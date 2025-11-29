@@ -50,7 +50,9 @@ class UserRepository(
                     action = action,
                     actionSource = FollowActionSource.Space,
                     csrf = authRepository.biliJct,
-                    sessData = authRepository.sessionData
+                    sessData = authRepository.sessionData,
+                    buvid3 = authRepository.buvid3,
+                    dedeUserId = authRepository.mid!!
                 )
             }
 
@@ -59,7 +61,9 @@ class UserRepository(
                     mid = mid,
                     action = action,
                     actionSource = FollowActionSource.Space,
-                    accessKey = authRepository.accessToken
+                    accessKey = authRepository.accessToken,
+                    buvid3 = authRepository.buvid3,
+                    dedeUserId = authRepository.mid!!
                 )
             }
         }

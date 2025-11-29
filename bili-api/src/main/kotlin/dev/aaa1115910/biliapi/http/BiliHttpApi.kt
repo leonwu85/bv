@@ -1209,7 +1209,9 @@ object BiliHttpApi {
         actionSource: FollowActionSource,
         accessKey: String? = null,
         csrf: String? = null,
-        sessData: String? = null
+        sessData: String? = null,
+        dedeUserId: Long? = null,
+        buvid3: String? = null
     ): BiliResponseWithoutData = client.post("/x/relation/modify") {
         checkToken(accessKey, sessData)
         setBody(
@@ -1219,10 +1221,24 @@ object BiliHttpApi {
                     append("act", "${action.id}")
                     append("re_src", "${actionSource.id}")
                     accessKey?.let { append("access_key", accessKey) }
+//                    csrf?.let { append("csrf", "0a7f08877b4d57ff3a0e0bf7392ac763") }
                     csrf?.let { append("csrf", csrf) }
                 }
             ))
-        sessData?.let { header("Cookie", "SESSDATA=$sessData;") }
+
+        println("csrf: $csrf; buvid3: $buvid3; sessdata: $sessData")
+        // 风控
+//        parameter("dm_img_list", "[]")
+//        parameter("dm_img_str", "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ")
+//        parameter(
+//            "dm_cover_img_str",
+//            "QU5HTEUgKEFNRCwgQU1EIFJhZGVvbiA3ODBNIEdyYXBoaWNzICgweDAwMDAxNUJGKSBEaXJlY3QzRDExIHZzXzVfMCBwc181XzAsIEQzRDExKUdvb2dsZSBJbmMuIChBTU"
+//        )
+//        parameter("dm_img_inter", "{\"ds\":[],\"wh\":[4769,2793,43],\"of\":[285,570,285]}")
+//        header("origin", "https://space.bilibili.com/")
+//        header("referer", "https://space.bilibili.com/")
+//        sessData?.let { header("Cookie", "buvid3=9F7C73B6-87BE-3BCA-9012-6B18C2F4938F63725infoc; SESSDATA=6f2d9419%2C1779977715%2C76dbd%2Ab2CjDF1tPM5TpZeDSMeFV_5WtTZRBt4yANuno-3aCgXCDE6EDeqUrKUxOIvzDpl0Jil8ESVmNzUmRqckp2NWFVV2xhSVg0X2dSVnU3aGk5MzhUWk5ORFo5aHh4NWxlZmM5NTl3aHN5YnBIY21zX2liZnpBb2t2VVh6MW94WDFxcWFjWTZUV0x0RXl3IIEC;") }
+        sessData?.let { header("Cookie", "buvid3=$buvid3; SESSDATA=$sessData;") }
     }.body()
 
     /**

@@ -210,7 +210,7 @@ object Prefs {
                 id
             } else {
                 val randomBuvid = generateBuvid()
-                buvid3 = randomBuvid
+                buvid = randomBuvid
                 randomBuvid
             }
         }
@@ -218,7 +218,11 @@ object Prefs {
 
     var buvid3: String
         get() = runBlocking {
-            val id = dsm.getPreferenceFlow(PrefKeys.prefBuvid3Request).first()
+            var id = dsm.getPreferenceFlow(PrefKeys.prefBuvid3Request).first()
+            if(!id.contains("infoc")){
+                buvid3 = "${UUID.randomUUID()}${(0..9).random()}infoc"
+                id = buvid3
+            }
             if (id != "") {
                 id
             } else {
