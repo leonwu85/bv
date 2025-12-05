@@ -57,7 +57,7 @@ fun AnimeContent(
         pgcType = PgcType.Anime,
         featureButtons = {
             AnimeFeatureButtons(
-                modifier = Modifier.padding(vertical = 24.dp),
+                modifier = Modifier.padding(vertical = 12.dp),
                 onOpenTimeline = onOpenTimeline,
                 onOpenFollowing = onOpenFollowing,
                 onOpenIndex = onOpenIndex,

@@ -36,7 +36,7 @@ fun MovieContent(
         pgcType = PgcType.Movie,
         featureButtons = {
             MovieFeatureButtons(
-                modifier = Modifier.padding(vertical = 24.dp),
+                modifier = Modifier.padding(vertical = 12.dp),
                 onOpenIndex = onOpenIndex
             )
         }

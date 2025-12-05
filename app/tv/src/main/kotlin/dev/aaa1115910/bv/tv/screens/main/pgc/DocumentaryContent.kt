@@ -36,7 +36,7 @@ fun DocumentaryContent(
         pgcType = PgcType.Documentary,
         featureButtons = {
             DocumentaryFeatureButtons(
-                modifier = Modifier.padding(vertical = 24.dp),
+                modifier = Modifier.padding(vertical = 12.dp),
                 onOpenIndex = onOpenIndex
             )
         }

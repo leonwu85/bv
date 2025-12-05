@@ -36,7 +36,7 @@ fun VarietyContent(
         pgcType = PgcType.Variety,
         featureButtons = {
             VarietyFeatureButtons(
-                modifier = Modifier.padding(vertical = 24.dp),
+                modifier = Modifier.padding(vertical = 12.dp),
                 onOpenIndex = onOpenIndex
             )
         }

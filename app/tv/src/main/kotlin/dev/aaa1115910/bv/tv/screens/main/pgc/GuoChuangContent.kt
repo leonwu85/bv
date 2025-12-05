@@ -36,7 +36,7 @@ fun GuoChuangContent(
         pgcType = PgcType.GuoChuang,
         featureButtons = {
             GuoChuangFeatureButtons(
-                modifier = Modifier.padding(vertical = 24.dp),
+                modifier = Modifier.padding(vertical = 12.dp),
                 onOpenIndex = onOpenIndex
             )
         }

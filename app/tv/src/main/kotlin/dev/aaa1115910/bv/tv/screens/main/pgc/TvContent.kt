@@ -36,7 +36,7 @@ fun TvContent(
         pgcType = PgcType.Tv,
         featureButtons = {
             TvFeatureButtons(
-                modifier = Modifier.padding(vertical = 24.dp),
+                modifier = Modifier.padding(vertical = 12.dp),
                 onOpenIndex = onOpenIndex
             )
         }

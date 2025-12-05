@@ -355,7 +355,7 @@ fun PgcFeatureButtons(
     LazyRow(
         modifier = modifier
             .fillMaxWidth()
-            .height(80.dp),
+            .height(40.dp),
         horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
         contentPadding = PaddingValues(horizontal = 32.dp)
     ) {
