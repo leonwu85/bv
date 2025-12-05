@@ -56,6 +56,7 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerClockState
 import dev.aaa1115910.bv.player.entity.VideoPlayerDebugInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekState
 import dev.aaa1115910.bv.player.entity.VideoPlayerStateData
+import dev.aaa1115910.bv.player.entity.DefaultStartPosition
 import dev.aaa1115910.bv.player.tv.controller.VideoPlayerController
 import dev.aaa1115910.bv.util.countDownTimer
 import dev.aaa1115910.bv.util.fInfo
@@ -590,8 +591,12 @@ fun BvPlayer(
                 mDanmakuPlayer?.pause()
             },
             onBackToHistory = {
-                val time = videoPlayerHistoryData.lastPlayed.toLong()
-                logger.fInfo { "Back to history: ${time.formatHourMinSec()}" }
+                val time = if (videoPlayerConfigData.defaultStartPosition == DefaultStartPosition.History) {
+                    videoPlayerHistoryData.lastPlayed.toLong()
+                } else {
+                    0L
+                }
+                logger.fInfo { "Back to history/beginning: ${time.formatHourMinSec()}" }
                 videoPlayer.seekTo(time)
                 mDanmakuPlayer?.seekTo(time)
                 // akdanmaku 会在跳转后立即播放，如果需要缓冲则会导致弹幕不同步

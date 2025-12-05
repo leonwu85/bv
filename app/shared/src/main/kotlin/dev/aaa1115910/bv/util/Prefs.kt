@@ -25,6 +25,7 @@ import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.player.entity.PlayerLoadNextAction
+import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -356,6 +357,13 @@ object Prefs {
         }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefPlayerLoadNextActionKey, value.value) }
 
+    var playerDefaultStartPosition: PlayerDefaultStartPosition
+        get() = runBlocking {
+            val intValue = dsm.getPreferenceFlow(PrefKeys.prefPlayerDefaultStartPositionRequest).first()
+            PlayerDefaultStartPosition.fromValue(intValue)
+        }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefPlayerDefaultStartPositionKey, value.value) }
+
     var playerExitWhenAllIsPlayed: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefPlayerExitWhenAllIsPlayedRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefPlayerExitWhenAllIsPlayedKey, value) }
@@ -441,6 +449,7 @@ object PrefKeys {
     val prefIsLoopKey = booleanPreferencesKey("player_is_loop")
     val prefShowDanmakuKey = booleanPreferencesKey("player_show_danmaku")
     val prefPlayerLoadNextActionKey = intPreferencesKey("player_load_next_action")
+    val prefPlayerDefaultStartPositionKey = intPreferencesKey("player_default_start_position")
 
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
@@ -512,4 +521,5 @@ object PrefKeys {
     val prefIsLoopRequest = PreferenceRequest(prefIsLoopKey, false)
     val prefShowDanmakuRequest = PreferenceRequest(prefShowDanmakuKey, true)
     val prefPlayerLoadNextActionRequest = PreferenceRequest(prefPlayerLoadNextActionKey, PlayerLoadNextAction.DoNothing.value)
+    val prefPlayerDefaultStartPositionRequest = PreferenceRequest(prefPlayerDefaultStartPositionKey, PlayerDefaultStartPosition.History.value)
 }

@@ -24,6 +24,7 @@ import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
 import dev.aaa1115910.bv.player.entity.PlayerLoadNextAction
+import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.tv.component.settings.SettingListItemWithDialog
@@ -47,6 +48,7 @@ fun PlayerSetting(
     var playerShowDebugInfo by remember { mutableStateOf(Prefs.playerShowDebugInfo) }
     var playerExitWhenAllIsPlayed by remember { mutableStateOf(Prefs.playerExitWhenAllIsPlayed) }
     var playerLoadNextAction by remember { mutableStateOf(Prefs.playerLoadNextAction) }
+    var playerDefaultStartPosition by remember { mutableStateOf(Prefs.playerDefaultStartPosition) }
     var defaultPlaybackSpeed by remember { mutableDoubleStateOf(Prefs.defaultPlaySpeed.toDouble()) }
     var playerSeekForwardStep by remember { mutableDoubleStateOf(Prefs.playerSeekForwardStep.toDouble()) }
     var playerSeekBackwardStep by remember { mutableDoubleStateOf(Prefs.playerSeekBackwardStep.toDouble()) }
@@ -175,6 +177,19 @@ fun PlayerSetting(
                     onValueChange = {
                         playerLoadNextAction = it
                         Prefs.playerLoadNextAction = it
+                    }
+                )
+            }
+            item {
+                SettingListItemWithDialog(
+                    title = stringResource(R.string.settings_player_default_start_position_title),
+                    supportText = stringResource(R.string.settings_player_default_start_position_text),
+                    options = PlayerDefaultStartPosition.entries,
+                    getDisplayName = { item, ctx -> item.displayName(ctx) },
+                    value = playerDefaultStartPosition,
+                    onValueChange = {
+                        playerDefaultStartPosition = it
+                        Prefs.playerDefaultStartPosition = it
                     }
                 )
             }
