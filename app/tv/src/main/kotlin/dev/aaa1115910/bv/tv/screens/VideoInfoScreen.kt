@@ -202,6 +202,7 @@ fun VideoInfoScreen(
     var fromPlayer by remember { mutableStateOf(false) }
     var paused by remember { mutableStateOf(false) }
     var proxyArea by remember { mutableStateOf(ProxyArea.MainLand) }
+    var intentAid by remember { mutableLongStateOf(0L) }
 
     val containsVerticalScreenVideo by remember {
         derivedStateOf {
@@ -413,6 +414,7 @@ fun VideoInfoScreen(
     LaunchedEffect(Unit) {
         if (intent.hasExtra("aid")) {
             val aid = intent.getLongExtra("aid", 170001)
+            intentAid = aid
             var cid = intent.getLongExtra("cid", 0)
             fromSeason = intent.getBooleanExtra("fromSeason", false)
             fromPlayer = intent.getBooleanExtra("fromPlayer", false)
@@ -909,6 +911,7 @@ fun VideoInfoScreen(
                                 episodes = section.episodes,
                                 lastPlayedCid = lastPlayedCid,
                                 lastPlayedTime = lastPlayedTime,
+                                intentAid = intentAid,
                                 enableUgcListDialog = section.episodes.size > 5,
                                 onClickEp = { aid, cid ->
                                     logger.fInfo { "Click ugc season episode: [av:${videoDetailViewModel.videoDetail?.aid}, bv:${videoDetailViewModel.videoDetail?.bvid}, cid:$cid]" }
@@ -1515,7 +1518,7 @@ private fun VideoPartRowButton(
     onClick: () -> Unit
 ) {
     Surface(
-        modifier = modifier.height(64.dp),
+        modifier = modifier.size(width = 64.dp, height = 64.dp),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
@@ -1567,8 +1570,7 @@ fun VideoPartRow(
         if (lastPlayedCid != 0L && pages.isNotEmpty()) {
             val index = pages.indexOfFirst { it.cid == lastPlayedCid }
             if (index > 0) {
-                val scrollIndex = if (enablePartListDialog) index + 1 else index
-                listState.scrollToItem(scrollIndex)
+                listState.scrollToItem(index)
             }
         }
     }
@@ -1579,15 +1581,24 @@ fun VideoPartRow(
             .onFocusChanged { hasFocus = it.hasFocus },
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            modifier = Modifier
-                .padding(start = 10.dp),
-            text = stringResource(R.string.video_info_part_row_title)
-                    + (" - $subtitle".takeIf { subtitle.isNotBlank() } ?: ""),
-            fontSize = titleFontSize.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Row(
+            modifier = Modifier.padding(start = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.video_info_part_row_title)
+                        + (" - $subtitle".takeIf { subtitle.isNotBlank() } ?: ""),
+                fontSize = titleFontSize.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (enablePartListDialog) {
+                VideoPartRowButton(
+                    onClick = { showPartListDialog = true }
+                )
+            }
+        }
 
         LazyRow(
             modifier = Modifier
@@ -1597,13 +1608,6 @@ fun VideoPartRow(
             contentPadding = PaddingValues(12.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (enablePartListDialog) {
-                item {
-                    VideoPartRowButton(
-                        onClick = { showPartListDialog = true }
-                    )
-                }
-            }
             itemsIndexed(items = pages, key = { _, page -> page.cid }) { index, page ->
                 VideoPartButton(
                     modifier = Modifier
@@ -1637,6 +1641,7 @@ fun VideoUgcSeasonRow(
     episodes: List<Episode>,
     lastPlayedCid: Long = 0,
     lastPlayedTime: Int = 0,
+    intentAid: Long = 0,
     enableUgcListDialog: Boolean = false,
     onClickEp: (avid: Long, cid: Long) -> Unit,
     onClickEpPart: (episode: Episode, cid: Long) -> Unit
@@ -1654,14 +1659,22 @@ fun VideoUgcSeasonRow(
     )
     var focusingEpisode by remember { mutableStateOf<Episode?>(null) }
 
-    // 滚动到有历史记录的那一集
-    LaunchedEffect(lastPlayedCid, episodes) {
-        if (lastPlayedCid != 0L && episodes.isNotEmpty()) {
-            val index = episodes.indexOfFirst { it.cid == lastPlayedCid || it.pages.any { page -> page.cid == lastPlayedCid } }
-            if (index > 0) {
-                val scrollIndex = if (enableUgcListDialog) index + 1 else index
-                listState.scrollToItem(scrollIndex)
-            }
+    // 滚动到有历史记录的那一集，如果没有历史记录则滚动到与 intentAid 相同的视频
+    LaunchedEffect(lastPlayedCid, intentAid, episodes) {
+        if (episodes.isEmpty()) return@LaunchedEffect
+
+        val index = if (lastPlayedCid != 0L) {
+            // 优先使用历史记录
+            episodes.indexOfFirst { it.cid == lastPlayedCid || it.pages.any { page -> page.cid == lastPlayedCid } }
+        } else if (intentAid != 0L) {
+            // 没有历史记录时，滚动到与 intentAid 相同的视频
+            episodes.indexOfFirst { it.aid == intentAid }
+        } else {
+            -1
+        }
+
+        if (index > 0) {
+            listState.scrollToItem(index)
         }
     }
 
@@ -1671,12 +1684,21 @@ fun VideoUgcSeasonRow(
             .onFocusChanged { hasFocus = it.hasFocus },
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            modifier = Modifier
-                .padding(start = 10.dp),
-            text = title,
-            fontSize = titleFontSize.sp
-        )
+        Row(
+            modifier = Modifier.padding(start = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = title,
+                fontSize = titleFontSize.sp
+            )
+            if (enableUgcListDialog) {
+                VideoPartRowButton(
+                    onClick = { showUgcListDialog = true }
+                )
+            }
+        }
 
         LazyRow(
             modifier = Modifier
@@ -1686,13 +1708,6 @@ fun VideoUgcSeasonRow(
             contentPadding = PaddingValues(12.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (enableUgcListDialog) {
-                item {
-                    VideoPartRowButton(
-                        onClick = { showUgcListDialog = true }
-                    )
-                }
-            }
             itemsIndexed(items = episodes) { index, episode ->
                 VideoPartButton(
                     modifier = Modifier
