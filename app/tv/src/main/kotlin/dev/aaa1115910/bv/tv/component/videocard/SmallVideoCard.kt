@@ -116,8 +116,7 @@ fun SmallVideoCard(
 private fun CoverBottomInfo(
     modifier: Modifier = Modifier,
     play: String,
-    danmaku: String,
-    time: String
+    danmaku: String
 ) {
     Row(
         modifier = modifier
@@ -153,14 +152,6 @@ private fun CoverBottomInfo(
                 color = Color.White
             )
         }
-
-        Spacer(Modifier.weight(1f))
-        Text(
-            text = time,
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.White,
-            maxLines = 1
-        )
     }
 }
 
@@ -187,21 +178,43 @@ fun CardCover(
             contentDescription = null,
             contentScale = ContentScale.Crop
         )
-        // 封面与徽章叠放，徽章绝对定位在右上角
-        if (badge.isNotEmpty()) {
-            Text(
-                modifier = Modifier
-                    .padding(5.dp)
-                    .align(Alignment.TopEnd)
-                    .background(
-                        color = Color.Black.copy(0.3f),
-                        shape = MaterialTheme.shapes.extraSmall
-                    )
-                    .padding(vertical = 1.dp, horizontal = 2.dp),
-                text = badge,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White
-            )
+        // 右上角信息区域：徽章和时长
+        Column(
+            modifier = Modifier
+                .padding(5.dp)
+                .align(Alignment.TopEnd),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            // 充电专属徽章
+            if (badge.isNotEmpty()) {
+                Text(
+                    modifier = Modifier
+                        .background(
+                            color = Color.Black.copy(0.5f),
+                            shape = MaterialTheme.shapes.extraSmall
+                        )
+                        .padding(vertical = 1.dp, horizontal = 2.dp),
+                    text = badge,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White
+                )
+            }
+            // 时长显示
+            if (time.isNotEmpty()) {
+                Text(
+                    modifier = Modifier
+                        .background(
+                            color = Color.Black.copy(0.5f),
+                            shape = MaterialTheme.shapes.extraSmall
+                        )
+                        .padding(vertical = 1.dp, horizontal = 4.dp),
+                    text = time,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White,
+                    maxLines = 1
+                )
+            }
         }
         // 只有需要显示时才创建阴影和信息组件
         if (showInfo) {
@@ -221,8 +234,7 @@ fun CardCover(
 
             CoverBottomInfo(
                 play = play,
-                danmaku = danmaku,
-                time = time
+                danmaku = danmaku
             )
         }
     }
