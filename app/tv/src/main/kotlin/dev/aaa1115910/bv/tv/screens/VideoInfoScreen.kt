@@ -77,7 +77,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1457,6 +1460,7 @@ private fun VideoPartButton(
     title: String,
     duration: Int,
     played: Int = 0,
+    isLastPlayed: Boolean = false,
     type: VideoPartType = VideoPartType.Part,
     onClick: () -> Unit
 ) {
@@ -1476,17 +1480,24 @@ private fun VideoPartButton(
         ) {
             Box(
                 modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.2f))
+                    .background(Color.Black.copy(alpha = 0.75f))
                     .fillMaxHeight()
                     .fillMaxWidth(if (played < 0) 1f else (played / duration.toFloat()))
             ) {}
             Text(
                 modifier = Modifier
                     .padding(8.dp),
-                text = when (type) {
-                    VideoPartType.Episode -> "EP"
-                    VideoPartType.Part -> "P"
-                } + "$index $title",
+                text = buildAnnotatedString {
+                    if (isLastPlayed) {
+                        withStyle(style = SpanStyle(color = Color(0xFFE39B17))) {
+                            append("继续播放 ")
+                        }
+                    }
+                    append(when (type) {
+                        VideoPartType.Episode -> "EP"
+                        VideoPartType.Part -> "P"
+                    } + "$index $title")
+                },
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -1542,6 +1553,7 @@ fun VideoPartRow(
     val focusRequester = remember { FocusRequester() }
     var hasFocus by remember { mutableStateOf(false) }
     var showPartListDialog by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
     val titleFontSize by animateFloatAsState(
         targetValue = if (hasFocus) 30f else 14f,
         label = "title font size",
@@ -1549,6 +1561,17 @@ fun VideoPartRow(
             durationMillis = 120
         )
     )
+
+    // 滚动到有历史记录的那一集
+    LaunchedEffect(lastPlayedCid, pages) {
+        if (lastPlayedCid != 0L && pages.isNotEmpty()) {
+            val index = pages.indexOfFirst { it.cid == lastPlayedCid }
+            if (index > 0) {
+                val scrollIndex = if (enablePartListDialog) index + 1 else index
+                listState.scrollToItem(scrollIndex)
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -1570,6 +1593,7 @@ fun VideoPartRow(
             modifier = Modifier
                 .padding(top = 4.dp)
                 .focusRestorer(focusRequester),
+            state = listState,
             contentPadding = PaddingValues(12.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -1587,6 +1611,7 @@ fun VideoPartRow(
                     index = index + 1,
                     title = page.title,
                     played = if (page.cid == lastPlayedCid) lastPlayedTime else 0,
+                    isLastPlayed = page.cid == lastPlayedCid,
                     duration = page.duration,
                     onClick = { onClick(page.cid) }
                 )
@@ -1598,6 +1623,8 @@ fun VideoPartRow(
         show = showPartListDialog,
         onHideDialog = { showPartListDialog = false },
         pages = pages,
+        lastPlayedCid = lastPlayedCid,
+        lastPlayedTime = lastPlayedTime,
         title = "分 P 列表",
         onClick = onClick
     )
@@ -1617,6 +1644,7 @@ fun VideoUgcSeasonRow(
     val focusRequester = remember { FocusRequester() }
     var hasFocus by remember { mutableStateOf(false) }
     var showUgcListDialog by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
     val titleFontSize by animateFloatAsState(
         targetValue = if (hasFocus) 30f else 14f,
         label = "title font size",
@@ -1625,6 +1653,17 @@ fun VideoUgcSeasonRow(
         )
     )
     var focusingEpisode by remember { mutableStateOf<Episode?>(null) }
+
+    // 滚动到有历史记录的那一集
+    LaunchedEffect(lastPlayedCid, episodes) {
+        if (lastPlayedCid != 0L && episodes.isNotEmpty()) {
+            val index = episodes.indexOfFirst { it.cid == lastPlayedCid || it.pages.any { page -> page.cid == lastPlayedCid } }
+            if (index > 0) {
+                val scrollIndex = if (enableUgcListDialog) index + 1 else index
+                listState.scrollToItem(scrollIndex)
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -1643,6 +1682,7 @@ fun VideoUgcSeasonRow(
             modifier = Modifier
                 .padding(top = 4.dp)
                 .focusRestorer(focusRequester),
+            state = listState,
             contentPadding = PaddingValues(12.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -1661,6 +1701,7 @@ fun VideoUgcSeasonRow(
                     index = index + 1,
                     title = episode.title,
                     played = if (episode.cid == lastPlayedCid) lastPlayedTime else 0,
+                    isLastPlayed = episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid },
                     duration = episode.duration,
                     type = VideoPartType.Episode,
                     onClick = { onClickEp(episode.aid, episode.cid) }
@@ -1686,6 +1727,8 @@ fun VideoUgcSeasonRow(
         show = showUgcListDialog,
         onHideDialog = { showUgcListDialog = false },
         episodes = episodes,
+        lastPlayedCid = lastPlayedCid,
+        lastPlayedTime = lastPlayedTime,
         title = "合集列表",
         onClick = onClickEp
     )
@@ -1697,6 +1740,8 @@ private fun VideoPartListDialog(
     show: Boolean,
     title: String,
     pages: List<VideoPage>,
+    lastPlayedCid: Long = 0,
+    lastPlayedTime: Int = 0,
     onHideDialog: () -> Unit,
     onClick: (cid: Long) -> Unit
 ) {
@@ -1794,7 +1839,8 @@ private fun VideoPartListDialog(
                                 modifier = buttonModifier,
                                 index = page.index,
                                 title = page.title,
-                                played = 0,
+                                played = if (page.cid == lastPlayedCid) lastPlayedTime else 0,
+                                isLastPlayed = page.cid == lastPlayedCid,
                                 duration = page.duration,
                                 onClick = { onClick(page.cid) }
                             )
@@ -1812,6 +1858,8 @@ private fun VideoUgcListDialog(
     show: Boolean,
     title: String,
     episodes: List<Episode>,
+    lastPlayedCid: Long = 0,
+    lastPlayedTime: Int = 0,
     onHideDialog: () -> Unit,
     onClick: (avid: Long, cid: Long) -> Unit
 ) {
@@ -1910,7 +1958,8 @@ private fun VideoUgcListDialog(
                                 index = selectedTabIndex * 20 + index + 1,
                                 type = VideoPartType.Episode,
                                 title = episode.title,
-                                played = 0,
+                                played = if (episode.cid == lastPlayedCid) lastPlayedTime else 0,
+                                isLastPlayed = episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid },
                                 duration = episode.duration,
                                 onClick = { onClick(episode.aid, episode.cid) }
                             )
