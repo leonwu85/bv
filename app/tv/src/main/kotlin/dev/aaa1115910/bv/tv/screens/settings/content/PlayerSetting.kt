@@ -53,6 +53,7 @@ fun PlayerSetting(
     var playerSeekForwardStep by remember { mutableDoubleStateOf(Prefs.playerSeekForwardStep.toDouble()) }
     var playerSeekBackwardStep by remember { mutableDoubleStateOf(Prefs.playerSeekBackwardStep.toDouble()) }
     var portraitVideoFixMode by remember { mutableStateOf(Prefs.portraitVideoFixMode) }
+    var defaultDanmakuArea by remember { mutableDoubleStateOf(Prefs.defaultDanmakuArea.toDouble()) }
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -246,6 +247,22 @@ fun PlayerSetting(
                     onValueChange = {
                         playerSeekBackwardStep = it
                         Prefs.playerSeekBackwardStep = it.toInt()
+                    }
+                )
+            }
+            item {
+                SettingNumberListItem(
+                    title = stringResource(R.string.settings_player_default_danmaku_area_title),
+                    supportText = stringResource(R.string.settings_player_default_danmaku_area_text),
+                    value = defaultDanmakuArea * 100,
+                    minValue = 10.0,
+                    maxValue = 100.0,
+                    isInteger = true,
+                    step = 10.0,
+                    valueFormat = "%.0f%%",
+                    onValueChange = {
+                        defaultDanmakuArea = it / 100
+                        Prefs.defaultDanmakuArea = (it / 100).toFloat()
                     }
                 )
             }

@@ -62,6 +62,7 @@ fun SettingNumberListItem(
     maxValue: Double = 100.0,
     isInteger: Boolean = true,
     step: Double = 1.0,
+    valueFormat: String? = null,
     defaultHasFocus: Boolean = false,
     onValueChange: (Double) -> Unit
 ) {
@@ -77,10 +78,11 @@ fun SettingNumberListItem(
             Text(
                 modifier = Modifier
                     .widthIn(48.dp, 96.dp),
-                text = if (isInteger) currentValue.toInt().toString() else String.format(
-                    "%.2f",
-                    currentValue
-                ),
+                text = when {
+                    valueFormat != null -> String.format(valueFormat, currentValue)
+                    isInteger -> currentValue.toInt().toString()
+                    else -> String.format("%.2f", currentValue)
+                },
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (hasFocus) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface
@@ -100,6 +102,7 @@ fun SettingNumberListItem(
         maxValue = maxValue,
         step = step,
         isInteger = isInteger,
+        valueFormat = valueFormat,
         onHideDialog = { showDialog = false },
         onChange = { newValue ->
             currentValue = newValue.toDouble()
@@ -120,6 +123,7 @@ private fun NumberDialog(
     maxValue: Double = 100.0,
     step: Double = 1.0,
     isInteger: Boolean = true,
+    valueFormat: String? = null,
 ) {
     val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
@@ -161,7 +165,11 @@ private fun NumberDialog(
                 ) {
                     Icon(imageVector = Icons.Rounded.ArrowDropUp, contentDescription = null)
                     Text(
-                        text = if (isInteger) currentValue.toInt().toString() else String.format("%.2f", currentValue),
+                        text = when {
+                            valueFormat != null -> String.format(valueFormat, currentValue)
+                            isInteger -> currentValue.toInt().toString()
+                            else -> String.format("%.2f", currentValue)
+                        },
                         style = MaterialTheme.typography.headlineMedium
                     )
                     Icon(imageVector = Icons.Rounded.ArrowDropDown, contentDescription = null)
