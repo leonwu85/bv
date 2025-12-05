@@ -540,7 +540,7 @@ fun VideoPlayerController(
             var throttledProgress by remember { mutableStateOf(0f) }
             LaunchedEffect(Unit) {
                 while (true) {
-                    delay( 1000L)
+                    delay( 500L)
                     val currentPosition = videoPlayer.currentPosition
                     val duration = videoPlayer.duration
                     val currentProgress = if (duration > 0) {
@@ -556,10 +556,10 @@ fun VideoPlayerController(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(2.2.dp),
+                    .height(3.dp),
                 progress = { throttledProgress },
-                color = SliderDefaults.colors().activeTrackColor,
-                trackColor = Color.Black.copy(alpha = 0.4f),
+                color = Color(0xFFBD26B8).copy(alpha = 0.5f),
+                trackColor = Color.Black.copy(alpha = 0.2f),
                 gapSize = 0.dp,
                 drawStopIndicator = {}
             )
