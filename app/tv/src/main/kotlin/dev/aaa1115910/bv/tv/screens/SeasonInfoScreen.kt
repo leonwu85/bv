@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -89,6 +90,8 @@ import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.transform.BlurTransformation
 import dev.aaa1115910.biliapi.entity.video.season.Episode
 import dev.aaa1115910.biliapi.entity.video.season.PgcSeason
 import dev.aaa1115910.bv.R
@@ -273,29 +276,68 @@ fun SeasonInfoScreen(
         }
     } else {
         val seasonData = seasonViewModel.seasonData!!
+
+        // 计算模糊背景图片：优先使用历史记录那一集的 cover，否则使用正片的最后一集的 cover
+        val blurBackgroundCover = remember(seasonData, seasonViewModel.lastPlayProgress) {
+            val lastEpId = seasonViewModel.lastPlayProgress?.lastEpId
+            if (lastEpId != null) {
+                // 有历史记录，先从正片中查找
+                seasonData.episodes.find { it.id == lastEpId }?.cover
+                    // 如果正片中没有，再从其他章节中查找
+                    ?: seasonData.sections.flatMap { it.episodes }.find { it.id == lastEpId }?.cover
+            } else {
+                null
+            }
+            // 如果没有历史记录或找不到对应剧集，使用正片的最后一集的 cover
+                ?: seasonData.episodes.lastOrNull()?.cover
+                // 如果正片也没有，使用番剧封面
+                ?: seasonData.cover
+        }
+
         Scaffold(
             modifier = modifier
         ) { innerPadding ->
-            LazyColumn(
-                modifier = Modifier
-                    .padding(innerPadding)
-                    .fillMaxSize(),
-                contentPadding = PaddingValues(vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Box(
+                Modifier.padding(innerPadding)
             ) {
-                item {
-                    SeasonInfoPart(
-                        modifier = Modifier.focusRequester(defaultFocusRequester),
-                        title = seasonData.title,
-                        cover = seasonData.cover,
-                        newEpDesc = seasonData.newEpDesc,
-                        description = seasonData.description,
-                        lastPlayedIndex = seasonViewModel.lastPlayProgress?.lastEpId ?: -1,
-                        lastPlayedTitle = generateEpisodeTitle(seasonData.episodes.find { it.id == seasonViewModel.lastPlayProgress?.lastEpId }, seasonData.title),
-                        following = seasonViewModel.isFollowing,
-                        isPublished = seasonData.publish.isPublished,
-                        publishDate = seasonData.publish.publishDate,
-                        seasonCount = seasonData.seasons.size,
+                // 图片加载成功后，动画 alpha，从 0 -> 0.6f
+                val bgLoaded = remember { mutableStateOf(false) }
+                val animatedAlpha by animateFloatAsState(
+                    targetValue = if (bgLoaded.value) 0.6f else 0f,
+                    animationSpec = tween(durationMillis = 500)
+                )
+                AsyncImage(
+                    modifier = Modifier.fillMaxSize(),
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(blurBackgroundCover)
+                        .transformations(BlurTransformation(LocalContext.current, 20f, 5f))
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    alpha = animatedAlpha,
+                    onSuccess = { bgLoaded.value = true },
+                    onError = { bgLoaded.value = false }
+                )
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize(),
+                    contentPadding = PaddingValues(vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        SeasonInfoPart(
+                            modifier = Modifier.focusRequester(defaultFocusRequester),
+                            title = seasonData.title,
+                            cover = seasonData.cover,
+                            newEpDesc = seasonData.newEpDesc,
+                            description = seasonData.description,
+                            lastPlayedIndex = seasonViewModel.lastPlayProgress?.lastEpId ?: -1,
+                            lastPlayedTitle = generateEpisodeTitle(seasonData.episodes.find { it.id == seasonViewModel.lastPlayProgress?.lastEpId }, seasonData.title),
+                            following = seasonViewModel.isFollowing,
+                            isPublished = seasonData.publish.isPublished,
+                            publishDate = seasonData.publish.publishDate,
+                            seasonCount = seasonData.seasons.size,
                         onPlay = {
                             logger.fInfo { "Click play button" }
                             var playAid = -1L
@@ -439,6 +481,7 @@ fun SeasonInfoScreen(
                 item {
                     Spacer(modifier = Modifier.height(64.dp))
                 }
+            }
             }
         }
     }
