@@ -39,6 +39,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
+import dev.aaa1115910.biliapi.http.entity.web.Hover
 import dev.aaa1115910.bv.entity.carddata.SeasonCardData
 import dev.aaa1115910.bv.ui.theme.BVTheme
 
@@ -104,6 +105,24 @@ fun SeasonCard(
                     contentDescription = null,
                     contentScale = ContentScale.FillBounds
                 )
+
+                // 右上角显示hover.text的最后一个字符串
+                data.hover?.text?.lastOrNull()?.let { lastText ->
+                    Text(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(5.dp)
+                            .background(
+                                color = Color.Black.copy(0.5f),
+                                shape = MaterialTheme.shapes.extraSmall
+                            )
+                            .padding(vertical = 2.dp, horizontal = 4.dp),
+                        text = lastText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White,
+                        maxLines = 1
+                    )
+                }
 
                 if (data.rating != null) {
                     Box(
@@ -171,7 +190,8 @@ private fun SeasonCardPreview() {
                             seasonId = 40794,
                             title = "007：没空去死",
                             cover = "http://i0.hdslb.com/bfs/bangumi/image/8d211c396aad084d6fa413015200dda6ed260768.png",
-                            rating = "8.6"
+                            rating = "8.6",
+                            hover = Hover(text = listOf("更新到 12集"), img = ""),
                         )
                     )
                 }

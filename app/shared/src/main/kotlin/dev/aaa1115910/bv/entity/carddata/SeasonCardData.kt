@@ -1,6 +1,7 @@
 package dev.aaa1115910.bv.entity.carddata
 
 import dev.aaa1115910.biliapi.http.entity.search.SearchMediaResult
+import dev.aaa1115910.biliapi.http.entity.web.Hover
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.resizedImageUrl
 
@@ -10,6 +11,7 @@ data class SeasonCardData(
     val subTitle: String? = null,
     val cover: String,
     val rating: String? = null,
+    val hover: Hover? = null,
     val badge: SearchMediaResult.Badge? = null,
 ) {
     companion object {
@@ -20,6 +22,7 @@ data class SeasonCardData(
                 subTitle = pgcItem.subTitle,
                 cover = pgcItem.cover.resizedImageUrl(ImageSize.SeasonCoverThumbnail),
                 rating = pgcItem.rating,
+                hover = pgcItem.hover,
                 badge = null
             )
         }
@@ -30,6 +33,7 @@ data class SeasonCardData(
                 title = followingSeason.title,
                 cover = followingSeason.cover,
                 rating = null,
+                hover = null,
                 badge = null
             )
         }

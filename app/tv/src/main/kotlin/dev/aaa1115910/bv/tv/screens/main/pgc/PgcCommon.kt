@@ -188,7 +188,8 @@ fun PgcFeedVideoRow(
                         title = feedItem.title,
                         subTitle = feedItem.subTitle,
                         cover = feedItem.cover.resizedImageUrl(ImageSize.SeasonCoverThumbnail),
-                        rating = feedItem.rating
+                        rating = feedItem.rating,
+                        hover = feedItem.hover
                     ),
                     onClick = {
                         SeasonInfoActivity.actionStart(
@@ -304,7 +305,8 @@ fun PgcFeedRankRow(
                                 title = feedItem.title,
                                 subTitle = feedItem.subTitle,
                                 cover = feedItem.cover.resizedImageUrl(ImageSize.SeasonCoverThumbnail),
-                                rating = feedItem.rating
+                                rating = feedItem.rating,
+                                hover = feedItem.hover
                             ),
                             onClick = {
                                 SeasonInfoActivity.actionStart(

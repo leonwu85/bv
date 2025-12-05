@@ -1,6 +1,7 @@
 package dev.aaa1115910.biliapi.entity.pgc
 
 import dev.aaa1115910.biliapi.http.SeasonIndexType
+import dev.aaa1115910.biliapi.http.entity.web.Hover
 
 data class PgcItem(
     var cover: String,
@@ -9,7 +10,8 @@ data class PgcItem(
     var seasonId: Int,
     var episodeId: Int,
     var seasonType: SeasonIndexType,
-    var rating: String
+    var rating: String,
+    var hover: Hover? = null
 ) {
     companion object {
         fun fromFeedSubItem(feedSubItem: dev.aaa1115910.biliapi.http.entity.pgc.PgcFeedData.FeedSubItem): PgcItem {
@@ -20,7 +22,8 @@ data class PgcItem(
                 seasonId = feedSubItem.seasonId!!,
                 episodeId = feedSubItem.episodeId,
                 seasonType = SeasonIndexType.fromId(feedSubItem.seasonType!!),
-                rating = feedSubItem.rating ?: "0"
+                rating = feedSubItem.rating ?: "0",
+                hover = feedSubItem.hover
             )
         }
 
@@ -32,7 +35,8 @@ data class PgcItem(
                 seasonId = feedSubItem.seasonId!!,
                 episodeId = feedSubItem.episodeId ?: feedSubItem.inline!!.epId,
                 seasonType = SeasonIndexType.fromId(feedSubItem.seasonType!!),
-                rating = feedSubItem.rating ?: "0"
+                rating = feedSubItem.rating ?: "0",
+                hover = feedSubItem.hover
             )
         }
 
@@ -44,7 +48,8 @@ data class PgcItem(
                 seasonId = indexResultItem.seasonId,
                 episodeId = indexResultItem.firstEp.epId,
                 seasonType = SeasonIndexType.fromId(indexResultItem.seasonType),
-                rating = indexResultItem.score
+                rating = indexResultItem.score,
+                hover = null
             )
         }
     }
