@@ -32,6 +32,7 @@ import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
+import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.viewmodel.home.RecommendViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -72,12 +73,13 @@ fun RecommendScreen(
         }
     }
 
-    val padding = dimensionResource(R.dimen.grid_padding)
-    val spacedBy = dimensionResource(R.dimen.grid_spacedBy)
+    val padding = dimensionResource(R.dimen.grid_padding) / 2
+    val spacedBy = dimensionResource(R.dimen.grid_spacedBy) / 2
+    val gridColumns = Prefs.gridColumns
     ProvideListBringIntoViewSpec {
         LazyVerticalGrid(
             modifier = modifier.fillMaxSize(),
-            columns = GridCells.Fixed(4),
+            columns = GridCells.Fixed(gridColumns),
             state = lazyGridState,
             contentPadding = PaddingValues(padding),
             verticalArrangement = Arrangement.spacedBy(spacedBy),

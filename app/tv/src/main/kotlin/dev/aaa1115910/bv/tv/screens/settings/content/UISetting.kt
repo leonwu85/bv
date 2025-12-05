@@ -64,9 +64,11 @@ fun UISetting(
     var showDensityDialog by remember { mutableStateOf(false) }
     var showThemeTypeDialog by remember { mutableStateOf(false) }
     var showDefaultHomeTabDialog by remember { mutableStateOf(false) }
+    var showGridColumnsDialog by remember { mutableStateOf(false) }
     val density by Prefs.densityFlow.collectAsState(context.resources.displayMetrics.widthPixels / 960f)
     val themeType by Prefs.themeTypeFlow.collectAsState(Prefs.themeType)
     var defaultHomeTab by remember { mutableStateOf(HomeTopNavItem.entries.getOrElse(Prefs.defaultHomeTab) { HomeTopNavItem.Recommend }) }
+    var gridColumns by remember { mutableStateOf(Prefs.gridColumns) }
 
     Box(modifier = modifier) {
         Column(
@@ -108,6 +110,14 @@ fun UISetting(
                         onClick = { showDefaultHomeTabDialog = true }
                     )
                 }
+                item {
+                    SettingListItem(
+                        title = stringResource(R.string.settings_ui_grid_columns_title),
+                        supportText = stringResource(R.string.settings_ui_grid_columns_text),
+                        valueText = if (gridColumns == 4) stringResource(R.string.settings_ui_grid_columns_4) else stringResource(R.string.settings_ui_grid_columns_5),
+                        onClick = { showGridColumnsDialog = true }
+                    )
+                }
             }
         }
     }
@@ -133,6 +143,16 @@ fun UISetting(
         onDefaultHomeTabChange = { 
             defaultHomeTab = it
             Prefs.defaultHomeTab = it.ordinal 
+        }
+    )
+
+    GridColumnsDialog(
+        show = showGridColumnsDialog,
+        onHideDialog = { showGridColumnsDialog = false },
+        gridColumns = gridColumns,
+        onGridColumnsChange = {
+            gridColumns = it
+            Prefs.gridColumns = it
         }
     )
 }
@@ -292,6 +312,49 @@ fun DefaultHomeTabDialog(
                             trailingContent = {
                                 RadioButton(
                                     selected = defaultHomeTab == it,
+                                    onClick = null
+                                )
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+}
+
+@Composable
+fun GridColumnsDialog(
+    modifier: Modifier = Modifier,
+    show: Boolean,
+    onHideDialog: () -> Unit,
+    gridColumns: Int,
+    onGridColumnsChange: (Int) -> Unit
+) {
+    val gridColumnOptions = listOf(4, 5)
+    if (show) {
+        TvAlertDialog(
+            modifier = modifier,
+            onDismissRequest = { onHideDialog() },
+            title = { Text(text = stringResource(R.string.settings_ui_grid_columns_title)) },
+            text = {
+                Column {
+                    gridColumnOptions.forEach { columns ->
+                        ListItem(
+                            selected = gridColumns == columns,
+                            onClick = { onGridColumnsChange(columns) },
+                            headlineContent = {
+                                Text(
+                                    text = if (columns == 4)
+                                        stringResource(R.string.settings_ui_grid_columns_4)
+                                    else
+                                        stringResource(R.string.settings_ui_grid_columns_5)
+                                )
+                            },
+                            trailingContent = {
+                                RadioButton(
+                                    selected = gridColumns == columns,
                                     onClick = null
                                 )
                             }

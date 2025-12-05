@@ -335,6 +335,10 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDefaultHomeTabRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDefaultHomeTabKey, value) }
 
+    var gridColumns: Int
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefGridColumnsRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefGridColumnsKey, value) }
+
 
     var portraitVideoFixMode: PortraitVideoFixMode
         get() = runBlocking {
@@ -439,6 +443,7 @@ object PrefKeys {
     val prefThemeTypeKey = intPreferencesKey("theme_type")
     val prefPlayModeKey = intPreferencesKey("play_mode")
     val prefDefaultHomeTabKey = intPreferencesKey("default_home_tab")
+    val prefGridColumnsKey = intPreferencesKey("grid_columns")
     val prefPortraitVideoFixModeKey = intPreferencesKey("portrait_video_fix_mode")
     val prefPlayerShowDebugInfoKey = booleanPreferencesKey("player_show_debug_info")
     val prefPlayerExitWhenAllIsPlayedKey = booleanPreferencesKey("player_exit_when_all_is_played")
@@ -511,6 +516,7 @@ object PrefKeys {
     val prefThemeTypeRequest = PreferenceRequest(prefThemeTypeKey, ThemeType.Auto.ordinal)
     val prefPlayModeRequest = PreferenceRequest(prefPlayModeKey, PlayMode.Sequential.ordinal)
     val prefDefaultHomeTabRequest = PreferenceRequest(prefDefaultHomeTabKey, 0)
+    val prefGridColumnsRequest = PreferenceRequest(prefGridColumnsKey, 4)
     val prefPortraitVideoFixModeRequest = PreferenceRequest(prefPortraitVideoFixModeKey, 0)
     val prefPlayerShowDebugInfoRequest = PreferenceRequest(prefPlayerShowDebugInfoKey, true)
     val prefPlayerExitWhenAllIsPlayedRequest = PreferenceRequest(prefPlayerExitWhenAllIsPlayedKey, true)

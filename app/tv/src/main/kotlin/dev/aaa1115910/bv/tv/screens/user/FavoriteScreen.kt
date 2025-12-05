@@ -49,6 +49,7 @@ import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.onDelayFocusChanged
+import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.viewmodel.user.FavoriteViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -145,22 +146,23 @@ fun FavoriteScreen(
             }
         }
     ) { innerPadding ->
+        val gridColumns = Prefs.gridColumns
         ProvideListBringIntoViewSpec(padding = 24.dp) {
             LazyVerticalGrid(
                 modifier = Modifier.padding(innerPadding),
                 state = lazyGridState,
-                columns = GridCells.Fixed(4),
+                columns = GridCells.Fixed(gridColumns),
                 contentPadding = PaddingValues(
-                    top = if (showPageTitle) 24.dp else 8.dp,
-                    bottom = 24.dp,
-                    start = 24.dp,
-                    end = 24.dp
+                    top = if (showPageTitle) 12.dp else 4.dp,
+                    bottom = 12.dp,
+                    start = 12.dp,
+                    end = 12.dp
                 ),
-                verticalArrangement = Arrangement.spacedBy(24.dp),
-                horizontalArrangement = Arrangement.spacedBy(24.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 item(
-                    span = { GridItemSpan(4) }
+                    span = { GridItemSpan(gridColumns) }
                 ) {
                     TabRow(
                         modifier = Modifier
