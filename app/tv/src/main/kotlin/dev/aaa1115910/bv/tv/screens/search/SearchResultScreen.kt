@@ -31,13 +31,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,6 +51,7 @@ import dev.aaa1115910.biliapi.entity.ugc.toSmartDate
 import dev.aaa1115910.biliapi.repositories.SearchType
 import dev.aaa1115910.biliapi.repositories.SearchTypeResult
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.tv.R as TvR
 import dev.aaa1115910.bv.tv.component.videocard.SeasonCard
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.entity.carddata.SeasonCardData
@@ -160,10 +161,11 @@ fun SearchResultScreen(
     }
 
     LaunchedEffect(searchResultViewModel.searchType) {
+        val gridColumns = Prefs.gridColumns
         rowSize = when (searchResultViewModel.searchType) {
-            SearchType.Video -> 4
-            SearchType.MediaBangumi, SearchType.MediaFt -> 6
-            SearchType.BiliUser -> 3
+            SearchType.Video -> gridColumns
+            SearchType.MediaBangumi, SearchType.MediaFt -> gridColumns + 2
+            SearchType.BiliUser -> gridColumns - 1
         }
     }
 
@@ -260,6 +262,8 @@ fun SearchResultScreen(
                 }
             }
             ProvideListBringIntoViewSpec(padding = 26.dp) {
+                val padding = dimensionResource(TvR.dimen.grid_padding) / 2
+                val spacedBy = dimensionResource(TvR.dimen.grid_spacedBy) / 2
                 LazyVerticalGrid(
                     modifier = Modifier.onPreviewKeyEvent {
                         when (it.key) {
@@ -271,9 +275,9 @@ fun SearchResultScreen(
                         false
                     },
                     columns = GridCells.Fixed(rowSize),
-                    contentPadding = PaddingValues(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp)
+                    contentPadding = PaddingValues(padding),
+                    verticalArrangement = Arrangement.spacedBy(spacedBy),
+                    horizontalArrangement = Arrangement.spacedBy(spacedBy)
                 ) {
                     itemsIndexed(
                         items = when (searchResult.type) {
