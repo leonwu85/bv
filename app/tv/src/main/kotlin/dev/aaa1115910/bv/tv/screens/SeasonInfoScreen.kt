@@ -840,6 +840,7 @@ fun SeasonEpisodeRow(
     onClick: (avid: Long, cid: Long, epid: Int, episodeTitle: String, startTime: Int) -> Unit
 ) {
     val focusRequester = remember { FocusRequester() }
+    val rowState = rememberLazyListState()
     var hasFocus by remember { mutableStateOf(false) }
     val titleColor = if (hasFocus) Color.White else Color.White.copy(alpha = 0.6f)
     val titleFontSize by animateFloatAsState(
@@ -848,6 +849,16 @@ fun SeasonEpisodeRow(
     )
 
     var showEpisodesDialog by remember { mutableStateOf(false) }
+
+    // 当存在历史记录时，滚动到对应集
+    LaunchedEffect(lastPlayedId, episodes) {
+        if (lastPlayedId != 0 && episodes.isNotEmpty()) {
+            val lastPlayedIndex = episodes.indexOfFirst { it.id == lastPlayedId }
+            if (lastPlayedIndex != -1) {
+                rowState.scrollToItem(lastPlayedIndex)
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -893,6 +904,7 @@ fun SeasonEpisodeRow(
             modifier = Modifier
                 .padding(top = 15.dp)
                 .focusRestorer(focusRequester),
+            state = rowState,
             contentPadding = PaddingValues(horizontal = 32.dp),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
         ) {
