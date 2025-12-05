@@ -854,12 +854,40 @@ fun SeasonEpisodeRow(
             .onFocusChanged { hasFocus = it.hasFocus },
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
+        Row(
             modifier = Modifier.padding(start = 50.dp),
-            text = title,
-            fontSize = titleFontSize.sp,
-            color = titleColor
-        )
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = title,
+                fontSize = titleFontSize.sp,
+                color = titleColor
+            )
+            Surface(
+                modifier = Modifier.size(32.dp),
+                colors = ClickableSurfaceDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
+                    pressedContainerColor = MaterialTheme.colorScheme.inverseSurface
+                ),
+                shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.small),
+                onClick = { showEpisodesDialog = true }
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .rotate(90f),
+                        imageVector = Icons.Rounded.ViewModule,
+                        contentDescription = null
+                    )
+                }
+            }
+        }
 
         LazyRow(
             modifier = Modifier
@@ -868,31 +896,6 @@ fun SeasonEpisodeRow(
             contentPadding = PaddingValues(horizontal = 32.dp),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
         ) {
-            item {
-                Surface(
-                    modifier = modifier.size(60.dp, 80.dp),
-                    colors = ClickableSurfaceDefaults.colors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
-                        pressedContainerColor = MaterialTheme.colorScheme.inverseSurface
-                    ),
-                    shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
-                    onClick = { showEpisodesDialog = true }
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .rotate(90f),
-                            imageVector = Icons.Rounded.ViewModule,
-                            contentDescription = null
-                        )
-                    }
-                }
-            }
             itemsIndexed(items = episodes) { index, episode ->
                 val episodeTitle by remember { mutableStateOf(if (episode.longTitle != "") episode.longTitle else episode.title) }
                 SeasonEpisodeButton(
