@@ -988,6 +988,8 @@ fun SeasonEpisodeRow(
         show = showEpisodesDialog,
         title = title,
         episodes = episodes,
+        lastPlayedId = lastPlayedId,
+        lastPlayedTime = lastPlayedTime,
         onHideDialog = { showEpisodesDialog = false },
         onClick = onClick
     )
