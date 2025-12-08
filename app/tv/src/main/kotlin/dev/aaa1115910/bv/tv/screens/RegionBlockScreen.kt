@@ -42,7 +42,6 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.ui.theme.BVTheme
-import okhttp3.internal.toHexString
 import qrcode.QRCode
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
