@@ -104,7 +104,7 @@ fun MainScreen(
     val handleBack = {
         val currentTime = System.currentTimeMillis()
         if (currentTime - lastPressBack < 1500) {
-            logger.fInfo { "Exiting bug video" }
+            logger.fInfo { "Exiting Bv Video" }
             currentSelectedTabs[DrawerItem.Home] = Prefs.defaultHomeTab
             (context as Activity).finish()
         } else {

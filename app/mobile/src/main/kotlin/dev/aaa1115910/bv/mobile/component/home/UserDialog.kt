@@ -146,7 +146,7 @@ fun UserDialogContent(
     ) {
         Column {
             CenterAlignedTopAppBar(
-                title = { Text(text = "Bug Video") },
+                title = { Text(text = "Bv Video") },
                 navigationIcon = {
                     IconButton(onClick = onClose) {
                         Icon(imageVector = Icons.Default.Close, contentDescription = null)

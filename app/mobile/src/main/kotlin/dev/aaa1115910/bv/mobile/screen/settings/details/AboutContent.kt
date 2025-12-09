@@ -92,7 +92,7 @@ private fun AppIcon(modifier: Modifier = Modifier) {
             contentScale = ContentScale.FillWidth
         )
         Text(
-            text = "Bug Video",
+            text = "Bv Video",
             style = MaterialTheme.typography.titleLarge,
         )
     }

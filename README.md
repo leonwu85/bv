@@ -4,7 +4,7 @@
 
 # BV
 
-~~Bug Video~~
+~~Bv Video~~
 
 [![Android Sdk Require](https://img.shields.io/badge/Android-6.0%2B-informational?logo=android)](https://apilevels.com/#:~:text=Jetpack%20Compose%20requires%20a%20minSdk%20of%2021%20or%20higher)
 [![GitHub](https://img.shields.io/github/license/fantasytyx/bv)](https://github.com/fantasytyx/bv)
@@ -16,7 +16,7 @@
 </div>
 
 ---
-BV ~~(Bug Video)~~ 是一款 [哔哩哔哩](https://www.bilibili.com) 的第三方应用，适配 `Android 移动端`
+BV ~~(Bv Video)~~ 是一款 [哔哩哔哩](https://www.bilibili.com) 的第三方应用，适配 `Android 移动端`
 和 `Android TV`，使用 `Jetpack Compose` 开发
 
 **都是随心乱写的代码，能跑就行。**
