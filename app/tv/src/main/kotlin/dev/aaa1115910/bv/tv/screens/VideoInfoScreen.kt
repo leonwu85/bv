@@ -1464,9 +1464,21 @@ private fun VideoPartButton(
     duration: Int,
     played: Int = 0,
     isLastPlayed: Boolean = false,
+    isCurrentIntent: Boolean = false,
     type: VideoPartType = VideoPartType.Part,
     onClick: () -> Unit
 ) {
+    val borderColor = when {
+        isLastPlayed -> Color(0xFFE39B17)
+        isCurrentIntent -> MaterialTheme.colorScheme.primary
+        else -> null
+    }
+    val focusedBorderColor = when {
+        isLastPlayed -> Color(0xFFE39B17)
+        isCurrentIntent -> Color(0xFF00BFFF)
+        else -> null
+    }
+
     Surface(
         modifier = modifier,
         colors = ClickableSurfaceDefaults.colors(
@@ -1474,7 +1486,28 @@ private fun VideoPartButton(
             focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
             pressedContainerColor = MaterialTheme.colorScheme.inverseSurface
         ),
+        scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1f),
         shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
+        border = ClickableSurfaceDefaults.border(
+            border = borderColor?.let {
+                Border(
+                    border = BorderStroke(2.dp, it),
+                    shape = MaterialTheme.shapes.medium
+                )
+            } ?: Border.None,
+            focusedBorder = focusedBorderColor?.let {
+                Border(
+                    border = BorderStroke(2.dp, it),
+                    shape = MaterialTheme.shapes.medium
+                )
+            } ?: Border.None,
+            pressedBorder = focusedBorderColor?.let {
+                Border(
+                    border = BorderStroke(2.dp, it),
+                    shape = MaterialTheme.shapes.medium
+                )
+            } ?: Border.None
+        ),
         onClick = { onClick() }
     ) {
         Box(
@@ -1717,6 +1750,7 @@ fun VideoUgcSeasonRow(
                     title = episode.title,
                     played = if (episode.cid == lastPlayedCid) lastPlayedTime else 0,
                     isLastPlayed = episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid },
+                    isCurrentIntent = episode.aid == intentAid,
                     duration = episode.duration,
                     type = VideoPartType.Episode,
                     onClick = { onClickEp(episode.aid, episode.cid) }
@@ -1744,6 +1778,7 @@ fun VideoUgcSeasonRow(
         episodes = episodes,
         lastPlayedCid = lastPlayedCid,
         lastPlayedTime = lastPlayedTime,
+        intentAid = intentAid,
         title = "合集列表",
         onClick = onClickEp
     )
@@ -1875,6 +1910,7 @@ private fun VideoUgcListDialog(
     episodes: List<Episode>,
     lastPlayedCid: Long = 0,
     lastPlayedTime: Int = 0,
+    intentAid: Long = 0,
     onHideDialog: () -> Unit,
     onClick: (avid: Long, cid: Long) -> Unit
 ) {
@@ -1975,6 +2011,7 @@ private fun VideoUgcListDialog(
                                 title = episode.title,
                                 played = if (episode.cid == lastPlayedCid) lastPlayedTime else 0,
                                 isLastPlayed = episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid },
+                                isCurrentIntent = episode.aid == intentAid,
                                 duration = episode.duration,
                                 onClick = { onClick(episode.aid, episode.cid) }
                             )
