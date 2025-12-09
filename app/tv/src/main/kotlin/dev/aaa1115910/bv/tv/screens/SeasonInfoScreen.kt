@@ -665,9 +665,11 @@ fun SeasonEpisodeButton(
     cover: String,
     duration: Int,
     played: Int = 0,
+    isLastPlayed: Boolean = false,
     onClick: () -> Unit
 ) {
     val isPreview = LocalInspectionMode.current
+    val borderColor = if (isLastPlayed) Color(0xFFE39B17) else null
 
     Surface(
         modifier = modifier,
@@ -676,7 +678,28 @@ fun SeasonEpisodeButton(
             focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
             pressedContainerColor = MaterialTheme.colorScheme.inverseSurface
         ),
+        scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1f),
         shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
+        border = ClickableSurfaceDefaults.border(
+            border = borderColor?.let {
+                Border(
+                    border = BorderStroke(2.dp, it),
+                    shape = MaterialTheme.shapes.medium
+                )
+            } ?: Border.None,
+            focusedBorder = borderColor?.let {
+                Border(
+                    border = BorderStroke(2.dp, it),
+                    shape = MaterialTheme.shapes.medium
+                )
+            } ?: Border.None,
+            pressedBorder = borderColor?.let {
+                Border(
+                    border = BorderStroke(2.dp, it),
+                    shape = MaterialTheme.shapes.medium
+                )
+            } ?: Border.None
+        ),
         onClick = onClick
     ) {
         Row {
@@ -854,6 +877,7 @@ fun SeasonEpisodesDialog(
                                 title = episodeTitle,
                                 cover = episode.cover,
                                 played = if (episode.id == lastPlayedId) lastPlayedTime else 0,
+                                isLastPlayed = episode.id == lastPlayedId,
                                 duration = episode.duration,
                                 onClick = {
                                     onClick(
@@ -968,6 +992,7 @@ fun SeasonEpisodeRow(
                     title = episodeTitle,
                     cover = episode.cover,
                     played = if (episode.id == lastPlayedId) lastPlayedTime else 0,
+                    isLastPlayed = episode.id == lastPlayedId,
                     duration = episode.duration,
                     onClick = {
                         val pTitle = generateEpisodeTitle(episode, title)
