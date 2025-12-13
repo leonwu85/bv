@@ -48,8 +48,10 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerClockData
 import dev.aaa1115910.bv.player.entity.VideoPlayerDebugInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekData
 import dev.aaa1115910.bv.player.entity.VideoPlayerStateData
+import dev.aaa1115910.bv.player.entity.DefaultStartPosition
 import dev.aaa1115910.bv.player.mobile.controller.BvPlayerController
 import dev.aaa1115910.bv.util.countDownTimer
+import dev.aaa1115910.bv.util.formatHourMinSec
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -207,6 +209,15 @@ fun BvPlayer(
             initDanmakuConfig()
 
             updateVideoAspectRatio()
+
+            // 根据 DefaultStartPosition 设置初始播放位置
+            if (lastPlayed > 0 && videoPlayerConfigData.defaultStartPosition == DefaultStartPosition.History) {
+                logger.info { "Seek to history position: ${lastPlayed.formatHourMinSec()}" }
+                videoPlayer.seekTo(lastPlayed)
+                mDanmakuPlayer?.seekTo(lastPlayed)
+                mDanmakuPlayer?.pause()
+            }
+
             videoPlayer.start()
 
             //reset default play speed

@@ -31,9 +31,9 @@ fun BackToHistoryTip(
 ) {
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
     val text = if (videoPlayerConfigData.defaultStartPosition == DefaultStartPosition.History) {
-        "上次看到 $time 点击确认键跳转"
-    } else {
         "点击确认键跳转视频开头"
+    } else {
+        "上次看到 $time 点击确认键跳转"
     }
     SkipTip(
         modifier = modifier,

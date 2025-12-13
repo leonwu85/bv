@@ -310,6 +310,14 @@ fun BvPlayer(
                 logger.info { "Reset default play speed: $currentPlaySpeed" }
                 videoPlayer.speed = currentPlaySpeed
                 mDanmakuPlayer?.updatePlaySpeed(currentPlaySpeed)
+
+                // 根据 DefaultStartPosition 设置初始播放位置
+                if (lastPlayed > 0 && videoPlayerConfigData.defaultStartPosition == DefaultStartPosition.History) {
+                    logger.info { "Seek to history position: ${lastPlayed.formatHourMinSec()}" }
+                    videoPlayer.seekTo(lastPlayed)
+                    mDanmakuPlayer?.seekTo(lastPlayed)
+                    mDanmakuPlayer?.pause()
+                }
             }
         }
 
@@ -592,9 +600,9 @@ fun BvPlayer(
             },
             onBackToHistory = {
                 val time = if (videoPlayerConfigData.defaultStartPosition == DefaultStartPosition.History) {
-                    videoPlayerHistoryData.lastPlayed.toLong()
-                } else {
                     0L
+                } else {
+                    videoPlayerHistoryData.lastPlayed.toLong()
                 }
                 logger.fInfo { "Back to history/beginning: ${time.formatHourMinSec()}" }
                 videoPlayer.seekTo(time)
