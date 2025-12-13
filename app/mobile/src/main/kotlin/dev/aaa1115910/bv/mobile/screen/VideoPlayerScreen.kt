@@ -392,7 +392,8 @@ fun VideoPlayerScreen(
                                     seasonId = seasonId,
                                     continuePlayNext = true
                                 )
-                            }
+                            },
+                            danmakuOpacity = playerViewModel.currentDanmakuOpacity
                         )
                     }
                 }

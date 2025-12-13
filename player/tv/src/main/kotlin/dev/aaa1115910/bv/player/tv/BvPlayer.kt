@@ -79,6 +79,7 @@ fun BvPlayer(
     modifier: Modifier = Modifier,
     videoPlayer: AbstractVideoPlayer,
     danmakuPlayer: DanmakuPlayer?,
+    danmakuOpacity: Float,
     playerSeekForwardStep: Int = 10,
     playerSeekBackwardStep: Int = 5,
     showBottomProgressBar: Boolean = false,
@@ -771,7 +772,7 @@ fun BvPlayer(
             DanmakuLayerSideEffects(
                 danmakuLayerHandle = danmakuLayerHandle,
                 area = videoPlayerConfigData.currentDanmakuArea,
-                opacity = videoPlayerConfigData.currentDanmakuOpacity,
+                opacity = danmakuOpacity,
                 visible = videoPlayerConfigData.showDanmaku,
                 maskFrame = currentDanmakuMaskFrame.takeIf { videoPlayerConfigData.currentDanmakuMask }
             )

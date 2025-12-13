@@ -235,6 +235,7 @@ fun VideoPlayerV3Screen(
                     .fillMaxSize(),
                 videoPlayer = playerViewModel.videoPlayer!!,
                 danmakuPlayer = playerViewModel.danmakuPlayer,
+                danmakuOpacity = playerViewModel.currentDanmakuOpacity,
                 playerSeekForwardStep = Prefs.playerSeekForwardStep,
                 playerSeekBackwardStep = Prefs.playerSeekBackwardStep,
                 showBottomProgressBar = Prefs.playerShowBottomProgressBar,

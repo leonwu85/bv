@@ -7,7 +7,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -78,12 +77,12 @@ fun DanmakuLayer(
         modifier
             .fillMaxWidth()
             .fillMaxHeight(handle.areaFraction)
-            .alpha(handle.opacity)
             .then(maskModifier)
     ) {
         AkDanmakuPlayer(
             modifier = Modifier.fillMaxWidth().fillMaxHeight(),
-            danmakuPlayer = player
+            danmakuPlayer = player,
+            alpha = handle.opacity
         )
     }
 }

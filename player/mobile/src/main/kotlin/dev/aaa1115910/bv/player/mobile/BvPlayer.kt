@@ -16,7 +16,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import com.kuaishou.akdanmaku.DanmakuConfig
 import com.kuaishou.akdanmaku.data.DanmakuItemData
 import com.kuaishou.akdanmaku.ecs.component.filter.TypeFilter
@@ -79,7 +78,8 @@ fun BvPlayer(
     onLoadNextVideo: () -> Unit,
     onLoadNewVideo: (VideoListItem) -> Unit,
     videoPlayer: AbstractVideoPlayer,
-    danmakuPlayer: DanmakuPlayer?
+    danmakuPlayer: DanmakuPlayer?,
+    danmakuOpacity: Float,
 ) {
     val logger = KotlinLogging.logger("BvPlayer")
     // 直接调用 danmakuPlayer 会始终为 null
@@ -395,9 +395,9 @@ fun BvPlayer(
             )
             AkDanmakuPlayer(
                 modifier = Modifier
-                    .alpha(videoPlayerConfigData.currentDanmakuOpacity)
                     .fillMaxHeight(videoPlayerConfigData.currentDanmakuArea),
-                danmakuPlayer = mDanmakuPlayer
+                danmakuPlayer = mDanmakuPlayer,
+                alpha = danmakuOpacity
             )
         }
     }
