@@ -1524,9 +1524,10 @@ private fun VideoPartButton(
                 modifier = Modifier
                     .padding(8.dp),
                 text = buildAnnotatedString {
-                    if (isLastPlayed) {
+                    if (isLastPlayed && played > 0) {
                         withStyle(style = SpanStyle(color = Color(0xFFE39B17))) {
-                            append("继续播放 ")
+                            val isFinished = duration <= 0 || played / duration.toFloat() >= 0.95f
+                            append(if (isFinished) "已播完 " else "继续播放 ")
                         }
                     }
                     append(when (type) {

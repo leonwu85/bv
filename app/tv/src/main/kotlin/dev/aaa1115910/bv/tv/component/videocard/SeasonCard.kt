@@ -107,24 +107,35 @@ fun SeasonCard(
                 )
 
                 // 右上角显示hover.text的最后一个字符串
-                data.hover?.text?.lastOrNull()?.let { lastText ->
-                    Text(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(5.dp)
-                            .background(
-                                color = Color.Black.copy(0.5f),
-                                shape = MaterialTheme.shapes.extraSmall
-                            )
-                            .padding(vertical = 2.dp, horizontal = 4.dp),
-                        text = lastText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White,
-                        maxLines = 1
-                    )
+                // 如果最后一个是评分格式（如"9.5分"），则显示倒数第二个
+                data.hover?.text?.let { textList ->
+                    val lastText = textList.lastOrNull()
+                    val displayText = if (lastText != null && lastText.matches(Regex("^\\d+(\\.\\d+)?分$"))) {
+                        textList.getOrNull(textList.size - 2)
+                    } else {
+                        lastText
+                    }
+                    displayText?.let {
+                        Text(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(5.dp)
+                                .fillMaxWidth(0.5f)
+                                .background(
+                                    color = Color.Black.copy(0.5f),
+                                    shape = MaterialTheme.shapes.extraSmall
+                                )
+                                .padding(vertical = 2.dp, horizontal = 4.dp),
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
 
-                if (data.rating != null) {
+                if (data.rating != null && data.rating != "0" && data.rating != "0分") {
                     Box(
                         modifier = Modifier
                             .height(48.dp)
@@ -199,4 +210,3 @@ private fun SeasonCardPreview() {
         }
     }
 }
-
