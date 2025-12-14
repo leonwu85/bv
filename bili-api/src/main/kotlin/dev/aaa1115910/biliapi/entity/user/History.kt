@@ -8,7 +8,7 @@ data class HistoryData(
     val data: List<HistoryItem>
 ) {
     companion object {
-        fun fromHistoryResponse(data: dev.aaa1115910.biliapi.http.entity.history.HistoryData) =
+        fun     fromHistoryResponse(data: dev.aaa1115910.biliapi.http.entity.history.HistoryData) =
             HistoryData(
                 cursor = data.cursor.viewAt,
                 data = data.list
@@ -48,7 +48,7 @@ data class HistoryItem(
                 oid = item.history.oid,
                 bvid = item.history.bvid,
                 cid = item.history.cid,
-                kid = 0,
+                kid = item.kid,
                 epid = item.history.epid,
                 seasonId = null,
                 title = item.title,

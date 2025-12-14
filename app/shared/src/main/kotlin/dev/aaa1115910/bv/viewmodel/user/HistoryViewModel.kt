@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.aaa1115910.biliapi.entity.ugc.toSmartDate
+import dev.aaa1115910.biliapi.entity.user.HistoryItemType
 import dev.aaa1115910.biliapi.http.entity.AuthFailureException
 import dev.aaa1115910.biliapi.repositories.HistoryRepository
 import dev.aaa1115910.bv.BVApp
@@ -59,8 +60,9 @@ class HistoryViewModel(
                 cursor = cursor,
                 preferApiType = Prefs.apiType
             )
-
+            logger.fWarn { data }
             data.data.forEach { historyItem ->
+                val isPgc = historyItem.type == HistoryItemType.Pgc
                 histories.addWithMainContext(
                     VideoCardData(
                         avid = historyItem.oid,
@@ -75,6 +77,9 @@ class HistoryViewModel(
                             (historyItem.progress * 1000L).formatHourMinSec(),
                             (historyItem.duration * 1000L).formatHourMinSec()
                         ),
+                        jumpToSeason = isPgc,
+                        epId = historyItem.epid,
+                        seasonId = historyItem.seasonId ?: if (isPgc) historyItem.kid.toInt() else null,
                         pubTime = historyItem.viewAt.toSmartDate() + context.getString(R.string.view_at)
                     )
                 )

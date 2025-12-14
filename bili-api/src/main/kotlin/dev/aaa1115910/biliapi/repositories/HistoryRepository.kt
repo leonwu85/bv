@@ -6,6 +6,7 @@ import bilibili.app.interfaces.v1.cursorV2Req
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.user.HistoryData
 import dev.aaa1115910.biliapi.http.BiliHttpApi
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.koin.core.annotation.Single
 
 @Single
@@ -28,6 +29,8 @@ class HistoryRepository(
                     viewAt = cursor,
                     sessData = authRepository.sessionData!!,
                 ).getResponseData()
+                val logger = KotlinLogging.logger {  }
+                logger.warn { data }
                 HistoryData.fromHistoryResponse(data)
             }
 
