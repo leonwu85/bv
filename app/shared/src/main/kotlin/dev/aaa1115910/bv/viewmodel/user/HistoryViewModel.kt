@@ -60,7 +60,7 @@ class HistoryViewModel(
                 cursor = cursor,
                 preferApiType = Prefs.apiType
             )
-            logger.fWarn { data }
+
             data.data.forEach { historyItem ->
                 val isPgc = historyItem.type == HistoryItemType.Pgc
                 histories.addWithMainContext(

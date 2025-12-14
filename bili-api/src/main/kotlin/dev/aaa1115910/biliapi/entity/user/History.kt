@@ -51,7 +51,11 @@ data class HistoryItem(
                 kid = item.kid,
                 epid = item.history.epid,
                 seasonId = null,
-                title = item.title,
+                title = when(item.history.business){
+                    "archive" -> item.title
+                    "pgc" -> item.title + "\n" + item.showTitle
+                    else -> item.title
+                },
                 cover = item.cover,
                 author = item.authorName,
                 authorId = item.authorMid,

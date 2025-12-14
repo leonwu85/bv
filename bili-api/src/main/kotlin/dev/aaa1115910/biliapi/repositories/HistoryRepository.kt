@@ -29,8 +29,6 @@ class HistoryRepository(
                     viewAt = cursor,
                     sessData = authRepository.sessionData!!,
                 ).getResponseData()
-                val logger = KotlinLogging.logger {  }
-                logger.warn { data }
                 HistoryData.fromHistoryResponse(data)
             }
 
