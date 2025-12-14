@@ -311,21 +311,16 @@ fun BvPlayer(
                 logger.info { "Reset default play speed: $currentPlaySpeed" }
                 videoPlayer.speed = currentPlaySpeed
                 mDanmakuPlayer?.updatePlaySpeed(currentPlaySpeed)
-
-                // 根据 DefaultStartPosition 设置初始播放位置
-                if (lastPlayed > 0 && videoPlayerConfigData.defaultStartPosition == DefaultStartPosition.History) {
-                    logger.info { "Seek to history position: ${lastPlayed.formatHourMinSec()}" }
-                    videoPlayer.seekTo(lastPlayed)
-                    mDanmakuPlayer?.seekTo(lastPlayed)
-                    mDanmakuPlayer?.pause()
-                }
             }
         }
 
         override fun onPlay() {
             logger.info { "onPlay" }
-            mDanmakuPlayer?.start()
             scope.launch(Dispatchers.Main) {
+                // 同步弹幕到视频当前位置
+                val currentPosition = videoPlayer.currentPosition
+                mDanmakuPlayer?.seekTo(currentPosition)
+                mDanmakuPlayer?.start()
                 isPlaying = true
                 isBuffering = false
                 updateBackToHistory()

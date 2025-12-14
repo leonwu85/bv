@@ -47,10 +47,8 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerClockData
 import dev.aaa1115910.bv.player.entity.VideoPlayerDebugInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekData
 import dev.aaa1115910.bv.player.entity.VideoPlayerStateData
-import dev.aaa1115910.bv.player.entity.DefaultStartPosition
 import dev.aaa1115910.bv.player.mobile.controller.BvPlayerController
 import dev.aaa1115910.bv.util.countDownTimer
-import dev.aaa1115910.bv.util.formatHourMinSec
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -210,13 +208,6 @@ fun BvPlayer(
 
             updateVideoAspectRatio()
 
-            // 根据 DefaultStartPosition 设置初始播放位置
-            if (lastPlayed > 0 && videoPlayerConfigData.defaultStartPosition == DefaultStartPosition.History) {
-                logger.info { "Seek to history position: ${lastPlayed.formatHourMinSec()}" }
-                videoPlayer.seekTo(lastPlayed)
-                mDanmakuPlayer?.seekTo(lastPlayed)
-                mDanmakuPlayer?.pause()
-            }
 
             videoPlayer.start()
 
@@ -228,6 +219,9 @@ fun BvPlayer(
 
         override fun onPlay() {
             logger.info { "onPlay" }
+            // 同步弹幕到视频当前位置
+            val currentPosition = videoPlayer.currentPosition
+            mDanmakuPlayer?.seekTo(currentPosition)
             mDanmakuPlayer?.start()
             isPlaying = true
             isBuffering = false
@@ -275,6 +269,11 @@ fun BvPlayer(
             updatePosition()
             delay(200)
         }
+    }
+
+    // 同步 videoPlayerHistoryData.lastPlayed 到本地变量
+    LaunchedEffect(videoPlayerHistoryData.lastPlayed) {
+        lastPlayed = videoPlayerHistoryData.lastPlayed.toLong()
     }
 
     LaunchedEffect(danmakuPlayer) {
