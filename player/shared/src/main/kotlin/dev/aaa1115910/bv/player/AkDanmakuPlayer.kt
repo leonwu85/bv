@@ -19,8 +19,7 @@ import com.kuaishou.akdanmaku.ui.DanmakuView
 @Composable
 fun AkDanmakuPlayer(
     modifier: Modifier = Modifier,
-    danmakuPlayer: DanmakuPlayer?,
-    alpha: Float = 1f
+    danmakuPlayer: DanmakuPlayer?
 ) {
     val context = LocalContext.current
     var danmakuView: DanmakuView? by remember { mutableStateOf(null) }
@@ -63,9 +62,6 @@ fun AkDanmakuPlayer(
                 }
             }
             danmakuView!!
-        },
-        update = { view ->
-            view.alpha = alpha
         }
     )
 }

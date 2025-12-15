@@ -31,10 +31,6 @@ class DanmakuLayerHandle(
     var areaFraction by mutableFloatStateOf(1f)
         private set
 
-    // 透明度
-    var opacity by mutableFloatStateOf(1f)
-        private set
-
     // 当前蒙版帧（null 表示无蒙版）
     var maskFrame: DanmakuMaskFrame? by mutableStateOf(null)
         private set
@@ -49,12 +45,10 @@ class DanmakuLayerHandle(
 
     fun update(
         area: Float? = null,
-        opacity: Float? = null,
         mask: DanmakuMaskFrame? = maskFrame,
         visible: Boolean? = null
     ) {
         area?.let { if (areaFraction != it) areaFraction = it }
-        opacity?.let { if (this.opacity != it) this.opacity = it }
         if (maskFrame !== mask) maskFrame = mask
         visible?.let { if (this.visible != it) this.visible = it }
     }
@@ -81,8 +75,7 @@ fun DanmakuLayer(
     ) {
         AkDanmakuPlayer(
             modifier = Modifier.fillMaxWidth().fillMaxHeight(),
-            danmakuPlayer = player,
-            alpha = handle.opacity
+            danmakuPlayer = player
         )
     }
 }

@@ -191,7 +191,8 @@ fun BvPlayer(
             retainerPolicy = RETAINER_BILIBILI,
             textSizeScale = videoPlayerConfigData.currentDanmakuScale,
             dataFilter = listOf(typeFilter),
-            visibility = videoPlayerConfigData.showDanmaku
+            visibility = videoPlayerConfigData.showDanmaku,
+            alpha = danmakuOpacity
         )
         danmakuConfig.updateFilter()
         logger.info { "Init danmaku config: $danmakuConfig" }
@@ -224,6 +225,7 @@ fun BvPlayer(
         danmakuConfig = danmakuConfig.copy(
             retainerPolicy = RETAINER_BILIBILI,
             textSizeScale = videoPlayerConfigData.currentDanmakuScale,
+            alpha = videoPlayerConfigData.currentDanmakuOpacity
         )
         logger.info { "Update danmaku config: $danmakuConfig" }
         mDanmakuPlayer?.updateConfig(danmakuConfig)
@@ -705,6 +707,8 @@ fun BvPlayer(
             onDanmakuOpacityChange = { opacity ->
                 logger.info { "On danmaku opacity change: $opacity" }
                 onDanmakuOpacityChange(opacity)
+                danmakuConfig = danmakuConfig.copy(alpha = opacity)
+                mDanmakuPlayer?.updateConfig(danmakuConfig)
             },
             onDanmakuAreaChange = { area ->
                 logger.info { "On danmaku area change: $area" }
@@ -767,7 +771,6 @@ fun BvPlayer(
             DanmakuLayerSideEffects(
                 danmakuLayerHandle = danmakuLayerHandle,
                 area = videoPlayerConfigData.currentDanmakuArea,
-                opacity = danmakuOpacity,
                 visible = videoPlayerConfigData.showDanmaku,
                 maskFrame = currentDanmakuMaskFrame.takeIf { videoPlayerConfigData.currentDanmakuMask }
             )
@@ -800,19 +803,17 @@ fun BvPlayer(
     }
 }
 
-// 同步弹幕层 UI 相关的独立副作用（区域/透明度/蒙版/可见性）
+// 同步弹幕层 UI 相关的独立副作用（区域/蒙版/可见性）
 @Composable
 private fun DanmakuLayerSideEffects(
     danmakuLayerHandle: DanmakuLayerHandle,
     area: Float,
-    opacity: Float,
     visible: Boolean,
     maskFrame: DanmakuMaskFrame?,
 ) {
-    LaunchedEffect(area, opacity, visible, maskFrame) {
+    LaunchedEffect(area, visible, maskFrame) {
         danmakuLayerHandle.update(
             area = area,
-            opacity = opacity,
             mask = maskFrame,
             visible = visible,
         )

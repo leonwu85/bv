@@ -147,7 +147,8 @@ fun BvPlayer(
         danmakuConfig = danmakuConfig.copy(
             retainerPolicy = RETAINER_BILIBILI,
             textSizeScale = videoPlayerConfigData.currentDanmakuScale,
-            dataFilter = listOf(typeFilter)
+            dataFilter = listOf(typeFilter),
+            alpha = danmakuOpacity
         )
         danmakuConfig.updateFilter()
         mDanmakuPlayer?.updateConfig(danmakuConfig)
@@ -169,6 +170,7 @@ fun BvPlayer(
         danmakuConfig = danmakuConfig.copy(
             retainerPolicy = RETAINER_BILIBILI,
             textSizeScale = videoPlayerConfigData.currentDanmakuScale,
+            alpha = videoPlayerConfigData.currentDanmakuOpacity
         )
         mDanmakuPlayer?.updateConfig(danmakuConfig)
     }
@@ -374,7 +376,11 @@ fun BvPlayer(
                 onEnabledDanmakuTypesChange(enabledDanmakuTypes)
                 updateDanmakuConfigTypeFilter()
             },
-            onDanmakuOpacityChange = onDanmakuOpacityChange,
+            onDanmakuOpacityChange = { opacity ->
+                onDanmakuOpacityChange(opacity)
+                danmakuConfig = danmakuConfig.copy(alpha = opacity)
+                mDanmakuPlayer?.updateConfig(danmakuConfig)
+            },
             onDanmakuScaleChange = { scale ->
                 onDanmakuScaleChange(scale)
                 updateDanmakuConfig()
@@ -395,8 +401,7 @@ fun BvPlayer(
             AkDanmakuPlayer(
                 modifier = Modifier
                     .fillMaxHeight(videoPlayerConfigData.currentDanmakuArea),
-                danmakuPlayer = mDanmakuPlayer,
-                alpha = danmakuOpacity
+                danmakuPlayer = mDanmakuPlayer
             )
         }
     }
