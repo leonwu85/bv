@@ -38,9 +38,7 @@ object BiliPlusHttpApi {
 
     private fun createClient() {
         client = HttpClient(OkHttp) {
-            install(UserAgent) {
-                agent = BiliApiConstants.USER_AGENT_WEB
-            }
+            BiliUserAgent()
             install(ContentNegotiation) {
                 json(json)
             }
