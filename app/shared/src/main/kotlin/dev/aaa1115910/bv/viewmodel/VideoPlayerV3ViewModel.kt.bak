@@ -815,30 +815,4 @@ class VideoPlayerV3ViewModel(
             )
         }
     }
-    
-    /**
-     * 加载直播流
-     */
-    fun loadLiveStream(streamUrl: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            logger.fInfo { "Load live stream: $streamUrl" }
-            withContext(Dispatchers.Main) { loadState = RequestState.Doing }
-            
-            runCatching {
-                withContext(Dispatchers.Main) {
-                    videoPlayer?.playUrl(videoUrl = streamUrl)
-                    videoPlayer?.prepare()
-                    videoPlayer?.start()
-                    loadState = RequestState.Success
-                }
-                logger.fInfo { "Live stream loaded successfully" }
-            }.onFailure { e ->
-                logger.fError { "Failed to load live stream: ${e.message}" }
-                withContext(Dispatchers.Main) {
-                    loadState = RequestState.Failed
-                    errorMessage = "加载直播流失败: ${e.message}"
-                }
-            }
-        }
-    }
 }

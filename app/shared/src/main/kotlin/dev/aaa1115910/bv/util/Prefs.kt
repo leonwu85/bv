@@ -204,6 +204,11 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowFpsRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowFpsKey, value) }
 
+    val showLiveInSidebarFlow: Flow<Boolean> get() = dsm.getPreferenceFlow(PrefKeys.prefShowLiveInSidebarRequest)
+    var showLiveInSidebar: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowLiveInSidebarRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowLiveInSidebarKey, value) }
+
     var buvid: String
         get() = runBlocking {
             val id = dsm.getPreferenceFlow(PrefKeys.prefBuvidRequest).first()
@@ -455,6 +460,7 @@ object PrefKeys {
     val prefShowDanmakuKey = booleanPreferencesKey("player_show_danmaku")
     val prefPlayerLoadNextActionKey = intPreferencesKey("player_load_next_action")
     val prefPlayerDefaultStartPositionKey = intPreferencesKey("player_default_start_position")
+    val prefShowLiveInSidebarKey = booleanPreferencesKey("show_live_in_sidebar")
 
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
@@ -528,4 +534,5 @@ object PrefKeys {
     val prefShowDanmakuRequest = PreferenceRequest(prefShowDanmakuKey, true)
     val prefPlayerLoadNextActionRequest = PreferenceRequest(prefPlayerLoadNextActionKey, PlayerLoadNextAction.DoNothing.value)
     val prefPlayerDefaultStartPositionRequest = PreferenceRequest(prefPlayerDefaultStartPositionKey, PlayerDefaultStartPosition.History.value)
+    val prefShowLiveInSidebarRequest = PreferenceRequest(prefShowLiveInSidebarKey, false)
 }

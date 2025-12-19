@@ -19,11 +19,13 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +51,7 @@ import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import dev.aaa1115910.bv.ui.theme.BVTheme
+import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.isDpadRight
 import dev.aaa1115910.bv.util.isKeyDown
@@ -193,17 +196,26 @@ fun DrawerContent(
                 )
             }
         )
+        // 动态菜单项列表，基于设置决定是否显示直播
+        val showLiveInSidebar by Prefs.showLiveInSidebarFlow.collectAsState(initial = false)
+        val menuItems = remember(showLiveInSidebar) {
+            buildList {
+                add(DrawerItem.Search)
+                add(DrawerItem.Home)
+                add(DrawerItem.UGC)
+                add(DrawerItem.PGC)
+                if (showLiveInSidebar) {
+                    add(DrawerItem.Live)
+                }
+            }
+        }
+        
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)
         ) {
-            listOf(
-                DrawerItem.Search,
-                DrawerItem.Home,
-                DrawerItem.UGC,
-                DrawerItem.PGC,
-            ).forEach { item ->
-                item {
-                    NavigationRailItem(
+            items(menuItems.size) { index ->
+                val item = menuItems[index]
+                NavigationRailItem(
                         modifier = Modifier
                             .focusRequester(drawerItemFocusRequesters[item]!!)
                             // 立即更新focusedItem以反映视觉状态
@@ -241,7 +253,6 @@ fun DrawerContent(
                             )
                         }
                     )
-                }
             }
         }
         NavigationRailItem(
@@ -285,6 +296,7 @@ enum class DrawerItem(
     Home(displayName = "首页", displayIcon = Icons.Default.Home),
     UGC(displayName = "UGC", displayIcon = Icons.Default.OndemandVideo),
     PGC(displayName = "PGC", displayIcon = Icons.Default.Movie),
+    Live(displayName = "直播", displayIcon = Icons.Default.Videocam),
     Settings(displayName = "设置", displayIcon = Icons.Default.Settings), ;
 }
 

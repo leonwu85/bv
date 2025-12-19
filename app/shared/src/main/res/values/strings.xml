@@ -206,6 +206,7 @@
     <string name="settings_item_audio">默认音频编码</string>
     <string name="settings_item_codec">默认视频编码</string>
     <string name="settings_item_info">设备信息</string>
+    <string name="settings_item_live">直播</string>
     <string name="settings_item_network">网络设置</string>
     <string name="settings_item_other">更多设置</string>
     <string name="settings_item_player_type">播放器内核</string>
@@ -245,6 +246,8 @@
     <string name="settings_ui_grid_columns_title">页面显示列数</string>
     <string name="settings_ui_grid_columns_4">4列</string>
     <string name="settings_ui_grid_columns_5">5列</string>
+    <string name="settings_live_enable">显示直播</string>
+    <string name="settings_live_enable_desc">在侧边栏显示直播入口</string>
     <string name="settings_version_check_update_button">爷要更新</string>
     <string name="settings_version_current_version">当前版本: %1$s</string>
     <string name="settings_version_latest_version">最新版本: %1$s</string>

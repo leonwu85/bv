@@ -43,6 +43,7 @@ import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.tv.screens.settings.content.AboutSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.ApiSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.InfoSetting
+import dev.aaa1115910.bv.tv.screens.settings.content.LiveStreamingSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.NetworkSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.OtherSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.PlayerSetting
@@ -153,6 +154,7 @@ enum class SettingsMenuNavItem(private val strRes: Int) {
     Player(R.string.settings_item_player),
     PlayerType(R.string.settings_item_player_type),
     UI(R.string.settings_item_ui),
+    Live(R.string.settings_item_live),
     Api(R.string.settings_item_api),
     Other(R.string.settings_item_other),
     Storage(R.string.settings_item_storage),
@@ -189,6 +191,7 @@ fun SettingContent(
                 SettingsMenuNavItem.UI -> UISetting()
                 SettingsMenuNavItem.Storage -> StorageSetting()
                 SettingsMenuNavItem.Api -> ApiSetting()
+                SettingsMenuNavItem.Live -> LiveStreamingSetting()
             }
         }
     }
