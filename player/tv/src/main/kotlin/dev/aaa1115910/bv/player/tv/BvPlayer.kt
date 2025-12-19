@@ -187,12 +187,15 @@ fun BvPlayer(
             }
             filterTypes.forEach { typeFilter.addFilterItem(it) }
         }
+        // Ensure screenPart is set from config (clamped 0f..1f)
+        val safeArea = videoPlayerConfigData.currentDanmakuArea.coerceIn(0f, 1f)
         danmakuConfig = danmakuConfig.copy(
             retainerPolicy = RETAINER_BILIBILI,
             textSizeScale = videoPlayerConfigData.currentDanmakuScale,
             dataFilter = listOf(typeFilter),
             visibility = videoPlayerConfigData.showDanmaku,
-            alpha = danmakuOpacity
+            alpha = danmakuOpacity,
+            screenPart = safeArea
         )
         danmakuConfig.updateFilter()
         logger.info { "Init danmaku config: $danmakuConfig" }
@@ -218,6 +221,8 @@ fun BvPlayer(
         }
         logger.info { "Update danmaku type filters: ${typeFilter.filterSet}" }
         danmakuConfig.updateFilter()
+        // ensure screenPart kept in sync
+        danmakuConfig = danmakuConfig.copy(screenPart = videoPlayerConfigData.currentDanmakuArea.coerceIn(0f, 1f))
         mDanmakuPlayer?.updateConfig(danmakuConfig)
     }
 
@@ -225,7 +230,8 @@ fun BvPlayer(
         danmakuConfig = danmakuConfig.copy(
             retainerPolicy = RETAINER_BILIBILI,
             textSizeScale = videoPlayerConfigData.currentDanmakuScale,
-            alpha = videoPlayerConfigData.currentDanmakuOpacity
+            alpha = videoPlayerConfigData.currentDanmakuOpacity,
+            screenPart = videoPlayerConfigData.currentDanmakuArea.coerceIn(0f, 1f)
         )
         logger.info { "Update danmaku config: $danmakuConfig" }
         mDanmakuPlayer?.updateConfig(danmakuConfig)
@@ -406,6 +412,22 @@ fun BvPlayer(
         logger.debug { "update mDanmakuPlayer" }
         mDanmakuPlayer = danmakuPlayer
         danmakuLayerHandle.updateDanmakuPlayer(danmakuPlayer)
+        // push current config (ensure screenPart applied) when player becomes available
+        val safeArea = videoPlayerConfigData.currentDanmakuArea.coerceIn(0f, 1f)
+        danmakuConfig = danmakuConfig.copy(screenPart = safeArea)
+        mDanmakuPlayer?.updateConfig(danmakuConfig)
+    }
+
+    // Sync currentDanmakuArea -> danmakuConfig.screenPart (and keep handle in sync)
+    LaunchedEffect(videoPlayerConfigData.currentDanmakuArea) {
+        val safeArea = videoPlayerConfigData.currentDanmakuArea.coerceIn(0f, 1f)
+        // update the danmaku config used by akdanmaku
+        danmakuConfig = danmakuConfig.copy(screenPart = safeArea)
+        logger.info { "Sync danmaku screenPart: $safeArea" }
+        mDanmakuPlayer?.updateConfig(danmakuConfig)
+        // also ensure the Compose handle is updated (DanmakuLayerSideEffects normally does this,
+        // but we call explicitly to make sure akdanmaku and UI stay in sync immediately)
+        danmakuLayerHandle.update(area = safeArea, mask = currentDanmakuMaskFrame?.takeIf { videoPlayerConfigData.currentDanmakuMask }, visible = videoPlayerConfigData.showDanmaku)
     }
 
     LaunchedEffect(videoPlayerLoadStateData.loadState) {
@@ -707,7 +729,7 @@ fun BvPlayer(
             onDanmakuOpacityChange = { opacity ->
                 logger.info { "On danmaku opacity change: $opacity" }
                 onDanmakuOpacityChange(opacity)
-                danmakuConfig = danmakuConfig.copy(alpha = opacity)
+                danmakuConfig = danmakuConfig.copy(alpha = opacity, screenPart = videoPlayerConfigData.currentDanmakuArea.coerceIn(0f, 1f))
                 mDanmakuPlayer?.updateConfig(danmakuConfig)
             },
             onDanmakuAreaChange = { area ->
@@ -743,7 +765,7 @@ fun BvPlayer(
             onOpenDanmaku = {
                 onShowDanmakuChange(true)
                 videoPlayerConfigData.showDanmaku = true
-                danmakuConfig = danmakuConfig.copy(visibility = true)
+                danmakuConfig = danmakuConfig.copy(visibility = true, screenPart = videoPlayerConfigData.currentDanmakuArea.coerceIn(0f, 1f))
                 danmakuConfig.updateVisibility()
                 logger.info { "Update danmaku config: $danmakuConfig" }
                 mDanmakuPlayer?.updateConfig(danmakuConfig)
@@ -751,7 +773,7 @@ fun BvPlayer(
             onHideDanmaku = {
                 onShowDanmakuChange(false)
                 videoPlayerConfigData.showDanmaku = false
-                danmakuConfig = danmakuConfig.copy(visibility = false)
+                danmakuConfig = danmakuConfig.copy(visibility = false, screenPart = videoPlayerConfigData.currentDanmakuArea.coerceIn(0f, 1f))
                 danmakuConfig.updateVisibility()
                 logger.info { "Update danmaku config: $danmakuConfig" }
                 mDanmakuPlayer?.updateConfig(danmakuConfig)

@@ -48,7 +48,10 @@ class DanmakuLayerHandle(
         mask: DanmakuMaskFrame? = maskFrame,
         visible: Boolean? = null
     ) {
-        area?.let { if (areaFraction != it) areaFraction = it }
+        area?.let {
+            val clamped = it.coerceIn(0f, 1f)
+            if (areaFraction != clamped) areaFraction = clamped
+        }
         if (maskFrame !== mask) maskFrame = mask
         visible?.let { if (this.visible != it) this.visible = it }
     }
