@@ -6,7 +6,10 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
 import java.lang.ref.WeakReference
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.PlayerType
@@ -173,6 +176,11 @@ class VideoPlayerV3Activity : ComponentActivity() {
         super.onPause()
         playerViewModel.videoPlayer?.pause()
         playerViewModel.danmakuPlayer?.pause()
+        
+        // 暂停直播弹幕
+        if (playerViewModel.isLive) {
+            playerViewModel.stopLiveDanmaku()
+        }
     }
 
     private fun initVideoPlayer() {
@@ -216,8 +224,14 @@ class VideoPlayerV3Activity : ComponentActivity() {
                 this.liveRoomId = roomId
                 this.liveStreamUrl = streamUrl
                 
-                // 直接加载直播流
+                // 加载直播流（内部会初始化弹幕播放器）
                 loadLiveStream(streamUrl)
+                
+                // 延迟启动直播弹幕，等待播放器初始化完成
+                lifecycleScope.launch {
+                    kotlinx.coroutines.delay(1000)
+                    startLiveDanmaku(roomId)
+                }
             }
             return
         }
