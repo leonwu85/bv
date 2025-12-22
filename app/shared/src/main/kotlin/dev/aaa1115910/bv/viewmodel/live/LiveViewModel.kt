@@ -24,14 +24,24 @@ class LiveViewModel(
     private val logger = KotlinLogging.logger("LiveViewModel")
 
     /**
-     * 扁平化的分区列表（所有子分区）
+     * 主分区列表（父分区组）
      */
-    val areaList = mutableStateListOf<LiveAreaItem>()
+    val parentAreaGroups = mutableStateListOf<dev.aaa1115910.biliapi.entity.live.LiveAreaGroup>()
 
     /**
-     * 当前选中的分区
+     * 当前选中的主分区组
      */
-    var currentArea by mutableStateOf<LiveAreaItem?>(null)
+    var currentParentGroup by mutableStateOf<dev.aaa1115910.biliapi.entity.live.LiveAreaGroup?>(null)
+
+    /**
+     * 当前主分区下的子分区列表
+     */
+    val subAreaList = mutableStateListOf<LiveAreaItem>()
+
+    /**
+     * 当前选中的子分区
+     */
+    var currentSubArea by mutableStateOf<LiveAreaItem?>(null)
 
     /**
      * 当前分区的直播间列表
@@ -70,18 +80,22 @@ class LiveViewModel(
             runCatching {
                 val response = liveRepository.getLiveAreaList()
                 if (response.code == 0) {
-                    // 扁平化所有子分区
-                    val allAreas = response.data.flatMap { it.list }
                     withContext(Dispatchers.Main) {
-                        areaList.clear()
-                        areaList.addAll(allAreas)
-                        // 默认选中第一个分区
-                        if (allAreas.isNotEmpty() && currentArea == null) {
-                            currentArea = allAreas[0]
-                            loadRooms(refresh = true)
+                        parentAreaGroups.clear()
+                        parentAreaGroups.addAll(response.data)
+                        // 默认选中第一个主分区和其第一个子分区
+                        if (response.data.isNotEmpty() && currentParentGroup == null) {
+                            val firstGroup = response.data[0]
+                            currentParentGroup = firstGroup
+                            subAreaList.clear()
+                            subAreaList.addAll(firstGroup.list)
+                            if (firstGroup.list.isNotEmpty()) {
+                                currentSubArea = firstGroup.list[0]
+                                loadRooms(refresh = true)
+                            }
                         }
                     }
-                    logger.info { "Loaded ${allAreas.size} live areas" }
+                    logger.info { "Loaded ${response.data.size} parent area groups" }
                 } else {
                     withContext(Dispatchers.Main) {
                         "加载直播分区失败: ${response.message}".toast(BVApp.context)
@@ -97,11 +111,26 @@ class LiveViewModel(
     }
 
     /**
-     * 切换分区
+     * 切换主分区
      */
-    fun switchArea(area: LiveAreaItem) {
-        if (currentArea?.id == area.id) return
-        currentArea = area
+    fun switchParentArea(group: dev.aaa1115910.biliapi.entity.live.LiveAreaGroup) {
+        if (currentParentGroup?.id == group.id) return
+        currentParentGroup = group
+        subAreaList.clear()
+        subAreaList.addAll(group.list)
+        // 默认选中第一个子分区
+        if (group.list.isNotEmpty()) {
+            currentSubArea = group.list[0]
+            loadRooms(refresh = true)
+        }
+    }
+
+    /**
+     * 切换子分区
+     */
+    fun switchSubArea(area: LiveAreaItem) {
+        if (currentSubArea?.id == area.id) return
+        currentSubArea = area
         loadRooms(refresh = true)
     }
 
@@ -110,7 +139,7 @@ class LiveViewModel(
      * @param refresh 是否刷新（清空现有数据）
      */
     fun loadRooms(refresh: Boolean = false) {
-        val area = currentArea ?: return
+        val area = currentSubArea ?: return
         if (loading) return
 
         viewModelScope.launch(Dispatchers.IO) {

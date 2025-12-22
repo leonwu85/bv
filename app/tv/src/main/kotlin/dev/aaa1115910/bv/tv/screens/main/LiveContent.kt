@@ -40,9 +40,15 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import dev.aaa1115910.biliapi.entity.live.LiveAreaGroup
 
-// 为直播分区创建稳定的 TopNavItem，确保选中项与焦点切换一致
-private data class LiveTopNavItem(val area: LiveAreaItem) : TopNavItem {
+// 主分区 TopNavItem
+private data class ParentAreaNavItem(val group: LiveAreaGroup) : TopNavItem {
+    override fun getDisplayName(context: Context): String = group.name
+}
+
+// 子分区 TopNavItem
+private data class SubAreaNavItem(val area: LiveAreaItem) : TopNavItem {
     override fun getDisplayName(context: Context): String = area.name
 }
 
@@ -57,8 +63,11 @@ fun LiveContent(
     val context = LocalContext.current
     
     val gridState = rememberLazyGridState()
+    val parentNavFocusRequester = remember { FocusRequester() }
+    val subNavFocusRequester = remember { FocusRequester() }
     var focusOnContent by remember { mutableStateOf(false) }
-    var topNavHasFocus by remember { mutableStateOf(false) }
+    var parentNavHasFocus by remember { mutableStateOf(false) }
+    var subNavHasFocus by remember { mutableStateOf(false) }
 
     val currentListOnTop by remember {
         derivedStateOf {
@@ -85,55 +94,89 @@ fun LiveContent(
         }
     }
 
-    // 当 areaList 首次加载完成后，请求 TopNav 焦点（必须在 Composable 内部）
-    LaunchedEffect(liveViewModel.areaList.isNotEmpty()) {
-        if (liveViewModel.areaList.isNotEmpty()) {
-            kotlinx.coroutines.delay(100)  // 等待 TopNav 完全渲染
-            navFocusRequester.requestFocus(scope)
+    // 当主分区加载完成后，请求主分区 TopNav 焦点
+    LaunchedEffect(liveViewModel.parentAreaGroups.isNotEmpty()) {
+        if (liveViewModel.parentAreaGroups.isNotEmpty()) {
+            kotlinx.coroutines.delay(100)
+            parentNavFocusRequester.requestFocus(scope)
         }
     }
 
-    BackHandler(focusOnContent || topNavHasFocus) {
+    BackHandler(focusOnContent || subNavHasFocus || parentNavHasFocus) {
         logger.info { "onFocusBackToNav" }
-        if (topNavHasFocus) {
+        if (subNavHasFocus) {
+            parentNavFocusRequester.requestFocus(scope)
+            return@BackHandler
+        }
+        if (parentNavHasFocus) {
             drawerItemFocusRequesters[DrawerItem.Live]?.requestFocus()
             return@BackHandler
         }
-        navFocusRequester.requestFocus(scope)
+        subNavFocusRequester.requestFocus(scope)
     }
 
     Scaffold(
         modifier = modifier,
         topBar = {
-            // 只在区域列表加载完成后显示TopNav
-            if (liveViewModel.areaList.isNotEmpty()) {
-                // 构建稳定的 nav items 列表，避免匿名对象导致 initialSelectedItem 不匹配
-                val navItems = remember(liveViewModel.areaList) {
-                    liveViewModel.areaList.map { LiveTopNavItem(it) }
-                }
-                TopNav(
-                    modifier = Modifier
-                        .focusRequester(navFocusRequester)
-                        .padding(end = 80.dp)
-                        .onFocusChanged { topNavHasFocus = it.hasFocus },
-                    items = navItems,
-                    isLargePadding = !focusOnContent && currentListOnTop,
-                    initialSelectedItem = navItems.firstOrNull { it.area.id == liveViewModel.currentArea?.id },
-                    onSelectedChanged = { nav ->
-                        (nav as? LiveTopNavItem)?.let { liveViewModel.switchArea(it.area) }
-                    },
-                    onClick = { nav ->
-                        // 点击当前Tab刷新数据
-                        (nav as? LiveTopNavItem)?.let { item ->
-                            if (item.area.id == liveViewModel.currentArea?.id) {
-                                liveViewModel.refresh()
-                            }
-                        }
-                    },
-                    onLeftKeyEvent = {
-                        drawerItemFocusRequesters[DrawerItem.Live]?.requestFocus()
+            androidx.compose.foundation.layout.Column {
+                // 第一行：主分区
+                if (liveViewModel.parentAreaGroups.isNotEmpty()) {
+                    val parentNavItems = remember(liveViewModel.parentAreaGroups) {
+                        liveViewModel.parentAreaGroups.map { ParentAreaNavItem(it) }
                     }
-                )
+                    TopNav(
+                        modifier = Modifier
+                            .focusRequester(parentNavFocusRequester)
+                            .padding(end = 80.dp)
+                            .onFocusChanged { parentNavHasFocus = it.hasFocus },
+                        items = parentNavItems,
+                        isLargePadding = false,
+                        initialSelectedItem = parentNavItems.firstOrNull { it.group.id == liveViewModel.currentParentGroup?.id },
+                        onSelectedChanged = { nav ->
+                            (nav as? ParentAreaNavItem)?.let { liveViewModel.switchParentArea(it.group) }
+                        },
+                        onClick = { nav ->
+                            (nav as? ParentAreaNavItem)?.let { item ->
+                                if (item.group.id == liveViewModel.currentParentGroup?.id) {
+                                    liveViewModel.refresh()
+                                }
+                            }
+                        },
+                        onLeftKeyEvent = {
+                            drawerItemFocusRequesters[DrawerItem.Live]?.requestFocus()
+                        }
+                    )
+                }
+                
+                // 第二行：子分区
+                if (liveViewModel.subAreaList.isNotEmpty()) {
+                    // 监听 currentParentGroup 变化以触发子分区列表更新
+                    val subNavItems = remember(liveViewModel.currentParentGroup, liveViewModel.subAreaList.size) {
+                        liveViewModel.subAreaList.map { SubAreaNavItem(it) }
+                    }
+                    TopNav(
+                        modifier = Modifier
+                            .focusRequester(subNavFocusRequester)
+                            .padding(end = 80.dp)
+                            .onFocusChanged { subNavHasFocus = it.hasFocus },
+                        items = subNavItems,
+                        isLargePadding = !focusOnContent && currentListOnTop,
+                        initialSelectedItem = subNavItems.firstOrNull { it.area.id == liveViewModel.currentSubArea?.id },
+                        onSelectedChanged = { nav ->
+                            (nav as? SubAreaNavItem)?.let { liveViewModel.switchSubArea(it.area) }
+                        },
+                        onClick = { nav ->
+                            (nav as? SubAreaNavItem)?.let { item ->
+                                if (item.area.id == liveViewModel.currentSubArea?.id) {
+                                    liveViewModel.refresh()
+                                }
+                            }
+                        },
+                        onLeftKeyEvent = {
+                            parentNavFocusRequester.requestFocus(scope)
+                        }
+                    )
+                }
             }
         }
     ) { innerPadding ->
