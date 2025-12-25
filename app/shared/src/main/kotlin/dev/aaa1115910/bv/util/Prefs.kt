@@ -400,6 +400,14 @@ object Prefs {
     var showDanmaku: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowDanmakuRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowDanmakuKey, value) }
+
+    // 首页导航项排序和隐藏状态
+    val homeNavItemsOrderFlow: Flow<String>
+        get() = dsm.getPreferenceFlow(PrefKeys.prefHomeNavItemsOrderRequest)
+
+    var homeNavItemsOrder: String
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefHomeNavItemsOrderRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefHomeNavItemsOrderKey, value) }
 }
 
 object PrefKeys {
@@ -461,6 +469,7 @@ object PrefKeys {
     val prefPlayerLoadNextActionKey = intPreferencesKey("player_load_next_action")
     val prefPlayerDefaultStartPositionKey = intPreferencesKey("player_default_start_position")
     val prefShowLiveInSidebarKey = booleanPreferencesKey("show_live_in_sidebar")
+    val prefHomeNavItemsOrderKey = stringPreferencesKey("home_nav_items_order")
 
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
@@ -535,4 +544,8 @@ object PrefKeys {
     val prefPlayerLoadNextActionRequest = PreferenceRequest(prefPlayerLoadNextActionKey, PlayerLoadNextAction.DoNothing.value)
     val prefPlayerDefaultStartPositionRequest = PreferenceRequest(prefPlayerDefaultStartPositionKey, PlayerDefaultStartPosition.History.value)
     val prefShowLiveInSidebarRequest = PreferenceRequest(prefShowLiveInSidebarKey, false)
+    val prefHomeNavItemsOrderRequest = PreferenceRequest(
+        prefHomeNavItemsOrderKey,
+        "0,1,2,3,4,5,6"  // 默认全部显示，按原始顺序
+    )
 }

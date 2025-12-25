@@ -4,6 +4,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -27,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -50,6 +53,9 @@ import dev.aaa1115910.bv.tv.component.settings.SettingListItem
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
 import dev.aaa1115910.bv.tv.component.HomeTopNavItem
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
+import dev.aaa1115910.bv.tv.util.NavItemConfig
+import dev.aaa1115910.bv.tv.util.moveNavItemToFirstAndUnhide
+import dev.aaa1115910.bv.tv.util.parseNavItemsOrderToConfig
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.requestFocus
@@ -65,6 +71,7 @@ fun UISetting(
     var showThemeTypeDialog by remember { mutableStateOf(false) }
     var showDefaultHomeTabDialog by remember { mutableStateOf(false) }
     var showGridColumnsDialog by remember { mutableStateOf(false) }
+    var showHomeNavItemsDialog by remember { mutableStateOf(false) }
     val density by Prefs.densityFlow.collectAsState(context.resources.displayMetrics.widthPixels / 960f)
     val themeType by Prefs.themeTypeFlow.collectAsState(Prefs.themeType)
     var defaultHomeTab by remember { mutableStateOf(HomeTopNavItem.entries.getOrElse(Prefs.defaultHomeTab) { HomeTopNavItem.Recommend }) }
@@ -118,6 +125,13 @@ fun UISetting(
                         onClick = { showGridColumnsDialog = true }
                     )
                 }
+                item {
+                    SettingListItem(
+                        title = stringResource(R.string.settings_ui_home_nav_items_title),
+                        supportText = stringResource(R.string.settings_ui_home_nav_items_text),
+                        onClick = { showHomeNavItemsDialog = true }
+                    )
+                }
             }
         }
     }
@@ -140,9 +154,14 @@ fun UISetting(
         show = showDefaultHomeTabDialog,
         onHideDialog = { showDefaultHomeTabDialog = false },
         defaultHomeTab = defaultHomeTab,
-        onDefaultHomeTabChange = { 
+        onDefaultHomeTabChange = {
             defaultHomeTab = it
-            Prefs.defaultHomeTab = it.ordinal 
+            Prefs.defaultHomeTab = it.ordinal
+
+            // 更新排序配置：将新的默认标签移到第一位，并取消隐藏
+            val currentOrder = Prefs.homeNavItemsOrder
+            val updatedOrder = moveNavItemToFirstAndUnhide(currentOrder, it.ordinal)
+            Prefs.homeNavItemsOrder = updatedOrder
         }
     )
 
@@ -154,6 +173,12 @@ fun UISetting(
             gridColumns = it
             Prefs.gridColumns = it
         }
+    )
+
+    HomeNavItemsEditDialog(
+        show = showHomeNavItemsDialog,
+        onHideDialog = { showHomeNavItemsDialog = false },
+        initialOrderString = Prefs.homeNavItemsOrder
     )
 }
 
@@ -365,4 +390,202 @@ fun GridColumnsDialog(
             confirmButton = {}
         )
     }
+}
+
+@Composable
+private fun HomeNavItemsEditDialog(
+    modifier: Modifier = Modifier,
+    show: Boolean,
+    onHideDialog: () -> Unit,
+    initialOrderString: String
+) {
+    if (!show) return
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val focusRequester = remember { FocusRequester() }
+
+    // 解析初始配置（按显示顺序）
+    val initialConfigs = remember(initialOrderString) {
+        parseNavItemsOrderToConfig(initialOrderString)
+    }
+
+    // 当前配置状态
+    var navConfigs by remember { mutableStateOf(initialConfigs) }
+
+    // 当前选中的索引
+    var selectedIndex by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(show) {
+        if (show) focusRequester.requestFocus(scope)
+    }
+
+    TvAlertDialog(
+        modifier = modifier,
+        onDismissRequest = {
+            // 关闭时自动保存
+            saveNavConfigs(navConfigs)
+            onHideDialog()
+        },
+        title = { Text(text = stringResource(R.string.settings_ui_home_nav_items_title)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .focusRequester(focusRequester)
+                    .focusable()
+                    .onPreviewKeyEvent {
+                        if (it.type == KeyEventType.KeyDown) {
+                            when (it.key) {
+                                Key.DirectionLeft -> {
+                                    // 向左移动：与上一个元素交换位置
+                                    // 但第一个元素（默认标签）不能向左移动
+                                    if (selectedIndex > 0) {
+                                        navConfigs = navConfigs.toMutableList().apply {
+                                            val temp = this[selectedIndex]
+                                            this[selectedIndex] = this[selectedIndex - 1]
+                                            this[selectedIndex - 1] = temp
+                                        }
+                                        selectedIndex--
+                                    }
+                                    true
+                                }
+                                Key.DirectionRight -> {
+                                    // 向右移动：与下一个元素交换位置
+                                    if (selectedIndex < navConfigs.size - 1) {
+                                        navConfigs = navConfigs.toMutableList().apply {
+                                            val temp = this[selectedIndex]
+                                            this[selectedIndex] = this[selectedIndex + 1]
+                                            this[selectedIndex + 1] = temp
+                                        }
+                                        selectedIndex++
+                                    }
+                                    true
+                                }
+                                Key.DirectionUp -> {
+                                    // 向上选择
+                                    if (selectedIndex > 0) selectedIndex--
+                                    true
+                                }
+                                Key.DirectionDown -> {
+                                    // 向下选择
+                                    if (selectedIndex < navConfigs.size - 1) selectedIndex++
+                                    true
+                                }
+                                Key.Enter, Key.DirectionCenter -> {
+                                    // 确认键：切换隐藏状态（除了默认首页标签）
+                                    val config = navConfigs[selectedIndex]
+                                    val defaultHomeTabOrdinal = Prefs.defaultHomeTab
+                                    if (config.ordinal != defaultHomeTabOrdinal) {
+                                        navConfigs = navConfigs.toMutableList().apply {
+                                            this[selectedIndex] = config.copy(hidden = !config.hidden)
+                                        }
+                                    }
+                                    true
+                                }
+                                else -> false
+                            }
+                        }
+                        false
+                    }
+            ) {
+                // 提示文字
+                Text(
+                    text = stringResource(R.string.settings_ui_home_nav_items_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                navConfigs.forEachIndexed { index, config ->
+                    val navItem = HomeTopNavItem.entries.getOrNull(config.ordinal)
+                    if (navItem != null) {
+                        val isSelected = index == selectedIndex
+                        val isDefaultHomeTab = config.ordinal == Prefs.defaultHomeTab
+
+                        NavItemEditRow(
+                            navItem = navItem,
+                            hidden = config.hidden,
+                            selected = isSelected,
+                            isDefaultHomeTab = isDefaultHomeTab,
+                            onFocus = { selectedIndex = index }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {}
+    )
+}
+
+@Composable
+private fun NavItemEditRow(
+    navItem: HomeTopNavItem,
+    hidden: Boolean,
+    selected: Boolean,
+    isDefaultHomeTab: Boolean,
+    onFocus: () -> Unit
+) {
+    val context = LocalContext.current
+
+    ListItem(
+        selected = selected,
+        onClick = { /* 点击由父组件处理 */ },
+        modifier = Modifier.onFocusChanged { if (it.hasFocus) onFocus() },
+        headlineContent = {
+            Text(
+                text = navItem.getDisplayName(context),
+                color = if (hidden)
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                else
+                    MaterialTheme.colorScheme.onSurface
+            )
+        },
+        trailingContent = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // 默认首页标签标记
+                if (isDefaultHomeTab) {
+                    Text(
+                        text = stringResource(R.string.settings_ui_home_nav_default_tag),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                // 隐藏状态标记
+                if (hidden) {
+                    Text(
+                        text = stringResource(R.string.settings_ui_home_nav_hidden),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                } else {
+                    Text(
+                        text = stringResource(R.string.settings_ui_home_nav_visible),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    )
+}
+
+/**
+ * 保存导航项配置到 Prefs
+ * 默认标签强制不隐藏
+ */
+private fun saveNavConfigs(navConfigs: List<NavItemConfig>) {
+    val defaultTabOrdinal = Prefs.defaultHomeTab
+    val finalOrderString = navConfigs.joinToString(",") { config ->
+        val shouldHide = if (config.ordinal == defaultTabOrdinal) {
+            false  // 默认标签强制不隐藏
+        } else {
+            config.hidden
+        }
+        if (shouldHide) "-${config.ordinal}" else "${config.ordinal}"
+    }
+    Prefs.homeNavItemsOrder = finalOrderString
 }
