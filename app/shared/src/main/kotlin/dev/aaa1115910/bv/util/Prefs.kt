@@ -408,6 +408,10 @@ object Prefs {
     var homeNavItemsOrder: String
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefHomeNavItemsOrderRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefHomeNavItemsOrderKey, value) }
+
+    var skipPgcIntroOutro: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefSkipPgcIntroOutroRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefSkipPgcIntroOutroKey, value) }
 }
 
 object PrefKeys {
@@ -470,6 +474,7 @@ object PrefKeys {
     val prefPlayerDefaultStartPositionKey = intPreferencesKey("player_default_start_position")
     val prefShowLiveInSidebarKey = booleanPreferencesKey("show_live_in_sidebar")
     val prefHomeNavItemsOrderKey = stringPreferencesKey("home_nav_items_order")
+    val prefSkipPgcIntroOutroKey = booleanPreferencesKey("skip_pgc_intro_outro")
 
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
@@ -548,4 +553,5 @@ object PrefKeys {
         prefHomeNavItemsOrderKey,
         "0,1,2,3,4,5,6"  // 默认全部显示，按原始顺序
     )
+    val prefSkipPgcIntroOutroRequest = PreferenceRequest(prefSkipPgcIntroOutroKey, false)
 }

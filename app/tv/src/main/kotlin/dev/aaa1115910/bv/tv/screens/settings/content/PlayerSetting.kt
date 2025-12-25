@@ -54,6 +54,7 @@ fun PlayerSetting(
     var playerSeekBackwardStep by remember { mutableDoubleStateOf(Prefs.playerSeekBackwardStep.toDouble()) }
     var portraitVideoFixMode by remember { mutableStateOf(Prefs.portraitVideoFixMode) }
     var defaultDanmakuArea by remember { mutableDoubleStateOf(Prefs.defaultDanmakuArea.toDouble()) }
+    var skipPgcIntroOutro by remember { mutableStateOf(Prefs.skipPgcIntroOutro) }
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -263,6 +264,17 @@ fun PlayerSetting(
                     onValueChange = {
                         defaultDanmakuArea = it / 100
                         Prefs.defaultDanmakuArea = (it / 100).toFloat()
+                    }
+                )
+            }
+            item {
+                SettingSwitchListItem(
+                    title = "跳过 PGC 片头片尾(实验性)",
+                    supportText = "自动跳过 PGC 片头片尾",
+                    checked = skipPgcIntroOutro,
+                    onCheckedChange = {
+                        skipPgcIntroOutro = it
+                        Prefs.skipPgcIntroOutro = it
                     }
                 )
             }

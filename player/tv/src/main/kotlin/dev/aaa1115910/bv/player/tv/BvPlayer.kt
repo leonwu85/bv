@@ -29,6 +29,8 @@ import com.kuaishou.akdanmaku.ecs.component.filter.TypeFilter
 import com.kuaishou.akdanmaku.ext.RETAINER_BILIBILI
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskFrame
+import dev.aaa1115910.biliapi.http.entity.video.ClipInfo
+import dev.aaa1115910.biliapi.http.entity.video.ClipType
 import dev.aaa1115910.biliapi.entity.video.Subtitle
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.BvVideoPlayer
@@ -57,6 +59,8 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerDebugInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekState
 import dev.aaa1115910.bv.player.entity.VideoPlayerStateData
 import dev.aaa1115910.bv.player.entity.DefaultStartPosition
+import dev.aaa1115910.bv.player.tv.controller.SkipEdTip
+import dev.aaa1115910.bv.player.tv.controller.SkipOpTip
 import dev.aaa1115910.bv.player.tv.controller.VideoPlayerController
 import dev.aaa1115910.bv.util.countDownTimer
 import dev.aaa1115910.bv.util.fInfo
@@ -167,6 +171,13 @@ fun BvPlayer(
     var hideBackToHistoryTimer: CountDownTimer? by remember { mutableStateOf(null) }
 
     var currentDanmakuMaskFrame: DanmakuMaskFrame? by remember { mutableStateOf(null) }
+
+    // 跳过片头片尾相关状态
+    var showSkipOpTip by remember { mutableStateOf(false) }
+    var showSkipEdTip by remember { mutableStateOf(false) }
+    var skipOpTipText by remember { mutableStateOf("即将跳过片头") }
+    var skipEdTipText by remember { mutableStateOf("即将跳过片尾") }
+    var processedClipIndices by remember { mutableStateOf(setOf<Int>()) }
 
     // 独立弹幕层句柄（Stable），父级重组频率降低
     val danmakuLayerHandle = remember { DanmakuLayerHandle() }
@@ -457,6 +468,7 @@ fun BvPlayer(
 
     DisposableEffect(Unit) {
         var updateSeekTimer: Timer? = null
+        var checkSkipTimer: Timer? = null
         var resetTimer: ((Long) -> Unit)? = null
 
         val updateMask: suspend () -> Unit = {
@@ -505,6 +517,52 @@ fun BvPlayer(
             }
         }
 
+        // 跳过片头片尾检测任务
+        val checkSkipTask: () -> Unit = {
+            val currentPosition = (seekState.position / 1000).toInt()  // 毫秒转秒
+            val clipInfoList = videoPlayerConfigData.clipInfoList
+
+            if (videoPlayerConfigData.skipPgcIntroOutro && clipInfoList.isNotEmpty() && isPlaying) {
+                clipInfoList.forEachIndexed { index, clipInfo ->
+                    // 跳过已处理的 clip
+                    if (index in processedClipIndices) return@forEachIndexed
+
+                    when (clipInfo.clipType) {
+                        ClipType.CLIP_TYPE_OP -> {
+                            // 检测是否到达片头开始时间
+                            if (currentPosition >= clipInfo.start && currentPosition < clipInfo.end) {
+                                scope.launch(Dispatchers.Main) {
+                                    skipOpTipText = clipInfo.toastText.ifBlank { "即将跳过片头" }
+                                    showSkipOpTip = true
+                                    // 显示提示后短暂延迟再跳转
+                                    delay(500)
+                                    videoPlayer.seekTo(clipInfo.end * 1000L)
+                                    mDanmakuPlayer?.seekTo(clipInfo.end * 1000L)
+                                    showSkipOpTip = false
+                                }
+                                processedClipIndices = processedClipIndices + index
+                            }
+                        }
+                        ClipType.CLIP_TYPE_ED -> {
+                            // 检测是否到达片尾开始时间
+                            if (currentPosition >= clipInfo.start && currentPosition < clipInfo.end) {
+                                scope.launch(Dispatchers.Main) {
+                                    skipEdTipText = clipInfo.toastText.ifBlank { "即将跳过片尾" }
+                                    showSkipEdTip = true
+                                    delay(500)
+                                    videoPlayer.seekTo(clipInfo.end * 1000L)
+                                    mDanmakuPlayer?.seekTo(clipInfo.end * 1000L)
+                                    showSkipEdTip = false
+                                }
+                                processedClipIndices = processedClipIndices + index
+                            }
+                        }
+                        else -> {}  // 忽略其他类型
+                    }
+                }
+            }
+        }
+
         resetTimer = { delay ->
             updateSeekTimer = timeTask(delay, "updateDanmakuMask", false) {
                 timerTask()
@@ -512,8 +570,14 @@ fun BvPlayer(
         }
         resetTimer.invoke(0)
 
+        // 启动跳过检测定时器
+        checkSkipTimer = timeTask(500, 500, "checkSkipTimer") {
+            checkSkipTask()
+        }
+
         onDispose {
             updateSeekTimer?.cancel()
+            checkSkipTimer?.cancel()
         }
     }
 
@@ -813,6 +877,22 @@ fun BvPlayer(
                 modifier = Modifier.align(Alignment.TopCenter),
                 handle = danmakuLayerHandle
             )
+
+            // 跳过片头片尾提示
+            if (showSkipOpTip) {
+                SkipOpTip(
+                    modifier = Modifier.align(Alignment.BottomStart),
+                    show = true,
+                    text = skipOpTipText
+                )
+            }
+            if (showSkipEdTip) {
+                SkipEdTip(
+                    modifier = Modifier.align(Alignment.BottomStart),
+                    show = true,
+                    text = skipEdTipText
+                )
+            }
 
             if (showLogs) {
                 Column(
