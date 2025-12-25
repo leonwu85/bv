@@ -126,7 +126,6 @@ fun MainScreen(
                 // 搜索+右侧是搜索->用户+用户内容不是放右侧的，右侧还是搜索。
                 // 让内容对应的菜单获得焦点
                 drawerItemFocusRequesters[selectedDrawerItem]?.requestFocus()
-                // 让右侧内容获得焦点
                 when (selectedDrawerItem) {
                     DrawerItem.Home -> mainFocusRequester.requestFocus()
                     DrawerItem.UGC -> ugcFocusRequester.requestFocus()

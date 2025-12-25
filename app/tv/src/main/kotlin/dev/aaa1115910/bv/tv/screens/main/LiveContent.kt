@@ -94,14 +94,6 @@ fun LiveContent(
         }
     }
 
-    // 当主分区加载完成后，请求主分区 TopNav 焦点
-    LaunchedEffect(liveViewModel.parentAreaGroups.isNotEmpty()) {
-        if (liveViewModel.parentAreaGroups.isNotEmpty()) {
-            kotlinx.coroutines.delay(100)
-            parentNavFocusRequester.requestFocus(scope)
-        }
-    }
-
     BackHandler(focusOnContent || subNavHasFocus || parentNavHasFocus) {
         logger.info { "onFocusBackToNav" }
         if (subNavHasFocus) {
