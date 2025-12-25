@@ -3,7 +3,6 @@ package dev.aaa1115910.bv.player.tv
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -27,10 +26,6 @@ class DanmakuLayerHandle(
     var danmakuPlayer: DanmakuPlayer? by mutableStateOf(initialDanmakuPlayer)
         private set
 
-    // 弹幕显示区域高度占比 (0f..1f)
-    var areaFraction by mutableFloatStateOf(1f)
-        private set
-
     // 当前蒙版帧（null 表示无蒙版）
     var maskFrame: DanmakuMaskFrame? by mutableStateOf(null)
         private set
@@ -44,14 +39,9 @@ class DanmakuLayerHandle(
     }
 
     fun update(
-        area: Float? = null,
         mask: DanmakuMaskFrame? = maskFrame,
         visible: Boolean? = null
     ) {
-        area?.let {
-            val clamped = it.coerceIn(0f, 1f)
-            if (areaFraction != clamped) areaFraction = clamped
-        }
         if (maskFrame !== mask) maskFrame = mask
         visible?.let { if (this.visible != it) this.visible = it }
     }
@@ -73,7 +63,7 @@ fun DanmakuLayer(
     Box(
         modifier
             .fillMaxWidth()
-            .fillMaxHeight(handle.areaFraction)
+            .fillMaxHeight()
             .then(maskModifier)
     ) {
         AkDanmakuPlayer(

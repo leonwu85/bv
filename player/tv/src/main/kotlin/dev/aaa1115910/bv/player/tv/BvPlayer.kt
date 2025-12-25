@@ -418,16 +418,13 @@ fun BvPlayer(
         mDanmakuPlayer?.updateConfig(danmakuConfig)
     }
 
-    // Sync currentDanmakuArea -> danmakuConfig.screenPart (and keep handle in sync)
+    // Sync currentDanmakuArea -> danmakuConfig.screenPart
     LaunchedEffect(videoPlayerConfigData.currentDanmakuArea) {
         val safeArea = videoPlayerConfigData.currentDanmakuArea.coerceIn(0f, 1f)
         // update the danmaku config used by akdanmaku
         danmakuConfig = danmakuConfig.copy(screenPart = safeArea)
         logger.info { "Sync danmaku screenPart: $safeArea" }
         mDanmakuPlayer?.updateConfig(danmakuConfig)
-        // also ensure the Compose handle is updated (DanmakuLayerSideEffects normally does this,
-        // but we call explicitly to make sure akdanmaku and UI stay in sync immediately)
-        danmakuLayerHandle.update(area = safeArea, mask = currentDanmakuMaskFrame?.takeIf { videoPlayerConfigData.currentDanmakuMask }, visible = videoPlayerConfigData.showDanmaku)
     }
 
     LaunchedEffect(videoPlayerLoadStateData.loadState) {
@@ -792,7 +789,6 @@ fun BvPlayer(
             // 将弹幕层副作用独立到子树，保证父级其它状态变化不导致 handle 以外的重组
             DanmakuLayerSideEffects(
                 danmakuLayerHandle = danmakuLayerHandle,
-                area = videoPlayerConfigData.currentDanmakuArea,
                 visible = videoPlayerConfigData.showDanmaku,
                 maskFrame = currentDanmakuMaskFrame.takeIf { videoPlayerConfigData.currentDanmakuMask }
             )
@@ -825,17 +821,15 @@ fun BvPlayer(
     }
 }
 
-// 同步弹幕层 UI 相关的独立副作用（区域/蒙版/可见性）
+// 同步弹幕层 UI 相关的独立副作用（蒙版/可见性）
 @Composable
 private fun DanmakuLayerSideEffects(
     danmakuLayerHandle: DanmakuLayerHandle,
-    area: Float,
     visible: Boolean,
     maskFrame: DanmakuMaskFrame?,
 ) {
-    LaunchedEffect(area, visible, maskFrame) {
+    LaunchedEffect(visible, maskFrame) {
         danmakuLayerHandle.update(
-            area = area,
             mask = maskFrame,
             visible = visible,
         )
