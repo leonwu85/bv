@@ -3,8 +3,10 @@ package dev.aaa1115910.bv.mobile.screen
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.pm.ActivityInfo
-import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -40,7 +42,7 @@ import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberBottomSheetScaffoldState
@@ -73,7 +75,6 @@ import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
-import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import com.origeek.imageViewer.previewer.ImagePreviewer
 import com.origeek.imageViewer.previewer.ImagePreviewerState
 import com.origeek.imageViewer.previewer.VerticalDragType
@@ -135,7 +136,6 @@ fun VideoPlayerScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val systemUiController = rememberSystemUiController()
     val logger = KotlinLogging.logger("VideoPlayerScreen")
 
     var isVideoFullscreen by rememberSaveable { mutableStateOf(false) }
@@ -158,38 +158,36 @@ fun VideoPlayerScreen(
         }
 
     SideEffect {
-        systemUiController.isStatusBarVisible = !isVideoFullscreen
-        systemUiController.isNavigationBarVisible = !isVideoFullscreen
-        if (windowSizeClass.widthSizeClass != WindowWidthSizeClass.Expanded) {
-            systemUiController.statusBarDarkContentEnabled = true
-            systemUiController.setStatusBarColor(Color.Black)
+        val window = (context as Activity).window
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+
+        // 设置系统栏可见性
+        if (isVideoFullscreen) {
+            insetsController.hide(WindowInsetsCompat.Type.systemBars())
+            insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            insetsController.show(WindowInsetsCompat.Type.systemBars())
         }
+
+        // 设置系统栏外观
+        if (windowSizeClass.widthSizeClass != WindowWidthSizeClass.Expanded) {
+            insetsController.isAppearanceLightStatusBars = false
+        }
+
+        // 设置屏幕方向
         if (forcePortrait) {
             if (isVideoFullscreen) {
-                (context as Activity).requestedOrientation =
+                context.requestedOrientation =
                     ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             } else {
                 //在模拟器设为手机尺寸时，横屏时会莫名其妙抛出异常，貌似与折叠屏特性有关，因此手机上强制竖屏
                 //java.lang.IllegalArgumentException: Bounding rectangle must start at the top or left window edge for folding features
                 @SuppressLint("SourceLockedOrientationActivity")
-                (context as Activity).requestedOrientation =
+                context.requestedOrientation =
                     ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             }
         } else {
-            (context as Activity).requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-    }
-
-    LaunchedEffect(isVideoFullscreen) {
-        if (isVideoFullscreen) {
-            (context as Activity).window.setFlags(
-                WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN
-            )
-        } else {
-            (context as Activity).window.clearFlags(
-                WindowManager.LayoutParams.FLAG_FULLSCREEN
-            )
+            context.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
 
@@ -414,7 +412,7 @@ fun VideoPlayerScreen(
                         onShowPreviewer = setPreviewerPictures
                     ) {
                         Column {
-                            TabRow(
+                            PrimaryTabRow(
                                 selectedTabIndex = pagerState.currentPage
                             ) {
                                 titles.forEachIndexed { index, title ->
@@ -887,7 +885,7 @@ fun VideoComments(
                 }
             }
 
-            itemsIndexed(items = comments) { index, comment ->
+            itemsIndexed(items = comments) { _, comment ->
                 Box {
                     CommentItem(
                         comment = comment,

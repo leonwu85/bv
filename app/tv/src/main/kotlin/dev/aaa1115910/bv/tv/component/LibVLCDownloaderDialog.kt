@@ -14,7 +14,6 @@ import androidx.tv.material3.Text
 import dev.aaa1115910.bv.network.VlcLibsApi
 import dev.aaa1115910.bv.player.BuildConfig
 import dev.aaa1115910.bv.util.toast
-import io.ktor.client.content.ProgressListener
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -75,12 +74,10 @@ fun LibVLCDownloaderDialog(
 
                 VlcLibsApi.downloadFile(
                     release,
-                    tempFile,
-                    object : ProgressListener {
-                        override suspend fun onProgress(downloaded: Long, total: Long?) {
-                            text = "正在下载(${downloaded / (total?.toFloat() ?: 0f) * 100}%)"
-                        }
-                    })
+                    tempFile
+                ) { downloaded, total ->
+                    text = "正在下载(${downloaded / (total?.toFloat() ?: 0f) * 100}%)"
+                }
 
                 text = "正在解压"
                 unZipLibs(tempFile)

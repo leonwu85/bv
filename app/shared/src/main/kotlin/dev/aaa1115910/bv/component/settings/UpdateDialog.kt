@@ -34,7 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
@@ -56,12 +55,12 @@ import dev.aaa1115910.bv.util.fException
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.toMBString
 import io.github.oshai.kotlinlogging.KotlinLogging
-import io.ktor.client.content.ProgressListener
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
+import kotlin.runCatching
 
 @Composable
 fun UpdateDialog(
@@ -149,16 +148,14 @@ fun UpdateDialog(
             runCatching {
                 GithubApi.downloadUpdate(
                     latestReleaseBuild!!,
-                    tempFile,
-                    object : ProgressListener {
-                        override suspend fun onProgress(downloaded: Long, total: Long?) {
-                            bytesSentTotal = downloaded
-                            contentLength = total ?: 0
-                            targetProgress =
-                                runCatching { bytesSentTotal.toFloat() / contentLength }
-                                    .getOrDefault(0f)
-                        }
-                    })
+                    tempFile
+                ) { downloaded, total ->
+                    bytesSentTotal = downloaded
+                    contentLength = total ?: 0
+//                    targetProgress =
+//                        runCatching { downloaded.toFloat() / (total ?: 0) }
+//                            .getOrDefault(0f)
+                }
                 if (show) installUpdate(tempFile)
             }.onFailure {
                 logger.fException(it) { "Failed to download update" }
