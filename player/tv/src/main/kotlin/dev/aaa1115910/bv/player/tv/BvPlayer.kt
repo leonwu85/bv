@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -178,6 +179,17 @@ fun BvPlayer(
     var skipOpTipText by remember { mutableStateOf("即将跳过片头") }
     var skipEdTipText by remember { mutableStateOf("即将跳过片尾") }
     var processedClipIndices by remember { mutableStateOf(setOf<Int>()) }
+
+    // 使用 rememberUpdatedState 来跟踪 clipInfoList 和 skipPgcIntroOutro 的最新值
+    // 这样可以在非 Composable 上下文（定时器回调）中读取到最新值
+    val currentClipInfoList by rememberUpdatedState(videoPlayerConfigData.clipInfoList)
+    val currentSkipPgcIntroOutro by rememberUpdatedState(videoPlayerConfigData.skipPgcIntroOutro)
+
+    // 当 clipInfoList 变化时，重置已处理的 clip 索引
+    // 这确保了切换到新视频时，跳过片头/片尾功能能够正常工作
+    LaunchedEffect(videoPlayerConfigData.clipInfoList) {
+        processedClipIndices = emptySet()
+    }
 
     // 独立弹幕层句柄（Stable），父级重组频率降低
     val danmakuLayerHandle = remember { DanmakuLayerHandle() }
@@ -517,17 +529,17 @@ fun BvPlayer(
         // 跳过片头片尾检测任务
         val checkSkipTask: () -> Unit = {
             val currentPosition = (seekState.position / 1000).toInt()  // 毫秒转秒
-            val clipInfoList = videoPlayerConfigData.clipInfoList
-
-            if (videoPlayerConfigData.skipPgcIntroOutro && clipInfoList.isNotEmpty() && isPlaying) {
-                clipInfoList.forEachIndexed { index, clipInfo ->
+            // 使用 rememberUpdatedState 获取最新值
+            if (currentSkipPgcIntroOutro && currentClipInfoList.isNotEmpty() && isPlaying) {
+                currentClipInfoList.forEachIndexed { index, clipInfo ->
                     // 跳过已处理的 clip
                     if (index in processedClipIndices) return@forEachIndexed
 
                     when (clipInfo.clipType) {
                         ClipType.CLIP_TYPE_OP -> {
                             // 检测是否到达片头开始时间
-                            if (currentPosition >= clipInfo.start && currentPosition < clipInfo.end) {
+                            val inRange = currentPosition >= clipInfo.start && currentPosition < clipInfo.end
+                            if (inRange) {
                                 scope.launch(Dispatchers.Main) {
                                     skipOpTipText = clipInfo.toastText.ifBlank { "即将跳过片头" }
                                     showSkipOpTip = true
@@ -542,7 +554,8 @@ fun BvPlayer(
                         }
                         ClipType.CLIP_TYPE_ED -> {
                             // 检测是否到达片尾开始时间
-                            if (currentPosition >= clipInfo.start && currentPosition < clipInfo.end) {
+                            val inRange = currentPosition >= clipInfo.start && currentPosition < clipInfo.end
+                            if (inRange) {
                                 scope.launch(Dispatchers.Main) {
                                     skipEdTipText = clipInfo.toastText.ifBlank { "即将跳过片尾" }
                                     showSkipEdTip = true
