@@ -63,7 +63,6 @@ fun LiveContent(
     val context = LocalContext.current
     
     val gridState = rememberLazyGridState()
-    val parentNavFocusRequester = remember { FocusRequester() }
     val subNavFocusRequester = remember { FocusRequester() }
     var focusOnContent by remember { mutableStateOf(false) }
     var parentNavHasFocus by remember { mutableStateOf(false) }
@@ -97,7 +96,7 @@ fun LiveContent(
     BackHandler(focusOnContent || subNavHasFocus || parentNavHasFocus) {
         logger.info { "onFocusBackToNav" }
         if (subNavHasFocus) {
-            parentNavFocusRequester.requestFocus(scope)
+            navFocusRequester.requestFocus(scope)
             return@BackHandler
         }
         if (parentNavHasFocus) {
@@ -118,7 +117,7 @@ fun LiveContent(
                     }
                     TopNav(
                         modifier = Modifier
-                            .focusRequester(parentNavFocusRequester)
+                            .focusRequester(navFocusRequester)
                             .padding(end = 80.dp)
                             .onFocusChanged { parentNavHasFocus = it.hasFocus },
                         items = parentNavItems,
@@ -165,7 +164,7 @@ fun LiveContent(
                             }
                         },
                         onLeftKeyEvent = {
-                            parentNavFocusRequester.requestFocus(scope)
+                            navFocusRequester.requestFocus(scope)
                         }
                     )
                 }
