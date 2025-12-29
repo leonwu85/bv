@@ -209,7 +209,7 @@ fun BvPlayer(
                                 skipOpTipText = clipInfo.toastText.ifBlank { "即将跳过片头" }
                                 showSkipOpTip = true
                                 // 显示提示后短暂延迟再跳转
-                                delay(500)
+                                delay(1500)
                                 videoPlayer.seekTo(clipInfo.end * 1000L)
                                 mDanmakuPlayer?.seekTo(clipInfo.end * 1000L)
                                 showSkipOpTip = false
@@ -224,7 +224,7 @@ fun BvPlayer(
                             scope.launch(Dispatchers.Main) {
                                 skipEdTipText = clipInfo.toastText.ifBlank { "即将跳过片尾" }
                                 showSkipEdTip = true
-                                delay(500)
+                                delay(1500)
                                 videoPlayer.seekTo(clipInfo.end * 1000L)
                                 mDanmakuPlayer?.seekTo(clipInfo.end * 1000L)
                                 showSkipEdTip = false
