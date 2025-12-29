@@ -22,6 +22,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.player.entity.Audio
+import com.kuaishou.akdanmaku.ui.EngineType
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
 import dev.aaa1115910.bv.player.entity.PlayerLoadNextAction
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
@@ -55,6 +56,10 @@ fun PlayerSetting(
     var portraitVideoFixMode by remember { mutableStateOf(Prefs.portraitVideoFixMode) }
     var defaultDanmakuArea by remember { mutableDoubleStateOf(Prefs.defaultDanmakuArea.toDouble()) }
     var skipPgcIntroOutro by remember { mutableStateOf(Prefs.skipPgcIntroOutro) }
+    var danmakuEngineType by remember { mutableStateOf(Prefs.danmakuEngineType) }
+
+    val danmakuEngineFlameName = stringResource(R.string.settings_danmaku_engine_flame)
+    val danmakuEngineEcsName = stringResource(R.string.settings_danmaku_engine_ecs)
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -264,6 +269,25 @@ fun PlayerSetting(
                     onValueChange = {
                         defaultDanmakuArea = it / 100
                         Prefs.defaultDanmakuArea = (it / 100).toFloat()
+                    }
+                )
+            }
+            item {
+                SettingListItemWithDialog(
+                    title = stringResource(R.string.settings_danmaku_engine_title),
+                    supportText = stringResource(R.string.settings_danmaku_engine_text),
+                    options = EngineType.entries,
+                    getDisplayName = { item, _ ->
+                        when (item) {
+                            EngineType.FLAME -> danmakuEngineFlameName
+                            EngineType.ECS -> danmakuEngineEcsName
+                            else -> item.name
+                        }
+                    },
+                    value = danmakuEngineType,
+                    onValueChange = {
+                        danmakuEngineType = it
+                        Prefs.danmakuEngineType = it
                     }
                 )
             }

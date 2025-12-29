@@ -14,6 +14,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kuaishou.akdanmaku.data.DanmakuItemData
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
+import com.kuaishou.akdanmaku.ui.EngineType
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.PlayData
 import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskSegment
@@ -202,7 +203,7 @@ class VideoPlayerV3ViewModel(
     private suspend fun ensureDanmakuPlayer() = withContext(Dispatchers.Main) {
         logger.fInfo { "[Danmaku 调试] 开始创建弹幕播放器" }
         danmakuPlayer?.release()
-        danmakuPlayer = DanmakuPlayer(SimpleRenderer())
+        danmakuPlayer = DanmakuPlayer(SimpleRenderer(), engineType = Prefs.danmakuEngineType)
         // danmakuPlayer = DanmakuPlayer(OptimizedTextRenderer.createHighPerformance())
         logger.fInfo { "[Danmaku 调试] 弹幕播放器创建完成: $danmakuPlayer" }
         logger.fInfo { "(Re)create DanmakuPlayer" }
@@ -548,6 +549,7 @@ class VideoPlayerV3ViewModel(
                     withContext(Dispatchers.IO) { kotlinx.coroutines.delay(16) }
                 }
             danmakuPlayer?.updateData(danmakuData.sortedBy { it.position })
+            danmakuPlayer?.start()
         }.onFailure {
             addLogs("加载弹幕失败：${it.localizedMessage}")
             logger.fWarn { "Load danmaku filed: ${it.stackTraceToString()}" }
@@ -1039,7 +1041,7 @@ class VideoPlayerV3ViewModel(
         
         // 更新弹幕播放器
         danmakuPlayer?.updateData(danmakuData)
-        
+        danmakuPlayer?.start()
         logger.fInfo { "Danmaku player updated, danmakuPlayer: $danmakuPlayer" }
         
         // 清空缓冲区

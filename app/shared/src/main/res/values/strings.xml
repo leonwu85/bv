@@ -742,4 +742,8 @@
     <string name="player_skip_tip_back_to_history">上次看到 %s 点击确认键跳转</string>
     <string name="player_skip_tip_go_to_beginning">点击确认键跳转视频开头</string>
     <string name="about_statement">此项目是个人为了学习安卓开发而fork, 仅用于学习和测试，禁止在中国境内传播、宣传、分发，如有相关使用需求请使用 [哔哩哔哩官方APP](https://app.bilibili.com)，否则后果自负</string>
+    <string name="settings_danmaku_engine_title">弹幕引擎</string>
+    <string name="settings_danmaku_engine_text">选择弹幕渲染引擎类型</string>
+    <string name="settings_danmaku_engine_flame">新引擎 FLAME</string>
+    <string name="settings_danmaku_engine_ecs">旧引擎 ECS</string>
 </resources>
