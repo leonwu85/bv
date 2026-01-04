@@ -540,7 +540,7 @@ object PrefKeys {
         PreferenceRequest(prefShowedRemoteControllerPanelDemoKey, false)
     val prefPreferOfficialCdnRequest = PreferenceRequest(prefPreferOfficialCdn, false)
     val prefDefaultDanmakuMaskRequest = PreferenceRequest(prefDefaultDanmakuMask, false)
-    val prefEnableFfmpegEndererRequest = PreferenceRequest(prefEnableFfmpegAudioRenderer, true)
+    val prefEnableFfmpegEndererRequest = PreferenceRequest(prefEnableFfmpegAudioRenderer, false)
     val prefBlacklistUserRequest = PreferenceRequest(prefBlacklistUserKey, false)
     val prefThemeTypeRequest = PreferenceRequest(prefThemeTypeKey, ThemeType.Auto.ordinal)
     val prefPlayModeRequest = PreferenceRequest(prefPlayModeKey, PlayMode.Sequential.ordinal)
