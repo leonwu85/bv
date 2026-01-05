@@ -38,30 +38,19 @@ import dev.aaa1115910.bv.util.focusedBorder
  *
  * @param comment 评论数据
  * @param modifier 修饰符
- * @param expanded 是否展开子评论
- * @param onToggleExpand 切换展开状态回调
  * @param onClick 点击回调
  */
 @Composable
 fun CommentItem(
     comment: Comment,
     modifier: Modifier = Modifier,
-    expanded: Boolean = false,
-    onToggleExpand: () -> Unit = {},
     onClick: () -> Unit = {}
 ) {
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .focusedBorder(MaterialTheme.shapes.small),
-        onClick = {
-            // 如果有子评论，点击时切换展开/折叠状态
-            if (comment.replies.isNotEmpty()) {
-                onToggleExpand()
-            } else {
-                onClick()
-            }
-        },
+        onClick = onClick,
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -80,39 +69,14 @@ fun CommentItem(
             // 主评论
             CommentMainContent(comment = comment)
 
-            // 子评论列表（如果有）
+            // 回复数量提示
             if (comment.replies.isNotEmpty()) {
-                Column(
-                    modifier = Modifier.padding(start = 52.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    // 根据展开状态决定显示数量
-                    val displayReplies = if (expanded) comment.replies else comment.replies.take(3)
-
-                    displayReplies.forEach { reply ->
-                        CommentReplyItem(
-                            reply = reply,
-                            expanded = expanded
-                        )
-                    }
-
-                    // 显示更多提示或收起提示
-                    if (!expanded && comment.replies.size > 3) {
-                        Text(
-                            text = "还有 ${comment.replies.size - 3} 条回复...",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
-                    } else if (expanded && comment.replies.size > 3) {
-                        Text(
-                            text = "收起回复",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
-                    }
-                }
+                Text(
+                    text = "${comment.repliesCount} 条回复 >>",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
             }
         }
     }
@@ -200,57 +164,6 @@ private fun CommentMainContent(
                     )
                 }
             }
-        }
-    }
-}
-
-/**
- * 子评论项
- */
-@Composable
-private fun CommentReplyItem(
-    reply: Comment,
-    expanded: Boolean = false
-) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        // 子评论头像（更小）
-        AsyncImage(
-            modifier = Modifier
-                .size(24.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surface),
-            model = reply.member.avatar,
-            contentDescription = null
-        )
-
-        // 子评论内容
-        Column(
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            // 用户名 + 内容（一行显示）
-            Text(
-                text = buildAnnotatedString {
-                    withStyle(SpanStyle(
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        fontSize = 12.sp
-                    )) {
-                        append(reply.member.name)
-                    }
-                    append("：")
-                    withStyle(SpanStyle(
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 12.sp
-                    )) {
-                        append(reply.content.joinToString(""))
-                    }
-                },
-                // 展开时不限制行数，折叠时最多 2 行
-                maxLines = if (expanded) Int.MAX_VALUE else 2,
-                overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis
-            )
         }
     }
 }
