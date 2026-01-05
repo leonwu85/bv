@@ -1,0 +1,7 @@
+<resources>
+
+    <style name="Theme.BV.TV" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+
+</resources>
