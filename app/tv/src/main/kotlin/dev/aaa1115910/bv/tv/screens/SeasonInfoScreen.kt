@@ -10,6 +10,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -99,6 +100,7 @@ import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.player.entity.VideoListPgcEpisode
 import dev.aaa1115910.bv.repository.VideoInfoRepository
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
+import dev.aaa1115910.bv.tv.component.CommentPanel
 import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.component.buttons.SeasonInfoButtons
@@ -106,6 +108,7 @@ import dev.aaa1115910.bv.tv.util.launchPlayerActivity
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.fInfo
+import dev.aaa1115910.bv.util.focusedBorder
 import dev.aaa1115910.bv.util.focusedScale
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.onBackPressed
@@ -164,6 +167,7 @@ fun SeasonInfoScreen(
 
     var paused by remember { mutableStateOf(false) }
     var showSeasonSelector by remember { mutableStateOf(false) }
+    var showCommentPanel by remember { mutableStateOf(false) }
     val defaultFocusRequester = remember { FocusRequester() }
 
     val onClickVideo: (avid: Long, cid: Long, epid: Int, episodeTitle: String, startTime: Int) -> Unit =
@@ -203,6 +207,24 @@ fun SeasonInfoScreen(
 
     val onClickCover = {
         if (seasonViewModel.seasonData?.seasons?.isNotEmpty() == true) showSeasonSelector = true
+    }
+
+    val onShowComment = {
+        showCommentPanel = true
+    }
+
+    val getCommentAid = {
+        val lastEpId = seasonViewModel.lastPlayProgress?.lastEpId
+        if (lastEpId != null) {
+            // 查找最后播放的剧集
+            seasonViewModel.seasonData?.episodes?.find { it.id == lastEpId }?.aid
+                ?: seasonViewModel.seasonData?.sections?.mapNotNull { section ->
+                    section.episodes.find { it.id == lastEpId }?.aid
+                }?.firstOrNull()
+        } else {
+            // 没有播放记录，使用第一集
+            seasonViewModel.seasonData?.episodes?.firstOrNull()?.aid
+        } ?: 0L
     }
 
     LaunchedEffect(Unit) {
@@ -417,7 +439,8 @@ fun SeasonInfoScreen(
                             }
                         },
                         onClickFollow = onClickFollow,
-                        onClickCover = onClickCover
+                        onClickCover = onClickCover,
+                        onShowComment = onShowComment
                     )
                 }
                 if (seasonViewModel.seasonData?.episodes?.isNotEmpty() == true) {
@@ -505,6 +528,12 @@ fun SeasonInfoScreen(
             }
         }
     )
+
+    CommentPanel(
+        show = showCommentPanel,
+        oid = getCommentAid(),
+        onHide = { showCommentPanel = false }
+    )
 }
 
 @Composable
@@ -581,6 +610,7 @@ fun SeasonBaseInfo(
     publishDate: String,
     onPlay: () -> Unit,
     onClickFollow: (follow: Boolean) -> Unit,
+    onShowComment: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -599,6 +629,23 @@ fun SeasonBaseInfo(
             )
             Text(text = newEpDesc)
             Text(text = description)
+
+            // 评论按钮
+            Row(
+                modifier = Modifier
+                    .clip(MaterialTheme.shapes.small)
+                    .background(Color.White.copy(alpha = 0.2f))
+                    .focusedBorder(MaterialTheme.shapes.small)
+                    .padding(horizontal = 4.dp)
+                    .clickable { onShowComment() }
+                    .height(30.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "评论>>",
+                    color = Color.White
+                )
+            }
         }
         Spacer(modifier = Modifier.height(12.dp))
         SeasonInfoButtons(
@@ -628,7 +675,8 @@ fun SeasonInfoPart(
     seasonCount: Int,
     onPlay: () -> Unit,
     onClickFollow: (follow: Boolean) -> Unit,
-    onClickCover: () -> Unit
+    onClickCover: () -> Unit,
+    onShowComment: () -> Unit = {}
 ) {
     Row(
         modifier = modifier
@@ -651,7 +699,8 @@ fun SeasonInfoPart(
             isPublished = isPublished,
             publishDate = publishDate,
             onPlay = onPlay,
-            onClickFollow = onClickFollow
+            onClickFollow = onClickFollow,
+            onShowComment = onShowComment
         )
     }
 }
