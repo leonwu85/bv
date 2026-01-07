@@ -16,8 +16,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.Divider
 import androidx.compose.runtime.Composable
@@ -33,12 +36,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
@@ -50,6 +52,8 @@ import dev.aaa1115910.biliapi.entity.reply.CommentReplyPage
 import dev.aaa1115910.biliapi.repositories.CommentRepository
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.focusedBorder
+import dev.aaa1115910.bv.util.isDpadDown
+import dev.aaa1115910.bv.util.isKeyDown
 import dev.aaa1115910.bv.util.onBackPressed
 import dev.aaa1115910.bv.util.requestFocus
 import kotlinx.coroutines.delay
@@ -79,6 +83,7 @@ fun SubCommentPanel(
     val focusRequester = remember { FocusRequester() }
 
     val replies = remember { mutableStateListOf<Comment>() }
+    var focusedCommentIndex by remember { mutableStateOf(0) }
     var loading by remember { mutableStateOf(false) }
     var currentPage by remember { mutableStateOf(CommentReplyPage()) }
     var hasNext by remember { mutableStateOf(true) }
@@ -175,14 +180,7 @@ fun SubCommentPanel(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // 标题栏
-                    Text(
-                        text = "子评论",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White
-                    )
-
-                    // 根评论（只读显示）
+                    // 根评论（只读显示，右键展开/收起）
                     SubCommentRootItem(comment = rootComment)
 
                     // 分隔线
@@ -210,28 +208,59 @@ fun SubCommentPanel(
                                 .weight(1f)
                                 .fillMaxWidth()
                                 .focusRequester(focusRequester)
-                                .onKeyEvent { event ->
-                                    // 左键返回顶部
-                                    if (event.type == KeyEventType.KeyDown &&
-                                        event.key == Key.DirectionLeft
-                                    ) {
-                                        scope.launch {
-                                            listState.scrollToItem(0)
-                                            delay(100)
-                                            focusRequester.requestFocus(scope)
+                                .onPreviewKeyEvent { event ->
+                                    when {
+                                        // 左键返回顶部
+                                        event.isKeyDown() && event.key == Key.DirectionLeft -> {
+                                            scope.launch {
+                                                listState.scrollToItem(0)
+                                                delay(100)
+                                                focusRequester.requestFocus(scope)
+                                            }
+                                            true
                                         }
-                                        true
-                                    } else {
-                                        false
+                                        // 下键：检查当前评论是否已完全可见
+                                        event.isKeyDown() && event.isDpadDown() -> {
+                                            val currentItemInfo = listState.layoutInfo.visibleItemsInfo
+                                                .firstOrNull { it.index == focusedCommentIndex }
+
+                                            if (currentItemInfo != null) {
+                                                val viewportEnd = listState.layoutInfo.viewportEndOffset
+                                                val itemBottom = currentItemInfo.offset + currentItemInfo.size
+                                                val amountToScroll = itemBottom - viewportEnd
+
+                                                // 如果评论底部不可见，精确滚动使其可见
+                                                if (amountToScroll > 0) {
+                                                    scope.launch {
+                                                        listState.animateScrollBy(amountToScroll.toFloat())
+                                                    }
+                                                    true // 拦截事件
+                                                } else {
+                                                    false // 允许焦点转移
+                                                }
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        else -> false
                                     }
                                 },
                             state = listState,
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            items(replies, key = { it.rpid }) { reply ->
+                            itemsIndexed(
+                                items = replies,
+                                key = { _, it -> it.rpid }
+                            ) { index, reply ->
                                 SubCommentItem(
                                     comment = reply,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .onFocusChanged { focusState ->
+                                            if (focusState.hasFocus) {
+                                                focusedCommentIndex = index
+                                            }
+                                        }
                                 )
                             }
 

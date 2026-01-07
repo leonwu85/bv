@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.runtime.Composable
@@ -17,6 +19,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
@@ -169,55 +173,49 @@ private fun CommentMainContent(
 }
 
 /**
- * 评论内容组件，支持表情显示
+ * 评论内容组件，支持表情显示（富文本）
  */
 @Composable
 fun CommentContent(
     content: List<String>,
     emotes: List<Comment.Emote>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip
 ) {
-    val emoteMap = emotes.associateBy { it.text }
-
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        content.forEach { text ->
-            val emote = emoteMap[text]
-            if (emote != null) {
-                // 表情图片
-                Box(
-                    modifier = Modifier
-                        .size(emoteSizeToDp(emote.size)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AsyncImage(
-                        model = emote.url,
-                        contentDescription = emote.text,
-                    )
-                }
-            } else {
-                // 普通文本
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
+    val emoteNameList = emotes.map { it.text }
+    val inlineContentMap = emotes.associateWith { emote ->
+        InlineTextContent(
+            Placeholder(
+                width = emote.size.fontSize.sp,
+                height = emote.size.fontSize.sp,
+                placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter
+            )
+        ) {
+            AsyncImage(
+                model = emote.url,
+                contentDescription = null
+            )
         }
-    }
-}
+    }.mapKeys { it.key.text }
 
-/**
- * 将表情尺寸转换为 dp
- */
-private fun emoteSizeToDp(size: EmoteSize): androidx.compose.ui.unit.Dp {
-    return when (size) {
-        EmoteSize.Small -> 20.dp
-        EmoteSize.Large -> 40.dp
-    }
+    Text(
+        modifier = modifier,
+        text = buildAnnotatedString {
+            content.forEach { text ->
+                if (emoteNameList.contains(text)) {
+                    appendInlineContent(text)
+                } else {
+                    append(text)
+                }
+            }
+        },
+        inlineContent = inlineContentMap,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        maxLines = maxLines,
+        overflow = overflow
+    )
 }
 
 /**

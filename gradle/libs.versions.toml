@@ -1,6 +1,6 @@
 [versions]
 accompanist = "0.36.0"
-akdanmaku = "v1.3.5" # 1.0.0
+akdanmaku = "v1.3.6" # 1.0.0
 androidsvg = "1.4"
 coil = "2.7.0"
 firebase-bom = "33.14.0"

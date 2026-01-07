@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidthIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -42,6 +43,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
@@ -55,6 +57,9 @@ import dev.aaa1115910.biliapi.entity.reply.CommentSort
 import dev.aaa1115910.biliapi.repositories.CommentRepository
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.focusedBorder
+import dev.aaa1115910.bv.util.isDpadDown
+import dev.aaa1115910.bv.util.isDpadLeft
+import dev.aaa1115910.bv.util.isKeyDown
 import dev.aaa1115910.bv.util.onBackPressed
 import dev.aaa1115910.bv.util.requestFocus
 import kotlinx.coroutines.delay
@@ -91,6 +96,7 @@ fun CommentPanel(
     var hasRequestedFocus by remember { mutableStateOf(false) }
     var wasSubCommentPanelShown by remember { mutableStateOf(false) }
     var selectedCommentIndex by remember { mutableStateOf(0) }
+    var focusedCommentIndex by remember { mutableStateOf(0) }
 
     // 判断是否滚动到底部
     val isAtBottom by remember {
@@ -253,18 +259,42 @@ fun CommentPanel(
                                 .weight(1f)
                                 .fillMaxWidth()
                                 .focusRequester(focusRequester)
-                                .onKeyEvent { event ->
-                                    // 左键返回顶部
-                                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
-                                        scope.launch {
-                                            listState.scrollToItem(0)
-                                            // 滚动后重新请求焦点，使焦点移到第一条评论
-                                            delay(100)
-                                            focusRequester.requestFocus(scope)
+                                .onPreviewKeyEvent { event ->
+                                    when {
+                                        // 左键返回顶部
+                                        event.isKeyDown() && event.isDpadLeft() -> {
+                                            scope.launch {
+                                                listState.scrollToItem(0)
+                                                // 滚动后重新请求焦点，使焦点移到第一条评论
+                                                delay(100)
+                                                focusRequester.requestFocus(scope)
+                                            }
+                                            true
                                         }
-                                        true
-                                    } else {
-                                        false
+                                        // 下键：检查当前评论是否已完全可见
+                                        event.isKeyDown() && event.isDpadDown() -> {
+                                            val currentItemInfo = listState.layoutInfo.visibleItemsInfo
+                                                .firstOrNull { it.index == focusedCommentIndex }
+
+                                            if (currentItemInfo != null) {
+                                                val viewportEnd = listState.layoutInfo.viewportEndOffset
+                                                val itemBottom = currentItemInfo.offset + currentItemInfo.size
+                                                val amountToScroll = itemBottom - viewportEnd
+
+                                                // 如果评论底部不可见，精确滚动使其可见
+                                                if (amountToScroll > 0) {
+                                                    scope.launch {
+                                                        listState.animateScrollBy(amountToScroll.toFloat())
+                                                    }
+                                                    true // 拦截事件
+                                                } else {
+                                                    false // 允许焦点转移
+                                                }
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        else -> false
                                     }
                                 },
                             state = listState,
@@ -276,7 +306,13 @@ fun CommentPanel(
                             ) { index, comment ->
                                 CommentItem(
                                     comment = comment,
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .onFocusChanged { focusState ->
+                                            if (focusState.hasFocus) {
+                                                focusedCommentIndex = index
+                                            }
+                                        },
                                     onClick = {
                                         // 只有有子评论时才能点击打开子评论浮窗
                                         if (comment.repliesCount > 0) {

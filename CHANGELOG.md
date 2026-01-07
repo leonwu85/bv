@@ -1,6 +1,6 @@
 [![Downloads](https://img.shields.io/github/downloads/leonwu85/bv/total?cacheSeconds=3600)](https://github.com/leonwu85/bv/releases)
 
-## 新增功能点汇总 (2024-12-05 ~ 2025-12-26)
+## 新增功能点汇总 (2024-12-05 ~ 20256-01-07)
 
 - 直播功能(实验性)
     - 集成 B站直播功能，需从设置-直播开启
@@ -20,6 +20,7 @@
     - 详情页高亮标注历史记录或EP
     - 详情页自动滚动到历史记录或EP
     - 优化视频卡片时长显示布局
+    - 支持视频评论显示
 - 其它
     - 优化 Coil 图片加载
 ---
