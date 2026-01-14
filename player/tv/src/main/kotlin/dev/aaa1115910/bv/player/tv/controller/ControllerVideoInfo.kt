@@ -132,7 +132,8 @@ fun ControllerVideoInfo(
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
     onSubtitleChange: (Subtitle) -> Unit,
-    onLoadNextVideo: (Boolean) -> Unit
+    onLoadNextVideo: (Boolean) -> Unit,
+    onShowComment: () -> Unit = {},
 ) {
     val videoPlayerClockState = LocalVideoPlayerClockState.current
     val videoPlayerSeekState = LocalVideoPlayerSeekState.current
@@ -230,7 +231,8 @@ fun ControllerVideoInfo(
                 },
                 isFollowingUp = videoPlayerVideoInfoData.isFollowingUp,
                 showNextVideoBtn = videoPlayerConfigData.showNextVideoBtn,
-                onLoadNextVideo = onLoadNextVideo
+                onLoadNextVideo = onLoadNextVideo,
+                onShowComment = onShowComment
             )
         }
     }
@@ -259,7 +261,9 @@ data class ControlButton(
     val scale: Float = 1f,
     val painterId: Int? = null,
     val tint: Color = Color.White.copy(alpha = 0.8f),
-    val width: Int? = null
+    val width: Int? = null,
+    val alwaysShowBorder: Boolean = false,
+    val fontWeight: FontWeight? = null
 )
 
 @Composable
@@ -312,6 +316,7 @@ fun ControllerVideoInfoBottom(
     onSubtitleChange: (Long) -> Unit,
     showNextVideoBtn: Boolean = false,
     onLoadNextVideo: (Boolean) -> Unit,
+    onShowComment: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     var hideVideoInfoJob by remember { mutableStateOf<Job?>(null) }
@@ -325,6 +330,14 @@ fun ControllerVideoInfoBottom(
     val upSpaceIconId = if (isFollowingUp) R.drawable.person_following else R.drawable.person
     val buttons = remember(fromSeason, showDanmaku, isPlaying, isLoop, speed, rotation, currentSubtitleId, isFollowingUp) {
         listOf(
+            ControlButton(
+                id = "comment",
+                text = "评",
+                onClick = onShowComment,
+                width = 30,
+                alwaysShowBorder = true,
+                fontWeight = FontWeight.Bold
+            ),
             ControlButton(
                 id = "nextVideo",
                 painterId = R.drawable.next_play_fill,
@@ -596,7 +609,7 @@ fun ControllerVideoInfoBottom(
                         border = Border(
                             border = BorderStroke(
                                 width = 1.dp,
-                                color = Color.Transparent
+                                color = if (button.alwaysShowBorder) Color.White.copy(alpha = 0.45f) else Color.Transparent
                             )
                         ),
                         focusedBorder = Border(
@@ -613,6 +626,7 @@ fun ControllerVideoInfoBottom(
                             textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.bodyLarge,
                             color = button.tint,
+                            fontWeight = button.fontWeight,
                             modifier = Modifier.ifElse(
                                 button.scale != 1f,
                                 Modifier.scale(button.scale)

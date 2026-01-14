@@ -72,6 +72,7 @@ import dev.aaa1115910.bv.player.tv.BvPlayer
 import dev.aaa1115910.bv.player.tv.controller.SkipTip
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
 import dev.aaa1115910.bv.tv.component.buttons.CoinButton
+import dev.aaa1115910.bv.tv.component.CommentPanel
 import dev.aaa1115910.bv.tv.component.buttons.FavoriteButton
 import dev.aaa1115910.bv.tv.component.buttons.LikeButton
 import dev.aaa1115910.bv.tv.manager.FollowStateManager
@@ -122,6 +123,9 @@ fun VideoPlayerV3Screen(
     var autoActionCountdownJob by remember { mutableStateOf<Job?>(null) }
     var autoActionTipVisible by remember { mutableStateOf(false) }
     var autoActionTipText by remember { mutableStateOf("") }
+
+    // 评论面板状态
+    var showCommentPanel by remember { mutableStateOf(false) }
 
     // 焦点管理
     val relatedVideosFocusRequester = remember { FocusRequester() }
@@ -423,6 +427,7 @@ fun VideoPlayerV3Screen(
                         playerViewModel.videoPlayer?.start()
                     }
                 },
+                onShowComment = { showCommentPanel = true },
                 onResolutionChange = { resolutionCode, afterChange ->
                     scope.launch(Dispatchers.Default) {
                         playerViewModel.playQuality(resolutionCode)
@@ -703,6 +708,15 @@ fun VideoPlayerV3Screen(
                             fromPlayer = true
                         )
                     }
+                )
+            }
+
+            // 评论面板
+            if (playerViewModel.currentAid > 0) {
+                CommentPanel(
+                    show = showCommentPanel,
+                    oid = playerViewModel.currentAid,
+                    onHide = { showCommentPanel = false }
                 )
             }
         }

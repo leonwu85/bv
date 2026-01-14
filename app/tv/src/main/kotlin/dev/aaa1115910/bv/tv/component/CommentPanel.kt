@@ -184,7 +184,7 @@ fun CommentPanel(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .clickable(onClick = onHide), // 点击背景关闭
+            .clickable(onClick = onHide),
         contentAlignment = Alignment.CenterEnd
     ) {
         AnimatedVisibility(
