@@ -26,7 +26,6 @@ import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.player.entity.PlayerLoadNextAction
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
-import com.kuaishou.akdanmaku.ui.EngineType
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -413,13 +412,6 @@ object Prefs {
     var skipPgcIntroOutro: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefSkipPgcIntroOutroRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefSkipPgcIntroOutroKey, value) }
-
-    var danmakuEngineType: EngineType
-        get() = runBlocking {
-            EngineType.entries[dsm.getPreferenceFlow(PrefKeys.prefDanmakuEngineTypeRequest).first()]
-        }
-        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDanmakuEngineTypeKey, value.ordinal)
-        }
 }
 
 object PrefKeys {
@@ -483,7 +475,6 @@ object PrefKeys {
     val prefShowLiveInSidebarKey = booleanPreferencesKey("show_live_in_sidebar")
     val prefHomeNavItemsOrderKey = stringPreferencesKey("home_nav_items_order")
     val prefSkipPgcIntroOutroKey = booleanPreferencesKey("skip_pgc_intro_outro")
-    val prefDanmakuEngineTypeKey = intPreferencesKey("danmaku_engine_type")
 
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
@@ -563,5 +554,4 @@ object PrefKeys {
         "0,1,2,3,4,5,6"  // 默认全部显示，按原始顺序
     )
     val prefSkipPgcIntroOutroRequest = PreferenceRequest(prefSkipPgcIntroOutroKey, false)
-    val prefDanmakuEngineTypeRequest = PreferenceRequest(prefDanmakuEngineTypeKey, EngineType.FLAME.ordinal)
 }

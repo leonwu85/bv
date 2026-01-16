@@ -495,10 +495,9 @@ fun BvPlayer(
     }
 
     LaunchedEffect(danmakuPlayer) {
-        logger.debug { "update mDanmakuPlayer" }
         mDanmakuPlayer = danmakuPlayer
         danmakuLayerHandle.updateDanmakuPlayer(danmakuPlayer)
-        // push current config (ensure screenPart applied) when player becomes available
+        // 当弹幕播放器可用时，立即设置正确的配置（包括 visibility）
         val safeArea = videoPlayerConfigData.currentDanmakuArea.coerceIn(0f, 1f)
         danmakuConfig = danmakuConfig.copy(screenPart = safeArea)
         mDanmakuPlayer?.updateConfig(danmakuConfig)

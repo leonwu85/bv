@@ -1,5 +1,7 @@
 [versions]
 accompanist = "0.36.0"
+ashley = "1.7.4"
+gdx = "1.14.0"
 akdanmaku = "v1.3.7" # 1.0.0
 androidsvg = "1.4"
 coil = "2.7.0"
@@ -37,6 +39,11 @@ akdanmaku = { module = "com.github.leonwu85:AkDanmaku", version.ref = "akdanmaku
 
 # https://github.com/BigBadaboom/androidsvg
 androidSvg = { module = "com.caverock:androidsvg-aar", version.ref = "androidsvg" }
+
+# https://libgdx.com/
+gdx = { module = "com.badlogicgames.gdx:gdx", version.ref = "gdx" }
+gdx-backend-android = { module = "com.badlogicgames.gdx:gdx-backend-android", version.ref = "gdx" }
+ashley = { module = "com.badlogicgames.ashley:ashley", version.ref = "ashley" }
 
 # https://coil-kt.github.io/coil
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
