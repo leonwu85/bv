@@ -1932,6 +1932,31 @@ object BiliHttpApi {
         parameter("plat", plat)
         sessData?.let { header("Cookie", "SESSDATA=$it;") }
     }.body()
+
+    /**
+     * 一键三连
+     */
+    suspend fun tripleLike(
+        avid: Long? = null,
+        bvid: String? = null,
+        csrf: String? = null,
+        sessData: String? = null
+    ): Pair<Boolean, String> {
+        checkToken(null, sessData)
+        val response = client.post("/x/web-interface/archive/like/triple") {
+            require(avid != null || bvid != null) { "avid and bvid cannot be null at the same time" }
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        avid?.let { append("aid", "$it") }
+                        bvid?.let { append("bvid", it) }
+                        csrf?.let { append("csrf", it) }
+                    }
+                ))
+            sessData?.let { header("Cookie", "SESSDATA=$it;") }
+        }.body<BiliResponseWithoutData>()
+        return Pair(response.code == 0, response.message)
+    }
 }
 
 enum class SeasonIndexType(val id: Int) {

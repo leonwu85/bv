@@ -57,6 +57,7 @@
     <string name="video_player_menu_nav_others">其它设置</string>
     <string name="video_player_menu_nav_picture">画面音频</string>
     <string name="video_player_menu_nav_subtitle">字幕设置</string>
+    <string name="video_player_menu_nav_triple_like">一键三连</string>
     <string name="video_player_menu_others_play_mode">播放模式</string>
     <string name="video_player_menu_picture_aspect_ratio">画面比例</string>
     <string name="video_player_menu_picture_audio">音频编码</string>
@@ -77,4 +78,6 @@
     <string name="pvf_mode_none">不做处理</string>
     <string name="pvf_mode_limit_1080p">自动限制到 ≤1080P</string>
     <string name="pvf_mode_use_texture_view">使用 TextureView 渲染</string>
+    <string name="player_long_press_action_open_menu">打开菜单</string>
+    <string name="player_long_press_action_triple_like">一键三连</string>
 </resources>

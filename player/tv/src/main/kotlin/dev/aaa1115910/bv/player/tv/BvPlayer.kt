@@ -116,6 +116,8 @@ fun BvPlayer(
     onLoopPlayModeChange: (Boolean) -> Unit = {},
     onRefreshVideo: () -> Unit = {},
     onShowComment: () -> Unit = {},
+    onTripleLike: () -> Unit = {},
+    useTripleLikeOnLongPress: Boolean = false,
     userActionContent: @Composable (
         modifier: Modifier,
         focusMap: Map<String, FocusRequester>,
@@ -866,7 +868,9 @@ fun BvPlayer(
             },
             userActionContent = userActionContent,
             onLoadNextVideo = onLoadNextVideo,
-            onShowComment = onShowComment
+            onShowComment = onShowComment,
+            onTripleLike = onTripleLike,
+            useTripleLikeOnLongPress = useTripleLikeOnLongPress
         ) {
             LaunchedEffect(Unit) {
                 videoPlayer.setOptions()

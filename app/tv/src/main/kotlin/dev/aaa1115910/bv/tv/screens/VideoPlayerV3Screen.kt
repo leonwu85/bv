@@ -56,6 +56,7 @@ import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoShotData
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
 import dev.aaa1115910.bv.player.entity.PlayerLoadNextAction
+import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoListItemData
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
@@ -70,6 +71,7 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerVideoShotData
 import dev.aaa1115910.bv.player.tv.BvPlayer
 import dev.aaa1115910.bv.player.tv.controller.SkipTip
+import dev.aaa1115910.bv.player.tv.controller.TripleLikeTip
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
 import dev.aaa1115910.bv.tv.component.buttons.CoinButton
 import dev.aaa1115910.bv.tv.component.CommentPanel
@@ -126,6 +128,10 @@ fun VideoPlayerV3Screen(
 
     // 评论面板状态
     var showCommentPanel by remember { mutableStateOf(false) }
+
+    // 一键三连 Tip 状态
+    var showTripleLikeTip by remember { mutableStateOf(false) }
+    var tripleLikeTipMessage by remember { mutableStateOf("") }
 
     // 焦点管理
     val relatedVideosFocusRequester = remember { FocusRequester() }
@@ -501,6 +507,16 @@ fun VideoPlayerV3Screen(
                     Prefs.defaultPlayMode = playMode
                     playerViewModel.currentPlayMode = playMode
                 },
+                onTripleLike = {
+                    scope.launch {
+                        val success = VideoUserActionManager.tripleLike(playerViewModel.currentAid)
+                        tripleLikeTipMessage = if (success) "一键三连成功" else "一键三连失败"
+                        showTripleLikeTip = true
+                        delay(2000)
+                        showTripleLikeTip = false
+                    }
+                },
+                useTripleLikeOnLongPress = Prefs.playerLongPressAction == PlayerLongPressAction.TripleLike,
                 onOpenUpSpace = {
                     UpInfoActivity.actionStart(
                         context,
@@ -719,6 +735,12 @@ fun VideoPlayerV3Screen(
                     onHide = { showCommentPanel = false }
                 )
             }
+
+            // 一键三连 Tip
+            TripleLikeTip(
+                show = showTripleLikeTip,
+                message = tripleLikeTipMessage
+            )
         }
     }
 }

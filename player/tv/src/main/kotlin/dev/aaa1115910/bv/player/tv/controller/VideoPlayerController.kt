@@ -114,6 +114,8 @@ fun VideoPlayerController(
 
     onRequestFocus: () -> Unit,
     onShowComment: () -> Unit = {},
+    onTripleLike: () -> Unit = {},
+    useTripleLikeOnLongPress: Boolean = false,
     content: @Composable BoxScope.() -> Unit
 ) {
     val context = LocalContext.current
@@ -266,7 +268,11 @@ fun VideoPlayerController(
                         if (it.nativeKeyEvent.isLongPress) {
                             logger.fInfo { "[${it.key}] long press" }
                             scope.launch(Dispatchers.Main) {
-                                showMenuController = true
+                                if (useTripleLikeOnLongPress) {
+                                    onTripleLike()
+                                } else {
+                                    showMenuController = true
+                                }
                             }
                             return@onPreviewKeyEvent true
                         }
@@ -287,7 +293,11 @@ fun VideoPlayerController(
                     // 一切设备上长按 DirectionCenter 键会是这个按键事件
                     Key(763) -> {
                         scope.launch(Dispatchers.Main) {
-                            showMenuController = true
+                            if (useTripleLikeOnLongPress) {
+                                onTripleLike()
+                            } else {
+                                showMenuController = true
+                            }
                         }
                         return@onPreviewKeyEvent true
                     }
@@ -528,7 +538,8 @@ fun VideoPlayerController(
             onSubtitleSizeChange = onSubtitleSizeChange,
             onSubtitleBackgroundOpacityChange = onSubtitleBackgroundOpacityChange,
             onSubtitleBottomPadding = onSubtitleBottomPadding,
-            onPlayModeChange = onPlayModeChange
+            onPlayModeChange = onPlayModeChange,
+            onTripleLike = onTripleLike
         )
         // 缓存底部进度条显示条件，避免频繁计算
         val shouldShowBottomProgressBar by remember { 

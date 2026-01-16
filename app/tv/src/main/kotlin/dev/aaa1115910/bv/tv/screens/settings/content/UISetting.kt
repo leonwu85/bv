@@ -48,6 +48,7 @@ import androidx.tv.material3.RadioButton
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.ThemeType
+import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.component.settings.SettingListItem
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
@@ -72,6 +73,7 @@ fun UISetting(
     var showDefaultHomeTabDialog by remember { mutableStateOf(false) }
     var showGridColumnsDialog by remember { mutableStateOf(false) }
     var showHomeNavItemsDialog by remember { mutableStateOf(false) }
+    var showLongPressActionDialog by remember { mutableStateOf(false) }
     val density by Prefs.densityFlow.collectAsState(context.resources.displayMetrics.widthPixels / 960f)
     val themeType by Prefs.themeTypeFlow.collectAsState(Prefs.themeType)
     var defaultHomeTab by remember { mutableStateOf(HomeTopNavItem.entries.getOrElse(Prefs.defaultHomeTab) { HomeTopNavItem.Recommend }) }
@@ -132,6 +134,17 @@ fun UISetting(
                         onClick = { showHomeNavItemsDialog = true }
                     )
                 }
+                item {
+                    val currentLongPressAction by Prefs.playerLongPressActionFlow.collectAsState(
+                        Prefs.playerLongPressAction
+                    )
+                    SettingListItem(
+                        title = stringResource(R.string.settings_ui_long_press_title),
+                        supportText = stringResource(R.string.settings_ui_long_press_text),
+                        valueText = currentLongPressAction.getDisplayName(LocalContext.current),
+                        onClick = { showLongPressActionDialog = true }
+                    )
+                }
             }
         }
     }
@@ -179,6 +192,13 @@ fun UISetting(
         show = showHomeNavItemsDialog,
         onHideDialog = { showHomeNavItemsDialog = false },
         initialOrderString = Prefs.homeNavItemsOrder
+    )
+
+    LongPressActionDialog(
+        show = showLongPressActionDialog,
+        onHideDialog = { showLongPressActionDialog = false },
+        longPressAction = Prefs.playerLongPressAction,
+        onLongPressActionChange = { Prefs.playerLongPressAction = it }
     )
 }
 
@@ -588,4 +608,46 @@ private fun saveNavConfigs(navConfigs: List<NavItemConfig>) {
         if (shouldHide) "-${config.ordinal}" else "${config.ordinal}"
     }
     Prefs.homeNavItemsOrder = finalOrderString
+}
+
+@Composable
+fun LongPressActionDialog(
+    modifier: Modifier = Modifier,
+    show: Boolean,
+    onHideDialog: () -> Unit,
+    longPressAction: PlayerLongPressAction,
+    onLongPressActionChange: (PlayerLongPressAction) -> Unit
+) {
+    var selectedAction by remember(show) { mutableStateOf(longPressAction) }
+
+    if (show) {
+        TvAlertDialog(
+            modifier = modifier,
+            onDismissRequest = { onHideDialog() },
+            title = { Text(text = stringResource(R.string.settings_ui_long_press_title)) },
+            text = {
+                Column {
+                    PlayerLongPressAction.entries.forEach {
+                        ListItem(
+                            selected = selectedAction == it,
+                            onClick = {
+                                selectedAction = it
+                                onLongPressActionChange(it)
+                            },
+                            headlineContent = {
+                                Text(text = it.getDisplayName(LocalContext.current))
+                            },
+                            trailingContent = {
+                                RadioButton(
+                                    selected = selectedAction == it,
+                                    onClick = null
+                                )
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
 }

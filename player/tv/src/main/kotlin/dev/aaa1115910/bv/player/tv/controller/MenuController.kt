@@ -79,7 +79,8 @@ fun MenuController(
     onSubtitleSizeChange: (TextUnit) -> Unit,
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
     onSubtitleBottomPadding: (Dp) -> Unit,
-    onPlayModeChange: (PlayMode) -> Unit
+    onPlayModeChange: (PlayMode) -> Unit,
+    onTripleLike: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val defaultFocusRequester = remember { FocusRequester() }
@@ -114,7 +115,8 @@ fun MenuController(
                 onSubtitleSizeChange = onSubtitleSizeChange,
                 onSubtitleBackgroundOpacityChange = onSubtitleBackgroundOpacityChange,
                 onSubtitleBottomPadding = onSubtitleBottomPadding,
-                onPlayModeChange = onPlayModeChange
+                onPlayModeChange = onPlayModeChange,
+                onTripleLike = onTripleLike
             )
         }
     }
@@ -139,7 +141,8 @@ fun MenuController(
     onSubtitleSizeChange: (TextUnit) -> Unit,
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
     onSubtitleBottomPadding: (Dp) -> Unit,
-    onPlayModeChange: (PlayMode) -> Unit
+    onPlayModeChange: (PlayMode) -> Unit,
+    onTripleLike: () -> Unit = {}
 ) {
     var selectedNavItem by remember { mutableStateOf(VideoPlayerMenuNavItem.Picture) }
     var focusState by remember { mutableStateOf(MenuFocusState.MenuNav) }
@@ -178,19 +181,28 @@ fun MenuController(
                     onSubtitleSizeChange = onSubtitleSizeChange,
                     onSubtitleBackgroundOpacityChange = onSubtitleBackgroundOpacityChange,
                     onSubtitleBottomPadding = onSubtitleBottomPadding,
-                    onPlayModeChange = onPlayModeChange
+                    onPlayModeChange = onPlayModeChange,
+                    onTripleLike = onTripleLike
                 )
                 MenuNavList(
                     modifier = Modifier
                         .focusRequester(defaultFocusRequester)
                         .onPreviewKeyEvent {
-                            if (it.type == KeyEventType.KeyUp) {
-                                if (listOf(Key.Enter, Key.DirectionCenter).contains(it.key)) {
+                            when {
+                                it.type == KeyEventType.KeyUp && listOf(Key.Enter, Key.DirectionCenter).contains(it.key) -> {
+                                    // 如果选中的是一键三连，执行操作
+                                    if (selectedNavItem == VideoPlayerMenuNavItem.TripleLike) {
+                                        onTripleLike()
+                                    }
                                     return@onPreviewKeyEvent false
                                 }
-                                return@onPreviewKeyEvent true
+
+                                it.type == KeyEventType.KeyUp -> {
+                                    return@onPreviewKeyEvent true
+                                }
+
+                                it.key == Key.DirectionLeft -> focusState = MenuFocusState.Menu
                             }
-                            if (it.key == Key.DirectionLeft) focusState = MenuFocusState.Menu
                             false
                         },
                     selectedMenu = selectedNavItem,
@@ -222,7 +234,8 @@ private fun MenuList(
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
     onSubtitleBottomPadding: (Dp) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit,
-    onFocusStateChange: (MenuFocusState) -> Unit
+    onFocusStateChange: (MenuFocusState) -> Unit,
+    onTripleLike: () -> Unit = {}
 ) {
     Box(
         modifier = modifier,
@@ -260,6 +273,10 @@ private fun MenuList(
                     onSubtitleBottomPadding = onSubtitleBottomPadding,
                     onFocusStateChange = onFocusStateChange
                 )
+            }
+
+            VideoPlayerMenuNavItem.TripleLike -> {
+                // 按确认键执行一键三连，右侧不显示内容
             }
 
 //            VideoPlayerMenuNavItem.Others -> {
@@ -407,7 +424,8 @@ fun MenuControllerPreview() {
                             currentSubtitleBackgroundOpacity = it
                         },
                         onSubtitleBottomPadding = { currentSubtitleBottomPadding = it },
-                        onPlayModeChange = { currentPlayMode = it }
+                        onPlayModeChange = { currentPlayMode = it },
+                        onTripleLike = {}
                     )
                 }
             }

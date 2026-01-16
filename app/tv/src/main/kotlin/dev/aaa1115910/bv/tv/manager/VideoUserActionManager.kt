@@ -4,6 +4,7 @@ import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
 import dev.aaa1115910.biliapi.repositories.CoinRepository
 import dev.aaa1115910.biliapi.repositories.FavoriteRepository
 import dev.aaa1115910.biliapi.repositories.LikeRepository
+import dev.aaa1115910.biliapi.repositories.TripleLikeRepository
 import dev.aaa1115910.bv.util.Prefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -127,5 +128,23 @@ object VideoUserActionManager {
         val default = flow.value.favoriteFolders.firstOrNull { it.title == "默认收藏夹" }
             ?: return false
         return updateVideoFavoriteFolders(aid, listOf(default.id), uid)
+    }
+
+    suspend fun tripleLike(aid: Long, uid: Long = Prefs.uid): Boolean {
+        if (aid <= 0) return false
+        val tripleLikeRepository: TripleLikeRepository = get(TripleLikeRepository::class.java)
+        return try {
+            val result = withContext(Dispatchers.IO) {
+                tripleLikeRepository.tripleLike(aid = aid)
+            }
+            ensure(aid, uid).value = ensure(aid, uid).value.copy(
+                liked = result.like,
+                coin = result.coin,
+                favorited = result.fav
+            )
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 }
