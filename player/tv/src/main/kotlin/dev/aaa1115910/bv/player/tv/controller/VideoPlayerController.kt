@@ -134,6 +134,8 @@ fun VideoPlayerController(
     var lastPressBack by remember { mutableLongStateOf(0L) }
     var lastPressDown by remember { mutableLongStateOf(0L) }
     var hasFocus by remember { mutableStateOf(false) }
+    var justTriggeredLongPress by remember { mutableStateOf(false) }
+    var longPressResetJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     var goTime by remember { mutableLongStateOf(0L) }
     var seekChangeCount by remember { mutableIntStateOf(0) }
@@ -267,6 +269,12 @@ fun VideoPlayerController(
 
                         if (it.nativeKeyEvent.isLongPress) {
                             logger.fInfo { "[${it.key}] long press" }
+                            justTriggeredLongPress = true
+                            longPressResetJob?.cancel()
+                            longPressResetJob = scope.launch(Dispatchers.Main) {
+                                delay(1000)
+                                justTriggeredLongPress = false
+                            }
                             scope.launch(Dispatchers.Main) {
                                 if (useTripleLikeOnLongPress) {
                                     onTripleLike()
@@ -277,8 +285,14 @@ fun VideoPlayerController(
                             return@onPreviewKeyEvent true
                         }
 
-                        logger.fInfo { "[${it.key}] short press" }
                         if (it.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
+
+                        if (justTriggeredLongPress) {
+                            logger.fInfo { "[${it.key}] ignore key up after long press" }
+                            return@onPreviewKeyEvent true
+                        }
+
+                        logger.fInfo { "[${it.key}] short press" }
                         if (videoPlayer.isPlaying)
                             onPause()
                         else if (videoPlayer.currentPosition >= videoPlayer.duration) {
@@ -292,6 +306,12 @@ fun VideoPlayerController(
                     // KEYCODE_CENTER_LONG
                     // 一切设备上长按 DirectionCenter 键会是这个按键事件
                     Key(763) -> {
+                        justTriggeredLongPress = true
+                        longPressResetJob?.cancel()
+                        longPressResetJob = scope.launch(Dispatchers.Main) {
+                            delay(500)
+                            justTriggeredLongPress = false
+                        }
                         scope.launch(Dispatchers.Main) {
                             if (useTripleLikeOnLongPress) {
                                 onTripleLike()
