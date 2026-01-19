@@ -427,6 +427,10 @@ object Prefs {
     val playerLongPressActionFlow: Flow<PlayerLongPressAction>
         get() = dsm.getPreferenceFlow(PrefKeys.prefPlayerLongPressActionRequest)
             .transform { ordinal -> emit(PlayerLongPressAction.fromValue(ordinal)) }
+
+    var showOnlineViewerCount: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowOnlineViewerCountRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowOnlineViewerCountKey, value) }
 }
 
 object PrefKeys {
@@ -491,6 +495,7 @@ object PrefKeys {
     val prefHomeNavItemsOrderKey = stringPreferencesKey("home_nav_items_order")
     val prefSkipPgcIntroOutroKey = booleanPreferencesKey("skip_pgc_intro_outro")
     val prefPlayerLongPressActionKey = intPreferencesKey("player_long_press_action")
+    val prefShowOnlineViewerCountKey = booleanPreferencesKey("show_online_viewer_count")
 
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
@@ -571,4 +576,5 @@ object PrefKeys {
     )
     val prefSkipPgcIntroOutroRequest = PreferenceRequest(prefSkipPgcIntroOutroKey, false)
     val prefPlayerLongPressActionRequest = PreferenceRequest(prefPlayerLongPressActionKey, PlayerLongPressAction.OpenMenu.ordinal)
+    val prefShowOnlineViewerCountRequest = PreferenceRequest(prefShowOnlineViewerCountKey, false)  // false = 1分钟后隐藏, true = 始终显示
 }

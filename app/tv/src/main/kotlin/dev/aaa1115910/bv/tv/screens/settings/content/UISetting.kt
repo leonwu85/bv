@@ -74,6 +74,7 @@ fun UISetting(
     var showGridColumnsDialog by remember { mutableStateOf(false) }
     var showHomeNavItemsDialog by remember { mutableStateOf(false) }
     var showLongPressActionDialog by remember { mutableStateOf(false) }
+    var showOnlineViewerCountDialog by remember { mutableStateOf(false) }
     val density by Prefs.densityFlow.collectAsState(context.resources.displayMetrics.widthPixels / 960f)
     val themeType by Prefs.themeTypeFlow.collectAsState(Prefs.themeType)
     var defaultHomeTab by remember { mutableStateOf(HomeTopNavItem.entries.getOrElse(Prefs.defaultHomeTab) { HomeTopNavItem.Recommend }) }
@@ -145,6 +146,15 @@ fun UISetting(
                         onClick = { showLongPressActionDialog = true }
                     )
                 }
+                item {
+                    val showOnlineViewerCount = Prefs.showOnlineViewerCount
+                    SettingListItem(
+                        title = "视频在线观看人数",
+                        supportText = "设置播放器在线人数显示方式",
+                        valueText = if (showOnlineViewerCount) "始终显示" else "30 秒后隐藏",
+                        onClick = { showOnlineViewerCountDialog = true }
+                    )
+                }
             }
         }
     }
@@ -199,6 +209,13 @@ fun UISetting(
         onHideDialog = { showLongPressActionDialog = false },
         longPressAction = Prefs.playerLongPressAction,
         onLongPressActionChange = { Prefs.playerLongPressAction = it }
+    )
+
+    OnlineViewerCountDialog(
+        show = showOnlineViewerCountDialog,
+        onHideDialog = { showOnlineViewerCountDialog = false },
+        showOnlineViewerCount = Prefs.showOnlineViewerCount,
+        onShowOnlineViewerCountChange = { Prefs.showOnlineViewerCount = it }
     )
 }
 
@@ -640,6 +657,45 @@ fun LongPressActionDialog(
                             trailingContent = {
                                 RadioButton(
                                     selected = selectedAction == it,
+                                    onClick = null
+                                )
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+}
+
+@Composable
+private fun OnlineViewerCountDialog(
+    modifier: Modifier = Modifier,
+    show: Boolean,
+    onHideDialog: () -> Unit,
+    showOnlineViewerCount: Boolean,
+    onShowOnlineViewerCountChange: (Boolean) -> Unit
+) {
+    if (show) {
+        TvAlertDialog(
+            modifier = modifier,
+            onDismissRequest = { onHideDialog() },
+            title = { Text(text = "视频在线观看人数") },
+            text = {
+                Column {
+                    val options = listOf(
+                        "30 秒后隐藏" to false,
+                        "始终显示" to true
+                    )
+                    options.forEach { (text, value) ->
+                        ListItem(
+                            selected = showOnlineViewerCount == value,
+                            onClick = { onShowOnlineViewerCountChange(value) },
+                            headlineContent = { Text(text = text) },
+                            trailingContent = {
+                                RadioButton(
+                                    selected = showOnlineViewerCount == value,
                                     onClick = null
                                 )
                             }
