@@ -154,7 +154,7 @@ fun VideoPlayerV3Screen(
 
     // 获取在线观看人数
     LaunchedEffect(playerViewModel.currentCid, playerViewModel.currentAid) {
-        if (playerViewModel.currentCid > 0 && playerViewModel.currentAid > 0) {
+        if (playerViewModel.currentCid > 0 && playerViewModel.currentAid > 0 && Prefs.showOnlineViewerCount > 0) {
             withContext(Dispatchers.IO) {
                 try {
                     val response = BiliHttpApi.getVideoOnlineTotal(
@@ -165,9 +165,9 @@ fun VideoPlayerV3Screen(
                         onlineViewerCount = response.data?.total ?: ""
                         showOnlineViewerCountTip = true
 
-                        // 如果设置为 0.5 分钟后隐藏，则自动隐藏
-                        if (!Prefs.showOnlineViewerCount) {
-                            delay(30_000)  // 1 分钟
+                        // 如果设置为 30 秒后隐藏，则自动隐藏
+                        if (Prefs.showOnlineViewerCount == 1) {
+                            delay(30_000)
                             showOnlineViewerCountTip = false
                         }
                     }
@@ -180,7 +180,7 @@ fun VideoPlayerV3Screen(
 
     // 如果设置为始终显示，每 5 分钟刷新一次数据
     LaunchedEffect(showOnlineViewerCountTip, Prefs.showOnlineViewerCount) {
-        if (showOnlineViewerCountTip && Prefs.showOnlineViewerCount) {
+        if (showOnlineViewerCountTip && Prefs.showOnlineViewerCount == 2) {
             while (true) {
                 delay(300_000)  // 5 分钟
                 if (playerViewModel.currentCid > 0 && playerViewModel.currentAid > 0) {

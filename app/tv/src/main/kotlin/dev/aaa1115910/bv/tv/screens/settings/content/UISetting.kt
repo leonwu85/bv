@@ -151,7 +151,12 @@ fun UISetting(
                     SettingListItem(
                         title = "视频在线观看人数",
                         supportText = "设置播放器在线人数显示方式",
-                        valueText = if (showOnlineViewerCount) "始终显示" else "30 秒后隐藏",
+                        valueText = when (showOnlineViewerCount) {
+                            0 -> "不显示"
+                            1 -> "30 秒后隐藏"
+                            2 -> "始终显示"
+                            else -> "30 秒后隐藏"
+                        },
                         onClick = { showOnlineViewerCountDialog = true }
                     )
                 }
@@ -674,8 +679,8 @@ private fun OnlineViewerCountDialog(
     modifier: Modifier = Modifier,
     show: Boolean,
     onHideDialog: () -> Unit,
-    showOnlineViewerCount: Boolean,
-    onShowOnlineViewerCountChange: (Boolean) -> Unit
+    showOnlineViewerCount: Int,
+    onShowOnlineViewerCountChange: (Int) -> Unit
 ) {
     if (show) {
         TvAlertDialog(
@@ -685,8 +690,9 @@ private fun OnlineViewerCountDialog(
             text = {
                 Column {
                     val options = listOf(
-                        "30 秒后隐藏" to false,
-                        "始终显示" to true
+                        "不显示" to 0,
+                        "30 秒后隐藏" to 1,
+                        "始终显示" to 2
                     )
                     options.forEach { (text, value) ->
                         ListItem(
