@@ -431,6 +431,9 @@ object Prefs {
     var showOnlineViewerCount: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowOnlineViewerCountRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowOnlineViewerCountKey, value) }
+
+    val showOnlineViewerCountFlow: Flow<Boolean>
+        get() = dsm.getPreferenceFlow(PrefKeys.prefShowOnlineViewerCountRequest)
 }
 
 object PrefKeys {

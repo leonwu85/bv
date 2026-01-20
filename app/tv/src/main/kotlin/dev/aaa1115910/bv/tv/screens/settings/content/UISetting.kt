@@ -77,6 +77,7 @@ fun UISetting(
     var showOnlineViewerCountDialog by remember { mutableStateOf(false) }
     val density by Prefs.densityFlow.collectAsState(context.resources.displayMetrics.widthPixels / 960f)
     val themeType by Prefs.themeTypeFlow.collectAsState(Prefs.themeType)
+    val showOnlineViewerCount by Prefs.showOnlineViewerCountFlow.collectAsState(Prefs.showOnlineViewerCount)
     var defaultHomeTab by remember { mutableStateOf(HomeTopNavItem.entries.getOrElse(Prefs.defaultHomeTab) { HomeTopNavItem.Recommend }) }
     var gridColumns by remember { mutableStateOf(Prefs.gridColumns) }
 
@@ -147,7 +148,6 @@ fun UISetting(
                     )
                 }
                 item {
-                    val showOnlineViewerCount = Prefs.showOnlineViewerCount
                     SettingListItem(
                         title = "视频在线观看人数",
                         supportText = "设置播放器在线人数显示方式",
@@ -214,7 +214,7 @@ fun UISetting(
     OnlineViewerCountDialog(
         show = showOnlineViewerCountDialog,
         onHideDialog = { showOnlineViewerCountDialog = false },
-        showOnlineViewerCount = Prefs.showOnlineViewerCount,
+        showOnlineViewerCount = showOnlineViewerCount,
         onShowOnlineViewerCountChange = { Prefs.showOnlineViewerCount = it }
     )
 }
