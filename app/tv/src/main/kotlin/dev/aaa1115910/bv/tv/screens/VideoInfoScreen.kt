@@ -1019,10 +1019,32 @@ fun VideoInfoScreen(
         description = videoDetailViewModel.videoDetail?.description ?: ""
     )
 
+    // 计算评论面板的初始 episode id（用于 UGC 合集）
+    val commentInitialEpisodeId = remember(lastPlayedCid, intentAid, videoDetailViewModel.videoDetail?.ugcSeason) {
+        val sections = videoDetailViewModel.videoDetail?.ugcSeason?.sections ?: return@remember -1
+        val allEpisodes = sections.flatMap { it.episodes }
+
+        // 优先使用历史记录对应的 episode
+        if (lastPlayedCid != 0L) {
+            allEpisodes.find { ep ->
+                ep.cid == lastPlayedCid || ep.pages.any { it.cid == lastPlayedCid }
+            }?.id?.let { return@remember it }
+        }
+
+        // 没有历史记录时，使用与 intentAid 匹配的 episode
+        if (intentAid != 0L) {
+            allEpisodes.find { it.aid == intentAid }?.id?.let { return@remember it }
+        }
+
+        -1
+    }
+
     CommentPanel(
         show = showCommentPanel,
         oid = videoDetailViewModel.videoDetail?.aid ?: 0L,
-        onHide = { showCommentPanel = false }
+        onHide = { showCommentPanel = false },
+        sections = videoDetailViewModel.videoDetail?.ugcSeason?.sections ?: emptyList(),
+        initialEpisodeId = commentInitialEpisodeId
     )
 
     // 浮层关闭后，焦点返回评论按钮
