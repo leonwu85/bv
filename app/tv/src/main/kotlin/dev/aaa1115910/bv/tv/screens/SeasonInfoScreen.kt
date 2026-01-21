@@ -95,6 +95,7 @@ import coil.request.ImageRequest
 import coil.transform.BlurTransformation
 import dev.aaa1115910.biliapi.entity.video.season.Episode
 import dev.aaa1115910.biliapi.entity.video.season.PgcSeason
+import dev.aaa1115910.biliapi.entity.video.season.Section
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.player.entity.VideoListPgcEpisode
@@ -169,6 +170,7 @@ fun SeasonInfoScreen(
     var showSeasonSelector by remember { mutableStateOf(false) }
     var showCommentPanel by remember { mutableStateOf(false) }
     val defaultFocusRequester = remember { FocusRequester() }
+    val commentButtonFocusRequester = remember { FocusRequester() }
 
     val onClickVideo: (avid: Long, cid: Long, epid: Int, episodeTitle: String, startTime: Int) -> Unit =
         { avid, cid, epid, episodeTitle, startTime ->
@@ -440,7 +442,8 @@ fun SeasonInfoScreen(
                         },
                         onClickFollow = onClickFollow,
                         onClickCover = onClickCover,
-                        onShowComment = onShowComment
+                        onShowComment = onShowComment,
+                        commentButtonFocusRequester = commentButtonFocusRequester
                     )
                 }
                 if (seasonViewModel.seasonData?.episodes?.isNotEmpty() == true) {
@@ -532,7 +535,16 @@ fun SeasonInfoScreen(
     CommentPanel(
         show = showCommentPanel,
         oid = getCommentAid(),
-        onHide = { showCommentPanel = false }
+        onHide = {
+            showCommentPanel = false
+            commentButtonFocusRequester.requestFocus(scope)
+        },
+        episodes = seasonViewModel.seasonData?.episodes ?: emptyList(),
+        sections = seasonViewModel.seasonData?.sections ?: emptyList(),
+        initialEpisodeId = seasonViewModel.lastPlayProgress?.lastEpId ?: -1,
+        onEpisodeChange = { episode ->
+            logger.debug { "User viewed comments for episode: ${episode.id} (${episode.title})" }
+        }
     )
 }
 
@@ -611,6 +623,7 @@ fun SeasonBaseInfo(
     onPlay: () -> Unit,
     onClickFollow: (follow: Boolean) -> Unit,
     onShowComment: () -> Unit = {},
+    commentButtonFocusRequester: FocusRequester = remember { FocusRequester() }
 ) {
     Column(
         modifier = modifier
@@ -633,6 +646,7 @@ fun SeasonBaseInfo(
             // 评论按钮
             Row(
                 modifier = Modifier
+                    .focusRequester(commentButtonFocusRequester)
                     .clip(MaterialTheme.shapes.small)
                     .background(Color.White.copy(alpha = 0.2f))
                     .focusedBorder(MaterialTheme.shapes.small)
@@ -676,7 +690,8 @@ fun SeasonInfoPart(
     onPlay: () -> Unit,
     onClickFollow: (follow: Boolean) -> Unit,
     onClickCover: () -> Unit,
-    onShowComment: () -> Unit = {}
+    onShowComment: () -> Unit = {},
+    commentButtonFocusRequester: FocusRequester = remember { FocusRequester() }
 ) {
     Row(
         modifier = modifier
@@ -700,7 +715,8 @@ fun SeasonInfoPart(
             publishDate = publishDate,
             onPlay = onPlay,
             onClickFollow = onClickFollow,
-            onShowComment = onShowComment
+            onShowComment = onShowComment,
+            commentButtonFocusRequester = commentButtonFocusRequester
         )
     }
 }

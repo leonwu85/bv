@@ -18,6 +18,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidthIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -28,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +40,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -45,15 +51,23 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Border
+import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentPage
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
+import dev.aaa1115910.biliapi.entity.video.season.Episode
+import dev.aaa1115910.biliapi.entity.video.season.Section
 import dev.aaa1115910.biliapi.repositories.CommentRepository
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.focusedBorder
@@ -65,6 +79,7 @@ import dev.aaa1115910.bv.util.requestFocus
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.getKoin
+import androidx.compose.ui.platform.LocalContext
 
 /**
  * 评论浮层组件
@@ -72,17 +87,26 @@ import org.koin.compose.getKoin
  * @param show 是否显示浮层
  * @param oid 视频 aid
  * @param onHide 关闭浮层回调
+ * @param episodes 正片剧集列表（用于选集切换）
+ * @param sections 章节选集列表（用于选集切换）
+ * @param initialEpisodeId 初始选中的剧集ID
+ * @param onEpisodeChange 剧集切换回调
  */
 @Composable
 fun CommentPanel(
     show: Boolean,
     oid: Long,
-    onHide: () -> Unit
+    onHide: () -> Unit,
+    episodes: List<Episode> = emptyList(),
+    sections: List<Section> = emptyList(),
+    initialEpisodeId: Int = -1,
+    onEpisodeChange: ((Episode) -> Unit)? = null
 ) {
     val commentRepository: CommentRepository = getKoin().get()
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
+    val sidebarFocusRequester = remember { FocusRequester() }
 
     val comments = remember { mutableStateListOf<Comment>() }
     var loading by remember { mutableStateOf(false) }
@@ -97,6 +121,60 @@ fun CommentPanel(
     var wasSubCommentPanelShown by remember { mutableStateOf(false) }
     var selectedCommentIndex by remember { mutableStateOf(0) }
     var focusedCommentIndex by remember { mutableStateOf(0) }
+
+    // 选集相关状态
+    var currentEpisode by remember { mutableStateOf<Episode?>(null) }
+    var focusOnSidebar by remember { mutableStateOf(false) }
+    var scrollToCurrentEpisode by remember { mutableStateOf(false) }
+    var pendingFocusToComments by remember { mutableStateOf(false) }
+
+    // 合并所有剧集（正片 + 章节）
+    val allEpisodeItems by remember(episodes, sections) {
+        derivedStateOf {
+            buildList {
+                var idx = 0
+                // 添加正片剧集
+                if (episodes.isNotEmpty()) {
+                    episodes.forEach { ep ->
+                        // 过滤掉 aid 为 0 的剧集
+                        if (ep.aid > 0) {
+                            add(EpisodeItem(ep, "正片", idx++))
+                        }
+                    }
+                }
+                // 添加章节剧集
+                sections.forEach { section ->
+                    section.episodes.forEach { ep ->
+                        // 过滤掉 aid 为 0 的剧集
+                        if (ep.aid > 0) {
+                            add(EpisodeItem(ep, section.title, idx++))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 是否显示侧边栏（多于1集时显示）
+    val showSidebar by remember(allEpisodeItems) {
+        derivedStateOf { allEpisodeItems.size > 1 }
+    }
+
+    // 初始化当前选中的剧集
+    LaunchedEffect(allEpisodeItems, initialEpisodeId) {
+        if (currentEpisode == null && allEpisodeItems.isNotEmpty()) {
+            currentEpisode = if (initialEpisodeId != -1) {
+                allEpisodeItems.find { it.episode.id == initialEpisodeId }?.episode
+            } else {
+                allEpisodeItems.firstOrNull()?.episode
+            }
+        }
+    }
+
+    // 获取当前要加载评论的 aid
+    val currentOid by remember(currentEpisode, oid) {
+        derivedStateOf { currentEpisode?.aid ?: oid }
+    }
 
     // 判断是否滚动到底部
     val isAtBottom by remember {
@@ -115,7 +193,7 @@ fun CommentPanel(
             try {
                 val page = if (reset) CommentPage() else currentPage
                 val data = commentRepository.getComments(
-                    id = oid,
+                    id = currentOid,
                     type = 1L, // 视频评论
                     sort = CommentSort.Hot,
                     page = page,
@@ -140,13 +218,17 @@ fun CommentPanel(
     }
 
     // 显示时加载评论
-    LaunchedEffect(show, oid) {
+    LaunchedEffect(show, currentOid) {
         if (show && comments.isEmpty()) {
             loadComments(true)
         }
         if (!show) {
             hasRequestedFocus = false
             wasSubCommentPanelShown = false
+            // 重置边栏焦点状态，确保下次打开时焦点在评论列表
+            focusOnSidebar = false
+            scrollToCurrentEpisode = false
+            pendingFocusToComments = false
         }
     }
 
@@ -160,6 +242,12 @@ fun CommentPanel(
                 delay(100)
                 focusRequester.requestFocus(scope)
                 wasSubCommentPanelShown = false
+            }
+            // 切换剧集后评论加载完成，请求焦点到评论列表
+            else if (pendingFocusToComments) {
+                delay(100) // 等待渲染完成
+                focusRequester.requestFocus(scope)
+                pendingFocusToComments = false
             }
             // 初次显示父评论浮窗，请求焦点
             else if (!hasRequestedFocus) {
@@ -196,107 +284,171 @@ fun CommentPanel(
                 modifier = Modifier
                     .fillMaxHeight()
                     .padding(horizontal = 16.dp, vertical = 16.dp)
-                    .widthIn(min = 300.dp, max = 400.dp)
-                    .fillMaxWidth(0.3f)
+                    .widthIn(
+                        min = if (showSidebar) 600.dp else 300.dp,
+                        max = if (showSidebar) 700.dp else 400.dp
+                    )
+                    .fillMaxWidth(if (showSidebar) 0.5f else 0.3f)
                     .clickable(enabled = true, onClick = {}) // 阻止点击穿透
-                    .onBackPressed { onHide() },
+                    .onBackPressed {
+                        if (focusOnSidebar && showSidebar) {
+                            // 在边栏时按返回键关闭评论面板
+                            onHide()
+                        } else if (showSidebar) {
+                            // 在评论列表时按返回键切换到边栏
+                            focusOnSidebar = true
+                            scrollToCurrentEpisode = true
+                            // 焦点请求由 EpisodeSidebar 内部的 LaunchedEffect 处理
+                        } else {
+                            // 没有边栏时直接关闭
+                            onHide()
+                        }
+                    },
                 colors = SurfaceDefaults.colors(
                     containerColor = Color.Black.copy(alpha = 0.95f)
                 ),
                 shape = MaterialTheme.shapes.large
             ) {
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // 标题栏
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = "评论",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = Color.White
-                            )
-                            Text(
-                                text = "左键返回顶部",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.5f)
-                            )
-                        }
-                        Text(
-                            text = if (comments.isNotEmpty()) "${comments.size} 条" else "",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.7f)
+                    // 左侧边栏 - 仅在有多个剧集时显示
+                    if (showSidebar) {
+                        EpisodeSidebar(
+                            episodes = allEpisodeItems,
+                            currentEpisode = currentEpisode,
+                            onEpisodeSelected = { episodeItem ->
+                                currentEpisode = episodeItem.episode
+                                onEpisodeChange?.invoke(episodeItem.episode)
+                                comments.clear()
+                                loadComments(true)
+                                // 切换剧集后将焦点移回评论列表
+                                focusOnSidebar = false
+                                scrollToCurrentEpisode = false
+                                // 标记需要在评论加载完成后请求焦点
+                                pendingFocusToComments = true
+                            },
+                            modifier = Modifier
+                                .width(220.dp)
+                                .fillMaxHeight(),
+                            focusRequester = sidebarFocusRequester,
+                            onFocusMoved = {
+                                // 焦点返回评论列表
+                                focusOnSidebar = false
+                                scrollToCurrentEpisode = false
+                                scope.launch {
+                                    focusRequester.requestFocus(scope)
+                                }
+                            },
+                            scrollToCurrent = scrollToCurrentEpisode
                         )
                     }
 
-                    // 评论列表
-                    if (error != null) {
-                        Text(
-                            text = error ?: "加载失败",
-                            color = Color.Red,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    } else if (comments.isEmpty() && !loading) {
-                        Text(
-                            text = "暂无评论",
-                            color = Color.White.copy(alpha = 0.5f),
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    } else {
-                        LazyColumn(
+                    // 右侧评论列表区域
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // 标题栏
+                        Row(
                             modifier = Modifier
-                                .weight(1f)
                                 .fillMaxWidth()
-                                .focusRequester(focusRequester)
-                                .onPreviewKeyEvent { event ->
-                                    when {
-                                        // 左键返回顶部
-                                        event.isKeyDown() && event.isDpadLeft() -> {
-                                            scope.launch {
-                                                listState.scrollToItem(0)
-                                                // 滚动后重新请求焦点，使焦点移到第一条评论
-                                                delay(100)
-                                                focusRequester.requestFocus(scope)
-                                            }
-                                            true
-                                        }
-                                        // 下键：检查当前评论是否已完全可见
-                                        event.isKeyDown() && event.isDpadDown() -> {
-                                            val currentItemInfo = listState.layoutInfo.visibleItemsInfo
-                                                .firstOrNull { it.index == focusedCommentIndex }
+                                .padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "评论",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = Color.White
+                                )
+                                // 操作提示
+                                Text(
+                                    text = if (showSidebar) "左键返回顶部,返回键切换剧集" else "左键返回顶部",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.5f)
+                                )
+                                // 显示当前剧集
+                                if (currentEpisode != null && showSidebar) {
+                                    Text(
+                                        text = generateEpisodeTitle(currentEpisode, ""),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.White.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = if (comments.isNotEmpty()) "${comments.size} 条" else "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                        }
 
-                                            if (currentItemInfo != null) {
-                                                val viewportEnd = listState.layoutInfo.viewportEndOffset
-                                                val itemBottom = currentItemInfo.offset + currentItemInfo.size
-                                                val amountToScroll = itemBottom - viewportEnd
-
-                                                // 如果评论底部不可见，精确滚动使其可见
-                                                if (amountToScroll > 0) {
-                                                    scope.launch {
-                                                        listState.animateScrollBy(amountToScroll.toFloat())
-                                                    }
-                                                    true // 拦截事件
-                                                } else {
-                                                    false // 允许焦点转移
+                        // 评论列表
+                        if (error != null) {
+                            Text(
+                                text = error ?: "加载失败",
+                                color = Color.Red,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        } else if (comments.isEmpty() && !loading) {
+                            Text(
+                                text = "暂无评论",
+                                color = Color.White.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester)
+                                    .onPreviewKeyEvent { event ->
+                                        when {
+                                            // 左键返回顶部
+                                            event.isKeyDown() && event.isDpadLeft() -> {
+                                                scope.launch {
+                                                    listState.scrollToItem(0)
+                                                    // 滚动后重新请求焦点，使焦点移到第一条评论
+                                                    delay(100)
+                                                    focusRequester.requestFocus(scope)
                                                 }
-                                            } else {
-                                                false
+                                                true
                                             }
+                                            // 下键：检查当前评论是否已完全可见
+                                            event.isKeyDown() && event.isDpadDown() -> {
+                                                val currentItemInfo = listState.layoutInfo.visibleItemsInfo
+                                                    .firstOrNull { it.index == focusedCommentIndex }
+
+                                                if (currentItemInfo != null) {
+                                                    val viewportEnd = listState.layoutInfo.viewportEndOffset
+                                                    val itemBottom = currentItemInfo.offset + currentItemInfo.size
+                                                    val amountToScroll = itemBottom - viewportEnd
+
+                                                    // 如果评论底部不可见，精确滚动使其可见
+                                                    if (amountToScroll > 0) {
+                                                        scope.launch {
+                                                            listState.animateScrollBy(amountToScroll.toFloat())
+                                                        }
+                                                        true // 拦截事件
+                                                    } else {
+                                                        false // 允许焦点转移
+                                                    }
+                                                } else {
+                                                    false
+                                                }
+                                            }
+                                            else -> false
                                         }
-                                        else -> false
-                                    }
-                                },
+                                    },
                             state = listState,
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
@@ -356,16 +508,17 @@ fun CommentPanel(
 
                     // 底部提示
                     Spacer(modifier = Modifier.height(8.dp))
-                }
-            }
-        }
-    }
+                } // Column (右侧评论列表区域) 结束
+            } // Row 结束
+        } // Surface 结束
+        } // AnimatedVisibility 结束
+    } // Box 结束
 
     // 子评论浮窗
     if (selectedRootComment != null) {
         SubCommentPanel(
             show = showSubCommentPanel,
-            oid = oid,
+            oid = currentOid,
             rootId = selectedRootComment!!.rpid,
             rootComment = selectedRootComment!!,
             onHide = {
@@ -373,5 +526,225 @@ fun CommentPanel(
                 selectedRootComment = null
             }
         )
+    }
+}
+
+/**
+ * 选集侧边栏项数据类
+ */
+private data class EpisodeItem(
+    val episode: Episode,
+    val sectionTitle: String,
+    val index: Int
+)
+
+/**
+ * 生成剧集标题
+ */
+private fun generateEpisodeTitle(
+    episode: Episode?,
+    sectionTitle: String
+): String {
+    if (episode == null) return ""
+
+    return if (episode.longTitle.isNotEmpty()) {
+        runCatching {
+            "第 ${episode.title.toInt()} 集 "
+        }.getOrDefault("") + episode.longTitle
+    } else if (sectionTitle == "正片") {
+        runCatching {
+            "第 ${episode.title.toInt()} 集"
+        }.getOrDefault(episode.title)
+    } else {
+        episode.title
+    }
+}
+
+/**
+ * 选集侧边栏组件
+ */
+@Composable
+private fun EpisodeSidebar(
+    episodes: List<EpisodeItem>,
+    currentEpisode: Episode?,
+    onEpisodeSelected: (EpisodeItem) -> Unit,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester,
+    onFocusMoved: () -> Unit = {},
+    scrollToCurrent: Boolean = false
+) {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // 为每个剧集项创建独立的 FocusRequester
+    val itemFocusRequesters = remember(episodes.size) {
+        List(episodes.size) { FocusRequester() }
+    }
+
+    // 计算在 LazyColumn 中的实际索引（考虑章节标题）
+    fun calculateLazyColumnIndex(episodes: List<EpisodeItem>, episodeIndex: Int): Int {
+        if (episodeIndex < 0 || episodes.isEmpty()) return 0
+        var actualIndex = 0
+        var lastSectionTitle = ""
+        // 遍历到目标索引之前的所有项
+        for (i in 0 until episodeIndex) {
+            if (episodes[i].sectionTitle != lastSectionTitle) {
+                lastSectionTitle = episodes[i].sectionTitle
+                actualIndex++  // 章节标题占一个索引
+            }
+            actualIndex++  // 剧集项占一个索引
+        }
+        // 检查目标项本身是否有新章节标题
+        if (episodes[episodeIndex].sectionTitle != lastSectionTitle) {
+            actualIndex++  // 目标项的章节标题
+        }
+        return actualIndex  // 返回剧集项的正确索引
+    }
+
+    // 初始化时滚动到当前选中的剧集（只滚动，不请求焦点）
+    LaunchedEffect(currentEpisode, episodes) {
+        val index = episodes.indexOfFirst { it.episode.id == currentEpisode?.id }
+        if (index >= 0) {
+            val actualIndex = calculateLazyColumnIndex(episodes, index)
+            listState.scrollToItem(maxOf(0, actualIndex - 2))
+        }
+    }
+
+    // 当 scrollToCurrent 变为 true 时，直接请求焦点到当前剧集（位置已由初始化 LaunchedEffect 处理）
+    LaunchedEffect(scrollToCurrent) {
+        if (scrollToCurrent) {
+            delay(50) // 短暂等待确保布局就绪
+            val index = episodes.indexOfFirst { it.episode.id == currentEpisode?.id }
+            if (index >= 0) {
+                // 直接请求焦点到当前选中的剧集项
+                itemFocusRequesters.getOrNull(index)?.requestFocus()
+            } else {
+                // 没有找到当前剧集，焦点到第一个剧集
+                itemFocusRequesters.firstOrNull()?.requestFocus()
+            }
+        }
+    }
+
+    LazyColumn(
+        modifier = modifier.focusRequester(focusRequester),
+        state = listState,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        contentPadding = PaddingValues(vertical = 8.dp)
+    ) {
+        // 按章节分组显示
+        var lastSectionTitle = ""
+
+        episodes.forEachIndexed { index, item ->
+            // 章节标题
+            if (item.sectionTitle != lastSectionTitle) {
+                lastSectionTitle = item.sectionTitle
+                item {
+                    Text(
+                        text = item.sectionTitle,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Color.White.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            // 剧集按钮
+            item {
+                val isSelected = item.episode.id == currentEpisode?.id
+                EpisodeSidebarItem(
+                    episode = item.episode,
+                    sectionTitle = item.sectionTitle,
+                    isSelected = isSelected,
+                    onClick = { onEpisodeSelected(item) },
+                    onBackKeyPressed = onFocusMoved,
+                    focusRequester = itemFocusRequesters[index]
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 选集侧边栏单项组件
+ */
+@Composable
+private fun EpisodeSidebarItem(
+    episode: Episode,
+    sectionTitle: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onBackKeyPressed: () -> Unit = {},
+    focusRequester: FocusRequester = remember { FocusRequester() }
+) {
+    val borderColor = if (isSelected) Color(0xFFE39B17) else null
+    val context = LocalContext.current
+
+    Surface(
+        modifier = Modifier.focusRequester(focusRequester),
+        onClick = onClick,
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (isSelected) {
+                Color.White.copy(alpha = 0.15f)
+            } else {
+                Color.Transparent
+            },
+            focusedContainerColor = MaterialTheme.colorScheme.inverseSurface
+        ),
+        border = ClickableSurfaceDefaults.border(
+            border = borderColor?.let {
+                Border(border = BorderStroke(width = 2.dp, color = it))
+            } ?: Border.None,
+            focusedBorder = borderColor?.let {
+                Border(
+                    border = BorderStroke(width = 2.dp, color = it),
+                    shape = MaterialTheme.shapes.small
+                )
+            } ?: Border.None
+        ),
+        shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.small)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // 剧集封面缩略图
+            AsyncImage(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(MaterialTheme.shapes.extraSmall),
+                model = ImageRequest.Builder(context)
+                    .data(episode.cover)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop
+            )
+
+            // 剧集标题
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = generateEpisodeTitle(episode, sectionTitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (episode.longTitle.isNotEmpty()) {
+                    Text(
+                        text = episode.longTitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
     }
 }
