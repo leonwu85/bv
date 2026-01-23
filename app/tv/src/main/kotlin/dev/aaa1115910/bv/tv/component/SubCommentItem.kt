@@ -27,6 +27,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.MaterialTheme
@@ -135,6 +136,7 @@ fun SubCommentRootItem(
     val focusRequester = remember { FocusRequester() }
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
 
     Surface(
         onClick = { /* 右键展开/收起 */ },
@@ -145,12 +147,16 @@ fun SubCommentRootItem(
                     // 右键展开/收起
                     event.isKeyDown() && event.isDpadRight() -> {
                         expanded = !expanded
+                        if (expanded) {
+                            scope.launch { scrollState.scrollTo(0) }
+                        }
                         true
                     }
                     // 展开状态下，下键滚动内容，不允许焦点转移
                     event.isKeyDown() && event.isDpadDown() && expanded -> {
                         scope.launch {
-                            scrollState.animateScrollBy(100f)
+                            val scrollAmount = with(density) { 100.dp.toPx() }
+                            scrollState.animateScrollBy(scrollAmount)
                         }
                         true // 始终拦截事件，防止焦点转移
                     }

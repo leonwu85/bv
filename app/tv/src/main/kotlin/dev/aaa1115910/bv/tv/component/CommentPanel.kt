@@ -80,6 +80,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.getKoin
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 
 /**
  * 评论浮层组件
@@ -107,6 +108,7 @@ fun CommentPanel(
     val listState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
     val sidebarFocusRequester = remember { FocusRequester() }
+    val density = LocalDensity.current
 
     val comments = remember { mutableStateListOf<Comment>() }
     var loading by remember { mutableStateOf(false) }
@@ -423,7 +425,7 @@ fun CommentPanel(
                                                 }
                                                 true
                                             }
-                                            // 下键：检查当前评论是否已完全可见
+                                            // 下键：逐步滚动，仅在完全可见时转移焦点
                                             event.isKeyDown() && event.isDpadDown() -> {
                                                 val currentItemInfo = listState.layoutInfo.visibleItemsInfo
                                                     .firstOrNull { it.index == focusedCommentIndex }
@@ -431,16 +433,17 @@ fun CommentPanel(
                                                 if (currentItemInfo != null) {
                                                     val viewportEnd = listState.layoutInfo.viewportEndOffset
                                                     val itemBottom = currentItemInfo.offset + currentItemInfo.size
-                                                    val amountToScroll = itemBottom - viewportEnd
 
-                                                    // 如果评论底部不可见，精确滚动使其可见
-                                                    if (amountToScroll > 0) {
+                                                    // 如果评论底部不可见，逐步滚动
+                                                    if (itemBottom > viewportEnd) {
                                                         scope.launch {
-                                                            listState.animateScrollBy(amountToScroll.toFloat())
+                                                            // 每次滚动约 150dp
+                                                            val scrollAmount = with(density) { 150.dp.toPx() }
+                                                            listState.animateScrollBy(scrollAmount)
                                                         }
-                                                        true // 拦截事件
+                                                        true // 拦截事件，不允许焦点转移
                                                     } else {
-                                                        false // 允许焦点转移
+                                                        false // 评论已完全可见，允许焦点转移
                                                     }
                                                 } else {
                                                     false
