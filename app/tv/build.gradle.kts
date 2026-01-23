@@ -63,4 +63,5 @@ java {
 
 dependencies {
     implementation(project(":app:shared"))
+    implementation(libs.vlc.android.all)
 }

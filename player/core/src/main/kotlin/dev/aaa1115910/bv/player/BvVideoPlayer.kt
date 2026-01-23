@@ -19,6 +19,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import dev.aaa1115910.bv.player.impl.exo.ExoMediaPlayer
+import dev.aaa1115910.bv.player.impl.vlc.VlcMediaPlayer
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 
 @OptIn(UnstableApi::class)
@@ -140,6 +141,27 @@ fun BvVideoPlayer(
                     clearVideoView()
                     textureView = null
                     surfaceView = null
+                }
+            }
+        }
+        is VlcMediaPlayer -> {
+            var vlcSurfaceView: SurfaceView? by remember { mutableStateOf(null) }
+
+            AndroidView(
+                modifier = modifier.fillMaxSize(),
+                factory = { ctx ->
+                    SurfaceView(ctx).also { sv ->
+                        vlcSurfaceView = sv
+                        videoPlayer.attachSurface(sv)
+                        logger.info { "Current view type is VLC SurfaceView" }
+                    }
+                }
+            )
+
+            DisposableEffect(videoPlayer) {
+                onDispose {
+                    videoPlayer.detachSurface()
+                    vlcSurfaceView = null
                 }
             }
         }

@@ -18,6 +18,7 @@ import dev.aaa1115910.bv.mobile.screen.VideoPlayerScreen
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.player.VideoPlayerOptions
 import dev.aaa1115910.bv.player.impl.exo.ExoPlayerFactory
+import dev.aaa1115910.bv.player.impl.vlc.VlcPlayerFactory
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.toast
@@ -87,6 +88,7 @@ class VideoPlayerActivity : ComponentActivity() {
         )
         val videoPlayer = when (Prefs.playerType) {
             PlayerType.Media3 -> ExoPlayerFactory().create(this, options)
+            PlayerType.VLC -> VlcPlayerFactory().create(this, options)
         }
         playerViewModel.videoPlayer = videoPlayer
         //TODO 还没处理旋转后的一些判断，就先放这了

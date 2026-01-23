@@ -750,4 +750,8 @@
     <string name="settings_danmaku_engine_text">选择弹幕渲染引擎类型</string>
     <string name="settings_danmaku_engine_flame">新引擎 FLAME</string>
     <string name="settings_danmaku_engine_ecs">旧引擎 ECS</string>
+
+    <!-- VLC Player Settings -->
+    <string name="settings_player_vlc_auto_rotate_title">VLC 自动旋转</string>
+    <string name="settings_player_vlc_auto_rotate_text">根据视频元数据自动旋转画面（切换时会短暂暂停）</string>
 </resources>

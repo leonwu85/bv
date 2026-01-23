@@ -126,6 +126,10 @@ android {
             excludes += "**/*.version"
         }
 
+        jniLibs {
+            useLegacyPackaging = false
+        }
+
         if (gradle.startParameter.taskNames.find { it.startsWith("assembleLite") } != null) {
             jniLibs {
                 val vlcLibs = listOf("libvlc", "libc++_shared", "libvlcjni")
@@ -177,6 +181,7 @@ dependencies {
     implementation(project(":app:mobile"))
     implementation(project(":app:tv"))
     implementation(project(":app:shared"))
+    implementation(libs.vlc.android.all)
 }
 
 tasks.withType<Test> {

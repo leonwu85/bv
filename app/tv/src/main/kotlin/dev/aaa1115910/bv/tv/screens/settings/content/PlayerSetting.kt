@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
+import dev.aaa1115910.bv.entity.PlayerType
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.player.entity.Audio
@@ -55,6 +56,7 @@ fun PlayerSetting(
     var portraitVideoFixMode by remember { mutableStateOf(Prefs.portraitVideoFixMode) }
     var defaultDanmakuArea by remember { mutableDoubleStateOf(Prefs.defaultDanmakuArea.toDouble()) }
     var skipPgcIntroOutro by remember { mutableStateOf(Prefs.skipPgcIntroOutro) }
+    var vlcAutoRotate by remember { mutableStateOf(Prefs.vlcAutoRotate) }
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -277,6 +279,20 @@ fun PlayerSetting(
                         Prefs.skipPgcIntroOutro = it
                     }
                 )
+            }
+            // VLC 播放器专用设置
+            if (Prefs.playerType == PlayerType.VLC) {
+                item {
+                    SettingSwitchListItem(
+                        title = stringResource(R.string.settings_player_vlc_auto_rotate_title),
+                        supportText = stringResource(R.string.settings_player_vlc_auto_rotate_text),
+                        checked = vlcAutoRotate,
+                        onCheckedChange = {
+                            vlcAutoRotate = it
+                            Prefs.vlcAutoRotate = it
+                        }
+                    )
+                }
             }
         }
     }
