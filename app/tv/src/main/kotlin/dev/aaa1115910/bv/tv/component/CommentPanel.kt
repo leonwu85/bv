@@ -692,18 +692,23 @@ private fun EpisodeSidebarItem(
             } else {
                 Color.Transparent
             },
-            focusedContainerColor = MaterialTheme.colorScheme.inverseSurface
+            focusedContainerColor = if (isSelected) {
+                Color.White.copy(alpha = 0.15f)
+            } else {
+                Color.Transparent
+            }
+        ),
+        scale = ClickableSurfaceDefaults.scale(
+            focusedScale = 1f
         ),
         border = ClickableSurfaceDefaults.border(
             border = borderColor?.let {
                 Border(border = BorderStroke(width = 2.dp, color = it))
             } ?: Border.None,
-            focusedBorder = borderColor?.let {
-                Border(
-                    border = BorderStroke(width = 2.dp, color = it),
-                    shape = MaterialTheme.shapes.small
-                )
-            } ?: Border.None
+            focusedBorder = Border(
+                border = BorderStroke(width = 2.dp, color = MaterialTheme.colorScheme.primary),
+                shape = MaterialTheme.shapes.small
+            )
         ),
         shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.small)
     ) {

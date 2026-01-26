@@ -1534,6 +1534,7 @@ private fun VideoPartButton(
     type: VideoPartType = VideoPartType.Part,
     onClick: () -> Unit
 ) {
+    var hasFocus by remember { mutableStateOf(false) }
     val borderColor = when {
         isLastPlayed -> Color(0xFFE39B17)
         isCurrentIntent -> MaterialTheme.colorScheme.primary
@@ -1544,13 +1545,14 @@ private fun VideoPartButton(
         isCurrentIntent -> Color(0xFF00BFFF)
         else -> null
     }
+    val goldColor = Color(0xFFE39B17)
 
     Surface(
-        modifier = modifier,
+        modifier = modifier.onFocusChanged { hasFocus = it.hasFocus },
         colors = ClickableSurfaceDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
-            pressedContainerColor = MaterialTheme.colorScheme.inverseSurface
+            focusedContainerColor = Color(0xFF555555),
+            pressedContainerColor = Color(0xFF555555)
         ),
         scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1f),
         shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
@@ -1586,24 +1588,45 @@ private fun VideoPartButton(
                     .fillMaxHeight()
                     .fillMaxWidth(if (played < 0) 1f else (played / duration.toFloat()))
             ) {}
-            Text(
-                modifier = Modifier
-                    .padding(8.dp),
-                text = buildAnnotatedString {
-                    if (isLastPlayed && played > 0) {
-                        withStyle(style = SpanStyle(color = Color(0xFFE39B17))) {
-                            val isFinished = duration <= 0 || played / duration.toFloat() >= 0.95f
-                            append(if (isFinished) "已播完 " else "继续播放 ")
+
+            val textStyle = LocalTextStyle.current
+            val isFinished = duration <= 0 || played / duration.toFloat() >= 0.95f
+            val prefixText = if (isLastPlayed && played > 0) (if (isFinished) "已播完 " else "继续播放 ") else ""
+            val mainText = when (type) {
+                VideoPartType.Episode -> "EP"
+                VideoPartType.Part -> "P"
+            } + "$index $title"
+
+            if (isLastPlayed && hasFocus) {
+                Text(
+                    modifier = Modifier.padding(8.dp),
+                    text = buildAnnotatedString {
+                        withStyle(style = SpanStyle(color = goldColor)) {
+                            append(prefixText)
                         }
-                    }
-                    append(when (type) {
-                        VideoPartType.Episode -> "EP"
-                        VideoPartType.Part -> "P"
-                    } + "$index $title")
-                },
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+                        withStyle(style = SpanStyle(color = Color.White)) {
+                            append(mainText)
+                        }
+                    },
+                    style = textStyle,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            } else {
+                Text(
+                    modifier = Modifier.padding(8.dp),
+                    text = buildAnnotatedString {
+                        if (isLastPlayed && played > 0) {
+                            withStyle(style = SpanStyle(color = goldColor)) {
+                                append(prefixText)
+                            }
+                        }
+                        append(mainText)
+                    },
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }

@@ -740,10 +740,10 @@ fun SeasonEpisodeButton(
         modifier = modifier,
         colors = ClickableSurfaceDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
-            pressedContainerColor = MaterialTheme.colorScheme.inverseSurface
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            pressedContainerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
-        scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1f),
+        scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1.05f),
         shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
         border = ClickableSurfaceDefaults.border(
             border = borderColor?.let {
