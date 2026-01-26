@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
@@ -458,8 +459,17 @@ private fun HomeNavItemsEditDialog(
     // 当前选中的索引
     var selectedIndex by remember { mutableIntStateOf(0) }
 
+    // 为每个列表项创建 FocusRequester
+    val focusRequesters = remember(navConfigs.size) {
+        List(navConfigs.size) { FocusRequester() }
+    }
+
     LaunchedEffect(show) {
-        if (show) focusRequester.requestFocus(scope)
+        if (show) {
+            focusRequester.requestFocus(scope)
+            // 延迟请求焦点到第一个列表项
+            focusRequesters.firstOrNull()?.requestFocus()
+        }
     }
 
     TvAlertDialog(
@@ -478,6 +488,12 @@ private fun HomeNavItemsEditDialog(
                     .onPreviewKeyEvent {
                         if (it.type == KeyEventType.KeyDown) {
                             when (it.key) {
+                                Key.Back -> {
+                                    // 返回键：关闭弹框并保存
+                                    saveNavConfigs(navConfigs)
+                                    onHideDialog()
+                                    true
+                                }
                                 Key.DirectionLeft -> {
                                     // 向左移动：与上一个元素交换位置
                                     // 但第一个元素（默认标签）不能向左移动
@@ -549,7 +565,8 @@ private fun HomeNavItemsEditDialog(
                             hidden = config.hidden,
                             selected = isSelected,
                             isDefaultHomeTab = isDefaultHomeTab,
-                            onFocus = { selectedIndex = index }
+                            onFocus = { selectedIndex = index },
+                            focusRequester = focusRequesters[index]
                         )
                     }
                 }
@@ -565,14 +582,24 @@ private fun NavItemEditRow(
     hidden: Boolean,
     selected: Boolean,
     isDefaultHomeTab: Boolean,
-    onFocus: () -> Unit
+    onFocus: () -> Unit,
+    focusRequester: FocusRequester
 ) {
     val context = LocalContext.current
 
     ListItem(
         selected = selected,
         onClick = { /* 点击由父组件处理 */ },
-        modifier = Modifier.onFocusChanged { if (it.hasFocus) onFocus() },
+        modifier = Modifier
+            .focusRequester(focusRequester)
+            .onFocusChanged { if (it.hasFocus) onFocus() },
+        colors = androidx.tv.material3.ListItemDefaults.colors(
+            containerColor = Color.Transparent,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+            focusedSelectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            pressedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
         headlineContent = {
             Text(
                 text = navItem.getDisplayName(context),
