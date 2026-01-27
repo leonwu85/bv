@@ -333,7 +333,7 @@ fun BvPlayer(
                 val totalTime = (videoPlayer.duration.coerceAtLeast(0L) / 1000).toInt()
 
                 if (totalTime == 0) {
-                    -2 // 无法正常博凡
+                    -2 // 无法正常播放
                 } else if (currentTime >= totalTime - 1) {
                     -1 // 播放完后上报的时间应为 -1
                 } else {
@@ -409,7 +409,7 @@ fun BvPlayer(
                 val danmakuPosition = if (lastPlayed > 0) lastPlayed else videoPlayer.currentPosition
                 logger.info { "onPlay: danmakuPosition=${danmakuPosition.formatHourMinSec()}, currentPosition=${videoPlayer.currentPosition.formatHourMinSec()}" }
 
-                // 只在第一次启动弹幕（防止 onPlay 被多次调用）
+                // 防止 onPlay 被多次调用
                 val wasPlaying = isPlaying
                 isPlaying = true
                 isBuffering = false
