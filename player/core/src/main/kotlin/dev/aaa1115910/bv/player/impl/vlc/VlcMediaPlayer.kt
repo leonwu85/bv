@@ -10,6 +10,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
+import org.videolan.libvlc.interfaces.IVLCVout
 
 /**
  * VLC 播放器实现
@@ -45,6 +46,9 @@ class VlcMediaPlayer(
     // 视频尺寸
     private var _videoWidth: Int = 0
     private var _videoHeight: Int = 0
+
+    // 保存 SurfaceView 引用用于尺寸调整
+    private var currentSurfaceView: SurfaceView? = null
 
     // 保持事件监听器的强引用，防止被GC回收
     // @Volatile
@@ -309,16 +313,41 @@ class VlcMediaPlayer(
     }
 
     /**
+     * 视频布局监听器
+     * 当视频尺寸变化时，重新计算并设置窗口尺寸
+     */
+    private val videoLayoutListener = IVLCVout.OnNewVideoLayoutListener { vlcVout, width, height, visibleWidth, visibleHeight, sarNum, sarDen ->
+        logger.info { "Video layout changed: ${width}x${height}, visible: ${visibleWidth}x${visibleHeight}, SAR: $sarNum:$sarDen" }
+        
+        // 保存视频尺寸
+        _videoWidth = width
+        _videoHeight = height
+        
+        // 在 SurfaceView 上更新窗口尺寸
+        currentSurfaceView?.let { surfaceView ->
+            surfaceView.post {
+                val surfaceWidth = surfaceView.width
+                val surfaceHeight = surfaceView.height
+                if (surfaceWidth > 0 && surfaceHeight > 0) {
+                    logger.info { "Updating VLC window size to surface: ${surfaceWidth}x${surfaceHeight}" }
+                    vlcVout.setWindowSize(surfaceWidth, surfaceHeight)
+                }
+            }
+        }
+    }
+
+    /**
      * 附加视频渲染视图
      * VLC 使用 IVLCVout 接口来附加视图
      */
     fun attachSurface(surfaceView: SurfaceView) {
         try {
+            currentSurfaceView = surfaceView
             val ivlcVout = mediaPlayer?.getVLCVout()
             if (ivlcVout != null) {
                 ivlcVout.setVideoView(surfaceView)
 
-                // 设置窗口尺寸，确保视频正确缩放填充 SurfaceView
+                // 设置窗口尺寸
                 surfaceView.post {
                     val width = surfaceView.width
                     val height = surfaceView.height
@@ -328,8 +357,13 @@ class VlcMediaPlayer(
                     }
                 }
 
-                ivlcVout.attachViews()
-                // 重新设置事件监听器，确保attach surface后事件能正常触发
+                // 使用 OnNewVideoLayoutListener 附加视图
+                ivlcVout.attachViews(videoLayoutListener)
+                
+                // 设置视频缩放模式为 BEST_FIT
+                mediaPlayer?.setVideoScale(MediaPlayer.ScaleType.SURFACE_BEST_FIT)
+                
+                // 重新设置事件监听器
                 mediaPlayer?.setEventListener(vlcEventListener)
             }
         } catch (e: Exception) {
@@ -343,6 +377,7 @@ class VlcMediaPlayer(
     fun detachSurface() {
         logger.debug { "Detaching SurfaceView from VLC player" }
         try {
+            currentSurfaceView = null
             mediaPlayer?.getVLCVout()?.detachViews()
         } catch (e: Exception) {
             logger.error(e) { "Failed to detach SurfaceView" }
