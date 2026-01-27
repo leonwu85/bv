@@ -46,6 +46,12 @@ android {
         targetSdk = AppConfiguration.targetSdk
         versionCode = AppConfiguration.versionCode
         versionName = AppConfiguration.versionName
+
+        // 只打包 ARM 架构，减少 APK 体积（排除 x86 和 x86_64）
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
+
         vectorDrawables {
             useSupportLibrary = true
         }
@@ -139,16 +145,7 @@ android {
         }
     }
 
-    /*splits {
-        if (gradle.startParameter.taskNames.find { it.startsWith("assembleDefault") } != null) {
-            abi {
-                isEnable = true
-                reset()
-                include("x86_64", "x86", "arm64-v8a", "armeabi-v7a")
-                isUniversalApk = true
-            }
-        }
-    }*/
+    // 使用 ABI Filters 替代 Splits，在 defaultConfig 中配置
 
     applicationVariants.configureEach {
         val variant = this

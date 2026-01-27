@@ -57,6 +57,7 @@ fun PlayerSetting(
     var defaultDanmakuArea by remember { mutableDoubleStateOf(Prefs.defaultDanmakuArea.toDouble()) }
     var skipPgcIntroOutro by remember { mutableStateOf(Prefs.skipPgcIntroOutro) }
     var vlcAutoRotate by remember { mutableStateOf(Prefs.vlcAutoRotate) }
+    var selectedPlayerType by remember { mutableStateOf(Prefs.playerType) }
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -111,6 +112,19 @@ fun PlayerSetting(
                     onValueChange = {
                         Prefs.defaultAudio = it
                         selectedAudio = it
+                    }
+                )
+            }
+            item {
+                SettingListItemWithDialog(
+                    title = stringResource(R.string.settings_item_player_type),
+                    supportText = stringResource(R.string.settings_item_player_type),
+                    options = PlayerType.entries,
+                    getDisplayName = { item, _ -> item.name },
+                    value = selectedPlayerType,
+                    onValueChange = {
+                        selectedPlayerType = it
+                        Prefs.playerType = it
                     }
                 )
             }

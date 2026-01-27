@@ -72,7 +72,6 @@ class VlcMediaPlayer(
                 val cache = event.buffering
                 _bufferedPercentage = cache.toInt()
                 // 只有当播放器实际暂停时才报告缓冲状态
-                // VLC在播放过程中也会持续发送Buffering事件，但不能因此中断弹幕
                 if (mediaPlayer?.isPlaying == true) {
                     // 播放中，不报告缓冲状态，只更新缓冲百分比
                     if (cache >= 100f) {
@@ -93,11 +92,11 @@ class VlcMediaPlayer(
                 mPlayerEventListener?.onBuffering()
             }
             MediaPlayer.Event.TimeChanged -> {
-                // TimeChanged 事件在正常播放时也会触发，作为进度上报
+                // TimeChanged 正常播放时也会触发，作为进度上报
                 dispatchProgress(timeMs = event.timeChanged)
             }
             MediaPlayer.Event.PositionChanged -> {
-                // PositionChanged 事件提供进度百分比，补充上报（部分情况下 TimeChanged 不触发）
+                // PositionChanged 事件提供进度百分比，补充上报
                 dispatchProgress(positionFraction = event.positionChanged)
             }
             MediaPlayer.Event.SeekableChanged -> {
@@ -135,7 +134,7 @@ class VlcMediaPlayer(
             add(":network-caching=1500")
             // 硬件解码
             add(":codec=mediacodec,all")
-            // 色彩空间
+            // 色彩空间，可能引起兼容性问题，以后分析
             // add(":android-display-chroma=RV32")
             // AV_CODEC 格式
             add(":avcodec-fast=1")
@@ -150,9 +149,6 @@ class VlcMediaPlayer(
             mediaPlayer = MediaPlayer(libVlc).apply {
                 setEventListener(vlcEventListener)
             }
-            // 保持事件监听器的强引用
-            // eventListenerHolder = vlcEventListener
-            logger.info { "VLC player initialized successfully" }
         } catch (e: UnsatisfiedLinkError) {
             logger.error(e) { "VLC native library not available" }
             mPlayerEventListener?.onError(Exception("VLC 播放器不可用，请确保应用正确安装"))
@@ -168,7 +164,6 @@ class VlcMediaPlayer(
     }
 
     override fun playUrl(videoUrl: String?, audioUrl: String?) {
-        logger.debug { "Setting URL - video: $videoUrl, audio: $audioUrl" }
         this.currentVideoUrl = videoUrl
         this.currentAudioUrl = audioUrl
 
@@ -176,7 +171,6 @@ class VlcMediaPlayer(
         media?.release()
 
         // VLC 支持同时设置视频和音频流，但需要通过 Media 选项
-        // 这里简化处理，优先使用 videoUrl
         val url = videoUrl ?: audioUrl
         if (url != null) {
             // 使用 Uri.parse() 确保网络 URL 被正确解析
@@ -203,12 +197,10 @@ class VlcMediaPlayer(
     }
 
     override fun prepare() {
-        logger.debug { "Preparing VLC player" }
         media?.let {
             mediaPlayer?.media = it
         }
 
-        // VLC 需要调用 play() 才会开始触发事件（Opening, Buffering 等）
         // 与 ExoPlayer 不同，VLC 不会在设置 media 后自动触发事件
         mediaPlayer?.play()
 
@@ -274,7 +266,7 @@ class VlcMediaPlayer(
         get() = _bufferedPercentage
 
     override fun setOptions() {
-        // VLC 通过初始化选项和 Media 选项配置，这里保持兼容接口
+        // 保持兼容接口
     }
 
     override var speed: Float
@@ -284,7 +276,7 @@ class VlcMediaPlayer(
         }
 
     override val tcpSpeed: Long
-        get() = 0L // VLC 不直接支持网速查询
+        get() = 0L // VLC 不支持网速查询
 
     override val debugInfo: String
         get() = """
@@ -325,6 +317,17 @@ class VlcMediaPlayer(
             val ivlcVout = mediaPlayer?.getVLCVout()
             if (ivlcVout != null) {
                 ivlcVout.setVideoView(surfaceView)
+
+                // 设置窗口尺寸，确保视频正确缩放填充 SurfaceView
+                surfaceView.post {
+                    val width = surfaceView.width
+                    val height = surfaceView.height
+                    if (width > 0 && height > 0) {
+                        logger.info { "Setting VLC window size: ${width}x${height}" }
+                        ivlcVout.setWindowSize(width, height)
+                    }
+                }
+
                 ivlcVout.attachViews()
                 // 重新设置事件监听器，确保attach surface后事件能正常触发
                 mediaPlayer?.setEventListener(vlcEventListener)
