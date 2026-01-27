@@ -18,6 +18,9 @@ interface VideoPlayerListener {
     /** 缓冲中 */
     fun onBuffering()
 
+    /** 进度变更（毫秒/百分比），未实现的播放器可忽略 */
+    fun onProgress(position: Long, duration: Long, buffered: Int) {}
+
     /** 播放结束 */
     fun onEnd()
 
@@ -29,5 +32,8 @@ interface VideoPlayerListener {
 
     /** 前进 */
     fun onSeekForward(seekForwardIncrementMs: Long)
+
+    /** Seek完成，位置发生变化（用于同步弹幕） */
+    fun onSeeked(position: Long) {}
 
 }

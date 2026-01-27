@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import android.view.SurfaceView
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
-import dev.aaa1115910.bv.player.VideoPlayerListener
 import dev.aaa1115910.bv.player.VideoPlayerOptions
 import dev.aaa1115910.bv.util.formatHourMinSec
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -47,18 +46,19 @@ class VlcMediaPlayer(
     private var _videoWidth: Int = 0
     private var _videoHeight: Int = 0
 
+    // 保持事件监听器的强引用，防止被GC回收
+    // @Volatile
+    // private var eventListenerHolder: MediaPlayer.EventListener? = null
+
     private val vlcEventListener = MediaPlayer.EventListener { event ->
         when (event.type) {
             MediaPlayer.Event.Playing -> {
-                logger.debug { "VLC: Playing event" }
                 mPlayerEventListener?.onPlay()
             }
             MediaPlayer.Event.Paused -> {
-                logger.debug { "VLC: Paused event" }
                 mPlayerEventListener?.onPause()
             }
             MediaPlayer.Event.Stopped -> {
-                logger.debug { "VLC: Stopped event" }
                 mPlayerEventListener?.onIdle()
             }
             MediaPlayer.Event.EncounteredError -> {
@@ -66,37 +66,48 @@ class VlcMediaPlayer(
                 mPlayerEventListener?.onError(Exception("VLC playback error"))
             }
             MediaPlayer.Event.EndReached -> {
-                logger.debug { "VLC: EndReached event" }
                 mPlayerEventListener?.onEnd()
             }
             MediaPlayer.Event.Buffering -> {
                 val cache = event.buffering
                 _bufferedPercentage = cache.toInt()
-                logger.debug { "VLC: Buffering $cache%" }
-                if (cache < 100f) {
-                    mPlayerEventListener?.onBuffering()
+                // 只有当播放器实际暂停时才报告缓冲状态
+                // VLC在播放过程中也会持续发送Buffering事件，但不能因此中断弹幕
+                if (mediaPlayer?.isPlaying == true) {
+                    // 播放中，不报告缓冲状态，只更新缓冲百分比
+                    if (cache >= 100f) {
+                        // 缓冲完成，确保播放状态正确
+                        mPlayerEventListener?.onPlay()
+                    }
                 } else {
-                    mPlayerEventListener?.onReady()
+                    // 播放器暂停，正常报告缓冲状态
+                    if (cache < 100f) {
+                        mPlayerEventListener?.onBuffering()
+                    } else {
+                        mPlayerEventListener?.onReady()
+                    }
                 }
+                dispatchProgress()
             }
             MediaPlayer.Event.Opening -> {
-                logger.debug { "VLC: Opening event" }
                 mPlayerEventListener?.onBuffering()
             }
             MediaPlayer.Event.TimeChanged -> {
-                // 时间变化事件，过于频繁不记录
+                // TimeChanged 事件在正常播放时也会触发，作为进度上报
+                dispatchProgress(timeMs = event.timeChanged)
             }
             MediaPlayer.Event.PositionChanged -> {
-                // 位置变化事件
+                // PositionChanged 事件提供进度百分比，补充上报（部分情况下 TimeChanged 不触发）
+                dispatchProgress(positionFraction = event.positionChanged)
             }
             MediaPlayer.Event.SeekableChanged -> {
-                logger.debug { "VLC: Seekable changed to ${event.seekable}" }
+//                mPlayerEventListener?.onSeekableChanged(event.seekable)
             }
             MediaPlayer.Event.PausableChanged -> {
-                logger.debug { "VLC: Pausable changed to ${event.pausable}" }
+//                mPlayerEventListener?.onPausableChanged(event.pausable)
             }
             MediaPlayer.Event.RecordChanged -> {
-                logger.debug { "VLC: RecordChanged event" }
+                // 记录变化事件
             }
         }
     }
@@ -104,7 +115,7 @@ class VlcMediaPlayer(
     override fun initPlayer() {
         logger.info { "Initializing VLC player" }
 
-        // 手动加载 VLC native 库（VLC AAR 没有自动加载）
+        // 手动加载 VLC native 库
         try {
             System.loadLibrary("c++_shared")
             logger.info { "Loaded libc++_shared" }
@@ -125,7 +136,7 @@ class VlcMediaPlayer(
             // 硬件解码
             add(":codec=mediacodec,all")
             // 色彩空间
-            add(":android-display-chroma=RV32")
+            // add(":android-display-chroma=RV32")
             // AV_CODEC 格式
             add(":avcodec-fast=1")
             // 跳过帧
@@ -139,6 +150,8 @@ class VlcMediaPlayer(
             mediaPlayer = MediaPlayer(libVlc).apply {
                 setEventListener(vlcEventListener)
             }
+            // 保持事件监听器的强引用
+            // eventListenerHolder = vlcEventListener
             logger.info { "VLC player initialized successfully" }
         } catch (e: UnsatisfiedLinkError) {
             logger.error(e) { "VLC native library not available" }
@@ -201,7 +214,7 @@ class VlcMediaPlayer(
 
         // 处理初始跳转位置
         if (pendingSeekPosition > 0) {
-            mediaPlayer?.time = pendingSeekPosition * 1000L // VLC 使用微秒
+            mediaPlayer?.time = pendingSeekPosition
             clearPendingSeekPosition()
         }
     }
@@ -233,8 +246,7 @@ class VlcMediaPlayer(
 
     override fun seekTo(time: Long) {
         logger.debug { "Seeking to ${time}ms" }
-        // VLC 使用微秒为单位
-        mediaPlayer?.time = time * 1000L
+        mediaPlayer?.time = time
     }
 
     override fun release() {
@@ -253,10 +265,10 @@ class VlcMediaPlayer(
     }
 
     override val currentPosition: Long
-        get() = (mediaPlayer?.time ?: 0) / 1000L // 转换为毫秒
+        get() = mediaPlayer?.time ?: 0L 
 
     override val duration: Long
-        get() = (mediaPlayer?.length ?: 0) / 1000L // 转换为毫秒
+        get() = mediaPlayer?.length ?: 0L 
 
     override val bufferedPercentage: Int
         get() = _bufferedPercentage
@@ -290,17 +302,32 @@ class VlcMediaPlayer(
         get() = _videoHeight
 
     /**
+     * 统一分发进度信息，兼容 TimeChanged/PositionChanged 事件来源
+     */
+    private fun dispatchProgress(timeMs: Long? = null, positionFraction: Float? = null) {
+        val durationMs = mediaPlayer?.length ?: 0L
+        val positionMs = when {
+            timeMs != null && timeMs >= 0 -> timeMs
+            positionFraction != null && durationMs > 0 -> (durationMs * positionFraction).toLong()
+            else -> mediaPlayer?.time ?: 0L
+        }.coerceAtLeast(0L)
+
+        val buffered = _bufferedPercentage.coerceIn(0, 100)
+        mPlayerEventListener?.onProgress(positionMs, durationMs.coerceAtLeast(0L), buffered)
+    }
+
+    /**
      * 附加视频渲染视图
      * VLC 使用 IVLCVout 接口来附加视图
      */
     fun attachSurface(surfaceView: SurfaceView) {
-        logger.debug { "Attaching SurfaceView to VLC player" }
         try {
             val ivlcVout = mediaPlayer?.getVLCVout()
             if (ivlcVout != null) {
                 ivlcVout.setVideoView(surfaceView)
                 ivlcVout.attachViews()
-                logger.info { "SurfaceView attached successfully" }
+                // 重新设置事件监听器，确保attach surface后事件能正常触发
+                mediaPlayer?.setEventListener(vlcEventListener)
             }
         } catch (e: Exception) {
             logger.error(e) { "Failed to attach SurfaceView" }
