@@ -845,7 +845,8 @@ fun BvPlayer(
             DanmakuLayerSideEffects(
                 danmakuLayerHandle = danmakuLayerHandle,
                 visible = videoPlayerConfigData.showDanmaku,
-                maskFrame = currentDanmakuMaskFrame.takeIf { videoPlayerConfigData.currentDanmakuMask }
+                maskFrame = currentDanmakuMaskFrame.takeIf { videoPlayerConfigData.currentDanmakuMask },
+                videoAspectRatio = aspectRatioValue
             )
 
             BvVideoPlayer(
@@ -892,17 +893,19 @@ fun BvPlayer(
     }
 }
 
-// 同步弹幕层 UI 相关的独立副作用（蒙版/可见性）
+// 同步弹幕层 UI 相关的独立副作用（蒙版/可见性/视频宽高比）
 @Composable
 private fun DanmakuLayerSideEffects(
     danmakuLayerHandle: DanmakuLayerHandle,
     visible: Boolean,
     maskFrame: DanmakuMaskFrame?,
+    videoAspectRatio: Float,
 ) {
-    LaunchedEffect(visible, maskFrame) {
+    LaunchedEffect(visible, maskFrame, videoAspectRatio) {
         danmakuLayerHandle.update(
             mask = maskFrame,
             visible = visible,
+            videoAspectRatio = videoAspectRatio,
         )
     }
 }

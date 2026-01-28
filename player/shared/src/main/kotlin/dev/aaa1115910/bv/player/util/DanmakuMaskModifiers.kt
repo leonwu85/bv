@@ -19,15 +19,39 @@ import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMobMaskFrame
 import dev.aaa1115910.biliapi.entity.danmaku.DanmakuWebMaskFrame
 
 fun Modifier.bitmapMask(
-    bitmap: Bitmap
+    bitmap: Bitmap,
+    videoAspectRatio: Float = 0f
 ): Modifier = composed {
     drawWithContent {
         drawIntoCanvas { canvas ->
             canvas.saveLayer(Rect(Offset.Zero, size), Paint())
             drawContent()
+
+            // 计算视频居中显示时的实际区域
+            val (dstOffset, dstSize) = if (videoAspectRatio > 0f) {
+                val containerAspectRatio = size.width / size.height
+                if (videoAspectRatio > containerAspectRatio) {
+                    // 视频更宽，上下有黑边 (letterbox)
+                    val videoHeight = size.width / videoAspectRatio
+                    val offsetY = (size.height - videoHeight) / 2
+                    androidx.compose.ui.unit.IntOffset(0, offsetY.toInt()) to
+                            androidx.compose.ui.unit.IntSize(size.width.toInt(), videoHeight.toInt())
+                } else {
+                    // 视频更高，左右有黑边 (pillarbox)
+                    val videoWidth = size.height * videoAspectRatio
+                    val offsetX = (size.width - videoWidth) / 2
+                    androidx.compose.ui.unit.IntOffset(offsetX.toInt(), 0) to
+                            androidx.compose.ui.unit.IntSize(videoWidth.toInt(), size.height.toInt())
+                }
+            } else {
+                // 无有效的视频宽高比，使用全尺寸
+                androidx.compose.ui.unit.IntOffset.Zero to size.toIntSize()
+            }
+
             drawImage(
                 image = bitmap.asImageBitmap(),
-                dstSize = size.toIntSize(),
+                dstOffset = dstOffset,
+                dstSize = dstSize,
                 blendMode = BlendMode.DstIn
             )
             canvas.restore()
@@ -36,7 +60,8 @@ fun Modifier.bitmapMask(
 }
 
 fun Modifier.danmakuWebMask(
-    frame: DanmakuWebMaskFrame
+    frame: DanmakuWebMaskFrame,
+    videoAspectRatio: Float = 0f
 ): Modifier = composed {
     val svgObj = runCatching {
         SVG.getFromString(frame.svg)
@@ -49,11 +74,12 @@ fun Modifier.danmakuWebMask(
     val canvas = Canvas(bitmap)
     svgObj.renderToCanvas(canvas)
 
-    bitmapMask(bitmap)
+    bitmapMask(bitmap, videoAspectRatio)
 }
 
 fun Modifier.danmakuMobMask(
-    frame: DanmakuMobMaskFrame
+    frame: DanmakuMobMaskFrame,
+    videoAspectRatio: Float = 0f
 ): Modifier = composed {
     val binaryBitmap = Bitmap.createBitmap(40, 180, Bitmap.Config.ARGB_8888)
     frame.image.forEachIndexed { index, byte ->
@@ -62,16 +88,17 @@ fun Modifier.danmakuMobMask(
         binaryBitmap.setPixel(x, y, if (byte.toInt() == 0) Color.BLACK else Color.TRANSPARENT)
     }
 
-    bitmapMask(binaryBitmap)
+    bitmapMask(binaryBitmap, videoAspectRatio)
 }
 
 fun Modifier.danmakuMask(
-    frame: DanmakuMaskFrame?
+    frame: DanmakuMaskFrame?,
+    videoAspectRatio: Float = 0f
 ): Modifier = composed {
     if (frame == null) return@composed this
 
     when (frame) {
-        is DanmakuWebMaskFrame -> danmakuWebMask(frame)
-        is DanmakuMobMaskFrame -> danmakuMobMask(frame)
+        is DanmakuWebMaskFrame -> danmakuWebMask(frame, videoAspectRatio)
+        is DanmakuMobMaskFrame -> danmakuMobMask(frame, videoAspectRatio)
     }
 }
