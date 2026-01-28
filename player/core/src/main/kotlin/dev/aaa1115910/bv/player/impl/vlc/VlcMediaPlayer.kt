@@ -138,14 +138,23 @@ class VlcMediaPlayer(
             add(":network-caching=1500")
             // 硬件解码
             add(":codec=mediacodec,all")
-            // 色彩空间，可能引起兼容性问题，以后分析
-            // add(":android-display-chroma=RV32")
             // AV_CODEC 格式
             add(":avcodec-fast=1")
             // 跳过帧
             add(":avcodec-skiploopfilter=1")
             // 线程数
             add(":avcodec-threads=${Runtime.getRuntime().availableProcessors()}")
+            
+            // HDR 配置
+            // 启用 Android 显示输出
+            add("--vout=android-display")
+            // 自动色调映射：仅在显示器不支持 HDR 时才进行转换
+            // 0=强制转换, 1=自动（根据显示能力决定）, 2=禁用
+            add("--tone-mapping=1")
+            // 设置色调映射算法（当需要转换时使用 Hable 算法）
+            add("--tone-mapping-algorithm=1")
+            // 设置目标峰值亮度（cd/m²）
+            add("--tone-mapping-param=100")
         }
 
         try {
