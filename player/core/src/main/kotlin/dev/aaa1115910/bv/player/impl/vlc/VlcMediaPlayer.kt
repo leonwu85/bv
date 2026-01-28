@@ -145,6 +145,12 @@ class VlcMediaPlayer(
             // 线程数
             add(":avcodec-threads=${Runtime.getRuntime().availableProcessors()}")
             
+            // 音频配置
+            // 启用音频透传
+            add("--spdif")
+            // 音频输出模块
+            add("--aout=opensles")
+            
             // HDR 配置
             // 启用 Android 显示输出
             add("--vout=android-display")
