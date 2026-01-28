@@ -174,29 +174,10 @@ class VlcMediaPlayer(
         // 如果已有 Media 对象，先释放
         media?.release()
 
-        // VLC 支持同时设置视频和音频流，但需要通过 Media 选项
+        // VLC 合入音频流
         val url = videoUrl ?: audioUrl
         if (url != null) {
-            // 使用 Uri.parse() 确保网络 URL 被正确解析
-            media = Media(libVlc, Uri.parse(url)).apply {
-                // VLC 使用 :http-header= 格式设置自定义请求头
-                headers.forEach { (key, value) ->
-                    addOption(":http-header=$key: $value")
-                }
-                // 设置 Referer（如果 headers 中没有）
-                options.referer?.let {
-                    addOption(":http-referrer=$it")
-                }
-                // 设置 User-Agent（如果 headers 中没有）
-                options.userAgent?.let {
-                    addOption(":http-user-agent=$it")
-                }
-                // 如果有旋转设置，添加滤镜
-                if (currentRotation != 0) {
-                    addOption(":video-filter=transform")
-                    addOption(":transform-type=${mapDegreesToTransform(currentRotation)}")
-                }
-            }
+            media = buildMedia(url, audioUrl)
         }
     }
 
@@ -407,23 +388,7 @@ class VlcMediaPlayer(
         media?.let { oldMedia ->
             val url = currentVideoUrl ?: currentAudioUrl
             url?.let {
-                val newMedia = Media(libVlc, url).apply {
-                    // 设置请求头
-                    headers.forEach { (key, value) ->
-                        addOption(":http-user-agent=$value")
-                    }
-                    options.referer?.let { ref ->
-                        addOption(":http-referrer=$ref")
-                    }
-                    options.userAgent?.let { ua ->
-                        addOption(":http-user-agent=$ua")
-                    }
-                    // 添加旋转滤镜
-                    if (degrees != 0) {
-                        addOption(":video-filter=transform")
-                        addOption(":transform-type=${mapDegreesToTransform(degrees)}")
-                    }
-                }
+                val newMedia = buildMedia(it, currentAudioUrl)
 
                 mediaPlayer?.media = newMedia
                 oldMedia.release()
@@ -437,6 +402,33 @@ class VlcMediaPlayer(
                 if (wasPlaying) {
                     start()
                 }
+            }
+        }
+    }
+
+    private fun buildMedia(url: String, audioUrl: String?): Media {
+        val normalizedAudioUrl = audioUrl?.takeIf { it.isNotBlank() && it != url }
+        return Media(libVlc, Uri.parse(url)).apply {
+            // VLC 使用 :http-header= 格式设置自定义请求头
+            headers.forEach { (key, value) ->
+                addOption(":http-header=$key: $value")
+            }
+            // 设置 Referer
+            options.referer?.let {
+                addOption(":http-referrer=$it")
+            }
+            // 设置 User-Agent
+            options.userAgent?.let {
+                addOption(":http-user-agent=$it")
+            }
+            // 合入音频流
+            normalizedAudioUrl?.let {
+                addOption(":input-slave=$it")
+            }
+            // 如果有旋转设置，添加滤镜
+            if (currentRotation != 0) {
+                addOption(":video-filter=transform")
+                addOption(":transform-type=${mapDegreesToTransform(currentRotation)}")
             }
         }
     }
