@@ -146,21 +146,21 @@ class VlcMediaPlayer(
             add(":avcodec-threads=${Runtime.getRuntime().availableProcessors()}")
             
             // 音频配置
-            // 启用音频透传
-            add("--spdif")
+            // 启用音频透传（让支持杜比的设备直接处理杜比音频）
+            add(":spdif")
             // 音频输出模块
-            add("--aout=opensles")
+            add(":aout=opensles")
             
             // HDR 配置
             // 启用 Android 显示输出
-            add("--vout=android-display")
+            add(":vout=android-display")
             // 自动色调映射：仅在显示器不支持 HDR 时才进行转换
             // 0=强制转换, 1=自动（根据显示能力决定）, 2=禁用
-            add("--tone-mapping=1")
+            add(":tone-mapping=1")
             // 设置色调映射算法（当需要转换时使用 Hable 算法）
-            add("--tone-mapping-algorithm=1")
+            add(":tone-mapping-algorithm=1")
             // 设置目标峰值亮度（cd/m²）
-            add("--tone-mapping-param=100")
+            add(":tone-mapping-param=100")
         }
 
         try {
