@@ -351,7 +351,7 @@ fun PlayerSetting(
             title = { Text("需要下载 VLC 组件") },
             text = {
                 Text("VLC 播放器需要下载额外的组件才能使用。\n\n" +
-                     "下载大小：约 25 MB\n" +
+                     "下载大小：约 80 MB\n" +
                      "建议在 Wi-Fi 环境下下载")
             },
             confirmButton = {
