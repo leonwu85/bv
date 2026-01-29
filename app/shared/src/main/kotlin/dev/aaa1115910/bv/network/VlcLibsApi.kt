@@ -24,6 +24,15 @@ import java.io.File
 
 object VlcLibsApi {
     private var endPoint = "api.github.com"
+
+    // Maven 仓库镜像源列表（按优先级排序）
+    private val MAVEN_MIRRORS = listOf(
+        "https://maven.aliyun.com/repository/public",           // 阿里云镜像（国内首选）
+        "https://repo1.maven.org/maven2"                        // Maven Central 官方源（备用）
+    )
+
+    private const val GROUP_PATH = "org/videolan/android"
+    private const val ARTIFACT_ID = "libvlc-all"
     private lateinit var client: HttpClient
 
     init {
@@ -102,6 +111,52 @@ object VlcLibsApi {
         } else {
             ""
         }
+    }
+
+    /**
+     * 获取 AAR 下载地址列表（多镜像源）
+     */
+    fun getAarDownloadUrls(version: String): List<String> {
+        return MAVEN_MIRRORS.map { baseUrl ->
+            "$baseUrl/$GROUP_PATH/$ARTIFACT_ID/$version/$ARTIFACT_ID-$version.aar"
+        }
+    }
+
+    /**
+     * 下载 AAR 文件（自动尝试多个镜像源）
+     */
+    suspend fun downloadAar(
+        version: String,
+        targetFile: File,
+        onProgress: (bytesReceived: Long, contentLength: Long) -> Unit
+    ) {
+        val downloadUrls = getAarDownloadUrls(version)
+        var lastException: Exception? = null
+
+        for (downloadUrl in downloadUrls) {
+            try {
+                client.prepareRequest {
+                    url(downloadUrl)
+                    onDownload { received, total ->
+                        onProgress(received, total ?: 0L)
+                    }
+                }.execute { response ->
+                    if (response.status.value in 200..299) {
+                        response.bodyAsChannel().copyAndClose(targetFile.writeChannel())
+                    } else {
+                        throw IllegalStateException("HTTP ${response.status.value}")
+                    }
+                }
+                return // 下载成功，直接返回
+            } catch (e: Exception) {
+                lastException = e
+                // 当前镜像源失败，继续尝试下一个
+                continue
+            }
+        }
+
+        // 所有镜像源都失败
+        throw lastException ?: IllegalStateException("All mirrors failed")
     }
 }
 

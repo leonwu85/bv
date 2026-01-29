@@ -31,8 +31,13 @@ import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.tv.component.settings.SettingListItemWithDialog
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
 import dev.aaa1115910.bv.tv.component.settings.SettingNumberListItem
+import dev.aaa1115910.bv.tv.component.LibVLCDownloaderDialog
+import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
 import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.bv.util.VlcLibsInstaller
+import android.widget.Toast
+import androidx.tv.material3.Button
 
 @Composable
 fun PlayerSetting(
@@ -59,6 +64,8 @@ fun PlayerSetting(
     var vlcAutoRotate by remember { mutableStateOf(Prefs.vlcAutoRotate) }
     var selectedPlayerType by remember { mutableStateOf(Prefs.playerType) }
     var enableAsyncQueueing by remember { mutableStateOf(Prefs.enableAsyncQueueing) }
+    var showVlcDownloadConfirmDialog by remember { mutableStateOf(false) }
+    var showVlcDownloaderDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -123,9 +130,20 @@ fun PlayerSetting(
                     options = PlayerType.entries,
                     getDisplayName = { item, _ -> item.name },
                     value = selectedPlayerType,
-                    onValueChange = {
-                        selectedPlayerType = it
-                        Prefs.playerType = it
+                    onValueChange = { newType ->
+                        if (newType == PlayerType.VLC) {
+                            // 检查 VLC 库是否已安装
+                            if (VlcLibsInstaller.isVlcLibsInstalled(context)) {
+                                selectedPlayerType = newType
+                                Prefs.playerType = newType
+                            } else {
+                                // 显示下载确认弹窗
+                                showVlcDownloadConfirmDialog = true
+                            }
+                        } else {
+                            selectedPlayerType = newType
+                            Prefs.playerType = newType
+                        }
                     }
                 )
             }
@@ -324,6 +342,53 @@ fun PlayerSetting(
                 }
             }
         }
+    }
+
+    // VLC 下载确认弹窗
+    if (showVlcDownloadConfirmDialog) {
+        TvAlertDialog(
+            onDismissRequest = { showVlcDownloadConfirmDialog = false },
+            title = { Text("需要下载 VLC 组件") },
+            text = {
+                Text("VLC 播放器需要下载额外的组件才能使用。\n\n" +
+                     "下载大小：约 25 MB\n" +
+                     "建议在 Wi-Fi 环境下下载")
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showVlcDownloadConfirmDialog = false
+                    showVlcDownloaderDialog = true
+                }) {
+                    Text("下载")
+                }
+            },
+            dismissButton = {
+                Button(onClick = {
+                    showVlcDownloadConfirmDialog = false
+                }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // VLC 库下载弹窗
+    if (showVlcDownloaderDialog) {
+        LibVLCDownloaderDialog(
+            show = true,
+            onDismissRequest = {
+                showVlcDownloaderDialog = false
+            },
+            onDownloadComplete = {
+                showVlcDownloaderDialog = false
+                selectedPlayerType = PlayerType.VLC
+                Prefs.playerType = PlayerType.VLC
+            },
+            onDownloadFailed = { errorMessage ->
+                showVlcDownloaderDialog = false
+                Toast.makeText(context, "下载失败: $errorMessage", Toast.LENGTH_LONG).show()
+            }
+        )
     }
 
 }

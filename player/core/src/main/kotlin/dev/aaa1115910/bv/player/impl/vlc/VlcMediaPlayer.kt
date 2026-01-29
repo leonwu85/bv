@@ -12,6 +12,7 @@ import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import androidx.core.net.toUri
+import java.io.File
 
 /**
  * VLC 播放器实现
@@ -138,20 +139,9 @@ class VlcMediaPlayer(
     override fun initPlayer() {
         logger.info { "Initializing VLC player" }
 
-        // 手动加载 VLC native 库
-        try {
-            System.loadLibrary("c++_shared")
-            logger.info { "Loaded libc++_shared" }
-        } catch (e: UnsatisfiedLinkError) {
-            logger.debug { "libc++_shared already loaded or not available: ${e.message}" }
-        }
-
-        try {
-            System.loadLibrary("vlc")
-            logger.info { "Loaded libvlc" }
-        } catch (e: UnsatisfiedLinkError) {
-            logger.debug { "libvlc already loaded or not available: ${e.message}" }
-        }
+        // 加载 VLC native 库
+        // 优先从 vlc_libs 目录加载按需下载的库，回退到 APK 内置库
+        loadVlcNativeLibs(context)
 
         val vlcOptions = arrayListOf<String>().apply {
             // ========== 缓存配置 ==========
@@ -505,6 +495,70 @@ class VlcMediaPlayer(
                     start()
                 }
             }, 500)
+        }
+    }
+
+    companion object {
+        private val logger = KotlinLogging.logger { }
+        private var libsLoaded = false
+
+        /**
+         * 加载 VLC native 库
+         * 优先从 vlc_libs 目录加载按需下载的库，回退到 APK 内置库
+         */
+        private fun loadVlcNativeLibs(context: Context) {
+            if (libsLoaded) {
+                logger.debug { "VLC libs already loaded" }
+                return
+            }
+
+            try {
+                val vlcLibsDir = File(context.filesDir, "vlc_libs")
+                val libvlcFile = File(vlcLibsDir, "libvlc.so")
+                val cxxFile = File(vlcLibsDir, "libc++_shared.so")
+                val libvlcjniFile = File(vlcLibsDir, "libvlcjni.so")
+
+                if (vlcLibsDir.exists() && libvlcFile.exists() && cxxFile.exists()) {
+                    // 加载按需下载的库
+                    logger.info { "Loading VLC libs from: $vlcLibsDir" }
+
+                    // 先加载 libc++_shared（C++ 标准库）
+                    System.load(cxxFile.absolutePath)
+                    logger.info { "Loaded libc++_shared from ${cxxFile.absolutePath}" }
+
+                    // 再加载 libvlcjni.so（JNI 绑定）
+                    if (libvlcjniFile.exists()) {
+                        System.load(libvlcjniFile.absolutePath)
+                        logger.info { "Loaded libvlcjni from ${libvlcjniFile.absolutePath}" }
+                    }
+
+                    // 最后加载 libvlc.so（核心库）
+                    System.load(libvlcFile.absolutePath)
+                    logger.info { "Loaded libvlc from ${libvlcFile.absolutePath}" }
+                } else {
+                    // 回退到 APK 内置库
+                    logger.info { "Loading VLC libs from APK" }
+
+                    try {
+                        System.loadLibrary("c++_shared")
+                        logger.info { "Loaded libc++_shared from APK" }
+                    } catch (e: UnsatisfiedLinkError) {
+                        logger.debug { "libc++_shared already loaded or not available: ${e.message}" }
+                    }
+
+                    try {
+                        System.loadLibrary("vlc")
+                        logger.info { "Loaded libvlc from APK" }
+                    } catch (e: UnsatisfiedLinkError) {
+                        logger.debug { "libvlc already loaded or not available: ${e.message}" }
+                    }
+                }
+
+                libsLoaded = true
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to load VLC native libraries" }
+                throw e
+            }
         }
     }
 }

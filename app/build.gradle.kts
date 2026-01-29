@@ -134,6 +134,10 @@ android {
 
         jniLibs {
             useLegacyPackaging = false
+            // 排除 VLC 的 .so 文件，使用按需下载的库
+            val vlcLibs = listOf("libvlc", "libc++_shared", "libvlcjni")
+            val abis = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            vlcLibs.forEach { vlcLibName -> abis.forEach { abi -> excludes.add("lib/$abi/$vlcLibName.so") } }
         }
 
         if (gradle.startParameter.taskNames.find { it.startsWith("assembleLite") } != null) {
