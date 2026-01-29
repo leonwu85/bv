@@ -156,11 +156,11 @@ class VlcMediaPlayer(
         val vlcOptions = arrayListOf<String>().apply {
             // ========== 缓存配置 ==========
             add(":network-caching=3000")
-            add(":file-caching=2000")
+            add(":file-caching=3000")
 
             // ========== 编解码器配置 ==========
             add(":codec=mediacodec-ndk,all")
-            // add(":mediacodec-dr=0")            // 禁用 direct rendering（修复内存泄漏）
+            add(":mediacodec-dr=1")
 
             // ========== 性能优化 ==========
             add(":avcodec-fast=1")
