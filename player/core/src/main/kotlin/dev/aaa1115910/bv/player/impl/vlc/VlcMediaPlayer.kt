@@ -1,8 +1,7 @@
 package dev.aaa1115910.bv.player.impl.vlc
 
 import android.content.Context
-import android.net.Uri
-import android.view.SurfaceView
+import org.videolan.libvlc.util.VLCVideoLayout
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.VideoPlayerOptions
 import dev.aaa1115910.bv.util.formatHourMinSec
@@ -10,7 +9,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
-import org.videolan.libvlc.interfaces.IVLCVout
+import androidx.core.net.toUri
 
 /**
  * VLC 播放器实现
@@ -47,8 +46,8 @@ class VlcMediaPlayer(
     private var _videoWidth: Int = 0
     private var _videoHeight: Int = 0
 
-    // 保存 SurfaceView 引用用于尺寸调整
-    private var currentSurfaceView: SurfaceView? = null
+    // 保存 VideoLayout 引用用于尺寸调整
+    private var currentVideoLayout: VLCVideoLayout? = null
 
     // 保持事件监听器的强引用，防止被GC回收
     // @Volatile
@@ -168,6 +167,7 @@ class VlcMediaPlayer(
             mediaPlayer = MediaPlayer(libVlc).apply {
                 setEventListener(vlcEventListener)
             }
+
         } catch (e: UnsatisfiedLinkError) {
             logger.error(e) { "VLC native library not available" }
             mPlayerEventListener?.onError(Exception("VLC 播放器不可用，请确保应用正确安装"))
@@ -280,10 +280,10 @@ class VlcMediaPlayer(
 
     override val debugInfo: String
         get() = """
-            player: VLC ${if (libVlc != null) try { LibVLC.version() } catch (e: Exception) { "unknown" } else "not initialized"}
+            player: VLC ${if (libVlc != null) try { LibVLC.version() } catch (_: Exception) { "unknown" } else "not initialized"}
             time: ${currentPosition.formatHourMinSec()} / ${duration.formatHourMinSec()}
             buffered: $bufferedPercentage%
-            resolution: ${videoWidth} x ${videoHeight}
+            resolution: $videoWidth x $videoHeight
             speed: $speed
         """.trimIndent()
 
@@ -309,74 +309,42 @@ class VlcMediaPlayer(
     }
 
     /**
-     * 视频布局监听器
-     * 当视频尺寸变化时，重新计算并设置窗口尺寸
+     * 附加视频渲染视图（官方推荐方式）
+     * 使用 mediaPlayer.attachViews() 而非 IVLCVout.setVideoView()
+     *
+     * @param videoLayout FrameLayout 容器，VLC 将在其中创建和管理 SurfaceView
      */
-    private val videoLayoutListener = IVLCVout.OnNewVideoLayoutListener { vlcVout, width, height, visibleWidth, visibleHeight, sarNum, sarDen ->
-        logger.info { "Video layout changed: ${width}x${height}, visible: ${visibleWidth}x${visibleHeight}, SAR: $sarNum:$sarDen" }
-        
-        // 保存视频尺寸
-        _videoWidth = width
-        _videoHeight = height
-        
-        // 在 SurfaceView 上更新窗口尺寸
-        currentSurfaceView?.let { surfaceView ->
-            surfaceView.post {
-                val surfaceWidth = surfaceView.width
-                val surfaceHeight = surfaceView.height
-                if (surfaceWidth > 0 && surfaceHeight > 0) {
-                    logger.info { "Updating VLC window size to surface: ${surfaceWidth}x${surfaceHeight}" }
-                    vlcVout.setWindowSize(surfaceWidth, surfaceHeight)
-                }
-            }
-        }
-    }
-
-    /**
-     * 附加视频渲染视图
-     * VLC 使用 IVLCVout 接口来附加视图
-     */
-    fun attachSurface(surfaceView: SurfaceView) {
+    fun attachVideoLayout(videoLayout: VLCVideoLayout) {
         try {
-            currentSurfaceView = surfaceView
-            val ivlcVout = mediaPlayer?.getVLCVout()
-            if (ivlcVout != null) {
-                ivlcVout.setVideoView(surfaceView)
+            currentVideoLayout = videoLayout
 
-                // 设置窗口尺寸
-                surfaceView.post {
-                    val width = surfaceView.width
-                    val height = surfaceView.height
-                    if (width > 0 && height > 0) {
-                        logger.info { "Setting VLC window size: ${width}x${height}" }
-                        ivlcVout.setWindowSize(width, height)
-                    }
-                }
+            // 使用官方推荐的 attachViews 方法
+            // 参数：FrameLayout, DisplayManager, enableSubtitles, enableTextureView
+            mediaPlayer?.attachViews(videoLayout, null, false, false)
 
-                // 使用 OnNewVideoLayoutListener 附加视图
-                ivlcVout.attachViews(videoLayoutListener)
-                
-                // 设置视频缩放模式为 BEST_FIT
-                mediaPlayer?.setVideoScale(MediaPlayer.ScaleType.SURFACE_BEST_FIT)
-                
-                // 重新设置事件监听器
-                mediaPlayer?.setEventListener(vlcEventListener)
-            }
+            // 设置视频缩放模式
+            mediaPlayer?.videoScale = MediaPlayer.ScaleType.SURFACE_BEST_FIT
+
+            // 重新设置事件监听器（attachViews 可能会重置监听器）
+            mediaPlayer?.setEventListener(vlcEventListener)
+
+            logger.info { "Attached VLC views to video layout" }
         } catch (e: Exception) {
-            logger.error(e) { "Failed to attach SurfaceView" }
+            logger.error(e) { "Failed to attach video layout" }
         }
     }
 
     /**
      * 分离视频渲染视图
      */
-    fun detachSurface() {
-        logger.debug { "Detaching SurfaceView from VLC player" }
+    fun detachVideoLayout() {
+        logger.debug { "Detaching video layout from VLC player" }
         try {
-            currentSurfaceView = null
-            mediaPlayer?.getVLCVout()?.detachViews()
+            currentVideoLayout = null
+            // 使用官方方法分离视图
+            mediaPlayer?.detachViews()
         } catch (e: Exception) {
-            logger.error(e) { "Failed to detach SurfaceView" }
+            logger.error(e) { "Failed to detach video layout" }
         }
     }
 
@@ -423,7 +391,7 @@ class VlcMediaPlayer(
 
     private fun buildMedia(url: String, audioUrl: String?): Media {
         val normalizedAudioUrl = audioUrl?.takeIf { it.isNotBlank() && it != url }
-        return Media(libVlc, Uri.parse(url)).apply {
+        return Media(libVlc, url.toUri()).apply {
             // VLC 使用 :http-header= 格式设置自定义请求头
             headers.forEach { (key, value) ->
                 addOption(":http-header=$key: $value")

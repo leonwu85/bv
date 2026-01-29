@@ -1,6 +1,7 @@
 package dev.aaa1115910.bv.player
 
 import android.graphics.Matrix
+import android.widget.FrameLayout
 import android.view.SurfaceView
 import android.view.TextureView
 import androidx.annotation.OptIn
@@ -20,6 +21,7 @@ import androidx.media3.common.util.UnstableApi
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import dev.aaa1115910.bv.player.impl.exo.ExoMediaPlayer
 import dev.aaa1115910.bv.player.impl.vlc.VlcMediaPlayer
+import org.videolan.libvlc.util.VLCVideoLayout
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 
 @OptIn(UnstableApi::class)
@@ -145,23 +147,23 @@ fun BvVideoPlayer(
             }
         }
         is VlcMediaPlayer -> {
-            var vlcSurfaceView: SurfaceView? by remember { mutableStateOf(null) }
+            var vlcVideoLayout: VLCVideoLayout? by remember { mutableStateOf(null) }
 
             AndroidView(
                 modifier = modifier.fillMaxSize(),
                 factory = { ctx ->
-                    SurfaceView(ctx).also { sv ->
-                        vlcSurfaceView = sv
-                        videoPlayer.attachSurface(sv)
-                        logger.info { "Current view type is VLC SurfaceView" }
+                    VLCVideoLayout(ctx).also { layout ->
+                        vlcVideoLayout = layout
+                        videoPlayer.attachVideoLayout(layout)
+                        logger.info { "Current view type is VLCVideoLayout" }
                     }
                 }
             )
 
             DisposableEffect(videoPlayer) {
                 onDispose {
-                    videoPlayer.detachSurface()
-                    vlcSurfaceView = null
+                    videoPlayer.detachVideoLayout()
+                    vlcVideoLayout = null
                 }
             }
         }
