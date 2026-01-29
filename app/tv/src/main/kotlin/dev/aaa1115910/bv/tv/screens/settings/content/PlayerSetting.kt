@@ -58,6 +58,7 @@ fun PlayerSetting(
     var skipPgcIntroOutro by remember { mutableStateOf(Prefs.skipPgcIntroOutro) }
     var vlcAutoRotate by remember { mutableStateOf(Prefs.vlcAutoRotate) }
     var selectedPlayerType by remember { mutableStateOf(Prefs.playerType) }
+    var enableAsyncQueueing by remember { mutableStateOf(Prefs.enableAsyncQueueing) }
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -304,6 +305,20 @@ fun PlayerSetting(
                         onCheckedChange = {
                             vlcAutoRotate = it
                             Prefs.vlcAutoRotate = it
+                        }
+                    )
+                }
+            }
+            // ExoPlayer/Media3 专用设置
+            if (Prefs.playerType == PlayerType.Media3) {
+                item {
+                    SettingSwitchListItem(
+                        title = "启用异步缓冲队列",
+                        supportText = "减少丢帧和音频欠载，提升高帧率视频播放性能（Android 6.0-11 有效）",
+                        checked = enableAsyncQueueing,
+                        onCheckedChange = {
+                            enableAsyncQueueing = it
+                            Prefs.enableAsyncQueueing = it
                         }
                     )
                 }

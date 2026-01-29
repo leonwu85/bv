@@ -438,6 +438,10 @@ object Prefs {
     var vlcAutoRotate: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefVlcAutoRotateRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefVlcAutoRotate, value) }
+
+    var enableAsyncQueueing: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableAsyncQueueingRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableAsyncQueueing, value) }
 }
 
 object PrefKeys {
@@ -504,6 +508,7 @@ object PrefKeys {
     val prefPlayerLongPressActionKey = intPreferencesKey("player_long_press_action")
     val prefShowOnlineViewerCountKey = intPreferencesKey("show_online_viewer_count_v2")
     val prefVlcAutoRotate = booleanPreferencesKey("vlc_auto_rotate")
+    val prefEnableAsyncQueueing = booleanPreferencesKey("enable_async_queueing")
 
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
@@ -586,4 +591,5 @@ object PrefKeys {
     val prefPlayerLongPressActionRequest = PreferenceRequest(prefPlayerLongPressActionKey, PlayerLongPressAction.OpenMenu.ordinal)
     val prefShowOnlineViewerCountRequest = PreferenceRequest(prefShowOnlineViewerCountKey, 1)  // 0=不显示, 1=30秒后隐藏, 2=始终显示
     val prefVlcAutoRotateRequest = PreferenceRequest(prefVlcAutoRotate, true)
+    val prefEnableAsyncQueueingRequest = PreferenceRequest(prefEnableAsyncQueueing, true)
 }

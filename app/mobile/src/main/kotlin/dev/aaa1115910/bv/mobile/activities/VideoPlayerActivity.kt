@@ -84,7 +84,9 @@ class VideoPlayerActivity : ComponentActivity() {
             referer = when (Prefs.apiType) {
                 ApiType.Web -> getString(R.string.video_player_referer)
                 ApiType.App -> null
-            }
+            },
+            enableFfmpegAudioRenderer = Prefs.enableFfmpegAudioRenderer,
+            enableAsyncQueueing = Prefs.enableAsyncQueueing
         )
         val videoPlayer = when (Prefs.playerType) {
             PlayerType.Media3 -> ExoPlayerFactory().create(this, options)

@@ -1,8 +1,10 @@
 package dev.aaa1115910.bv.player.impl.exo
 
 import android.content.Context
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -73,8 +75,13 @@ class ExoMediaPlayer(
                     false -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
                 }
             )
-            // setMediaCodecSelector(MediaCodecSelector.PREFER_SOFTWARE)
             setEnableDecoderFallback(true)
+            // 为 API 23-30 启用异步缓冲队列（API 31+ 已默认启用）
+            if (options.enableAsyncQueueing && Build.VERSION.SDK_INT >= 23 && Build.VERSION.SDK_INT < 31) {
+                Log.d("ExoMediaPlayer", "Force enable asynchronous buffer queueing for API ${Build.VERSION.SDK_INT}")
+                @Suppress("UNCHECKED_CAST")
+                (this as DefaultRenderersFactory).forceEnableMediaCodecAsynchronousQueueing()
+            }
         }
 
         // 创建智能缓冲策略，根据设备性能和视频质量动态调整
