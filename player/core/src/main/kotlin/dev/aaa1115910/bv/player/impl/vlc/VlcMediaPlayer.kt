@@ -521,20 +521,20 @@ class VlcMediaPlayer(
                 if (vlcLibsDir.exists() && libvlcFile.exists() && cxxFile.exists()) {
                     // 加载按需下载的库
                     logger.info { "Loading VLC libs from: $vlcLibsDir" }
-
-                    // 先加载 libc++_shared（C++ 标准库）
+                    // 按序加载
+                    // 1. libc++_shared
                     System.load(cxxFile.absolutePath)
                     logger.info { "Loaded libc++_shared from ${cxxFile.absolutePath}" }
 
-                    // 再加载 libvlcjni.so（JNI 绑定）
+                    // 2. libvlc.so
+                    System.load(libvlcFile.absolutePath)
+                    logger.info { "Loaded libvlc from ${libvlcFile.absolutePath}" }
+
+                    // 3. libvlcjni.so
                     if (libvlcjniFile.exists()) {
                         System.load(libvlcjniFile.absolutePath)
                         logger.info { "Loaded libvlcjni from ${libvlcjniFile.absolutePath}" }
                     }
-
-                    // 最后加载 libvlc.so（核心库）
-                    System.load(libvlcFile.absolutePath)
-                    logger.info { "Loaded libvlc from ${libvlcFile.absolutePath}" }
                 } else {
                     // 回退到 APK 内置库
                     logger.info { "Loading VLC libs from APK" }
