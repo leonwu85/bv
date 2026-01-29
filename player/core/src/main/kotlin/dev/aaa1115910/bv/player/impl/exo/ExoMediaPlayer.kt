@@ -1,6 +1,8 @@
 package dev.aaa1115910.bv.player.impl.exo
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -38,6 +40,18 @@ class ExoMediaPlayer(
 ) : AbstractVideoPlayer(), Player.Listener {
     var mPlayer: ExoPlayer? = null
     protected var mMediaSource: MediaSource? = null
+
+    // 进度更新 Handler，用于定期触发 onProgress 回调
+    private val progressHandler = Handler(Looper.getMainLooper())
+    private val progressUpdateRunnable = object : Runnable {
+        override fun run() {
+            dispatchProgress()
+            if (isPlaying) {
+                // 播放中，每 500ms 更新一次进度
+                progressHandler.postDelayed(this, 500)
+            }
+        }
+    }
 
     @OptIn(UnstableApi::class)
     private val dataSourceFactory =
@@ -147,10 +161,12 @@ class ExoMediaPlayer(
 
     override fun seekTo(time: Long) {
         mPlayer?.seekTo(time)
+        dispatchProgress()
     }
 
     override fun release() {
         try {
+            progressHandler.removeCallbacks(progressUpdateRunnable)
             mPlayer?.release()
             mMediaSource = null
             mPlayer = null
@@ -182,7 +198,10 @@ class ExoMediaPlayer(
         when (playbackState) {
             Player.STATE_IDLE -> mPlayerEventListener?.onIdle()
             Player.STATE_BUFFERING -> mPlayerEventListener?.onBuffering()
-            Player.STATE_READY -> mPlayerEventListener?.onReady()
+            Player.STATE_READY -> {
+                mPlayerEventListener?.onReady()
+                dispatchProgress()
+            }
             Player.STATE_ENDED -> mPlayerEventListener?.onEnd()
         }
     }
@@ -190,8 +209,14 @@ class ExoMediaPlayer(
     override fun onIsPlayingChanged(isPlaying: Boolean) {
         if (isPlaying) {
             mPlayerEventListener?.onPlay()
+            // 启动进度更新
+            progressHandler.removeCallbacks(progressUpdateRunnable)
+            progressHandler.post(progressUpdateRunnable)
         } else {
             mPlayerEventListener?.onPause()
+            // 停止进度更新
+            progressHandler.removeCallbacks(progressUpdateRunnable)
+            dispatchProgress()
         }
     }
 
@@ -306,5 +331,16 @@ class ExoMediaPlayer(
             calculatedSize > maxSize -> maxSize.toInt()
             else -> calculatedSize.toInt()
         }
+    }
+
+    /**
+     * 统一分发进度信息
+     * 类似 VLC 的 dispatchProgress() 方法，用于触发 onProgress 回调
+     */
+    private fun dispatchProgress() {
+        val positionMs = mPlayer?.currentPosition ?: 0L
+        val durationMs = mPlayer?.duration ?: 0L
+        val buffered = mPlayer?.bufferedPercentage ?: 0
+        mPlayerEventListener?.onProgress(positionMs, durationMs.coerceAtLeast(0L), buffered)
     }
 }
