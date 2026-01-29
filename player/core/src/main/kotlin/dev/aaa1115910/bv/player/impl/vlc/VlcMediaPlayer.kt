@@ -160,7 +160,7 @@ class VlcMediaPlayer(
 
             // ========== 编解码器配置 ==========
             add(":codec=mediacodec-ndk,all")
-            add(":mediacodec-dr=0")            // 禁用 direct rendering（修复内存泄漏）
+            // add(":mediacodec-dr=0")            // 禁用 direct rendering（修复内存泄漏）
 
             // ========== 性能优化 ==========
             add(":avcodec-fast=1")
