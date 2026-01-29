@@ -1,6 +1,8 @@
 package dev.aaa1115910.bv.player.impl.vlc
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import org.videolan.libvlc.util.VLCVideoLayout
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.VideoPlayerOptions
@@ -48,6 +50,15 @@ class VlcMediaPlayer(
 
     // 保存 VideoLayout 引用用于尺寸调整
     private var currentVideoLayout: VLCVideoLayout? = null
+
+    // ========== 画面卡死检测 ==========
+    // 使用 PositionChanged 事件检测视频帧更新（基于视频帧，比 TimeChanged 更准确）
+    // PositionChanged 长时间不触发通常意味着解码器卡住了
+    private var lastFrameUpdateTime = System.currentTimeMillis()
+    private var lastPositionFraction = -1f
+    private val freezeDetectionHandler = Handler(Looper.getMainLooper())
+    private var freezeDetectionRunnable: Runnable? = null
+    private val FREEZE_THRESHOLD_MS = 5_000L  // 5秒无视频帧更新视为卡死
 
     // 保持事件监听器的强引用，防止被GC回收
     // @Volatile
@@ -99,8 +110,18 @@ class VlcMediaPlayer(
                 dispatchProgress(timeMs = event.timeChanged)
             }
             MediaPlayer.Event.PositionChanged -> {
+                val position = event.positionChanged
+                val now = System.currentTimeMillis()
+
+                // 更新卡死检测状态（基于视频帧位置变化）
+                // PositionChanged 长时间不触发通常意味着解码器卡住了
+                if (isPlaying && position != lastPositionFraction) {
+                    lastFrameUpdateTime = now
+                    lastPositionFraction = position
+                }
+
                 // PositionChanged 事件提供进度百分比，补充上报
-                dispatchProgress(positionFraction = event.positionChanged)
+                dispatchProgress(positionFraction = position)
             }
             MediaPlayer.Event.SeekableChanged -> {
 //                mPlayerEventListener?.onSeekableChanged(event.seekable)
@@ -133,33 +154,36 @@ class VlcMediaPlayer(
         }
 
         val vlcOptions = arrayListOf<String>().apply {
-            // 网络缓存设置（毫秒）
-            add(":network-caching=1500")
-            // 硬件解码
-            add(":codec=mediacodec,all")
-            // AV_CODEC 格式
+            // ========== 缓存配置 ==========
+            add(":network-caching=3000")
+            add(":file-caching=2000")
+
+            // ========== 编解码器配置 ==========
+            add(":codec=mediacodec-ndk,all")
+            add(":mediacodec-dr=0")            // 禁用 direct rendering（修复内存泄漏）
+
+            // ========== 性能优化 ==========
             add(":avcodec-fast=1")
-            // 跳过帧
             add(":avcodec-skiploopfilter=1")
-            // 线程数
+            add(":avcodec-skip-frame=1")
+            add(":avcodec-skip-idct=1")        // 跳过 IDCT 变换
             add(":avcodec-threads=${Runtime.getRuntime().availableProcessors()}")
-            
-            // 音频配置
-            // 启用音频透传（让支持杜比的设备直接处理杜比音频）
-            add(":spdif")
-            // 音频输出模块
-            add(":aout=opensles")
-            
-            // HDR 配置
-            // 启用 Android 显示输出
-            add(":vout=android-display")
-            // 自动色调映射：仅在显示器不支持 HDR 时才进行转换
-            // 0=强制转换, 1=自动（根据显示能力决定）, 2=禁用
-            add(":tone-mapping=1")
-            // 设置色调映射算法（当需要转换时使用 Hable 算法）
-            add(":tone-mapping-algorithm=1")
-            // 设置目标峰值亮度（cd/m²）
-            add(":tone-mapping-param=100")
+
+            // ========== 跳帧策略 ==========
+            add(":skip-frames=1")              // 启用跳帧
+            add(":drop-late-frames=1")         // 丢弃延迟帧
+
+            // ========== 音视频同步策略 ==========
+            add(":audio-desync=500")           // 允许音视频偏差 500ms
+            add(":clock-jitter=2000")          // 时钟抖动容差 2 秒
+            add(":audio-resample-method=0")    // 禁用音频重采样
+
+            // ========== 音频配置 ==========
+            add(":spdif")                      // 启用音频透传
+            add(":aout=opensles")              // 音频输出模块
+
+            // ========== 视频输出配置 ==========
+            add(":vout=android-display")       // Android 显示输出
         }
 
         try {
@@ -214,15 +238,18 @@ class VlcMediaPlayer(
     override fun start() {
         logger.debug { "Starting VLC player" }
         mediaPlayer?.play()
+        startFreezeDetection() // 启动卡死检测
     }
 
     override fun pause() {
         logger.debug { "Pausing VLC player" }
         mediaPlayer?.pause()
+        stopFreezeDetection() // 停止卡死检测
     }
 
     override fun stop() {
         logger.debug { "Stopping VLC player" }
+        stopFreezeDetection() // 停止卡死检测
         mediaPlayer?.stop()
     }
 
@@ -243,6 +270,7 @@ class VlcMediaPlayer(
 
     override fun release() {
         logger.info { "Releasing VLC player" }
+        stopFreezeDetection() // 停止卡死检测
         try {
             mediaPlayer?.stop()
             mediaPlayer?.release()
@@ -325,7 +353,7 @@ class VlcMediaPlayer(
             // 设置视频缩放模式
             mediaPlayer?.videoScale = MediaPlayer.ScaleType.SURFACE_BEST_FIT
 
-            // 重新设置事件监听器（attachViews 可能会重置监听器）
+            // 重新设置事件监听器
             mediaPlayer?.setEventListener(vlcEventListener)
 
             logger.info { "Attached VLC views to video layout" }
@@ -424,5 +452,59 @@ class VlcMediaPlayer(
         180 -> "180"
         270, -90 -> "270"
         else -> "0"
+    }
+
+    // ========== 画面卡死检测和恢复 ==========
+
+    /**
+     * 启动画面卡死检测
+     * 定期检查 PositionChanged 事件是否触发（基于视频帧），如果超过阈值未更新则尝试恢复
+     */
+    private fun startFreezeDetection() {
+        stopFreezeDetection()
+        // 重置检测时间，避免从暂停恢复时误判
+        lastFrameUpdateTime = System.currentTimeMillis()
+        freezeDetectionRunnable = object : Runnable {
+            override fun run() {
+                if (isPlaying) {
+                    val now = System.currentTimeMillis()
+                    val timeSinceLastFrame = now - lastFrameUpdateTime
+
+                    if (timeSinceLastFrame > FREEZE_THRESHOLD_MS) {
+                        logger.warn { "Detected video freeze (no PositionChanged for ${timeSinceLastFrame}ms), attempting recovery" }
+                        attemptFreezeRecovery()
+                    }
+                }
+                freezeDetectionHandler.postDelayed(this, 5_000) // 每5秒检查一次
+            }
+        }
+        freezeDetectionHandler.post(freezeDetectionRunnable!!)
+    }
+
+    /**
+     * 停止画面卡死检测
+     */
+    private fun stopFreezeDetection() {
+        freezeDetectionRunnable?.let {
+            freezeDetectionHandler.removeCallbacks(it)
+        }
+        freezeDetectionRunnable = null
+    }
+
+    /**
+     * 尝试从画面卡死中恢复
+     * 策略：暂停再播放（最简单且有效的恢复方式）
+     */
+    private fun attemptFreezeRecovery() {
+        val wasPlaying = isPlaying
+        if (wasPlaying) {
+            logger.info { "Freeze recovery: toggling play/pause" }
+            pause()
+            freezeDetectionHandler.postDelayed({
+                if (isPlaying.not()) {
+                    start()
+                }
+            }, 500)
+        }
     }
 }
