@@ -11,7 +11,13 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.view.SurfaceView
+import android.view.ViewTreeObserver
 import androidx.core.net.toUri
+import org.videolan.libvlc.interfaces.IMedia
 import java.io.File
 
 /**
@@ -52,6 +58,9 @@ class VlcMediaPlayer(
     // 保存 VideoLayout 引用用于尺寸调整
     private var currentVideoLayout: VLCVideoLayout? = null
 
+    // 保存 VLC 内部创建的 SurfaceView 引用用于手动缩放
+    private var vlcSurfaceView: View? = null
+
     // ========== 画面卡死检测 ==========
     // 使用 PositionChanged 事件检测视频帧更新（基于视频帧，比 TimeChanged 更准确）
     // PositionChanged 长时间不触发通常意味着解码器卡住了
@@ -68,6 +77,8 @@ class VlcMediaPlayer(
     private val vlcEventListener = MediaPlayer.EventListener { event ->
         when (event.type) {
             MediaPlayer.Event.Playing -> {
+                updateVideoSize()
+                applyManualSurfaceViewScaling()
                 mPlayerEventListener?.onPlay()
             }
             MediaPlayer.Event.Paused -> {
@@ -145,35 +156,41 @@ class VlcMediaPlayer(
 
         val vlcOptions = arrayListOf<String>().apply {
             // ========== 缓存配置 ==========
-            add(":network-caching=3000")
-            add(":file-caching=3000")
+            add("--network-caching=3000")
+            add("--file-caching=3000")
 
             // ========== 编解码器配置 ==========
-            add(":codec=mediacodec-ndk,all")
-            add(":mediacodec-dr=1")
-
+            add("--codec=mediacodec-ndk,all")
+            // add("--mediacodec-dr=1")
             // ========== 性能优化 ==========
-            add(":avcodec-fast=1")
-            add(":avcodec-skiploopfilter=1")
-            add(":avcodec-skip-frame=1")
-            add(":avcodec-skip-idct=1")        // 跳过 IDCT 变换
-            add(":avcodec-threads=${Runtime.getRuntime().availableProcessors()}")
+            add("--avcodec-hw")                 // 启用硬件解码
+            add("--avcodec-fast=1")
+            add("--avcodec-skiploopfilter=1")
+            add("--avcodec-skip-frame=1")
+            add("--avcodec-skip-idct=1")        // 跳过 IDCT 变换
+            add("--avcodec-threads=${Runtime.getRuntime().availableProcessors()}")
 
             // ========== 跳帧策略 ==========
-            add(":skip-frames=1")              // 启用跳帧
-            add(":drop-late-frames=1")         // 丢弃延迟帧
+            add("--skip-frames")              // 启用跳帧
+            add("--drop-late-frames")         // 丢弃延迟帧
 
             // ========== 音视频同步策略 ==========
-            add(":audio-desync=500")           // 允许音视频偏差 500ms
-            add(":clock-jitter=2000")          // 时钟抖动容差 2 秒
-            add(":audio-resample-method=0")    // 禁用音频重采样
+            add("--audio-desync=500")           // 允许音视频偏差 500ms
+            add("--clock-jitter=2000")          // 时钟抖动容差 2 秒
+//            add("--audio-resample-method=0")    // 禁用音频重采样
 
             // ========== 音频配置 ==========
-            add(":spdif")                      // 启用音频透传
-            add(":aout=opensles")              // 音频输出模块
+            add("--spdif")                      // 启用音频透传
+            add("--aout=opensles")              // 音频输出模块
 
             // ========== 视频输出配置 ==========
-            add(":vout=android-display")       // Android 显示输出
+            add("--vout=android-display")       // Android 显示输出
+        }
+
+        // ========== 调试日志：输出 VLC 配置 ==========
+        logger.debug { "VLC Options count: ${vlcOptions.size}" }
+        vlcOptions.forEachIndexed { index, option ->
+            logger.debug { "  VLC Option [$index]: $option" }
         }
 
         try {
@@ -181,6 +198,12 @@ class VlcMediaPlayer(
             mediaPlayer = MediaPlayer(libVlc).apply {
                 setEventListener(vlcEventListener)
             }
+
+            // ========== 调试日志：验证 LibVLC 实例 ==========
+            logger.info { "LibVLC created successfully" }
+            logger.info { "LibVLC version: ${try { LibVLC.version() } catch (e: Exception) { "unknown" }}" }
+            logger.info { "LibVLC hashCode: ${libVlc?.hashCode()}" }
+            logger.info { "MediaPlayer created: ${mediaPlayer?.hashCode()}" }
 
         } catch (e: UnsatisfiedLinkError) {
             logger.error(e) { "VLC native library not available" }
@@ -262,13 +285,33 @@ class VlcMediaPlayer(
         logger.info { "Releasing VLC player" }
         stopFreezeDetection() // 停止卡死检测
         try {
+            // 1. 先移除事件监听器，防止后续回调导致泄露
+            mediaPlayer?.setEventListener(null)
+
+            // 2. 停止播放
             mediaPlayer?.stop()
+
+            // 3. 释放 MediaPlayer
             mediaPlayer?.release()
             mediaPlayer = null
+
+            // 4. 释放 Media
             media?.release()
             media = null
+
+            // 5. 释放 LibVLC
             libVlc?.release()
             libVlc = null
+
+            // 6. 清理 Handler 中的所有回调
+            freezeDetectionHandler.removeCallbacksAndMessages(null)
+
+            // 7. 清理视图引用
+            currentVideoLayout = null
+
+            // 8. 清理事件监听器引用
+            mPlayerEventListener = null
+
         } catch (e: Exception) {
             logger.error(e) { "Error releasing VLC player" }
         }
@@ -327,6 +370,112 @@ class VlcMediaPlayer(
     }
 
     /**
+     * 更新视频尺寸
+     * 从 VLC 的 IMedia.Track 获取视频尺寸
+     * 确保 MediaPlayer 已经加载媒体并开始播放
+     */
+    private fun updateVideoSize() {
+        try {
+            val mp = mediaPlayer ?: return
+            val media = mp.media ?: return
+
+            // 獲取軌道數量
+            val trackCount = media.trackCount
+            for (i in 0 until trackCount) {
+                val track = media.getTrack(i)
+                if (track.type == IMedia.Track.Type.Video) {
+                    val videoTrack = track as IMedia.VideoTrack
+                    val width = videoTrack.width
+                    val height = videoTrack.height
+                    if (width > 0 && height > 0) {
+                        _videoWidth = width
+                        _videoHeight = height
+                        logger.info { "Video size from IMedia.Track: ${_videoWidth}x${_videoHeight}" }
+                        return
+                    }
+                }
+            }
+            logger.debug { "No video track found or invalid size" }
+
+        } catch (e: Exception) {
+            logger.debug { "Failed to get video size: ${e.message}" }
+        }
+    }
+
+    /**
+     * 手动计算并设置 SurfaceView 的尺寸
+     * 保持视频原始比例，根据屏幕尺寸进行 fit-center 缩放
+     * 确保宽高符合硬件解码器的像素对齐要求（32 字节对齐）
+     */
+    private fun applyManualSurfaceViewScaling() {
+        if (_videoWidth <= 0 || _videoHeight <= 0) {
+            logger.debug { "Video size not available, skipping scaling" }
+            return
+        }
+
+        val surfaceView = vlcSurfaceView ?: return
+        val container = currentVideoLayout ?: return
+
+        val containerWidth = container.width
+        val containerHeight = container.height
+
+        if (containerWidth <= 0 || containerHeight <= 0) {
+            logger.debug { "Container size not available, skipping scaling" }
+            return
+        }
+
+        // 计算视频宽高比
+        val videoRatio = _videoWidth.toFloat() / _videoHeight.toFloat()
+        val containerRatio = containerWidth.toFloat() / containerHeight.toFloat()
+
+        // 计算 fit-center 缩放后的原始尺寸
+        val (rawWidth, rawHeight) = if (videoRatio > containerRatio) {
+            containerWidth to (containerWidth / videoRatio).toInt()
+        } else {
+            (containerHeight * videoRatio).toInt() to containerHeight
+        }
+
+        // 应用像素对齐
+        val surfaceWidth = calculateAlignedSize(rawWidth, containerWidth)
+        val surfaceHeight = calculateAlignedSize(rawHeight, containerHeight)
+
+        // 设置 SurfaceView 的 LayoutParams
+        val params = surfaceView.layoutParams as? FrameLayout.LayoutParams
+            ?: FrameLayout.LayoutParams(surfaceWidth, surfaceHeight)
+
+        params.width = surfaceWidth
+        params.height = surfaceHeight
+        params.gravity = android.view.Gravity.CENTER
+
+        surfaceView.layoutParams = params
+
+        logger.info { "Applied manual SurfaceView scaling: " +
+            "video=${_videoWidth}x${_videoHeight}, " +
+            "container=${containerWidth}x${containerHeight}, " +
+            "raw=${rawWidth}x${rawHeight}, " +
+            "aligned=${surfaceWidth}x${surfaceHeight} " +
+            "(alignment=$PIXEL_ALIGNMENT)" }
+    }
+
+    /**
+     * 递归查找 VLC 创建的 SurfaceView
+     * 
+     */
+    private fun findVlcSurfaceView(parent: ViewGroup): View? {
+        for (i in 0 until parent.childCount) {
+            val child = parent.getChildAt(i)
+            if (child is SurfaceView) {
+                return child
+            }
+            if (child is ViewGroup) {
+                val found = findVlcSurfaceView(child)
+                if (found != null) return found
+            }
+        }
+        return null
+    }
+
+    /**
      * 附加视频渲染视图（官方推荐方式）
      * 使用 mediaPlayer.attachViews() 而非 IVLCVout.setVideoView()
      *
@@ -336,12 +485,32 @@ class VlcMediaPlayer(
         try {
             currentVideoLayout = videoLayout
 
+            // 设置 VLC 为 FILL 模式
+            // 控制 SurfaceView 的尺寸来实现正确的显示效果
+            mediaPlayer?.videoScale = MediaPlayer.ScaleType.SURFACE_FILL
+
             // 使用官方推荐的 attachViews 方法
             // 参数：FrameLayout, DisplayManager, enableSubtitles, enableTextureView
             mediaPlayer?.attachViews(videoLayout, null, false, false)
 
-            // 设置视频缩放模式
-            mediaPlayer?.videoScale = MediaPlayer.ScaleType.SURFACE_BEST_FIT
+            // 获取 VLC 内部创建的 SurfaceView
+            videoLayout.postDelayed({
+                // 查找 VLC 创建的 SurfaceView
+                vlcSurfaceView = findVlcSurfaceView(videoLayout)
+                logger.info { "Found VLC SurfaceView: $vlcSurfaceView" }
+
+                // 应用手动缩放
+                applyManualSurfaceViewScaling()
+            }, 100)
+
+            // 监听布局尺寸变化
+            videoLayout.viewTreeObserver.addOnGlobalLayoutListener(
+                object : ViewTreeObserver.OnGlobalLayoutListener {
+                    override fun onGlobalLayout() {
+                        applyManualSurfaceViewScaling()
+                    }
+                }
+            )
 
             // 重新设置事件监听器
             mediaPlayer?.setEventListener(vlcEventListener)
@@ -358,6 +527,7 @@ class VlcMediaPlayer(
     fun detachVideoLayout() {
         logger.debug { "Detaching video layout from VLC player" }
         try {
+            vlcSurfaceView = null
             currentVideoLayout = null
             // 使用官方方法分离视图
             mediaPlayer?.detachViews()
@@ -393,6 +563,9 @@ class VlcMediaPlayer(
 
                 mediaPlayer?.media = newMedia
                 oldMedia.release()
+
+                // 更新类成员 media 引用，防止泄露
+                this@VlcMediaPlayer.media = newMedia
 
                 // 恢复播放位置
                 if (position > 0) {
@@ -479,6 +652,8 @@ class VlcMediaPlayer(
             freezeDetectionHandler.removeCallbacks(it)
         }
         freezeDetectionRunnable = null
+        // 清理所有可能的 pending callbacks，防止 Handler 导致内存泄露
+        freezeDetectionHandler.removeCallbacksAndMessages(null)
     }
 
     /**
@@ -503,6 +678,49 @@ class VlcMediaPlayer(
         private var libsLoaded = false
 
         /**
+         * 像素对齐常量
+         * MTK 和部分高通芯片要求 SurfaceView 的宽高必须是 16 或 32 的倍数
+         */
+        private const val PIXEL_ALIGNMENT = 32
+
+        /**
+         * 将数值对齐到指定的倍数
+         * @param value 原始值
+         * @param alignment 对齐倍数（16 或 32）
+         * @return 对齐后的值（向下取整到最接近的 alignment 倍数）
+         */
+        private fun alignTo(value: Int, alignment: Int = PIXEL_ALIGNMENT): Int {
+            return (value / alignment) * alignment
+        }
+
+        /**
+         * 将数值对齐到指定的倍数（向上取整）
+         * @param value 原始值
+         * @param alignment 对齐倍数（16 或 32）
+         * @return 对齐后的值（向上取整到最接近的 alignment 倍数）
+         */
+        private fun alignToCeil(value: Int, alignment: Int = PIXEL_ALIGNMENT): Int {
+            return ((value + alignment - 1) / alignment) * alignment
+        }
+
+        /**
+         * 计算对齐后的尺寸，确保不超过容器尺寸
+         * @param desired 期望的尺寸
+         * @param max 容器的最大尺寸
+         * @param alignment 对齐倍数
+         * @return 对齐后的尺寸（保证 <= max）
+         */
+        private fun calculateAlignedSize(desired: Int, max: Int, alignment: Int = PIXEL_ALIGNMENT): Int {
+            val aligned = alignTo(desired, alignment)
+            // 如果对齐后为 0 或超过最大值，尝试向下对齐
+            return when {
+                aligned == 0 -> alignment
+                aligned > max -> alignTo(max, alignment)
+                else -> aligned
+            }
+        }
+
+        /**
          * 加载 VLC native 库
          * 优先从 vlc_libs 目录加载按需下载的库，回退到 APK 内置库
          */
@@ -520,35 +738,34 @@ class VlcMediaPlayer(
 
                 if (vlcLibsDir.exists() && libvlcFile.exists() && cxxFile.exists()) {
                     // 加载按需下载的库
-                    logger.info { "Loading VLC libs from: $vlcLibsDir" }
+                    logger.info { "[VLC-DEBUG] Loading VLC libs from: $vlcLibsDir" }
                     // 按序加载
                     // 1. libc++_shared
                     System.load(cxxFile.absolutePath)
-                    logger.info { "Loaded libc++_shared from ${cxxFile.absolutePath}" }
+                    logger.info { "[VLC-DEBUG] Loaded libc++_shared from ${cxxFile.absolutePath}" }
 
                     // 2. libvlc.so
                     System.load(libvlcFile.absolutePath)
-                    logger.info { "Loaded libvlc from ${libvlcFile.absolutePath}" }
+                    logger.info { "[VLC-DEBUG] Loaded libvlc from ${libvlcFile.absolutePath}" }
 
                     // 3. libvlcjni.so
                     if (libvlcjniFile.exists()) {
                         System.load(libvlcjniFile.absolutePath)
-                        logger.info { "Loaded libvlcjni from ${libvlcjniFile.absolutePath}" }
+                        logger.info { "[VLC-DEBUG] Loaded libvlcjni from ${libvlcjniFile.absolutePath}" }
                     }
                 } else {
                     // 回退到 APK 内置库
-                    logger.info { "Loading VLC libs from APK" }
-
+                    logger.info { "[VLC-DEBUG] Loading VLC libs from APK (AAR built-in)" }
                     try {
                         System.loadLibrary("c++_shared")
-                        logger.info { "Loaded libc++_shared from APK" }
+                        logger.info { "[VLC-DEBUG] Loaded libc++_shared from APK" }
                     } catch (e: UnsatisfiedLinkError) {
                         logger.debug { "libc++_shared already loaded or not available: ${e.message}" }
                     }
 
                     try {
                         System.loadLibrary("vlc")
-                        logger.info { "Loaded libvlc from APK" }
+                        logger.info { "[VLC-DEBUG] Loaded libvlc from APK" }
                     } catch (e: UnsatisfiedLinkError) {
                         logger.debug { "libvlc already loaded or not available: ${e.message}" }
                     }

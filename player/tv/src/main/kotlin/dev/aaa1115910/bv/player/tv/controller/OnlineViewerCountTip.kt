@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,7 +50,7 @@ fun OnlineViewerCountTip(
                 val iconColor = Color.White.copy(alpha = 0.3f)
 
                 Icon(
-                    imageVector = Icons.Default.Person,
+                    imageVector = Icons.Default.Group,
                     contentDescription = null,
                     tint = iconColor
                 )

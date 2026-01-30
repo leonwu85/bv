@@ -31,22 +31,22 @@ fun LibVLCDownloaderDialog(
     val scope = rememberCoroutineScope()
     var processing by remember { mutableStateOf(false) }
     var text by remember { mutableStateOf("等待操作中...") }
+    val version = BuildConfig.libVLCVersion
 
     val startInstall: () -> Unit = {
         processing = true
 
         scope.launch(Dispatchers.IO) {
             runCatching {
-                val version = BuildConfig.libVLCVersion
                 val aarFile = File(context.cacheDir, "libvlc-all-$version.aar")
                 val vlcLibsDir = File(context.filesDir, "vlc_libs")
                 val targetAbi = VlcLibsInstaller.getTargetAbi()
 
                 // 1. 下载 AAR（自动尝试多个镜像源）
-                text = "正在下载..."
+                text = "正在下载 v$version ($targetAbi)..."
                 VlcLibsApi.downloadAar(version, aarFile) { received, total ->
                     val percent = if (total > 0) (received * 100 / total) else 0
-                    text = "正在下载 ($percent%)"
+                    text = "正在下载 v$version ($targetAbi)... ($percent%)"
                 }
 
                 // 2. 解压并安装 so 文件
@@ -74,7 +74,7 @@ fun LibVLCDownloaderDialog(
     if (show) {
         TvAlertDialog(
             modifier = modifier,
-            title = { Text(text = "LibVLC 下载器") },
+            title = { Text(text = "LibVLC 下载器 (v$version)") },
             text = { Text(text = text) },
             onDismissRequest = { if (!processing) onDismissRequest() },
             confirmButton = {
