@@ -19,6 +19,7 @@ import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.OkHttpUtil
 import dev.aaa1115910.bv.player.VideoPlayerOptions
@@ -82,6 +83,7 @@ class ExoMediaPlayer(
                 @Suppress("UNCHECKED_CAST")
                 (this as DefaultRenderersFactory).forceEnableMediaCodecAsynchronousQueueing()
             }
+            setEnableAudioOutputPlaybackParameters(true)
         }
 
         // 创建智能缓冲策略，根据设备性能和视频质量动态调整
@@ -101,12 +103,18 @@ class ExoMediaPlayer(
             .setBackBuffer(bufferConfig.backBufferMs, false) // 动态回退缓冲
             .build()
 
+        val trackSelector = DefaultTrackSelector(context).apply {
+            parameters = buildUponParameters()
+                .setTunnelingEnabled(true)
+                .build()
+        }
         mPlayer = ExoPlayer
             .Builder(context)
             .setRenderersFactory(renderersFactory)
             .setLoadControl(loadControl)
             .setSeekForwardIncrementMs(1000 * 10)
             .setSeekBackIncrementMs(1000 * 10)
+            .setTrackSelector(trackSelector)
             .build()
 
         initListener()
