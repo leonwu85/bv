@@ -13,6 +13,7 @@ import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.network.VlcLibsApi
 import dev.aaa1115910.bv.player.BuildConfig
+import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.VlcLibsInstaller
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -55,6 +56,9 @@ fun LibVLCDownloaderDialog(
 
                 // 3. 删除临时 AAR 文件
                 aarFile.delete()
+
+                // 4. 保存已安装的版本号
+                Prefs.vlcLibsVersion = version
 
                 // 4. 通知完成
                 withContext(Dispatchers.Main) {

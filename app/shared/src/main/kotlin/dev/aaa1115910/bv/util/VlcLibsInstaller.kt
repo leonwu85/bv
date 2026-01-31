@@ -20,6 +20,24 @@ object VlcLibsInstaller {
     }
 
     /**
+     * 获取已安装的 VLC 库版本
+     * @return 已安装的版本号，未安装返回空字符串
+     */
+    fun getInstalledVersion(context: Context): String {
+        return Prefs.vlcLibsVersion
+    }
+
+    /**
+     * 检查是否需要更新 VLC 库
+     * @param expectedVersion 期望的版本号
+     * @return true 表示需要更新（未安装或版本不匹配）
+     */
+    fun needsUpdate(context: Context, expectedVersion: String): Boolean {
+        if (!isVlcLibsInstalled(context)) return true
+        return getInstalledVersion(context) != expectedVersion
+    }
+
+    /**
      * 获取当前设备的目标 ABI
      */
     fun getTargetAbi(): String {

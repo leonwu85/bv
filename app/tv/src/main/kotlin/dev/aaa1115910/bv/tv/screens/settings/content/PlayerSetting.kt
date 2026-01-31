@@ -36,6 +36,7 @@ import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.VlcLibsInstaller
+import dev.aaa1115910.bv.player.BuildConfig
 import android.widget.Toast
 import androidx.tv.material3.Button
 
@@ -134,13 +135,13 @@ fun PlayerSetting(
                     value = selectedPlayerType,
                     onValueChange = { newType ->
                         if (newType == PlayerType.VLC) {
-                            // 检查 VLC 库是否已安装
-                            if (VlcLibsInstaller.isVlcLibsInstalled(context)) {
-                                selectedPlayerType = newType
-                                Prefs.playerType = newType
-                            } else {
+                            // 检查 VLC 库是否需要更新（未安装或版本不匹配）
+                            if (VlcLibsInstaller.needsUpdate(context, BuildConfig.libVLCVersion)) {
                                 // 显示下载确认弹窗
                                 showVlcDownloadConfirmDialog = true
+                            } else {
+                                selectedPlayerType = newType
+                                Prefs.playerType = newType
                             }
                         } else {
                             selectedPlayerType = newType

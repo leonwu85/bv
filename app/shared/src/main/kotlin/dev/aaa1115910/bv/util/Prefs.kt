@@ -450,6 +450,10 @@ object Prefs {
     var enableAudioPlaybackParams: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableAudioPlaybackParamsRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableAudioPlaybackParams, value) }
+
+    var vlcLibsVersion: String
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefVlcLibsVersionRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefVlcLibsVersionKey, value) }
 }
 
 object PrefKeys {
@@ -519,6 +523,7 @@ object PrefKeys {
     val prefEnableAsyncQueueing = booleanPreferencesKey("enable_async_queueing")
     val prefEnableTunneling = booleanPreferencesKey("enable_tunneling")
     val prefEnableAudioPlaybackParams = booleanPreferencesKey("enable_audio_playback_params")
+    val prefVlcLibsVersionKey = stringPreferencesKey("vlc_libs_version")
 
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
@@ -604,4 +609,5 @@ object PrefKeys {
     val prefEnableAsyncQueueingRequest = PreferenceRequest(prefEnableAsyncQueueing, true)
     val prefEnableTunnelingRequest = PreferenceRequest(prefEnableTunneling, true)
     val prefEnableAudioPlaybackParamsRequest = PreferenceRequest(prefEnableAudioPlaybackParams, true)
+    val prefVlcLibsVersionRequest = PreferenceRequest(prefVlcLibsVersionKey, "")
 }
