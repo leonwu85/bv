@@ -544,9 +544,12 @@ fun BvPlayer(
     LaunchedEffect(danmakuPlayer) {
         mDanmakuPlayer = danmakuPlayer
         danmakuLayerHandle.updateDanmakuPlayer(danmakuPlayer)
-        // 当弹幕播放器可用时，立即设置正确的配置（包括 visibility）
+        // 当弹幕播放器可用时，立即设置正确的配置（包括 visibility 和 alpha）
         val safeArea = videoPlayerConfigData.currentDanmakuArea.coerceIn(0f, 1f)
-        danmakuConfig = danmakuConfig.copy(screenPart = safeArea)
+        danmakuConfig = danmakuConfig.copy(
+            screenPart = safeArea,
+            alpha = danmakuOpacity
+        )
         mDanmakuPlayer?.updateConfig(danmakuConfig)
     }
 
