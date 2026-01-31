@@ -442,6 +442,14 @@ object Prefs {
     var enableAsyncQueueing: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableAsyncQueueingRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableAsyncQueueing, value) }
+
+    var enableTunneling: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableTunnelingRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableTunneling, value) }
+
+    var enableAudioPlaybackParams: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableAudioPlaybackParamsRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableAudioPlaybackParams, value) }
 }
 
 object PrefKeys {
@@ -509,6 +517,8 @@ object PrefKeys {
     val prefShowOnlineViewerCountKey = intPreferencesKey("show_online_viewer_count_v2")
     val prefVlcAutoRotate = booleanPreferencesKey("vlc_auto_rotate")
     val prefEnableAsyncQueueing = booleanPreferencesKey("enable_async_queueing")
+    val prefEnableTunneling = booleanPreferencesKey("enable_tunneling")
+    val prefEnableAudioPlaybackParams = booleanPreferencesKey("enable_audio_playback_params")
 
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
@@ -592,4 +602,6 @@ object PrefKeys {
     val prefShowOnlineViewerCountRequest = PreferenceRequest(prefShowOnlineViewerCountKey, 1)  // 0=不显示, 1=30秒后隐藏, 2=始终显示
     val prefVlcAutoRotateRequest = PreferenceRequest(prefVlcAutoRotate, true)
     val prefEnableAsyncQueueingRequest = PreferenceRequest(prefEnableAsyncQueueing, true)
+    val prefEnableTunnelingRequest = PreferenceRequest(prefEnableTunneling, true)
+    val prefEnableAudioPlaybackParamsRequest = PreferenceRequest(prefEnableAudioPlaybackParams, true)
 }

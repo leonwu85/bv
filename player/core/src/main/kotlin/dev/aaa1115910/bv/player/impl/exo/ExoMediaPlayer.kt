@@ -83,7 +83,9 @@ class ExoMediaPlayer(
                 @Suppress("UNCHECKED_CAST")
                 (this as DefaultRenderersFactory).forceEnableMediaCodecAsynchronousQueueing()
             }
-            setEnableAudioOutputPlaybackParameters(true)
+            if (options.enableAudioPlaybackParams) {
+                setEnableAudioOutputPlaybackParameters(true)
+            }
         }
 
         // 创建智能缓冲策略，根据设备性能和视频质量动态调整
@@ -103,19 +105,23 @@ class ExoMediaPlayer(
             .setBackBuffer(bufferConfig.backBufferMs, false) // 动态回退缓冲
             .build()
 
-        val trackSelector = DefaultTrackSelector(context).apply {
-            parameters = buildUponParameters()
-                .setTunnelingEnabled(true)
-                .build()
-        }
-        mPlayer = ExoPlayer
-            .Builder(context)
+        val exoPlayerBuilder = ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setLoadControl(loadControl)
             .setSeekForwardIncrementMs(1000 * 10)
             .setSeekBackIncrementMs(1000 * 10)
-            .setTrackSelector(trackSelector)
-            .build()
+
+        // 只有在启用隧道模式时才需要自定义 TrackSelector
+        if (options.enableTunneling) {
+            val trackSelector = DefaultTrackSelector(context).apply {
+                parameters = buildUponParameters()
+                    .setTunnelingEnabled(true)
+                    .build()
+            }
+            exoPlayerBuilder.setTrackSelector(trackSelector)
+        }
+
+        mPlayer = exoPlayerBuilder.build()
 
         initListener()
     }

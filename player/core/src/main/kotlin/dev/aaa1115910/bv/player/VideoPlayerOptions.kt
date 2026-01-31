@@ -4,5 +4,7 @@ data class VideoPlayerOptions(
     val userAgent: String? = null,
     val referer: String? = null,
     val enableFfmpegAudioRenderer: Boolean = false,
-    val enableAsyncQueueing: Boolean = true
+    val enableAsyncQueueing: Boolean = true,
+    val enableTunneling: Boolean = true,
+    val enableAudioPlaybackParams: Boolean = true
 )

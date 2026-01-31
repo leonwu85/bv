@@ -64,6 +64,8 @@ fun PlayerSetting(
     var vlcAutoRotate by remember { mutableStateOf(Prefs.vlcAutoRotate) }
     var selectedPlayerType by remember { mutableStateOf(Prefs.playerType) }
     var enableAsyncQueueing by remember { mutableStateOf(Prefs.enableAsyncQueueing) }
+    var enableTunneling by remember { mutableStateOf(Prefs.enableTunneling) }
+    var enableAudioPlaybackParams by remember { mutableStateOf(Prefs.enableAudioPlaybackParams) }
     var showVlcDownloadConfirmDialog by remember { mutableStateOf(false) }
     var showVlcDownloaderDialog by remember { mutableStateOf(false) }
 
@@ -314,7 +316,7 @@ fun PlayerSetting(
                 )
             }
             // VLC 播放器专用设置
-            if (Prefs.playerType == PlayerType.VLC) {
+            if (selectedPlayerType == PlayerType.VLC) {
                 item {
                     SettingSwitchListItem(
                         title = stringResource(R.string.settings_player_vlc_auto_rotate_title),
@@ -328,7 +330,7 @@ fun PlayerSetting(
                 }
             }
             // ExoPlayer/Media3 专用设置
-            if (Prefs.playerType == PlayerType.Media3) {
+            if (selectedPlayerType == PlayerType.Media3) {
                 item {
                     SettingSwitchListItem(
                         title = "启用异步缓冲队列",
@@ -337,6 +339,28 @@ fun PlayerSetting(
                         onCheckedChange = {
                             enableAsyncQueueing = it
                             Prefs.enableAsyncQueueing = it
+                        }
+                    )
+                }
+                item {
+                    SettingSwitchListItem(
+                        title = "启用隧道模式",
+                        supportText = "使用硬件音频路径，可能提升播放性能但可能影响兼容性",
+                        checked = enableTunneling,
+                        onCheckedChange = {
+                            enableTunneling = it
+                            Prefs.enableTunneling = it
+                        }
+                    )
+                }
+                item {
+                    SettingSwitchListItem(
+                        title = "启用音频播放参数调整",
+                        supportText = "允许调整音频播放速度和音效",
+                        checked = enableAudioPlaybackParams,
+                        onCheckedChange = {
+                            enableAudioPlaybackParams = it
+                            Prefs.enableAudioPlaybackParams = it
                         }
                     )
                 }
