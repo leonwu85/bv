@@ -39,7 +39,6 @@ class VlcMediaPlayer(
 
     var libVlc: LibVLC? = null
     var mediaPlayer: MediaPlayer? = null
-    var media: Media? = null
 
     private var currentVideoUrl: String? = null
     private var currentAudioUrl: String? = null
@@ -180,6 +179,7 @@ class VlcMediaPlayer(
             add("--clock-jitter=0")              // 減少時鐘抖動影響
             
             // ========== 音频配置 ==========
+            add("--no-audio-time-stretch")      // 禁用音频时间拉伸
             // add("--spdif")                      // 启用音频透传
             // add("--aout=opensles")              // 音频输出模块
 
@@ -233,39 +233,25 @@ class VlcMediaPlayer(
         this.currentVideoUrl = videoUrl
         this.currentAudioUrl = audioUrl
 
-        // 先让 MediaPlayer 释放对旧 Media 的引用，防止内存泄漏
+        // 让 MediaPlayer 释放对旧 Media 的引用
         mediaPlayer?.media = null
-
-        // 释放旧的 Media 对象的 native 资源
-        media?.release()
-        media = null
-
-        // 注意：不在这里创建新的 Media，在 prepare() 中创建
-        // 这样可以避免在多次调用 playUrl() 时创建多个未使用的 media 对象
     }
 
     override fun prepare() {
         // 先释放旧的 Media（防止多次调用 prepare() 时泄漏）
         mediaPlayer?.media = null
-        media?.release()
-        media = null
 
         // 创建新的 Media
         val url = currentVideoUrl ?: currentAudioUrl
         if (url != null) {
             val newMedia = buildMedia(url, currentAudioUrl)
 
-            // 设置给 MediaPlayer
+            // 设置给 MediaPlayer（MediaPlayer 会增加 native 引用计数）
             mediaPlayer?.media = newMedia
 
-            // 关键：立即释放我们的 Java 引用
-            // MediaPlayer 会持有 native 引用，我们的 Java 引用不再需要
-            // 这是防止 Media 内存泄漏的正确方式
+            // 立即释放 Java 引用
+            // MediaPlayer 已持有 native 引用，我们的 Java 引用不再需要
             newMedia.release()
-
-            // 保存到类成员（用于 setVideoRotation 等操作）
-            // 注意：此时 Java 引用计数已释放，只有 MediaPlayer 持有 native 引用
-            media = newMedia
         }
 
         // 与 ExoPlayer 不同，VLC 不会在设置 media 后自动触发事件
@@ -300,12 +286,8 @@ class VlcMediaPlayer(
         logger.debug { "Resetting VLC player" }
         mediaPlayer?.stop()
 
-        // 先让 MediaPlayer 释放对 Media 的引用，防止内存泄漏
+        // 让 MediaPlayer 释放对 Media 的引用
         mediaPlayer?.media = null
-
-        // 再释放 Media 对象的 native 资源
-        media?.release()
-        media = null
     }
 
     override val isPlaying: Boolean
@@ -332,26 +314,21 @@ class VlcMediaPlayer(
             vlcSurfaceView = null
             currentVideoLayout = null
 
-            // 4. 关键：先让 MediaPlayer 释放对 Media 的引用，防止内存泄漏
-            // 这必须在 mediaPlayer.release() 之前执行
+            // 4. 让 MediaPlayer 释放对 Media 的引用
             mediaPlayer?.media = null
 
-            // 5. 释放 Media 的 native 资源
-            media?.release()
-            media = null
-
-            // 6. 释放 MediaPlayer
+            // 5. 释放 MediaPlayer
             mediaPlayer?.release()
             mediaPlayer = null
 
-            // 7. 释放 LibVLC
+            // 6. 释放 LibVLC
             libVlc?.release()
             libVlc = null
 
-            // 8. 清理 Handler 中的所有回调
+            // 7. 清理 Handler 中的所有回调
             freezeDetectionHandler.removeCallbacksAndMessages(null)
 
-            // 9. 清理事件监听器引用
+            // 8. 清理事件监听器引用
             mPlayerEventListener = null
 
         } catch (e: Exception) {
@@ -421,25 +398,28 @@ class VlcMediaPlayer(
             val mp = mediaPlayer ?: return
             val media = mp.media ?: return
 
-            // 獲取軌道數量
-//            val trackCount = media.trackCount
-            val tracks = media.tracks
-            for (track in tracks) {
-                if (track.type == IMedia.Track.Type.Video) {
-                    val videoTrack = track as IMedia.VideoTrack
-                    val width = videoTrack.width
-                    val height = videoTrack.height
-                    if (width > 0 && height > 0) {
-                        _videoWidth = width
-                        _videoHeight = height
-                        logger.info { "Video size from IMedia.Track: ${_videoWidth}x${_videoHeight}" }
-                        updateScaleMode()
-                        return
+            try {
+                val tracks = media.tracks
+                for (track in tracks) {
+                    if (track.type == IMedia.Track.Type.Video) {
+                        val videoTrack = track as IMedia.VideoTrack
+                        val width = videoTrack.width
+                        val height = videoTrack.height
+                        if (width > 0 && height > 0) {
+                            _videoWidth = width
+                            _videoHeight = height
+                            logger.info { "Video size from IMedia.Track: ${_videoWidth}x${_videoHeight}" }
+                            updateScaleMode()
+                            return
+                        }
                     }
                 }
+                logger.debug { "No video track found or invalid size" }
+            } finally {
+                // 关键：释放从 MediaPlayer.media 获取的引用
+                // mediaPlayer.media 会增加引用计数，必须手动释放
+                media.release()
             }
-            logger.debug { "No video track found or invalid size" }
-
         } catch (e: Exception) {
             logger.debug { "Failed to get video size: ${e.message}" }
         }
@@ -520,6 +500,12 @@ class VlcMediaPlayer(
         // 设置 SurfaceView 的 LayoutParams
         val params = surfaceView.layoutParams as? FrameLayout.LayoutParams
             ?: FrameLayout.LayoutParams(surfaceWidth, surfaceHeight)
+
+        // 检查当前 layoutParams 是否已经是目标值，避免不必要的布局更新和死循环
+        if (params.width == surfaceWidth && params.height == surfaceHeight) {
+            logger.debug { "LayoutParams already correct ($surfaceWidth x $surfaceHeight), skipping layout update" }
+            return
+        }
 
         params.width = surfaceWidth
         params.height = surfaceHeight
@@ -634,25 +620,16 @@ class VlcMediaPlayer(
         val position = currentPosition
         val wasPlaying = isPlaying
 
-        // 从 MediaPlayer 获取当前 Media（而不是从类成员）
-        // 这样可以确保获取到真正在使用的 Media 对象
-        val oldMedia = mediaPlayer?.media
         val url = currentVideoUrl ?: currentAudioUrl
         url?.let {
+            // 创建新 Media，带有旋转滤镜
             val newMedia = buildMedia(it, currentAudioUrl)
 
-            // 先设置新 media（让 MediaPlayer 释放旧引用）
+            // 设置给 MediaPlayer（会自动释放旧 Media 的 native 引用）
             mediaPlayer?.media = newMedia
 
-            // 关键：立即释放我们的 Java 引用
-            // MediaPlayer 会持有 native 引用，我们的 Java 引用不再需要
+            // 立即释放 Java 引用，MediaPlayer 保持 native 引用
             newMedia.release()
-
-            // 释放旧 media
-            oldMedia?.release()
-
-            // 更新类成员 media 引用
-            this@VlcMediaPlayer.media = newMedia
 
             // 恢复播放位置
             if (position > 0) {
@@ -682,8 +659,8 @@ class VlcMediaPlayer(
                 addOption(":http-user-agent=$it")
             }
             // 合入音频流
-            normalizedAudioUrl?.let {
-                addOption(":input-slave=$it")
+            normalizedAudioUrl?.let { audioUrl ->
+                addSlave(IMedia.Slave(IMedia.Slave.Type.Audio, 0, audioUrl))
             }
             // 如果有旋转设置，添加滤镜
             if (currentRotation != 0) {
