@@ -3,6 +3,7 @@ package dev.aaa1115910.bv.player.tv
 import android.os.CountDownTimer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -581,6 +582,15 @@ fun BvPlayer(
 
     DisposableEffect(Unit) {
         onDispose {
+            // 先暂停播放，防止渲染线程继续工作
+            videoPlayer.pause()
+
+            // 如果是 VLC 播放器，先分离视图再释放
+            // 这防止在 Surface 被销毁后 VLC 仍尝试渲染导致 BufferQueue abandoned 错误
+            if (videoPlayer is dev.aaa1115910.bv.player.impl.vlc.VlcMediaPlayer) {
+                (videoPlayer as dev.aaa1115910.bv.player.impl.vlc.VlcMediaPlayer).detachVideoLayout()
+            }
+
             videoPlayer.release()
         }
     }

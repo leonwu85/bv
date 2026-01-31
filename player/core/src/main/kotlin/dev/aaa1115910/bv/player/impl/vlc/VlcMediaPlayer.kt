@@ -157,34 +157,44 @@ class VlcMediaPlayer(
         val vlcOptions = arrayListOf<String>().apply {
             // ========== 缓存配置 ==========
             add("--network-caching=3000")
-            add("--file-caching=3000")
+            add("--file-caching=5000")
 
             // ========== 编解码器配置 ==========
             add("--codec=mediacodec-ndk,all")
-            // add("--mediacodec-dr=1")
+            // add("--mediacodec-dr")
             // ========== 性能优化 ==========
-            add("--avcodec-hw")                 // 启用硬件解码
-            add("--avcodec-fast=1")
+            // add("--avcodec-hw=none")                 
+            // add("--avcodec-fast")
             add("--avcodec-skiploopfilter=1")
-            add("--avcodec-skip-frame=1")
-            add("--avcodec-skip-idct=1")        // 跳过 IDCT 变换
             add("--avcodec-threads=${Runtime.getRuntime().availableProcessors()}")
 
             // ========== 跳帧策略 ==========
-            add("--skip-frames")              // 启用跳帧
-            add("--drop-late-frames")         // 丢弃延迟帧
+        //    add("--no-drop-late-frames")    // 防止過度丟幀造成的視覺卡頓
+        //    add("--no-skip-frames")
+//            add("--skip-frames")              // 启用跳帧
+//            add("--drop-late-frames")         // 丢弃延迟帧
 
             // ========== 音视频同步策略 ==========
-            add("--audio-desync=500")           // 允许音视频偏差 500ms
-            add("--clock-jitter=2000")          // 时钟抖动容差 2 秒
-//            add("--audio-resample-method=0")    // 禁用音频重采样
-
+            add("--drop-late-frames")            // 丟棄延遲幀以維持同步
+            // add("--skip-frames")                 // 必要時跳幀
+            add("--clock-jitter=0")              // 減少時鐘抖動影響
+            
             // ========== 音频配置 ==========
-            add("--spdif")                      // 启用音频透传
-            add("--aout=opensles")              // 音频输出模块
+            // add("--spdif")                      // 启用音频透传
+            // add("--aout=opensles")              // 音频输出模块
 
             // ========== 视频输出配置 ==========
             add("--vout=android-display")       // Android 显示输出
+            // add("--vout=android-opengl")
+            // add("--vout=opengles2")
+            // add("--tone-mapping=3")          
+            // 或指定算法（根据视频/设备测试）：
+            // add("--tone-mapping=1")          // Reinhard（常见，默认之一，平衡亮度/颜色）
+            // add("--tone-mapping=2")          // Hable（电影感强）
+            // add("--tone-mapping=3")          // Mobius（避免过曝）
+            // add("--tone-mapping-param=0.8")
+            // add("--tone-mapping-desat=0.0")     // 去饱和度，0.0 为默认（不额外去饱和）
+//            add("--tone-mapping-peak=1000")   // 峰值亮度（nits），HDR10 常见 1000，Dolby Vision 可更高；根据视频调整
         }
 
         // ========== 调试日志：输出 VLC 配置 ==========
@@ -223,19 +233,39 @@ class VlcMediaPlayer(
         this.currentVideoUrl = videoUrl
         this.currentAudioUrl = audioUrl
 
-        // 如果已有 Media 对象，先释放
-        media?.release()
+        // 先让 MediaPlayer 释放对旧 Media 的引用，防止内存泄漏
+        mediaPlayer?.media = null
 
-        // VLC 合入音频流
-        val url = videoUrl ?: audioUrl
-        if (url != null) {
-            media = buildMedia(url, audioUrl)
-        }
+        // 释放旧的 Media 对象的 native 资源
+        media?.release()
+        media = null
+
+        // 注意：不在这里创建新的 Media，在 prepare() 中创建
+        // 这样可以避免在多次调用 playUrl() 时创建多个未使用的 media 对象
     }
 
     override fun prepare() {
-        media?.let {
-            mediaPlayer?.media = it
+        // 先释放旧的 Media（防止多次调用 prepare() 时泄漏）
+        mediaPlayer?.media = null
+        media?.release()
+        media = null
+
+        // 创建新的 Media
+        val url = currentVideoUrl ?: currentAudioUrl
+        if (url != null) {
+            val newMedia = buildMedia(url, currentAudioUrl)
+
+            // 设置给 MediaPlayer
+            mediaPlayer?.media = newMedia
+
+            // 关键：立即释放我们的 Java 引用
+            // MediaPlayer 会持有 native 引用，我们的 Java 引用不再需要
+            // 这是防止 Media 内存泄漏的正确方式
+            newMedia.release()
+
+            // 保存到类成员（用于 setVideoRotation 等操作）
+            // 注意：此时 Java 引用计数已释放，只有 MediaPlayer 持有 native 引用
+            media = newMedia
         }
 
         // 与 ExoPlayer 不同，VLC 不会在设置 media 后自动触发事件
@@ -269,6 +299,11 @@ class VlcMediaPlayer(
     override fun reset() {
         logger.debug { "Resetting VLC player" }
         mediaPlayer?.stop()
+
+        // 先让 MediaPlayer 释放对 Media 的引用，防止内存泄漏
+        mediaPlayer?.media = null
+
+        // 再释放 Media 对象的 native 资源
         media?.release()
         media = null
     }
@@ -291,25 +326,32 @@ class VlcMediaPlayer(
             // 2. 停止播放
             mediaPlayer?.stop()
 
-            // 3. 释放 MediaPlayer
-            mediaPlayer?.release()
-            mediaPlayer = null
+            // 3. 先分离 Surface 视图，防止 VLC 继续渲染到已销毁的 Surface
+            // 这一步必须在 release() 之前执行，否则会出现 BufferQueue abandoned 错误
+            mediaPlayer?.detachViews()
+            vlcSurfaceView = null
+            currentVideoLayout = null
 
-            // 4. 释放 Media
+            // 4. 关键：先让 MediaPlayer 释放对 Media 的引用，防止内存泄漏
+            // 这必须在 mediaPlayer.release() 之前执行
+            mediaPlayer?.media = null
+
+            // 5. 释放 Media 的 native 资源
             media?.release()
             media = null
 
-            // 5. 释放 LibVLC
+            // 6. 释放 MediaPlayer
+            mediaPlayer?.release()
+            mediaPlayer = null
+
+            // 7. 释放 LibVLC
             libVlc?.release()
             libVlc = null
 
-            // 6. 清理 Handler 中的所有回调
+            // 8. 清理 Handler 中的所有回调
             freezeDetectionHandler.removeCallbacksAndMessages(null)
 
-            // 7. 清理视图引用
-            currentVideoLayout = null
-
-            // 8. 清理事件监听器引用
+            // 9. 清理事件监听器引用
             mPlayerEventListener = null
 
         } catch (e: Exception) {
@@ -380,9 +422,9 @@ class VlcMediaPlayer(
             val media = mp.media ?: return
 
             // 獲取軌道數量
-            val trackCount = media.trackCount
-            for (i in 0 until trackCount) {
-                val track = media.getTrack(i)
+//            val trackCount = media.trackCount
+            val tracks = media.tracks
+            for (track in tracks) {
                 if (track.type == IMedia.Track.Type.Video) {
                     val videoTrack = track as IMedia.VideoTrack
                     val width = videoTrack.width
@@ -391,6 +433,7 @@ class VlcMediaPlayer(
                         _videoWidth = width
                         _videoHeight = height
                         logger.info { "Video size from IMedia.Track: ${_videoWidth}x${_videoHeight}" }
+                        updateScaleMode()
                         return
                     }
                 }
@@ -403,9 +446,33 @@ class VlcMediaPlayer(
     }
 
     /**
+     * 判断视频是否为竖屏
+     * @return true 如果视频高度大于宽度（竖屏），false 否则（横屏或正方形）
+     */
+    private fun isPortraitVideo(): Boolean {
+        return _videoHeight > _videoWidth
+    }
+
+    /**
+     * 根据视频方向动态设置 VLC 缩放模式
+     * - 竖屏视频：使用 SURFACE_FILL 填充整个屏幕
+     * - 横屏视频：使用 SURFACE_BEST_FIT 保持宽高比适配屏幕
+     */
+    private fun updateScaleMode() {
+        val scaleType = if (isPortraitVideo()) {
+            MediaPlayer.ScaleType.SURFACE_FILL
+        } else {
+            MediaPlayer.ScaleType.SURFACE_BEST_FIT
+        }
+        mediaPlayer?.videoScale = scaleType
+        logger.info { "Updated scale mode: $scaleType (video=${_videoWidth}x${_videoHeight}, isPortrait=${isPortraitVideo()})" }
+    }
+
+    /**
      * 手动计算并设置 SurfaceView 的尺寸
      * 保持视频原始比例，根据屏幕尺寸进行 fit-center 缩放
      * 确保宽高符合硬件解码器的像素对齐要求（32 字节对齐）
+     * 注意：仅对竖屏视频应用手动缩放，横屏视频由 VLC 的 SURFACE_BEST_FIT 自动处理
      */
     private fun applyManualSurfaceViewScaling() {
         if (_videoWidth <= 0 || _videoHeight <= 0) {
@@ -413,31 +480,42 @@ class VlcMediaPlayer(
             return
         }
 
-        val surfaceView = vlcSurfaceView ?: return
-        val container = currentVideoLayout ?: return
-
-        val containerWidth = container.width
-        val containerHeight = container.height
-
-        if (containerWidth <= 0 || containerHeight <= 0) {
-            logger.debug { "Container size not available, skipping scaling" }
+        // 横屏视频不应用手动缩放，由 VLC 的 SURFACE_BEST_FIT 自动处理
+        if (!isPortraitVideo()) {
+            logger.debug { "Landscape video, skipping manual scaling (VLC will handle it)" }
             return
         }
 
-        // 计算视频宽高比
-        val videoRatio = _videoWidth.toFloat() / _videoHeight.toFloat()
-        val containerRatio = containerWidth.toFloat() / containerHeight.toFloat()
+        val surfaceView = vlcSurfaceView ?: return
+        val container = currentVideoLayout ?: return
 
-        // 计算 fit-center 缩放后的原始尺寸
-        val (rawWidth, rawHeight) = if (videoRatio > containerRatio) {
-            containerWidth to (containerWidth / videoRatio).toInt()
-        } else {
-            (containerHeight * videoRatio).toInt() to containerHeight
+        // 使用屏幕尺寸进行缩放计算，而非容器尺寸
+        // 因为容器可能被外层的 aspectRatio 修饰符限制，导致视频显示区域过小
+        val screenWidth = context.resources.displayMetrics.widthPixels
+        val screenHeight = context.resources.displayMetrics.heightPixels
+        val containerWidth = container.width
+        val containerHeight = container.height
+
+        if (screenWidth <= 0 || screenHeight <= 0) {
+            logger.debug { "Screen size not available, skipping scaling" }
+            return
         }
 
-        // 应用像素对齐
-        val surfaceWidth = calculateAlignedSize(rawWidth, containerWidth)
-        val surfaceHeight = calculateAlignedSize(rawHeight, containerHeight)
+        // 计算视频宽高比和屏幕宽高比
+        val videoRatio = _videoWidth.toFloat() / _videoHeight.toFloat()
+        val screenRatio = screenWidth.toFloat() / screenHeight.toFloat()
+
+        // 计算 fit-center 缩放后的原始尺寸（基于屏幕尺寸）
+        val (rawWidth, rawHeight) = if (videoRatio > screenRatio) {
+            screenWidth to (screenWidth / videoRatio).toInt()
+        } else {
+            (screenHeight * videoRatio).toInt() to screenHeight
+        }
+
+        // 应用像素对齐（最大值为屏幕尺寸）
+        // 竖屏视频：宽度对齐，高度保持原值
+        val surfaceWidth = calculateAlignedSize(rawWidth, screenWidth)
+        val surfaceHeight = rawHeight  // 竖屏高度不需要对齐
 
         // 设置 SurfaceView 的 LayoutParams
         val params = surfaceView.layoutParams as? FrameLayout.LayoutParams
@@ -451,6 +529,7 @@ class VlcMediaPlayer(
 
         logger.info { "Applied manual SurfaceView scaling: " +
             "video=${_videoWidth}x${_videoHeight}, " +
+            "screen=${screenWidth}x${screenHeight}, " +
             "container=${containerWidth}x${containerHeight}, " +
             "raw=${rawWidth}x${rawHeight}, " +
             "aligned=${surfaceWidth}x${surfaceHeight} " +
@@ -485,9 +564,9 @@ class VlcMediaPlayer(
         try {
             currentVideoLayout = videoLayout
 
-            // 设置 VLC 为 FILL 模式
-            // 控制 SurfaceView 的尺寸来实现正确的显示效果
-            mediaPlayer?.videoScale = MediaPlayer.ScaleType.SURFACE_FILL
+            // 根据视频方向动态设置缩放模式
+            // 竖屏视频使用 SURFACE_FILL，横屏视频使用 SURFACE_BEST_FIT
+            updateScaleMode()
 
             // 使用官方推荐的 attachViews 方法
             // 参数：FrameLayout, DisplayManager, enableSubtitles, enableTextureView
@@ -551,31 +630,38 @@ class VlcMediaPlayer(
         // 触发缓冲回调（显示加载提示）
         mPlayerEventListener?.onBuffering()
 
-        // 保存当前位置
+        // 保存当前位置和播放状态
         val position = currentPosition
         val wasPlaying = isPlaying
 
-        // 重新创建带旋转滤镜的 Media
-        media?.let { oldMedia ->
-            val url = currentVideoUrl ?: currentAudioUrl
-            url?.let {
-                val newMedia = buildMedia(it, currentAudioUrl)
+        // 从 MediaPlayer 获取当前 Media（而不是从类成员）
+        // 这样可以确保获取到真正在使用的 Media 对象
+        val oldMedia = mediaPlayer?.media
+        val url = currentVideoUrl ?: currentAudioUrl
+        url?.let {
+            val newMedia = buildMedia(it, currentAudioUrl)
 
-                mediaPlayer?.media = newMedia
-                oldMedia.release()
+            // 先设置新 media（让 MediaPlayer 释放旧引用）
+            mediaPlayer?.media = newMedia
 
-                // 更新类成员 media 引用，防止泄露
-                this@VlcMediaPlayer.media = newMedia
+            // 关键：立即释放我们的 Java 引用
+            // MediaPlayer 会持有 native 引用，我们的 Java 引用不再需要
+            newMedia.release()
 
-                // 恢复播放位置
-                if (position > 0) {
-                    seekTo(position)
-                }
+            // 释放旧 media
+            oldMedia?.release()
 
-                // 恢复播放状态
-                if (wasPlaying) {
-                    start()
-                }
+            // 更新类成员 media 引用
+            this@VlcMediaPlayer.media = newMedia
+
+            // 恢复播放位置
+            if (position > 0) {
+                seekTo(position)
+            }
+
+            // 恢复播放状态
+            if (wasPlaying) {
+                start()
             }
         }
     }
@@ -604,6 +690,7 @@ class VlcMediaPlayer(
                 addOption(":video-filter=transform")
                 addOption(":transform-type=${mapDegreesToTransform(currentRotation)}")
             }
+            setHWDecoderEnabled(true, false)
         }
     }
 

@@ -26,7 +26,7 @@ qrcode = "4.5.0"
 rememberPreference = "1.1.1"
 slf4j-android-mvysny = "2.0.13"
 slf4j-simple = "2.0.17"
-vlc = "3.6.5"
+vlc = "4.0.0-eap23"
 zxing = "3.5.4"
 
 [libraries]
