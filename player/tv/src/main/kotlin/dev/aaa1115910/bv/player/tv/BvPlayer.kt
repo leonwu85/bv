@@ -582,6 +582,25 @@ fun BvPlayer(
 
     DisposableEffect(Unit) {
         onDispose {
+            // 在释放播放器前发送心跳，确保退出时进度被正确记录
+            if (!videoPlayerConfigData.incognitoMode) {
+                // 获取当前时间并直接调用上传方法
+                val currentTime = (videoPlayer.currentPosition.coerceAtLeast(0L) / 1000).toInt()
+                val totalTime = (videoPlayer.duration.coerceAtLeast(0L) / 1000).toInt()
+                val time = if (totalTime == 0) {
+                    -2 // 无法正常播放
+                } else if (currentTime >= totalTime - 1) {
+                    -1 // 播放完后上报的时间应为 -1
+                } else {
+                    currentTime // 播放中上报当前时间
+                }
+                if (time > -2) {
+                    scope.launch(Dispatchers.IO) {
+                        onSendHeartbeat(time)
+                    }
+                }
+            }
+
             // 先暂停播放，防止渲染线程继续工作
             videoPlayer.pause()
 
@@ -592,14 +611,6 @@ fun BvPlayer(
             }
 
             videoPlayer.release()
-        }
-    }
-
-    DisposableEffect(videoPlayerConfigData.incognitoMode) {
-        onDispose {
-            if (!videoPlayerConfigData.incognitoMode) {
-                sendHeartbeat()
-            }
         }
     }
 
