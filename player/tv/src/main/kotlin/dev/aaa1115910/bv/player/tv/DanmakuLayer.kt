@@ -34,16 +34,22 @@ class DanmakuLayerHandle(
     var visible by mutableStateOf(true)
         private set
 
+    // 视频宽高比，用于计算蒙版的正确覆盖区域
+    var videoAspectRatio: Float by mutableStateOf(0f)
+        private set
+
     fun updateDanmakuPlayer(player: DanmakuPlayer?) {
         if (danmakuPlayer !== player) danmakuPlayer = player
     }
 
     fun update(
         mask: DanmakuMaskFrame? = maskFrame,
-        visible: Boolean? = null
+        visible: Boolean? = null,
+        videoAspectRatio: Float? = null
     ) {
         if (maskFrame !== mask) maskFrame = mask
         visible?.let { if (this.visible != it) this.visible = it }
+        videoAspectRatio?.let { if (this.videoAspectRatio != it) this.videoAspectRatio = it }
     }
 }
 
@@ -56,8 +62,8 @@ fun DanmakuLayer(
     if (player == null) return
 
     // 根据 maskFrame 动态应用蒙版 Modifier（避免无意义的额外 Modifier 组合）
-    val maskModifier = if (handle.maskFrame != null) {
-        Modifier.danmakuMask(handle.maskFrame)
+    val maskModifier = if (handle.maskFrame != null && handle.videoAspectRatio > 0f) {
+        Modifier.danmakuMask(handle.maskFrame, handle.videoAspectRatio)
     } else Modifier
 
     Box(

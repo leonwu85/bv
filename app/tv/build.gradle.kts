@@ -50,6 +50,15 @@ android {
         targetSdk = AppConfiguration.targetSdk
     }
 
+    packaging {
+        jniLibs {
+            // 排除 VLC 的 .so 文件，使用按需下载的库
+            val vlcLibs = listOf("libvlc", "libc++_shared", "libvlcjni")
+            val abis = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            vlcLibs.forEach { vlcLibName -> abis.forEach { abi -> excludes.add("lib/$abi/$vlcLibName.so") } }
+        }
+    }
+
     testOptions {
         targetSdk = AppConfiguration.targetSdk
     }
@@ -63,4 +72,5 @@ java {
 
 dependencies {
     implementation(project(":app:shared"))
+    implementation(libs.vlc.android.all)
 }

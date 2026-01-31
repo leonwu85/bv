@@ -47,7 +47,6 @@ import dev.aaa1115910.bv.tv.screens.settings.content.LiveStreamingSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.NetworkSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.OtherSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.PlayerSetting
-import dev.aaa1115910.bv.tv.screens.settings.content.PlayerTypeSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.StorageSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.UISetting
 import dev.aaa1115910.bv.ui.theme.BVTheme
@@ -131,7 +130,7 @@ fun SettingsNav(
         contentPadding = PaddingValues(24.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        for (item in SettingsMenuNavItem.entries - listOf(SettingsMenuNavItem.PlayerType)) {
+        for (item in SettingsMenuNavItem.entries) {
             val buttonModifier = if (currentMenu == item) Modifier
                 .focusRequester(focusRequester)
                 .fillMaxWidth()
@@ -152,7 +151,6 @@ fun SettingsNav(
 
 enum class SettingsMenuNavItem(private val strRes: Int) {
     Player(R.string.settings_item_player),
-    PlayerType(R.string.settings_item_player_type),
     UI(R.string.settings_item_ui),
     Live(R.string.settings_item_live),
     Api(R.string.settings_item_api),
@@ -187,7 +185,6 @@ fun SettingContent(
                 SettingsMenuNavItem.About -> AboutSetting()
                 SettingsMenuNavItem.Other -> OtherSetting()
                 SettingsMenuNavItem.Network -> NetworkSetting()
-                SettingsMenuNavItem.PlayerType -> PlayerTypeSetting()
                 SettingsMenuNavItem.UI -> UISetting()
                 SettingsMenuNavItem.Storage -> StorageSetting()
                 SettingsMenuNavItem.Api -> ApiSetting()

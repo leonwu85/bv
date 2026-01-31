@@ -70,6 +70,7 @@ dependencies {
     implementation(libs.material)
     implementation(project(":libs:ffmpegDecoder"))
     implementation(project(":player:shared"))
+    api(libs.vlc.android.all)
     testImplementation(libs.kotlin.test)
     androidTestImplementation(androidx.compose.ui.test.junit4)
     debugImplementation(androidx.compose.ui.test.manifest)

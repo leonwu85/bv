@@ -46,6 +46,12 @@ android {
         targetSdk = AppConfiguration.targetSdk
         versionCode = AppConfiguration.versionCode
         versionName = AppConfiguration.versionName
+
+        // 只打包 ARM 架构，减少 APK 体积（排除 x86 和 x86_64）
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
+
         vectorDrawables {
             useSupportLibrary = true
         }
@@ -126,6 +132,14 @@ android {
             excludes += "**/*.version"
         }
 
+        jniLibs {
+            useLegacyPackaging = false
+            // 排除 VLC 的 .so 文件，使用按需下载的库
+            val vlcLibs = listOf("libvlc", "libc++_shared", "libvlcjni")
+            val abis = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            vlcLibs.forEach { vlcLibName -> abis.forEach { abi -> excludes.add("lib/$abi/$vlcLibName.so") } }
+        }
+
         if (gradle.startParameter.taskNames.find { it.startsWith("assembleLite") } != null) {
             jniLibs {
                 val vlcLibs = listOf("libvlc", "libc++_shared", "libvlcjni")
@@ -135,16 +149,7 @@ android {
         }
     }
 
-    /*splits {
-        if (gradle.startParameter.taskNames.find { it.startsWith("assembleDefault") } != null) {
-            abi {
-                isEnable = true
-                reset()
-                include("x86_64", "x86", "arm64-v8a", "armeabi-v7a")
-                isUniversalApk = true
-            }
-        }
-    }*/
+    // 使用 ABI Filters 替代 Splits，在 defaultConfig 中配置
 
     applicationVariants.configureEach {
         val variant = this
@@ -177,6 +182,7 @@ dependencies {
     implementation(project(":app:mobile"))
     implementation(project(":app:tv"))
     implementation(project(":app:shared"))
+    implementation(libs.vlc.android.all)
 }
 
 tasks.withType<Test> {

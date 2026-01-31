@@ -1,6 +1,10 @@
 package dev.aaa1115910.bv.player.impl.exo
 
 import android.content.Context
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -15,6 +19,7 @@ import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.OkHttpUtil
 import dev.aaa1115910.bv.player.VideoPlayerOptions
@@ -39,6 +44,18 @@ class ExoMediaPlayer(
     var mPlayer: ExoPlayer? = null
     protected var mMediaSource: MediaSource? = null
 
+    // 进度更新 Handler，用于定期触发 onProgress 回调
+    private val progressHandler = Handler(Looper.getMainLooper())
+    private val progressUpdateRunnable = object : Runnable {
+        override fun run() {
+            dispatchProgress()
+            if (isPlaying) {
+                // 播放中，每 500ms 更新一次进度
+                progressHandler.postDelayed(this, 500)
+            }
+        }
+    }
+
     @OptIn(UnstableApi::class)
     private val dataSourceFactory =
         OkHttpDataSource.Factory(OkHttpUtil.generateCustomSslOkHttpClient(context)).apply {
@@ -59,8 +76,16 @@ class ExoMediaPlayer(
                     false -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
                 }
             )
-            // setMediaCodecSelector(MediaCodecSelector.PREFER_SOFTWARE)
             setEnableDecoderFallback(true)
+            // 为 API 23-30 启用异步缓冲队列（API 31+ 已默认启用）
+            if (options.enableAsyncQueueing && Build.VERSION.SDK_INT >= 23 && Build.VERSION.SDK_INT < 31) {
+                Log.d("ExoMediaPlayer", "Force enable asynchronous buffer queueing for API ${Build.VERSION.SDK_INT}")
+                @Suppress("UNCHECKED_CAST")
+                (this as DefaultRenderersFactory).forceEnableMediaCodecAsynchronousQueueing()
+            }
+            if (options.enableAudioPlaybackParams) {
+                setEnableAudioOutputPlaybackParameters(true)
+            }
         }
 
         // 创建智能缓冲策略，根据设备性能和视频质量动态调整
@@ -80,13 +105,23 @@ class ExoMediaPlayer(
             .setBackBuffer(bufferConfig.backBufferMs, false) // 动态回退缓冲
             .build()
 
-        mPlayer = ExoPlayer
-            .Builder(context)
+        val exoPlayerBuilder = ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setLoadControl(loadControl)
             .setSeekForwardIncrementMs(1000 * 10)
             .setSeekBackIncrementMs(1000 * 10)
-            .build()
+
+        // 只有在启用隧道模式时才需要自定义 TrackSelector
+        if (options.enableTunneling) {
+            val trackSelector = DefaultTrackSelector(context).apply {
+                parameters = buildUponParameters()
+                    .setTunnelingEnabled(true)
+                    .build()
+            }
+            exoPlayerBuilder.setTrackSelector(trackSelector)
+        }
+
+        mPlayer = exoPlayerBuilder.build()
 
         initListener()
     }
@@ -147,10 +182,12 @@ class ExoMediaPlayer(
 
     override fun seekTo(time: Long) {
         mPlayer?.seekTo(time)
+        dispatchProgress()
     }
 
     override fun release() {
         try {
+            progressHandler.removeCallbacks(progressUpdateRunnable)
             mPlayer?.release()
             mMediaSource = null
             mPlayer = null
@@ -182,7 +219,10 @@ class ExoMediaPlayer(
         when (playbackState) {
             Player.STATE_IDLE -> mPlayerEventListener?.onIdle()
             Player.STATE_BUFFERING -> mPlayerEventListener?.onBuffering()
-            Player.STATE_READY -> mPlayerEventListener?.onReady()
+            Player.STATE_READY -> {
+                mPlayerEventListener?.onReady()
+                dispatchProgress()
+            }
             Player.STATE_ENDED -> mPlayerEventListener?.onEnd()
         }
     }
@@ -190,8 +230,14 @@ class ExoMediaPlayer(
     override fun onIsPlayingChanged(isPlaying: Boolean) {
         if (isPlaying) {
             mPlayerEventListener?.onPlay()
+            // 启动进度更新
+            progressHandler.removeCallbacks(progressUpdateRunnable)
+            progressHandler.post(progressUpdateRunnable)
         } else {
             mPlayerEventListener?.onPause()
+            // 停止进度更新
+            progressHandler.removeCallbacks(progressUpdateRunnable)
+            dispatchProgress()
         }
     }
 
@@ -306,5 +352,16 @@ class ExoMediaPlayer(
             calculatedSize > maxSize -> maxSize.toInt()
             else -> calculatedSize.toInt()
         }
+    }
+
+    /**
+     * 统一分发进度信息
+     * 类似 VLC 的 dispatchProgress() 方法，用于触发 onProgress 回调
+     */
+    private fun dispatchProgress() {
+        val positionMs = mPlayer?.currentPosition ?: 0L
+        val durationMs = mPlayer?.duration ?: 0L
+        val buffered = mPlayer?.bufferedPercentage ?: 0
+        mPlayerEventListener?.onProgress(positionMs, durationMs.coerceAtLeast(0L), buffered)
     }
 }

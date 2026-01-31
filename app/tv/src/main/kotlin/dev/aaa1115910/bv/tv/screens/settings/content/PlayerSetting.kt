@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
+import dev.aaa1115910.bv.entity.PlayerType
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.player.entity.Audio
@@ -30,8 +31,14 @@ import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.tv.component.settings.SettingListItemWithDialog
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
 import dev.aaa1115910.bv.tv.component.settings.SettingNumberListItem
+import dev.aaa1115910.bv.tv.component.LibVLCDownloaderDialog
+import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
 import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.bv.util.VlcLibsInstaller
+import dev.aaa1115910.bv.player.BuildConfig
+import android.widget.Toast
+import androidx.tv.material3.Button
 
 @Composable
 fun PlayerSetting(
@@ -55,6 +62,13 @@ fun PlayerSetting(
     var portraitVideoFixMode by remember { mutableStateOf(Prefs.portraitVideoFixMode) }
     var defaultDanmakuArea by remember { mutableDoubleStateOf(Prefs.defaultDanmakuArea.toDouble()) }
     var skipPgcIntroOutro by remember { mutableStateOf(Prefs.skipPgcIntroOutro) }
+    var vlcAutoRotate by remember { mutableStateOf(Prefs.vlcAutoRotate) }
+    var selectedPlayerType by remember { mutableStateOf(Prefs.playerType) }
+    var enableAsyncQueueing by remember { mutableStateOf(Prefs.enableAsyncQueueing) }
+    var enableTunneling by remember { mutableStateOf(Prefs.enableTunneling) }
+    var enableAudioPlaybackParams by remember { mutableStateOf(Prefs.enableAudioPlaybackParams) }
+    var showVlcDownloadConfirmDialog by remember { mutableStateOf(false) }
+    var showVlcDownloaderDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -109,6 +123,30 @@ fun PlayerSetting(
                     onValueChange = {
                         Prefs.defaultAudio = it
                         selectedAudio = it
+                    }
+                )
+            }
+            item {
+                SettingListItemWithDialog(
+                    title = stringResource(R.string.settings_item_player_type),
+                    supportText = stringResource(R.string.settings_item_player_type),
+                    options = PlayerType.entries,
+                    getDisplayName = { item, _ -> item.name },
+                    value = selectedPlayerType,
+                    onValueChange = { newType ->
+                        if (newType == PlayerType.VLC) {
+                            // 检查 VLC 库是否需要更新（未安装或版本不匹配）
+                            if (VlcLibsInstaller.needsUpdate(context, BuildConfig.libVLCVersion)) {
+                                // 显示下载确认弹窗
+                                showVlcDownloadConfirmDialog = true
+                            } else {
+                                selectedPlayerType = newType
+                                Prefs.playerType = newType
+                            }
+                        } else {
+                            selectedPlayerType = newType
+                            Prefs.playerType = newType
+                        }
                     }
                 )
             }
@@ -278,7 +316,104 @@ fun PlayerSetting(
                     }
                 )
             }
+            // VLC 播放器专用设置
+            if (selectedPlayerType == PlayerType.VLC) {
+                item {
+                    SettingSwitchListItem(
+                        title = stringResource(R.string.settings_player_vlc_auto_rotate_title),
+                        supportText = stringResource(R.string.settings_player_vlc_auto_rotate_text),
+                        checked = vlcAutoRotate,
+                        onCheckedChange = {
+                            vlcAutoRotate = it
+                            Prefs.vlcAutoRotate = it
+                        }
+                    )
+                }
+            }
+            // ExoPlayer/Media3 专用设置
+            if (selectedPlayerType == PlayerType.Media3) {
+                item {
+                    SettingSwitchListItem(
+                        title = "启用异步缓冲队列",
+                        supportText = "减少丢帧和音频欠载，提升高帧率视频播放性能（Android 6.0-11 有效）",
+                        checked = enableAsyncQueueing,
+                        onCheckedChange = {
+                            enableAsyncQueueing = it
+                            Prefs.enableAsyncQueueing = it
+                        }
+                    )
+                }
+                item {
+                    SettingSwitchListItem(
+                        title = "启用隧道模式",
+                        supportText = "使用硬件音频路径，可能提升播放性能但可能影响兼容性",
+                        checked = enableTunneling,
+                        onCheckedChange = {
+                            enableTunneling = it
+                            Prefs.enableTunneling = it
+                        }
+                    )
+                }
+                item {
+                    SettingSwitchListItem(
+                        title = "启用音频播放参数调整",
+                        supportText = "允许调整音频播放速度和音效",
+                        checked = enableAudioPlaybackParams,
+                        onCheckedChange = {
+                            enableAudioPlaybackParams = it
+                            Prefs.enableAudioPlaybackParams = it
+                        }
+                    )
+                }
+            }
         }
+    }
+
+    // VLC 下载确认弹窗
+    if (showVlcDownloadConfirmDialog) {
+        TvAlertDialog(
+            onDismissRequest = { showVlcDownloadConfirmDialog = false },
+            title = { Text("需要下载 VLC 组件") },
+            text = {
+                Text("VLC 播放器需要下载额外的组件才能使用。\n\n" +
+                     "下载大小：约 80 MB\n" +
+                     "建议在 Wi-Fi 环境下下载")
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showVlcDownloadConfirmDialog = false
+                    showVlcDownloaderDialog = true
+                }) {
+                    Text("下载")
+                }
+            },
+            dismissButton = {
+                Button(onClick = {
+                    showVlcDownloadConfirmDialog = false
+                }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // VLC 库下载弹窗
+    if (showVlcDownloaderDialog) {
+        LibVLCDownloaderDialog(
+            show = true,
+            onDismissRequest = {
+                showVlcDownloaderDialog = false
+            },
+            onDownloadComplete = {
+                showVlcDownloaderDialog = false
+                selectedPlayerType = PlayerType.VLC
+                Prefs.playerType = PlayerType.VLC
+            },
+            onDownloadFailed = { errorMessage ->
+                showVlcDownloaderDialog = false
+                Toast.makeText(context, "下载失败: $errorMessage", Toast.LENGTH_LONG).show()
+            }
+        )
     }
 
 }
