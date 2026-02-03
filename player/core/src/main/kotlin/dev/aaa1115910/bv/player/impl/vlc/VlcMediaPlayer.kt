@@ -50,6 +50,17 @@ class VlcMediaPlayer(
     // 缓冲百分比
     private var _bufferedPercentage: Int = 0
 
+    // seekable 状态（默认 true，根据 VLC 官方实现）
+    private var _isSeekable: Boolean = true
+
+    // ========== 异步 Seek 状态 ==========
+    private var isSeeking = false              // 正在进行 seek 操作
+    private var shouldResumeAfterSeek = false  // seek 完成后是否需要恢复播放
+    private var seekTargetPosition = 0L        // 目标 seek 位置
+    private val seekHandler = Handler(Looper.getMainLooper())  // 异步执行 seek 的 Handler
+    private var seekTimeoutRunnable: Runnable? = null  // seek 超时处理
+    private val SEEK_TIMEOUT_MS = 10_000L  // 10秒超时（VLC 缓冲可能很慢）
+
     // 视频尺寸
     private var _videoWidth: Int = 0
     private var _videoHeight: Int = 0
@@ -78,7 +89,48 @@ class VlcMediaPlayer(
             MediaPlayer.Event.Playing -> {
                 updateVideoSize()
                 applyManualSurfaceViewScaling()
-                mPlayerEventListener?.onPlay()
+
+                // 主动查询 seekable 状态（SeekableChanged 事件可能不可靠）
+                mediaPlayer?.let { mp ->
+                    val seekable = mp.isSeekable
+                    if (_isSeekable != seekable) {
+                        _isSeekable = seekable
+                        logger.debug { "Seekable (queried): $seekable" }
+                        mPlayerEventListener?.onSeekableChanged(seekable)
+                    }
+                }
+
+                // 处理初始跳转位置（Playing 事件触发后再 seek，确保 VLC 已真正开始播放）
+                val hasInitialSeek = pendingSeekPosition > 0
+                if (hasInitialSeek) {
+                    if (_isSeekable) {
+                        val position = pendingSeekPosition
+                        clearPendingSeekPosition()
+
+                        val mp = mediaPlayer
+                        if (mp != null) {
+                            // 初始跳转：标记为正在 seek，但不暂停播放器
+                            // 让 VLC 自然播放，seek 操作会平滑过渡
+                            seekTargetPosition = position
+                            isSeeking = true
+
+                            seekHandler.post {
+                                logger.debug { "Initial seek to ${position}ms (without pause)" }
+                                // 直接 seek，不暂停
+                                mp.time = position
+                            }
+                        }
+                    } else {
+                        logger.warn { "Media is not seekable, ignoring initial seek to ${pendingSeekPosition}ms" }
+                        clearPendingSeekPosition()
+                    }
+                }
+
+                // 只有在没有初始跳转时才报告 onPlay
+                // 初始跳转完成后会在 Buffering 事件中报告 onPlay
+                if (!hasInitialSeek) {
+                    mPlayerEventListener?.onPlay()
+                }
             }
             MediaPlayer.Event.Paused -> {
                 mPlayerEventListener?.onPause()
@@ -96,6 +148,34 @@ class VlcMediaPlayer(
             MediaPlayer.Event.Buffering -> {
                 val cache = event.buffering
                 _bufferedPercentage = cache.toInt()
+
+                // ========== seek 操作中的缓冲处理 ==========
+                if (isSeeking) {
+                    logger.debug { "Seek buffering: ${cache.toInt()}%" }
+                    if (cache >= 100f) {
+                        // 缓冲完成，取消超时
+                        seekTimeoutRunnable?.let { seekHandler.removeCallbacks(it) }
+                        seekTimeoutRunnable = null
+
+                        logger.debug { "Seek complete: at ${seekTargetPosition}ms, shouldResume=$shouldResumeAfterSeek" }
+
+                        // 恢复播放（无论是初始 seek 还是手动 seek）
+                        mediaPlayer?.play()
+                        isSeeking = false
+                        shouldResumeAfterSeek = false
+
+                        // 通知上层播放状态
+                        mPlayerEventListener?.onPlay()
+                        dispatchProgress()
+                        return@EventListener
+                    }
+                    // seek 期间保持缓冲状态
+                    mPlayerEventListener?.onBuffering()
+                    dispatchProgress()
+                    return@EventListener
+                }
+
+                // ========== 正常缓冲处理 ==========
                 // 只有当播放器实际暂停时才报告缓冲状态
                 if (mediaPlayer?.isPlaying == true) {
                     // 播放中，不报告缓冲状态，只更新缓冲百分比
@@ -135,7 +215,9 @@ class VlcMediaPlayer(
                 dispatchProgress(positionFraction = position)
             }
             MediaPlayer.Event.SeekableChanged -> {
-//                mPlayerEventListener?.onSeekableChanged(event.seekable)
+                _isSeekable = event.seekable
+                logger.debug { "Seekable changed: ${event.seekable}" }
+                mPlayerEventListener?.onSeekableChanged(event.seekable)
             }
             MediaPlayer.Event.PausableChanged -> {
 //                mPlayerEventListener?.onPausableChanged(event.pausable)
@@ -153,55 +235,29 @@ class VlcMediaPlayer(
         // 优先从 vlc_libs 目录加载按需下载的库，回退到 APK 内置库
         loadVlcNativeLibs(context)
 
-        val vlcOptions = arrayListOf<String>().apply {
-            // ========== 缓存配置 ==========
-            add("--network-caching=2000")
-            add("--file-caching=2000")
+        // 使用 VLCOptions 获取官方同步的配置
+        // 使用官方默认值 + 项目特定自定义选项
+        val vlcOptions = VLCOptions.getLibOptions(
+            context = context,
+            config = VLCConfig.Builder()
+                // ========== 官方默认值配置 ==========
+                // 使用官方默认值（deblocking=-1 自动，networkCaching=0 等）
+                // 如需自定义可取消注释：
+                // .setNetworkCaching(2000)
+                // .setDeblocking(-1)
+                // .setOpenGL(OpenGLMode.Disabled)
 
-            // ========== 编解码器配置 ==========
-            add("--codec=mediacodec-ndk,all")
-            // add("--mediacodec-dr")
-            // ========== 性能优化 ==========
-            // add("--avcodec-hw=none")                 
-            // add("--avcodec-fast")
-            add("--avcodec-skiploopfilter=1")
-            add("--avcodec-threads=${Runtime.getRuntime().availableProcessors()}")
-
-            // ========== 跳帧策略 ==========
-        //    add("--no-drop-late-frames")    // 防止過度丟幀造成的視覺卡頓
-        //    add("--no-skip-frames")
-//            add("--skip-frames")              // 启用跳帧
-//            add("--drop-late-frames")         // 丢弃延迟帧
-
-            // ========== 音视频同步策略 ==========
-            add("--drop-late-frames")            // 丟棄延遲幀以維持同步
-            // add("--skip-frames")                 // 必要時跳幀
-            add("--clock-jitter=0")              // 減少時鐘抖動影響
-            
-            // ========== 音频配置 ==========
-            add("--no-audio-time-stretch")      // 禁用音频时间拉伸
-            // add("--spdif")                      // 启用音频透传
-            // add("--aout=opensles")              // 音频输出模块
-
-            // ========== 视频输出配置 ==========
-            add("--vout=android-display")       // Android 显示输出
-            // add("--vout=android-opengl")
-            // add("--vout=opengles2")
-            // add("--tone-mapping=3")          
-            // 或指定算法（根据视频/设备测试）：
-            // add("--tone-mapping=1")          // Reinhard（常见，默认之一，平衡亮度/颜色）
-            // add("--tone-mapping=2")          // Hable（电影感强）
-            // add("--tone-mapping=3")          // Mobius（避免过曝）
-            // add("--tone-mapping-param=0.8")
-            // add("--tone-mapping-desat=0.0")     // 去饱和度，0.0 为默认（不额外去饱和）
-//            add("--tone-mapping-peak=1000")   // 峰值亮度（nits），HDR10 常见 1000，Dolby Vision 可更高；根据视频调整
-        }
-
-        // ========== 调试日志：输出 VLC 配置 ==========
-        logger.debug { "VLC Options count: ${vlcOptions.size}" }
-        vlcOptions.forEachIndexed { index, option ->
-            logger.debug { "  VLC Option [$index]: $option" }
-        }
+                // ========== 项目特定自定义选项 ==========
+                // 通过 customOptions 添加官方默认值之外的项目特定配置
+//                .apply {
+                    // 添加项目特定的自定义选项
+//                    listOf(
+//                        "--codec=mediacodec-ndk,all",  // 硬件解码优先
+//                        "--vout=android-display,none"  // 使用 Android 原生显示
+//                    ).forEach { addCustomOption(it) }
+//                }
+                .build()
+        )
 
         try {
             libVlc = LibVLC(context, vlcOptions)
@@ -257,11 +313,7 @@ class VlcMediaPlayer(
         // 与 ExoPlayer 不同，VLC 不会在设置 media 后自动触发事件
         mediaPlayer?.play()
 
-        // 处理初始跳转位置
-        if (pendingSeekPosition > 0) {
-            mediaPlayer?.time = pendingSeekPosition
-            clearPendingSeekPosition()
-        }
+        // 初始跳转位置移到 Playing 事件中处理，确保 VLC 已真正开始播放
     }
 
     override fun start() {
@@ -293,9 +345,55 @@ class VlcMediaPlayer(
     override val isPlaying: Boolean
         get() = mediaPlayer?.isPlaying == true
 
+    override val isSeekable: Boolean
+        get() = _isSeekable
+
     override fun seekTo(time: Long) {
-        logger.debug { "Seeking to ${time}ms" }
-        mediaPlayer?.time = time
+        if (!_isSeekable) {
+            logger.warn { "Media is not seekable, ignoring seek to ${time}ms" }
+            return
+        }
+
+        val mp = mediaPlayer
+        if (mp == null) {
+            logger.warn { "MediaPlayer is null, ignoring seek to ${time}ms" }
+            return
+        }
+
+        // 取消之前的 pending seek 和超时
+        seekHandler.removeCallbacksAndMessages(null)
+        seekTimeoutRunnable?.let { seekHandler.removeCallbacks(it) }
+
+        // 记录是否正在播放，seek 完成后恢复
+        shouldResumeAfterSeek = mp.isPlaying
+        seekTargetPosition = time
+        isSeeking = true
+
+        // 启动超时计时器
+        seekTimeoutRunnable = Runnable {
+            if (isSeeking) {
+                logger.warn { "Seek timeout after ${SEEK_TIMEOUT_MS}ms, force resuming" }
+                // 超时后强制恢复播放
+                isSeeking = false
+                shouldResumeAfterSeek = false
+                mPlayerEventListener?.onPlay()
+            }
+        }
+        seekHandler.postDelayed(seekTimeoutRunnable!!, SEEK_TIMEOUT_MS)
+
+        seekHandler.post {
+            logger.debug { "Seek start: pausing, seeking to ${time}ms" }
+
+            // 1. 先暂停
+            if (mp.isPlaying) {
+                mp.pause()
+            }
+
+            // 2. 执行 seek（异步执行避免阻塞）
+            mp.time = time
+
+            // 等待 Buffering 事件触发恢复
+        }
     }
 
     override fun release() {
@@ -327,6 +425,12 @@ class VlcMediaPlayer(
 
             // 7. 清理 Handler 中的所有回调
             freezeDetectionHandler.removeCallbacksAndMessages(null)
+            seekHandler.removeCallbacksAndMessages(null)
+
+            // 8. 清理 seek 状态
+            isSeeking = false
+            shouldResumeAfterSeek = false
+            seekTimeoutRunnable = null
 
             // 8. 清理事件监听器引用
             mPlayerEventListener = null

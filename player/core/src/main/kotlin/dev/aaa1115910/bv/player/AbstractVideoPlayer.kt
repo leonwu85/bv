@@ -47,6 +47,9 @@ abstract class AbstractVideoPlayer {
     /** 是否正在播放 */
     abstract val isPlaying: Boolean
 
+    /** 媒体是否可 seek */
+    abstract val isSeekable: Boolean
+
     /** 跳转播放位置 */
     abstract fun seekTo(time: Long)
 

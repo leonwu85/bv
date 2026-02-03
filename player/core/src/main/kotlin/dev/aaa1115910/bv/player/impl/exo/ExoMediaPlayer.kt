@@ -10,6 +10,8 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM
+import androidx.media3.common.Player.Commands
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -180,7 +182,14 @@ class ExoMediaPlayer(
     override val isPlaying: Boolean
         get() = mPlayer?.isPlaying == true
 
+    override val isSeekable: Boolean
+        get() = mPlayer?.isCommandAvailable(COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM) == true
+
     override fun seekTo(time: Long) {
+        if (!isSeekable) {
+            Log.w("ExoMediaPlayer", "Media is not seekable, ignoring seek to ${time}ms")
+            return
+        }
         mPlayer?.seekTo(time)
         dispatchProgress()
     }

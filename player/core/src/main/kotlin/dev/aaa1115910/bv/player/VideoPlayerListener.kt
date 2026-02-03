@@ -36,4 +36,7 @@ interface VideoPlayerListener {
     /** Seek完成，位置发生变化（用于同步弹幕） */
     fun onSeeked(position: Long) {}
 
+    /** seekable 状态变化 */
+    fun onSeekableChanged(seekable: Boolean) {}
+
 }
