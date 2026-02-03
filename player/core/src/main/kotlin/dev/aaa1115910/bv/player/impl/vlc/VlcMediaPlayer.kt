@@ -493,7 +493,53 @@ class VlcMediaPlayer(
     }
 
     /**
-     * 更新视频尺寸
+     * 使用反射兼容 VLC 3/VLC 4 获取视频轨道
+     * VLC 4: 使用 media.getTracks() 方法（支持按类型过滤）
+     * VLC 3: 使用 media.trackCount + media.getTrack(index)
+     */
+    private fun getVideoTracksCompatible(media: IMedia): List<IMedia.Track> {
+        // 尝试 VLC 4 API: getTracks() 方法（无参，获取所有轨道）
+        try {
+            val getTracksMethod = media.javaClass.getDeclaredMethod("getTracks")
+            getTracksMethod.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val tracks = getTracksMethod.invoke(media) as? Array<IMedia.Track>
+            if (tracks != null) {
+                logger.debug { "Using VLC 4 API (getTracks()), found ${tracks.size} tracks" }
+                return tracks.toList()
+            }
+        } catch (e: NoSuchMethodException) {
+            logger.debug { "VLC 4 getTracks() method not found, trying VLC 3 API" }
+        } catch (e: Exception) {
+            logger.debug { "Failed to access VLC 4 getTracks(): ${e.message}" }
+        }
+
+        // 回退到 VLC 3 API: trackCount + getTrack(index)
+        return try {
+            val trackCountField = media.javaClass.getDeclaredField("trackCount")
+            trackCountField.isAccessible = true
+            val trackCount = trackCountField.getInt(media) as Int
+
+            val getTrackMethod = media.javaClass.getDeclaredMethod("getTrack", Int::class.javaPrimitiveType)
+            getTrackMethod.isAccessible = true
+
+            val tracks = mutableListOf<IMedia.Track>()
+            for (i in 0 until trackCount) {
+                val track = getTrackMethod.invoke(media, i) as? IMedia.Track
+                if (track != null) {
+                    tracks.add(track)
+                }
+            }
+            logger.debug { "Using VLC 3 API (trackCount + getTrack), found ${tracks.size} tracks" }
+            tracks
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to get tracks using VLC 3 API: ${e.message}" }
+            emptyList()
+        }
+    }
+
+    /**
+     * 更新视频尺寸（兼容 VLC 3/VLC 4）
      * 从 VLC 的 IMedia.Track 获取视频尺寸
      * 确保 MediaPlayer 已经加载媒体并开始播放
      */
@@ -503,7 +549,7 @@ class VlcMediaPlayer(
             val media = mp.media ?: return
 
             try {
-                val tracks = media.tracks
+                val tracks = getVideoTracksCompatible(media)
                 for (track in tracks) {
                     if (track.type == IMedia.Track.Type.Video) {
                         val videoTrack = track as IMedia.VideoTrack
@@ -512,7 +558,7 @@ class VlcMediaPlayer(
                         if (width > 0 && height > 0) {
                             _videoWidth = width
                             _videoHeight = height
-                            logger.info { "Video size from IMedia.Track: ${_videoWidth}x${_videoHeight}" }
+                            logger.info { "Video size: ${_videoWidth}x${_videoHeight}" }
                             updateScaleMode()
                             return
                         }
