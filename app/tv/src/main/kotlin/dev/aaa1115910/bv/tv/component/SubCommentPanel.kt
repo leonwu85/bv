@@ -133,8 +133,8 @@ fun SubCommentPanel(
     }
 
     // 显示后请求焦点
-    LaunchedEffect(show, replies.isNotEmpty()) {
-        if (show && replies.isNotEmpty()) {
+    LaunchedEffect(show) {
+        if (show) {
             delay(300)
             focusRequester.requestFocus(scope)
         }
@@ -193,17 +193,37 @@ fun SubCommentPanel(
 
                     // 子评论列表
                     if (error != null) {
-                        Text(
-                            text = error ?: "加载失败",
-                            color = Color.Red,
-                            modifier = Modifier.padding(16.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester)
+                                .focusable()
+                        ) {
+                            Text(
+                                text = error ?: "加载失败",
+                                color = Color.Red,
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .padding(16.dp)
+                            )
+                        }
                     } else if (replies.isEmpty() && !loading) {
-                        Text(
-                            text = "暂无回复",
-                            color = Color.White.copy(alpha = 0.5f),
-                            modifier = Modifier.padding(16.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester)
+                                .focusable()
+                        ) {
+                            Text(
+                                text = "暂无回复",
+                                color = Color.White.copy(alpha = 0.5f),
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .padding(16.dp)
+                            )
+                        }
                     } else {
                         LazyColumn(
                             modifier = Modifier

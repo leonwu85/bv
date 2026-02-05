@@ -235,8 +235,8 @@ fun CommentPanel(
     }
 
     // 显示后请求焦点（初次显示时或子评论浮窗关闭后）
-    LaunchedEffect(show, showSubCommentPanel, comments.isNotEmpty()) {
-        if (show && !showSubCommentPanel && comments.isNotEmpty()) {
+    LaunchedEffect(show, showSubCommentPanel) {
+        if (show && !showSubCommentPanel) {
             // 子评论浮窗刚关闭，需要恢复焦点到之前点击的评论
             if (wasSubCommentPanelShown) {
                 delay(300) // 等待动画完成
@@ -396,17 +396,37 @@ fun CommentPanel(
 
                         // 评论列表
                         if (error != null) {
-                            Text(
-                                text = error ?: "加载失败",
-                                color = Color.Red,
-                                modifier = Modifier.padding(16.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester)
+                                    .focusable()
+                            ) {
+                                Text(
+                                    text = error ?: "加载失败",
+                                    color = Color.Red,
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .padding(16.dp)
+                                )
+                            }
                         } else if (comments.isEmpty() && !loading) {
-                            Text(
-                                text = "暂无评论",
-                                color = Color.White.copy(alpha = 0.5f),
-                                modifier = Modifier.padding(16.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester)
+                                    .focusable()
+                            ) {
+                                Text(
+                                    text = "暂无评论",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .padding(16.dp)
+                                )
+                            }
                         } else {
                             LazyColumn(
                                 modifier = Modifier
