@@ -756,15 +756,26 @@ object BiliHttpApi {
         sessData: String? = null
     ): Pair<Boolean, String> {
         checkToken(accessKey, sessData)
-        val response = client.post("/x/web-interface/archive/like") {
-            require(avid != null || bvid != null) { "avid and bvid cannot be null at the same time" }
+        require(avid != null || bvid != null) { "avid and bvid cannot be null at the same time" }
+
+        // 使用 App API（当只有 accessKey 时）
+        val useAppApi = accessKey != null && sessData == null
+        val url = if (useAppApi) {
+            "https://app.bilibili.com/x/v2/view/like"
+        } else {
+            "/x/web-interface/archive/like"
+        }
+
+        val response = client.post(url) {
             setBody(
                 FormDataContent(
                     Parameters.build {
                         avid?.let { append("aid", "$it") }
                         bvid?.let { append("bvid", it) }
                         append("like", "${if (like) 1 else 2}")
-                        csrf?.let { append("csrf", it) }
+                        if (!useAppApi) {
+                            csrf?.let { append("csrf", it) }
+                        }
                         accessKey?.let { append("access_key", it) }
                     }
                 ))
@@ -832,14 +843,25 @@ object BiliHttpApi {
     ): Pair<Boolean, String> {
         checkToken(accessKey, sessData)
         require(avid != null || bvid != null) { "avid and bvid cannot be null at the same time" }
-        val response = client.post("/x/web-interface/coin/add") {
+
+        // 使用 App API（当只有 accessKey 时）
+        val useAppApi = accessKey != null && sessData == null
+        val url = if (useAppApi) {
+            "https://app.bilibili.com/x/v2/view/coin/add"
+        } else {
+            "/x/web-interface/coin/add"
+        }
+
+        val response = client.post(url) {
             setBody(FormDataContent(
                 Parameters.build {
                     avid?.let { append("aid", "$it") }
                     bvid?.let { append("bvid", it) }
                     append("multiply", "$multiply")
                     append("select_like", "${if (like) 1 else 0}")
-                    csrf?.let { append("csrf", it) }
+                    if (!useAppApi) {
+                        csrf?.let { append("csrf", it) }
+                    }
                     accessKey?.let { append("access_key", it) }
                 }
             ))
@@ -1955,17 +1977,30 @@ object BiliHttpApi {
         avid: Long? = null,
         bvid: String? = null,
         csrf: String? = null,
-        sessData: String? = null
+        sessData: String? = null,
+        accessKey: String? = null
     ): Pair<Boolean, String> {
-        checkToken(null, sessData)
-        val response = client.post("/x/web-interface/archive/like/triple") {
-            require(avid != null || bvid != null) { "avid and bvid cannot be null at the same time" }
+        checkToken(accessKey, sessData)
+        require(avid != null || bvid != null) { "avid and bvid cannot be null at the same time" }
+
+        // 使用 App API（当只有 accessKey 时）
+        val useAppApi = accessKey != null && sessData == null
+        val url = if (useAppApi) {
+            "https://app.bilibili.com/x/v2/view/like/triple"
+        } else {
+            "/x/web-interface/archive/like/triple"
+        }
+
+        val response = client.post(url) {
             setBody(
                 FormDataContent(
                     Parameters.build {
                         avid?.let { append("aid", "$it") }
                         bvid?.let { append("bvid", it) }
-                        csrf?.let { append("csrf", it) }
+                        if (!useAppApi) {
+                            csrf?.let { append("csrf", it) }
+                        }
+                        accessKey?.let { append("access_key", it) }
                     }
                 ))
             sessData?.let { header("Cookie", "SESSDATA=$it;") }
