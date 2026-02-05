@@ -3,6 +3,7 @@ package dev.aaa1115910.bv.player.tv
 import android.os.CountDownTimer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -35,6 +36,7 @@ import dev.aaa1115910.biliapi.http.entity.video.ClipType
 import dev.aaa1115910.biliapi.entity.video.Subtitle
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.BvVideoPlayer
+import dev.aaa1115910.bv.player.impl.exo.ExoMediaPlayer
 import dev.aaa1115910.bv.player.VideoPlayerListener
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.DanmakuType
@@ -872,11 +874,16 @@ fun BvPlayer(
                 maskFrame = currentDanmakuMaskFrame.takeIf { videoPlayerConfigData.currentDanmakuMask },
                 videoAspectRatio = aspectRatioValue
             )
-
+        
             BvVideoPlayer(
                 modifier = Modifier
-//                    .fillMaxHeight()
-                    .aspectRatio(aspectRatioValue)
+                    .then(
+                        if (videoPlayer is ExoMediaPlayer) {
+                            Modifier.aspectRatio(aspectRatioValue)
+                        } else {
+                            Modifier
+                        }
+                    )
                     .align(Alignment.Center),
                 videoPlayer = videoPlayer,
                 playerListener = videoPlayerListener,

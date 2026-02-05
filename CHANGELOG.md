@@ -1,6 +1,6 @@
 [![Downloads](https://img.shields.io/github/downloads/leonwu85/bv/total?cacheSeconds=3600)](https://github.com/leonwu85/bv/releases)
 
-## 新增功能点汇总 (2024-12-05 ~ 20256-01-20)
+## 新增功能点汇总 (2024-12-05 ~ 20256-02-05)
 
 - 直播功能(实验性)
     - 集成 B站直播功能，需从设置-直播开启

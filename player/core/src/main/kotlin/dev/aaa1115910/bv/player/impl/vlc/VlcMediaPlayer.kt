@@ -87,8 +87,8 @@ class VlcMediaPlayer(
     private val vlcEventListener = MediaPlayer.EventListener { event ->
         when (event.type) {
             MediaPlayer.Event.Playing -> {
-                updateVideoSize()
-                applyManualSurfaceViewScaling()
+                // updateVideoSize()
+                // applyManualSurfaceViewScaling()
 
                 // 主动查询 seekable 状态（SeekableChanged 事件可能不可靠）
                 mediaPlayer?.let { mp ->
@@ -589,11 +589,12 @@ class VlcMediaPlayer(
      * - 横屏视频：使用 SURFACE_BEST_FIT 保持宽高比适配屏幕
      */
     private fun updateScaleMode() {
-        val scaleType = if (isPortraitVideo()) {
-            MediaPlayer.ScaleType.SURFACE_FILL
-        } else {
+        val scaleType = 
+        // val scaleType = if (isPortraitVideo()) {
+        //     MediaPlayer.ScaleType.SURFACE_FILL
+        // } else {
             MediaPlayer.ScaleType.SURFACE_BEST_FIT
-        }
+        // }
         mediaPlayer?.videoScale = scaleType
         logger.info { "Updated scale mode: $scaleType (video=${_videoWidth}x${_videoHeight}, isPortrait=${isPortraitVideo()})" }
     }
@@ -709,23 +710,23 @@ class VlcMediaPlayer(
             mediaPlayer?.attachViews(videoLayout, null, false, false)
 
             // 获取 VLC 内部创建的 SurfaceView
-            videoLayout.postDelayed({
-                // 查找 VLC 创建的 SurfaceView
-                vlcSurfaceView = findVlcSurfaceView(videoLayout)
-                logger.info { "Found VLC SurfaceView: $vlcSurfaceView" }
+            // videoLayout.postDelayed({
+            //     // 查找 VLC 创建的 SurfaceView
+            //     vlcSurfaceView = findVlcSurfaceView(videoLayout)
+            //     logger.info { "Found VLC SurfaceView: $vlcSurfaceView" }
 
-                // 应用手动缩放
-                applyManualSurfaceViewScaling()
-            }, 100)
+            //     // 应用手动缩放
+            //     applyManualSurfaceViewScaling()
+            // }, 100)
 
-            // 监听布局尺寸变化
-            videoLayout.viewTreeObserver.addOnGlobalLayoutListener(
-                object : ViewTreeObserver.OnGlobalLayoutListener {
-                    override fun onGlobalLayout() {
-                        applyManualSurfaceViewScaling()
-                    }
-                }
-            )
+            // // 监听布局尺寸变化
+            // videoLayout.viewTreeObserver.addOnGlobalLayoutListener(
+            //     object : ViewTreeObserver.OnGlobalLayoutListener {
+            //         override fun onGlobalLayout() {
+            //             applyManualSurfaceViewScaling()
+            //         }
+            //     }
+            // )
 
             // 重新设置事件监听器
             mediaPlayer?.setEventListener(vlcEventListener)

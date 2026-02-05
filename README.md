@@ -2,6 +2,8 @@
 
 **此项目是个人为了学习安卓开发而fork, 仅用于学习和测试，禁止在中国境内传播、宣传、分发，如有相关使用需求请使用 [哔哩哔哩官方APP](https://app.bilibili.com)，否则后果自负**
 
+**<span style="color: red;">此项目随时可能消失，有需要自行备份</span>**
+
 ## 修改
 ### 基于[fantasytyx/bv](https://github.com/fantasytyx/bv)修改，新增功能和变更如下：
 
@@ -24,7 +26,7 @@
     - 详情页、播放页支持查看视频评论
 - 其它
     - 优化 Coil 图片加载
-- 直播功能(实验性)
+- 直播功能(<span style="color: red;">Deprecated 不再更新！</span>)
     - 集成 B站直播功能，需从设置-直播开启
     - 直播分区导航重构，支持主分区与子分区两级切换
     - 直播弹幕实时显示
