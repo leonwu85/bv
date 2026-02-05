@@ -169,7 +169,7 @@ fun SeasonInfoScreen(
     var paused by remember { mutableStateOf(false) }
     var showSeasonSelector by remember { mutableStateOf(false) }
     var showCommentPanel by remember { mutableStateOf(false) }
-    val defaultFocusRequester = remember { FocusRequester() }
+    val playButtonFocusRequester = remember { FocusRequester() }
     val commentButtonFocusRequester = remember { FocusRequester() }
 
     val onClickVideo: (avid: Long, cid: Long, epid: Int, episodeTitle: String, startTime: Int) -> Unit =
@@ -255,9 +255,9 @@ fun SeasonInfoScreen(
         seasonViewModel.seasonData?.let {
             logger.fInfo { "season data change: ${seasonViewModel.seasonData}" }
             seasonViewModel.lastPlayProgress = it.userStatus.progress
-            //请求默认焦点到剧集封面上
+            //请求默认焦点到播放按钮上
             delay(300)
-            defaultFocusRequester.requestFocus(scope)
+            playButtonFocusRequester.requestFocus(scope)
         }
     }
 
@@ -351,7 +351,7 @@ fun SeasonInfoScreen(
                 ) {
                     item {
                         SeasonInfoPart(
-                            modifier = Modifier.focusRequester(defaultFocusRequester),
+                            playButtonFocusRequester = playButtonFocusRequester,
                             title = seasonData.title,
                             cover = seasonData.cover,
                             newEpDesc = seasonData.newEpDesc,
@@ -517,7 +517,7 @@ fun SeasonInfoScreen(
         onHideSelector = {
             showSeasonSelector = false
             runCatching {
-                defaultFocusRequester.requestFocus(scope)
+                playButtonFocusRequester.requestFocus(scope)
             }
         },
         currentSeasonId = seasonViewModel.seasonId ?: 0,
@@ -612,6 +612,7 @@ fun SeasonCover(
 @Composable
 fun SeasonBaseInfo(
     modifier: Modifier = Modifier,
+    playButtonFocusRequester: FocusRequester,
     title: String,
     newEpDesc: String,
     description: String,
@@ -663,6 +664,7 @@ fun SeasonBaseInfo(
         }
         Spacer(modifier = Modifier.height(12.dp))
         SeasonInfoButtons(
+            focusRequester = playButtonFocusRequester,
             lastPlayedIndex = lastPlayedIndex,
             lastPlayedTitle = lastPlayedTitle,
             following = following,
@@ -677,6 +679,7 @@ fun SeasonBaseInfo(
 @Composable
 fun SeasonInfoPart(
     modifier: Modifier = Modifier,
+    playButtonFocusRequester: FocusRequester,
     title: String,
     cover: String,
     newEpDesc: String,
@@ -705,6 +708,7 @@ fun SeasonInfoPart(
             onClick = onClickCover
         )
         SeasonBaseInfo(
+            playButtonFocusRequester = playButtonFocusRequester,
             title = title,
             newEpDesc = newEpDesc,
             description = description,
@@ -1284,6 +1288,7 @@ fun SeasonInfoPartPreview() {
     BVTheme {
         SeasonInfoPart(
             modifier = Modifier.fillMaxWidth(),
+            playButtonFocusRequester = remember { FocusRequester() },
             title = "人生一串",
             cover = "http://i0.hdslb.com/bfs/bangumi/7a790c64ff70f12c11888be0532b6981a923afd5.jpg",
             newEpDesc = "已完结, 全8集",
