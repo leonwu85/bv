@@ -18,7 +18,7 @@ object AppConfiguration {
                 ".r${versionCode}.${"git rev-list HEAD --abbrev-commit --max-count=1".exec()}"
     }
     val versionCode: Int by lazy { "git rev-list --count HEAD".exec().toInt()}
-    const val libVLCVersion = "4.0.0-eap23"
+    const val libVLCVersion = "3.6.5"
     var googleServicesAvailable = true
     const val blacklistUrl =
         "https://raw.githubusercontent.com/aaa1115910/bv-blacklist/main/blacklist.bin"

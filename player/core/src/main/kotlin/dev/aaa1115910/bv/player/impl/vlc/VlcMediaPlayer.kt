@@ -236,16 +236,13 @@ class VlcMediaPlayer(
         loadVlcNativeLibs(context)
 
         // 使用 VLCOptions 获取官方同步的配置
-        // 使用官方默认值 + 项目特定自定义选项
+        // 使用官方默认值 + 项目特定自定义选项（针对 B 站 DASH 流优化）
         val vlcOptions = VLCOptions.getLibOptions(
             context = context,
             config = VLCConfig.Builder()
-                // ========== 官方默认值配置 ==========
-                // 使用官方默认值（deblocking=-1 自动，networkCaching=0 等）
-                // 如需自定义可取消注释：
-                // .setNetworkCaching(2000)
-                // .setDeblocking(-1)
-                // .setOpenGL(OpenGLMode.Disabled)
+                // ========== 网络缓存优化 ==========
+                // 增加网络缓存以减少 seek 和初始加载时的卡顿
+                .setNetworkCaching(6000)  // 6秒网络缓存（B站 DASH 流推荐值）
 
                 // ========== 项目特定自定义选项 ==========
                 // 通过 customOptions 添加官方默认值之外的项目特定配置
