@@ -225,14 +225,8 @@ class VideoPlayerV3Activity : ComponentActivity() {
                 this.isLive = true
                 this.liveRoomId = roomId
                 
-                // 通过 ViewModel 加载直播流（带画质选择）
+                // 通过 ViewModel 加载直播流（带画质选择，加载成功后自动启动弹幕）
                 loadLiveStreamWithQuality(roomId)
-                
-                // 延迟启动直播弹幕，等待播放器初始化完成
-                lifecycleScope.launch {
-                    kotlinx.coroutines.delay(1000)
-                    startLiveDanmaku(roomId)
-                }
             }
             return
         }

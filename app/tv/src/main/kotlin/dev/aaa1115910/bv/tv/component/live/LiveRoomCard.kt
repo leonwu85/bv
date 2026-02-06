@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,6 +32,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
@@ -90,6 +93,7 @@ fun LiveRoomCard(
                 AsyncImage(
                     model = data.cover.resizedImageUrl(ImageSize.LargeCover),
                     contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
 
@@ -139,7 +143,9 @@ fun LiveRoomCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = formatViewCount(data.online),
+                        text = formatViewCount(
+                            data.watchedShow?.num ?: (data.online / 10)
+                        ),
                         color = Color.White,
                         fontSize = 13.sp
                     )
@@ -193,7 +199,8 @@ fun LiveRoomCard(
  */
 private fun formatViewCount(count: Int): String {
     return when {
-        count >= 10000 -> String.format("%.1f万", count / 10000.0)
+        count >= 100_000_000 -> String.format(Locale.US, "%.1f亿", count / 100_000_000.0)
+        count >= 10_000 -> String.format(Locale.US, "%.1f万", count / 10_000.0)
         else -> count.toString()
     }
 }

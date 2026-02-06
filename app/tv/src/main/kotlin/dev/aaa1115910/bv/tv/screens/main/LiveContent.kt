@@ -36,6 +36,7 @@ import dev.aaa1115910.bv.tv.component.live.LiveRoomCard
 import dev.aaa1115910.bv.util.requestFocus
 import dev.aaa1115910.bv.viewmodel.live.LiveViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import dev.aaa1115910.biliapi.entity.live.LiveAreaGroup
 
@@ -121,12 +122,18 @@ fun LiveContent(
                         isLargePadding = false,
                         initialSelectedItem = parentNavItems.firstOrNull { it.group.id == liveViewModel.currentParentGroup?.id },
                         onSelectedChanged = { nav ->
-                            (nav as? ParentAreaNavItem)?.let { liveViewModel.switchParentArea(it.group) }
+                            (nav as? ParentAreaNavItem)?.let {
+                                liveViewModel.lastFocusedRoomIndex = 0
+                                liveViewModel.switchParentArea(it.group)
+                                scope.launch { gridState.scrollToItem(0) }
+                            }
                         },
                         onClick = { nav ->
                             (nav as? ParentAreaNavItem)?.let { item ->
                                 if (item.group.id == liveViewModel.currentParentGroup?.id) {
+                                    liveViewModel.lastFocusedRoomIndex = 0
                                     liveViewModel.refresh()
+                                    scope.launch { gridState.scrollToItem(0) }
                                 }
                             }
                         },
@@ -151,12 +158,18 @@ fun LiveContent(
                         isLargePadding = !focusOnContent && currentListOnTop,
                         initialSelectedItem = subNavItems.firstOrNull { it.area.id == liveViewModel.currentSubArea?.id },
                         onSelectedChanged = { nav ->
-                            (nav as? SubAreaNavItem)?.let { liveViewModel.switchSubArea(it.area) }
+                            (nav as? SubAreaNavItem)?.let {
+                                liveViewModel.lastFocusedRoomIndex = 0
+                                liveViewModel.switchSubArea(it.area)
+                                scope.launch { gridState.scrollToItem(0) }
+                            }
                         },
                         onClick = { nav ->
                             (nav as? SubAreaNavItem)?.let { item ->
                                 if (item.area.id == liveViewModel.currentSubArea?.id) {
+                                    liveViewModel.lastFocusedRoomIndex = 0
                                     liveViewModel.refresh()
+                                    scope.launch { gridState.scrollToItem(0) }
                                 }
                             }
                         },

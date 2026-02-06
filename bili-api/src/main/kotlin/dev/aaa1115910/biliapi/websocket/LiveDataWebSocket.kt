@@ -3,9 +3,11 @@ package dev.aaa1115910.biliapi.websocket
 import dev.aaa1115910.biliapi.http.BiliLiveHttpApi
 import dev.aaa1115910.biliapi.http.entity.live.DanmakuEvent
 import dev.aaa1115910.biliapi.http.entity.live.FrameHeader
+import dev.aaa1115910.biliapi.http.entity.live.HostListItem
 import dev.aaa1115910.biliapi.http.entity.live.LiveEvent
 import dev.aaa1115910.biliapi.http.entity.live.readFrameHeader
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
+import dev.aaa1115910.biliapi.http.util.brotliDecompress
 import dev.aaa1115910.biliapi.http.util.zlibDecompress
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
@@ -40,6 +42,13 @@ object LiveDataWebSocket {
     private lateinit var client: HttpClient
     private val logger = KotlinLogging.logger { }
 
+    /** 最大重连次数 */
+    private const val MAX_RECONNECT_ATTEMPTS = 5
+    /** 初始重连延迟 (ms) */
+    private const val INITIAL_RECONNECT_DELAY = 1000L
+    /** 最大重连延迟 (ms) */
+    private const val MAX_RECONNECT_DELAY = 30_000L
+
     private val heartbeat = byteArrayOf(
         0, 0, 0, 0x1f,
         0, 0x10, 0, 0x1,
@@ -62,8 +71,13 @@ object LiveDataWebSocket {
         }
     }
 
+    /**
+     * 连接直播事件 WebSocket（自动获取连接信息）
+     * 内部会调用 API 获取 token 和房间号，适用于外部未预取数据的场景
+     */
     suspend fun connectLiveEvent(
         roomId: Int,
+        uid: Long = 0,
         onEvent: (event: LiveEvent) -> Unit
     ): Job {
         val danmuInfo =
@@ -71,17 +85,40 @@ object LiveDataWebSocket {
         val realRoomId =
             BiliLiveHttpApi.getLiveRoomPlayInfo(roomId).data?.roomId
                 ?: throw CancellationException()
-        val hosts = danmuInfo.hostList.last()
 
+        return connectLiveEvent(
+            realRoomId = realRoomId,
+            token = danmuInfo.token,
+            hostList = danmuInfo.hostList,
+            uid = uid,
+            onEvent = onEvent
+        )
+    }
+
+    /**
+     * 连接直播事件 WebSocket（使用预取的连接信息，避免重复 API 调用）
+     * @param realRoomId 真实房间号
+     * @param token 弹幕连接 token
+     * @param hostList WebSocket 主机列表，会按顺序尝试连接
+     * @param uid 用户 uid，已登录用户传入实际 uid，未登录传 0
+     * @param onEvent 事件回调
+     */
+    suspend fun connectLiveEvent(
+        realRoomId: Int,
+        token: String,
+        hostList: List<HostListItem>,
+        uid: Long = 0,
+        onEvent: (event: LiveEvent) -> Unit
+    ): Job {
         val data = buildJsonObject {
-            put("uid", 0)
+            put("uid", uid)
             put("roomid", realRoomId)
-            put("protover", 2)
+            put("protover", 3)
             put("platform", "web")
             put("type", 2)
-            put("key", danmuInfo.token)
+            put("key", token)
         }.toString().toByteArray()
-        val b = buildPacket {
+        val authPacket = buildPacket {
             val size = 16 + data.size
             writeInt(size) // 封包总大小
             writeShort(0x10) // 头部大小
@@ -90,33 +127,67 @@ object LiveDataWebSocket {
             writeInt(1)
             writePacket(ByteReadPacket(data))
         }
+        val authBytes = authPacket.readByteArray()
 
         val job = client.launch {
-            client.wss(
-                host = hosts.host,
-                port = hosts.wssPort,
-                path = "/sub"
-            ) {
-                val byte = b.readByteArray()
-                outgoing.send(Frame.Binary(true, byte))
-                launch {
-                    delay(5000)
-                    while (isActive) {
-                        //println("send heart")
-                        outgoing.send(Frame.Binary(true, heartbeat))
-                        delay(30_000)
-                    }
-                }
-                while (isActive) {
-                    val frame = incoming.receive()
-                    val eventData = frame.data
-                    launch {
+            var reconnectAttempt = 0
+            var reconnectDelay = INITIAL_RECONNECT_DELAY
 
-                        handleLiveEventData(eventData).forEach { event ->
-                            onEvent(event)
+            while (isActive) {
+                var connected = false
+                // 按顺序尝试 host 列表中的每个服务器
+                for (host in hostList) {
+                    if (!isActive) break
+                    try {
+                        logger.info { "Connecting to WebSocket host: ${host.host}:${host.wssPort} (attempt ${reconnectAttempt + 1})" }
+                        client.wss(
+                            host = host.host,
+                            port = host.wssPort,
+                            path = "/sub"
+                        ) {
+                            // 连接成功，重置重连计数
+                            connected = true
+                            reconnectAttempt = 0
+                            reconnectDelay = INITIAL_RECONNECT_DELAY
+                            logger.info { "WebSocket connected to ${host.host}:${host.wssPort}" }
+
+                            outgoing.send(Frame.Binary(true, authBytes))
+                            launch {
+                                delay(5000)
+                                while (isActive) {
+                                    outgoing.send(Frame.Binary(true, heartbeat))
+                                    delay(30_000)
+                                }
+                            }
+                            while (isActive) {
+                                val frame = incoming.receive()
+                                val eventData = frame.data
+                                launch {
+                                    handleLiveEventData(eventData).forEach { event ->
+                                        onEvent(event)
+                                    }
+                                }
+                            }
                         }
+                    } catch (e: CancellationException) {
+                        throw e // 不拦截取消
+                    } catch (e: Exception) {
+                        logger.warn { "WebSocket connection to ${host.host} failed: ${e.message}" }
+                        // 继续尝试下一个 host
                     }
+                    if (connected) break
                 }
+
+                // 如果所有 host 都失败了，或者连接断开后需要重连
+                if (!isActive) break
+                reconnectAttempt++
+                if (reconnectAttempt > MAX_RECONNECT_ATTEMPTS) {
+                    logger.error { "Max reconnect attempts ($MAX_RECONNECT_ATTEMPTS) reached, giving up" }
+                    break
+                }
+                logger.info { "Reconnecting in ${reconnectDelay}ms (attempt $reconnectAttempt/$MAX_RECONNECT_ATTEMPTS)" }
+                delay(reconnectDelay)
+                reconnectDelay = (reconnectDelay * 2).coerceAtMost(MAX_RECONNECT_DELAY)
             }
         }
         job.invokeOnCompletion {
@@ -164,8 +235,8 @@ object LiveDataWebSocket {
 
                     //普通包正文使用brotli压缩,解压为一个带头部的协议0普通包
                     3 -> {
-                        logger.warn { "todo package version: ${head.version}" }
-                        bytePack.readByteArray()
+                        val decompress = bytePack.readByteArray().brotliDecompress()
+                        result += handleLiveEventBodyDecompress(decompress)
                     }
 
                     else -> {
@@ -224,7 +295,10 @@ object LiveDataWebSocket {
                 strData = body.decodeToString()
             }
 
-            else -> return result
+            else -> {
+                logger.warn { "Dropped inner packet with unknown version: ${head.version}, dataSize: ${data.size}" }
+                return result
+            }
         }
         handleLiveCMDEventString(strData)?.let { result += it }
         return result
@@ -294,6 +368,7 @@ object LiveDataWebSocket {
             "HOT_RANK_SETTLEMENT_V2" -> {}
             "HOT_ROOM_NOTIFY" -> {}
             "INTERACT_WORD" -> {}
+            "INTERACT_WORD_V2" -> {}
             "LIVE" -> {
                 println(dataJson)
             }
@@ -301,9 +376,11 @@ object LiveDataWebSocket {
             "LIVE_INTERACTIVE_GAME" -> {}
             "LIKE_INFO_V3_CLICK" -> {}
             "LIKE_INFO_V3_UPDATE" -> {}
+            "LOG_IN_NOTICE" -> {}
             "NOTICE_MSG" -> {}
             "ONLINE_RANK_COUNT" -> {}
             "ONLINE_RANK_V2" -> {}
+            "ONLINE_RANK_V3" -> {}
             "ONLINE_RANK_TOP3" -> {}
             "PREPARING" -> {}
             "ROOM_REAL_TIME_MESSAGE_UPDATE" -> {}

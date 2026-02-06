@@ -114,27 +114,29 @@ object LiveStreamUrlFetcher {
     )
 
     /**
-     * 解析播放URL，优先级: FLV > HLS
+     * 解析播放URL，优先级: HLS > FLV
+     * 注意：必须优先 HLS，因为 FLV 协议只有 flv 格式，而 ExoPlayer 的 FLV 提取器
+     * 不支持 HEVC (H.265)。HLS 协议提供 fmp4/ts 容器，可正常播放 HEVC。
      */
     private fun parsePlayUrl(response: LiveRoomPlayInfoResponse): ParseResult? {
         val streams = response.data?.playUrlInfo?.playurl?.stream ?: return null
         
-        // 优先查找 http_stream (FLV)
-        val flvStream = streams.find { it.protocolName == "http_stream" }
-        if (flvStream != null) {
-            val result = buildUrlFromStream(flvStream)
-            if (result != null) {
-                logger.info { "Using FLV stream" }
-                return result
-            }
-        }
-
-        // 其次查找 http_hls (HLS)
+        // 优先查找 http_hls (HLS) — 支持 HEVC/AV1 等现代编码
         val hlsStream = streams.find { it.protocolName == "http_hls" }
         if (hlsStream != null) {
             val result = buildUrlFromStream(hlsStream)
             if (result != null) {
                 logger.info { "Using HLS stream" }
+                return result
+            }
+        }
+
+        // 其次查找 http_stream (FLV) — 仅支持 AVC (H.264)
+        val flvStream = streams.find { it.protocolName == "http_stream" }
+        if (flvStream != null) {
+            val result = buildUrlFromStream(flvStream)
+            if (result != null) {
+                logger.info { "Using FLV stream" }
                 return result
             }
         }

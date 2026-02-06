@@ -1,6 +1,7 @@
 [versions]
 accompanist = "0.36.0"
 ashley = "1.7.4"
+brotli = "0.1.2"
 gdx = "1.14.0"
 akdanmaku = "v1.3.7" # 1.0.0
 androidsvg = "1.4"
@@ -39,6 +40,9 @@ akdanmaku = { module = "com.github.leonwu85:AkDanmaku", version.ref = "akdanmaku
 
 # https://github.com/BigBadaboom/androidsvg
 androidSvg = { module = "com.caverock:androidsvg-aar", version.ref = "androidsvg" }
+
+# https://github.com/google/brotli
+brotli = { module = "org.brotli:dec", version.ref = "brotli" }
 
 # https://libgdx.com/
 gdx = { module = "com.badlogicgames.gdx:gdx", version.ref = "gdx" }

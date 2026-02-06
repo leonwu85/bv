@@ -24,7 +24,7 @@ fun AkDanmakuPlayer(
     val context = LocalContext.current
     var danmakuView: DanmakuView? by remember { mutableStateOf(null) }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(danmakuPlayer) {
         onDispose {
             danmakuPlayer?.release()
         }

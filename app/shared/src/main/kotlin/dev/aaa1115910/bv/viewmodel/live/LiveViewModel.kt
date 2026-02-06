@@ -161,13 +161,13 @@ class LiveViewModel(
                 )
                 if (response.code == 0) {
                     withContext(Dispatchers.Main) {
-                        roomList.addAll(response.data)
-                        hasMore = response.data.size >= 30
+                        roomList.addAll(response.data.list)
+                        hasMore = response.data.list.size >= 30
                         if (hasMore) {
                             currentPage++
                         }
                     }
-                    logger.info { "Loaded ${response.data.size} rooms for area ${area.name}, page $currentPage" }
+                    logger.info { "Loaded ${response.data.list.size} rooms for area ${area.name}, page $currentPage" }
                 } else {
                     withContext(Dispatchers.Main) {
                         "加载直播间列表失败: ${response.message}".toast(BVApp.context)

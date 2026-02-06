@@ -4,6 +4,7 @@ import dev.aaa1115910.biliapi.entity.live.LiveAreaResponse
 import dev.aaa1115910.biliapi.entity.live.LiveRoomListResponse
 import dev.aaa1115910.biliapi.entity.live.LiveRoomPlayInfoResponse
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
+import dev.aaa1115910.biliapi.http.util.encAppGet
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -18,7 +19,9 @@ import kotlinx.serialization.json.Json
 import org.koin.core.annotation.Single
 
 @Single
-class LiveRepository {
+class LiveRepository(
+    private val authRepository: AuthRepository
+) {
     private val client = HttpClient(OkHttp) {
         BiliUserAgent()
         install(ContentNegotiation) {
@@ -44,21 +47,33 @@ class LiveRepository {
      * @param areaId 分区ID
      * @param page 页码
      * @param pageSize 每页数量
-     * @param sortType 排序方式，默认online（按在线人数）
      */
     suspend fun getLiveRoomList(
         parentAreaId: String,
         areaId: String,
         page: Int = 1,
         pageSize: Int = 30,
-        sortType: String = "online"
     ): LiveRoomListResponse = withContext(Dispatchers.IO) {
-        client.get("https://api.live.bilibili.com/room/v1/Area/getRoomList") {
-            parameter("parent_area_id", parentAreaId)
+        client.get("https://api.live.bilibili.com/xlive/app-interface/v2/second/getList") {
+            parameter("access_key", authRepository.accessToken ?: "")
+            parameter("actionKey", "appkey")
             parameter("area_id", areaId)
-            parameter("sort_type", sortType)
+            parameter("build", 8430300)
+            parameter("device", "android")
+            parameter("mobi_app", "android")
             parameter("page", page)
             parameter("page_size", pageSize)
+            parameter("parent_area_id", parentAreaId)
+            parameter("platform", "android")
+            parameter("qn", 0)
+            parameter("sort_type", "")
+            encAppGet()
+            header("buvid", authRepository.buvid ?: "")
+            header("env", "prod")
+            header("app-key", "android")
+            header("x-bili-trace-id", "")
+            header("x-bili-aurora-eid", "")
+            header("x-bili-aurora-zone", "")
         }.body()
     }
 
