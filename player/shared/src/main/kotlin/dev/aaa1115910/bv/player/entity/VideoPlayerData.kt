@@ -135,6 +135,10 @@ data class VideoPlayerConfigData(
     val defaultStartPosition: DefaultStartPosition = DefaultStartPosition.History,
     val clipInfoList: List<ClipInfo> = emptyList(),
     val skipPgcIntroOutro: Boolean = false,
+    val isLive: Boolean = false,
+    val availableLiveQualities: List<Pair<Int, String>> = emptyList(),
+    val currentLiveQn: Int = 0,
+    val currentLiveQualityDescription: String = "",
 )
 
 data class VideoPlayerDanmakuMasksData(

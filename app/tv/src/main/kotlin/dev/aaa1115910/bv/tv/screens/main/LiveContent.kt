@@ -33,12 +33,9 @@ import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.tv.component.TopNav
 import dev.aaa1115910.bv.tv.component.TopNavItem
 import dev.aaa1115910.bv.tv.component.live.LiveRoomCard
-import dev.aaa1115910.bv.util.LiveStreamUrlFetcher
 import dev.aaa1115910.bv.util.requestFocus
 import dev.aaa1115910.bv.viewmodel.live.LiveViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import dev.aaa1115910.biliapi.entity.live.LiveAreaGroup
 
@@ -197,19 +194,13 @@ fun LiveContent(
                         onClick = {
                             // 保存焦点位置
                             liveViewModel.lastFocusedRoomIndex = index
-                            // 启动播放器
-                            scope.launch(Dispatchers.IO) {
-                                val playInfo = LiveStreamUrlFetcher.fetchLiveStreamUrl(room.roomId)
-                                if (playInfo != null) {
-                                    VideoPlayerV3Activity.actionStartLive(
-                                        context = context,
-                                        roomId = playInfo.roomId,
-                                        streamUrl = playInfo.streamUrl,
-                                        title = room.title,
-                                        upName = room.uname
-                                    )
-                                }
-                            }
+                            // 启动播放器（不再预获取流地址，由 ViewModel 负责）
+                            VideoPlayerV3Activity.actionStartLive(
+                                context = context,
+                                roomId = room.roomId,
+                                title = room.title,
+                                upName = room.uname
+                            )
                         },
                         onFocus = {
                             logger.debug { "Focus on room ${room.roomId}" }

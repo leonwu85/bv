@@ -36,7 +36,6 @@ class VideoPlayerV3Activity : ComponentActivity() {
         fun actionStartLive(
             context: Context,
             roomId: Int,
-            streamUrl: String,
             title: String,
             upName: String = ""
         ) {
@@ -59,7 +58,6 @@ class VideoPlayerV3Activity : ComponentActivity() {
                 ).apply {
                     putExtra("isLive", true)
                     putExtra("liveRoomId", roomId)
-                    putExtra("liveStreamUrl", streamUrl)
                     putExtra("title", title)
                     putExtra("upName", upName)
                 }
@@ -216,21 +214,19 @@ class VideoPlayerV3Activity : ComponentActivity() {
         // 检查是否为直播模式
         if (intent.getBooleanExtra("isLive", false)) {
             val roomId = intent.getIntExtra("liveRoomId", 0)
-            val streamUrl = intent.getStringExtra("liveStreamUrl") ?: ""
             val title = intent.getStringExtra("title") ?: "Unknown Title"
             val upName = intent.getStringExtra("upName") ?: ""
             
-            logger.fInfo { "Launch live parameter: [roomId=$roomId, streamUrl=$streamUrl]" }
+            logger.fInfo { "Launch live parameter: [roomId=$roomId]" }
             
             playerViewModel.apply {
                 this.title = title
                 this.upName = upName
                 this.isLive = true
                 this.liveRoomId = roomId
-                this.liveStreamUrl = streamUrl
                 
-                // 加载直播流（内部会初始化弹幕播放器）
-                loadLiveStream(streamUrl)
+                // 通过 ViewModel 加载直播流（带画质选择）
+                loadLiveStreamWithQuality(roomId)
                 
                 // 延迟启动直播弹幕，等待播放器初始化完成
                 lifecycleScope.launch {

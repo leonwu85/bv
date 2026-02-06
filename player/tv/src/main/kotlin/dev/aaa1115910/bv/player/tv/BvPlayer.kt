@@ -97,6 +97,7 @@ fun BvPlayer(
     onRotationChange: (VideoRotation) -> Unit,
     onPlaySpeedChange: (Float) -> Unit,
     onAudioChange: (Audio, afterChange: suspend () -> Unit) -> Unit,
+    onLiveQualityChange: (Int) -> Unit = {},
     onDanmakuSwitchChange: (List<DanmakuType>) -> Unit,
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
@@ -791,6 +792,7 @@ fun BvPlayer(
                     }
                 }
             },
+            onLiveQualityChange = onLiveQualityChange,
             onDanmakuSwitchChange = { enabledDanmakuTypes ->
                 logger.info { "On enabled danmaku type change: $enabledDanmakuTypes" }
                 onDanmakuSwitchChange(enabledDanmakuTypes)

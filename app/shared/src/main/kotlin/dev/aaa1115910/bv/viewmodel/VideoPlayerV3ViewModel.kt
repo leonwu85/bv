@@ -54,6 +54,7 @@ import dev.aaa1115910.bv.util.fError
 import dev.aaa1115910.bv.util.fException
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.fWarn
+import dev.aaa1115910.bv.util.LiveStreamUrlFetcher
 import dev.aaa1115910.bv.util.swapList
 import dev.aaa1115910.bv.util.swapListWithMainContext
 import dev.aaa1115910.bv.util.DanmakuRateLimiter
@@ -167,6 +168,12 @@ class VideoPlayerV3ViewModel(
     var isLive by mutableStateOf(false)
     var liveRoomId by mutableIntStateOf(0)
     var liveStreamUrl by mutableStateOf("")
+
+    // 直播画质管理
+    var availableLiveQualities = mutableStateListOf<Pair<Int, String>>() // qn -> description
+    var currentLiveQn by mutableIntStateOf(0)
+    var currentLiveQualityDescription by mutableStateOf("")
+    private var liveQnDescMap: Map<Int, String> = emptyMap()
     
     // 直播弹幕管理
     private var liveWebSocket: Job? = null
@@ -848,6 +855,73 @@ class VideoPlayerV3ViewModel(
         }
     }
     
+    /**
+     * 加载直播流（带画质信息）
+     * @param roomId 直播间ID
+     * @param qn 请求的画质编号，默认30000（最高值，服务端会自动降级）
+     */
+    fun loadLiveStreamWithQuality(roomId: Int, qn: Int = 30000) {
+        viewModelScope.launch(Dispatchers.IO) {
+            logger.fInfo { "Load live stream with quality: roomId=$roomId, qn=$qn" }
+            withContext(Dispatchers.Main) { loadState = RequestState.Doing }
+
+            // 初始化弹幕播放器
+            ensureDanmakuPlayer()
+
+            val playInfo = LiveStreamUrlFetcher.fetchLiveStreamUrl(roomId, qn)
+            if (playInfo == null) {
+                withContext(Dispatchers.Main) {
+                    loadState = RequestState.Failed
+                    errorMessage = "获取直播流失败"
+                }
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                liveStreamUrl = playInfo.streamUrl
+                currentLiveQn = playInfo.currentQn
+                liveQnDescMap = playInfo.qnDescMap
+
+                // 更新可用画质列表（按 qn 降序，即最高画质在前）
+                val qualities = playInfo.acceptQn
+                    .sortedDescending()
+                    .map { qualityQn ->
+                        qualityQn to (playInfo.qnDescMap[qualityQn] ?: "未知画质 $qualityQn")
+                    }
+                availableLiveQualities.clear()
+                availableLiveQualities.addAll(qualities)
+
+                currentLiveQualityDescription = playInfo.qnDescMap[playInfo.currentQn] ?: "未知画质"
+                logger.fInfo { "Live quality: current=${playInfo.currentQn} ($currentLiveQualityDescription), available=$qualities" }
+            }
+
+            runCatching {
+                withContext(Dispatchers.Main) {
+                    videoPlayer?.playUrl(videoUrl = playInfo.streamUrl)
+                    videoPlayer?.prepare()
+                    videoPlayer?.start()
+                    loadState = RequestState.Success
+                }
+                logger.fInfo { "Live stream loaded successfully with quality ${playInfo.currentQn}" }
+            }.onFailure { e ->
+                logger.fError { "Failed to load live stream: ${e.message}" }
+                withContext(Dispatchers.Main) {
+                    loadState = RequestState.Failed
+                    errorMessage = "加载直播流失败: ${e.message}"
+                }
+            }
+        }
+    }
+
+    /**
+     * 切换直播画质
+     * @param qn 目标画质编号
+     */
+    fun changeLiveQuality(qn: Int) {
+        logger.fInfo { "Change live quality to: $qn" }
+        loadLiveStreamWithQuality(liveRoomId, qn)
+    }
+
     /**
      * 加载直播流
      */

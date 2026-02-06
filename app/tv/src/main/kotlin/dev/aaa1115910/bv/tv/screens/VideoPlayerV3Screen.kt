@@ -275,7 +275,11 @@ fun VideoPlayerV3Screen(
             showNextVideoBtn = Prefs.playerLoadNextAction != PlayerLoadNextAction.DoNothing,
             defaultStartPosition = Prefs.playerDefaultStartPosition.toPlayerType(),
             clipInfoList = playerViewModel.clipInfoList,
-            skipPgcIntroOutro = Prefs.skipPgcIntroOutro
+            skipPgcIntroOutro = Prefs.skipPgcIntroOutro,
+            isLive = playerViewModel.isLive,
+            availableLiveQualities = playerViewModel.availableLiveQualities.toList(),
+            currentLiveQn = playerViewModel.currentLiveQn,
+            currentLiveQualityDescription = playerViewModel.currentLiveQualityDescription
         ),
         LocalVideoPlayerDanmakuMasksData provides VideoPlayerDanmakuMasksData(
             danmakuMasks = playerViewModel.danmakuMasks,
@@ -523,6 +527,9 @@ fun VideoPlayerV3Screen(
                         playerViewModel.playQuality(audio = audio)
                         afterChange()
                     }
+                },
+                onLiveQualityChange = { qn ->
+                    playerViewModel.changeLiveQuality(qn)
                 },
                 onDanmakuSwitchChange = { enabledDanmakuTypes ->
                     Prefs.defaultDanmakuTypes = enabledDanmakuTypes

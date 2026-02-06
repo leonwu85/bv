@@ -41,6 +41,7 @@ import dev.aaa1115910.biliapi.entity.video.Subtitle
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.DanmakuType
+import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerDebugInfoData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerSeekState
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
@@ -100,6 +101,7 @@ fun VideoPlayerController(
     onRotationChange: (VideoRotation) -> Unit,
     onPlaySpeedChange: (Float) -> Unit,
     onAudioChange: (Audio) -> Unit,
+    onLiveQualityChange: (Int) -> Unit = {},
     onDanmakuSwitchChange: (List<DanmakuType>) -> Unit,
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
@@ -119,6 +121,7 @@ fun VideoPlayerController(
     content: @Composable BoxScope.() -> Unit
 ) {
     val context = LocalContext.current
+    val videoPlayerConfigData = LocalVideoPlayerConfigData.current
     val videoPlayerSeekState = LocalVideoPlayerSeekState.current
     val videoPlayerStateData = LocalVideoPlayerStateData.current
     val videoPlayerDebugInfoData = LocalVideoPlayerDebugInfoData.current
@@ -324,6 +327,7 @@ fun VideoPlayerController(
 
                     Key.DirectionUp -> {
                         if (it.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
+                        if (videoPlayerConfigData.isLive) return@onPreviewKeyEvent true
                         logger.info { "[${it.key} press]" }
                         scope.launch(Dispatchers.Main) {
                             showListController = true
@@ -333,6 +337,7 @@ fun VideoPlayerController(
 
                     Key.DirectionDown -> {
                         if (it.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
+                        if (videoPlayerConfigData.isLive) return@onPreviewKeyEvent true
                         logger.info { "[${it.key} press]" }
 
                         // 检查是否为连按两次（间隔小于300ms且上次按键时间不为0）
@@ -549,6 +554,7 @@ fun VideoPlayerController(
             onRotationChange = onRotationChange,
             onPlaySpeedChange = onPlaySpeedChange,
             onAudioChange = onAudioChange,
+            onLiveQualityChange = onLiveQualityChange,
             onDanmakuSwitchChange = onDanmakuSwitchChange,
             onDanmakuSizeChange = onDanmakuSizeChange,
             onDanmakuOpacityChange = onDanmakuOpacityChange,

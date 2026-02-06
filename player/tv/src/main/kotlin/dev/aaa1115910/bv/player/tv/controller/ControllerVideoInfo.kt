@@ -319,6 +319,8 @@ fun ControllerVideoInfoBottom(
     onShowComment: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
+    val videoPlayerConfigData = LocalVideoPlayerConfigData.current
+    val isLive = videoPlayerConfigData.isLive
     var hideVideoInfoJob by remember { mutableStateOf<Job?>(null) }
     var pauseAutoHide by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
@@ -328,7 +330,7 @@ fun ControllerVideoInfoBottom(
     val danmakuIconId = if (showDanmaku) R.drawable.ic_danmaku_on else R.drawable.ic_danmaku_hide
     val subtitleIconId = if (currentSubtitleId > -1) R.drawable.ic_subtitle_on else R.drawable.ic_subtitle_off
     val upSpaceIconId = if (isFollowingUp) R.drawable.person_following else R.drawable.person
-    val buttons = remember(fromSeason, showDanmaku, isPlaying, isLoop, speed, rotation, currentSubtitleId, isFollowingUp) {
+    val buttons = remember(fromSeason, showDanmaku, isPlaying, isLoop, speed, rotation, currentSubtitleId, isFollowingUp, isLive) {
         listOf(
             ControlButton(
                 id = "comment",
@@ -390,13 +392,14 @@ fun ControllerVideoInfoBottom(
                 id = "playlist",
                 icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
                 onClick = onOpenPlayList,
-                scale = 1.2f
+                scale = 1.2f,
+                visible = !isLive
             ),
             ControlButton(
                 id = "related",
                 icon = Icons.Rounded.KeyboardDoubleArrowDown,
                 onClick = onOpenRelatedVideo,
-                visible = !fromSeason
+                visible = !fromSeason && !isLive
             ),
             ControlButton(
                 id = "settings",
@@ -584,7 +587,7 @@ fun ControllerVideoInfoBottom(
                 }
                 .onPreviewKeyEvent { event ->
                     if (event.type == KeyEventType.KeyDown) {
-                        if (!fromSeason && event.key == Key.DirectionDown) {
+                        if (!fromSeason && !isLive && event.key == Key.DirectionDown) {
                             onOpenRelatedVideo()
                         }
                     }

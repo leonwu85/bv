@@ -111,7 +111,7 @@ fun LiveRoomCard(
                     modifier = Modifier
                         .padding(8.dp)
                         .background(
-                            color = Color(0xFFFF6699),
+                            color = Color(0xFFFF6699).copy(alpha = 0.6f),
                             shape = RoundedCornerShape(4.dp)
                         )
                         .padding(horizontal = 8.dp, vertical = 4.dp)

@@ -72,13 +72,13 @@ class VlcMediaPlayer(
     private var vlcSurfaceView: View? = null
 
     // ========== 画面卡死检测 ==========
-    // 使用 PositionChanged 事件检测视频帧更新（基于视频帧，比 TimeChanged 更准确）
-    // PositionChanged 长时间不触发通常意味着解码器卡住了
+    // 使用 TimeChanged 事件检测视频卡死
+    // 直播流的 duration=0，导致 PositionChanged 的比例值不变化，因此改用 TimeChanged 的绝对时间
     private var lastFrameUpdateTime = System.currentTimeMillis()
-    private var lastPositionFraction = -1f
+    private var lastTimeChangedValue = -1L
     private val freezeDetectionHandler = Handler(Looper.getMainLooper())
     private var freezeDetectionRunnable: Runnable? = null
-    private val FREEZE_THRESHOLD_MS = 5_000L  // 5秒无视频帧更新视为卡死
+    private val FREEZE_THRESHOLD_MS = 5_000L  // 5秒无时间变化视为卡死
 
     // 保持事件监听器的强引用，防止被GC回收
     // @Volatile
@@ -197,19 +197,21 @@ class VlcMediaPlayer(
                 mPlayerEventListener?.onBuffering()
             }
             MediaPlayer.Event.TimeChanged -> {
+                val timeMs = event.timeChanged
+                val now = System.currentTimeMillis()
+
+                // 更新卡死检测状态（基于播放时间变化，对直播流和点播都可靠）
+                // TimeChanged 返回绝对时间（毫秒），直播流中会持续递增，不会像 PositionChanged 的比例值在 duration=0 时不变
+                if (isPlaying && timeMs != lastTimeChangedValue) {
+                    lastFrameUpdateTime = now
+                    lastTimeChangedValue = timeMs
+                }
+
                 // TimeChanged 正常播放时也会触发，作为进度上报
-                dispatchProgress(timeMs = event.timeChanged)
+                dispatchProgress(timeMs = timeMs)
             }
             MediaPlayer.Event.PositionChanged -> {
                 val position = event.positionChanged
-                val now = System.currentTimeMillis()
-
-                // 更新卡死检测状态（基于视频帧位置变化）
-                // PositionChanged 长时间不触发通常意味着解码器卡住了
-                if (isPlaying && position != lastPositionFraction) {
-                    lastFrameUpdateTime = now
-                    lastPositionFraction = position
-                }
 
                 // PositionChanged 事件提供进度百分比，补充上报
                 dispatchProgress(positionFraction = position)
@@ -833,12 +835,14 @@ class VlcMediaPlayer(
 
     /**
      * 启动画面卡死检测
-     * 定期检查 PositionChanged 事件是否触发（基于视频帧），如果超过阈值未更新则尝试恢复
+     * 定期检查 TimeChanged 事件是否触发（基于播放时间），如果超过阈值未更新则尝试恢复
+     * 使用 TimeChanged 而非 PositionChanged，因为直播流 duration=0 导致 position fraction 不变
      */
     private fun startFreezeDetection() {
         stopFreezeDetection()
         // 重置检测时间，避免从暂停恢复时误判
         lastFrameUpdateTime = System.currentTimeMillis()
+        lastTimeChangedValue = -1L
         freezeDetectionRunnable = object : Runnable {
             override fun run() {
                 if (isPlaying) {
@@ -846,7 +850,7 @@ class VlcMediaPlayer(
                     val timeSinceLastFrame = now - lastFrameUpdateTime
 
                     if (timeSinceLastFrame > FREEZE_THRESHOLD_MS) {
-                        logger.warn { "Detected video freeze (no PositionChanged for ${timeSinceLastFrame}ms), attempting recovery" }
+                        logger.warn { "Detected video freeze (no TimeChanged for ${timeSinceLastFrame}ms), attempting recovery" }
                         attemptFreezeRecovery()
                     }
                 }
