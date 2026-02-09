@@ -65,7 +65,9 @@ import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.android.annotation.KoinViewModel
@@ -178,6 +180,8 @@ class VideoPlayerV3ViewModel(
     // 直播弹幕管理
     private var liveWebSocket: Job? = null
     private var liveWebSocketInner: Job? = null
+    private var liveDanmakuConsumer: Job? = null
+    private var liveDanmakuChannel: Channel<DanmakuEvent>? = null
     private val liveDanmakuBuffer = mutableListOf<DanmakuItemData>()
     
     var coin by mutableStateOf(0)
@@ -988,6 +992,15 @@ class VideoPlayerV3ViewModel(
                 
                 logger.fInfo { "Real room id: $realRoomId, starting WebSocket connection" }
                 
+                // 创建 Channel 和单消费者协程，避免每条弹幕创建一个协程
+                val channel = Channel<DanmakuEvent>(capacity = Channel.BUFFERED)
+                liveDanmakuChannel = channel
+                liveDanmakuConsumer = viewModelScope.launch(Dispatchers.Main) {
+                    for (event in channel) {
+                        addLiveDanmaku(event)
+                    }
+                }
+                
                 logger.fInfo { "Connecting to live danmaku WebSocket for room $realRoomId" }
                 // 使用预取的 token 和 hostList，避免 connectLiveEvent 内部重复调用 API
                 liveWebSocketInner = LiveDataWebSocket.connectLiveEvent(
@@ -997,9 +1010,7 @@ class VideoPlayerV3ViewModel(
                     uid = Prefs.uid,
                 ) { event ->
                     if (event is DanmakuEvent) {
-                        viewModelScope.launch(Dispatchers.Main) {
-                            addLiveDanmaku(event)
-                        }
+                        channel.trySend(event)
                     }
                 }
             }.onFailure { e ->
@@ -1019,6 +1030,10 @@ class VideoPlayerV3ViewModel(
         liveWebSocket = null
         liveWebSocketInner?.cancel()
         liveWebSocketInner = null
+        liveDanmakuChannel?.close()
+        liveDanmakuChannel = null
+        liveDanmakuConsumer?.cancel()
+        liveDanmakuConsumer = null
         viewModelScope.launch(Dispatchers.Main) {
             liveDanmakuBuffer.clear()
         }

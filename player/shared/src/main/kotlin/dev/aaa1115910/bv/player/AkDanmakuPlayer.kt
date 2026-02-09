@@ -53,6 +53,9 @@ fun AkDanmakuPlayer(
                 // 确保View会被绘制
                 setWillNotDraw(false)
                 
+                // 硬件加速层，减少弹幕绘制的 CPU 开销
+                setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+                
                 // 兼容性优化：对于旧版本Android使用绘制缓存
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
                     @Suppress("DEPRECATION")
