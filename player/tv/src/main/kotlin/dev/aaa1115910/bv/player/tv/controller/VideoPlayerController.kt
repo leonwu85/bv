@@ -570,7 +570,7 @@ fun VideoPlayerController(
         // 缓存底部进度条显示条件，避免频繁计算
         val shouldShowBottomProgressBar by remember { 
             derivedStateOf { 
-                showBottomProgressBar && !showInfo && !showSeekController 
+                showBottomProgressBar && !videoPlayerConfigData.isLive && !showInfo && !showSeekController 
             } 
         }
         
