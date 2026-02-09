@@ -61,6 +61,9 @@ class VlcMediaPlayer(
     private var seekTimeoutRunnable: Runnable? = null  // seek 超时处理
     private val SEEK_TIMEOUT_MS = 10_000L  // 10秒超时（VLC 缓冲可能很慢）
 
+    // VLC 版本检测（VLC 3 竖屏视频需要手动设置画面尺寸和 FILL 缩放）
+    private var isVlc3: Boolean = true
+
     // 视频尺寸
     private var _videoWidth: Int = 0
     private var _videoHeight: Int = 0
@@ -70,6 +73,9 @@ class VlcMediaPlayer(
 
     // 保存 VLC 内部创建的 SurfaceView 引用用于手动缩放
     private var vlcSurfaceView: View? = null
+
+    // VLC 3 竖屏视频布局监听是否已注册（防止 Playing 事件多次触发时重复注册）
+    private var vlc3LayoutListenerRegistered = false
 
     // ========== 画面卡死检测 ==========
     // 使用 TimeChanged 事件检测视频卡死
@@ -87,8 +93,11 @@ class VlcMediaPlayer(
     private val vlcEventListener = MediaPlayer.EventListener { event ->
         when (event.type) {
             MediaPlayer.Event.Playing -> {
-                // updateVideoSize()
-                // applyManualSurfaceViewScaling()
+                // VLC 3 需要手动获取视频尺寸
+                // 获取尺寸后的竖屏处理
+                if (isVlc3 && _videoWidth <= 0) {
+                    updateVideoSize()
+                }
 
                 // 主动查询 seekable 状态（SeekableChanged 事件可能不可靠）
                 mediaPlayer?.let { mp ->
@@ -264,9 +273,17 @@ class VlcMediaPlayer(
                 setEventListener(vlcEventListener)
             }
 
+            // ========== VLC 版本检测 ==========
+            isVlc3 = try {
+                val version = LibVLC.version()
+                version.startsWith("3.")
+            } catch (e: Exception) {
+                true // 默认视为 VLC 3
+            }
+
             // ========== 调试日志：验证 LibVLC 实例 ==========
             logger.info { "LibVLC created successfully" }
-            logger.info { "LibVLC version: ${try { LibVLC.version() } catch (e: Exception) { "unknown" }}" }
+            logger.info { "LibVLC version: ${try { LibVLC.version() } catch (e: Exception) { "unknown" }}, isVlc3=$isVlc3" }
             logger.info { "LibVLC hashCode: ${libVlc?.hashCode()}" }
             logger.info { "MediaPlayer created: ${mediaPlayer?.hashCode()}" }
 
@@ -559,6 +576,10 @@ class VlcMediaPlayer(
                             _videoHeight = height
                             logger.info { "Video size: ${_videoWidth}x${_videoHeight}" }
                             updateScaleMode()
+                            // 应用手动缩放
+                            if (isVlc3 && isPortraitVideo()) {
+                                setupVlc3PortraitScaling()
+                            }
                             return
                         }
                     }
@@ -571,6 +592,35 @@ class VlcMediaPlayer(
             }
         } catch (e: Exception) {
             logger.debug { "Failed to get video size: ${e.message}" }
+        }
+    }
+
+    /**
+     * VLC 3 竖屏视频设置
+     * 仅在 updateVideoSize() 成功获取尺寸且确认为竖屏后调用一次
+     */
+    private fun setupVlc3PortraitScaling() {
+        val layout = currentVideoLayout ?: return
+
+        // 查找 VLC 内部创建的 SurfaceView
+        if (vlcSurfaceView == null) {
+            vlcSurfaceView = findVlcSurfaceView(layout)
+            logger.info { "Found VLC SurfaceView: $vlcSurfaceView" }
+        }
+
+        // 应用手动缩放
+        applyManualSurfaceViewScaling()
+
+        // 注册布局监听
+        if (!vlc3LayoutListenerRegistered) {
+            vlc3LayoutListenerRegistered = true
+            layout.viewTreeObserver.addOnGlobalLayoutListener(
+                object : ViewTreeObserver.OnGlobalLayoutListener {
+                    override fun onGlobalLayout() {
+                        applyManualSurfaceViewScaling()
+                    }
+                }
+            )
         }
     }
 
@@ -588,12 +638,12 @@ class VlcMediaPlayer(
      * - 横屏视频：使用 SURFACE_BEST_FIT 保持宽高比适配屏幕
      */
     private fun updateScaleMode() {
-        val scaleType = 
-        // val scaleType = if (isPortraitVideo()) {
-        //     MediaPlayer.ScaleType.SURFACE_FILL
-        // } else {
+        val scaleType = if (isVlc3 && isPortraitVideo()) {
+            // VLC 3 竖屏视频使用 SURFACE_FILL 填充屏幕
+            MediaPlayer.ScaleType.SURFACE_FILL
+        } else {
             MediaPlayer.ScaleType.SURFACE_BEST_FIT
-        // }
+        }
         mediaPlayer?.videoScale = scaleType
         logger.info { "Updated scale mode: $scaleType (video=${_videoWidth}x${_videoHeight}, isPortrait=${isPortraitVideo()})" }
     }
@@ -708,25 +758,6 @@ class VlcMediaPlayer(
             // 参数：FrameLayout, DisplayManager, enableSubtitles, enableTextureView
             mediaPlayer?.attachViews(videoLayout, null, false, false)
 
-            // 获取 VLC 内部创建的 SurfaceView
-            // videoLayout.postDelayed({
-            //     // 查找 VLC 创建的 SurfaceView
-            //     vlcSurfaceView = findVlcSurfaceView(videoLayout)
-            //     logger.info { "Found VLC SurfaceView: $vlcSurfaceView" }
-
-            //     // 应用手动缩放
-            //     applyManualSurfaceViewScaling()
-            // }, 100)
-
-            // // 监听布局尺寸变化
-            // videoLayout.viewTreeObserver.addOnGlobalLayoutListener(
-            //     object : ViewTreeObserver.OnGlobalLayoutListener {
-            //         override fun onGlobalLayout() {
-            //             applyManualSurfaceViewScaling()
-            //         }
-            //     }
-            // )
-
             // 重新设置事件监听器
             mediaPlayer?.setEventListener(vlcEventListener)
 
@@ -744,6 +775,7 @@ class VlcMediaPlayer(
         try {
             vlcSurfaceView = null
             currentVideoLayout = null
+            vlc3LayoutListenerRegistered = false
             // 使用官方方法分离视图
             mediaPlayer?.detachViews()
         } catch (e: Exception) {
