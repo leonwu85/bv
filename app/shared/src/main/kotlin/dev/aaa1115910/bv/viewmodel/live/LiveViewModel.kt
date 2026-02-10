@@ -161,7 +161,9 @@ class LiveViewModel(
                 )
                 if (response.code == 0) {
                     withContext(Dispatchers.Main) {
-                        roomList.addAll(response.data.list)
+                        val existingIds = roomList.map { it.roomId }.toHashSet()
+                        val newRooms = response.data.list.filter { it.roomId !in existingIds }
+                        roomList.addAll(newRooms)
                         hasMore = response.data.list.size >= 30
                         if (hasMore) {
                             currentPage++
