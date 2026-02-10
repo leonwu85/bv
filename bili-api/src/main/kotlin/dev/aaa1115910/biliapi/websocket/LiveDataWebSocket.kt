@@ -5,6 +5,7 @@ import dev.aaa1115910.biliapi.http.entity.live.DanmakuEvent
 import dev.aaa1115910.biliapi.http.entity.live.FrameHeader
 import dev.aaa1115910.biliapi.http.entity.live.HostListItem
 import dev.aaa1115910.biliapi.http.entity.live.LiveEvent
+import dev.aaa1115910.biliapi.http.entity.live.PopularityChangeEvent
 import dev.aaa1115910.biliapi.http.entity.live.readFrameHeader
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
 import dev.aaa1115910.biliapi.http.util.brotliDecompress
@@ -208,13 +209,27 @@ object LiveDataWebSocket {
         return result
     }
 
+    private fun formatPopularity(popularity: Int): String {
+        return when {
+            popularity >= 100_000_000 -> String.format("%.1f亿人气", popularity / 100_000_000.0)
+            popularity >= 10_000 -> String.format("%.1f万人气", popularity / 10_000.0)
+            else -> "${popularity}人气"
+        }
+    }
+
     private fun handleLiveEventBody(head: FrameHeader, data: ByteArray): List<LiveEvent> {
         val result = mutableListOf<LiveEvent>()
         val bytePack = ByteReadPacket(data)
         when (head.type) {
             //心跳包回复（人气值）
             3 -> {
-                //println("接收心跳，房间人气值: ${bytePack.readInt()}")
+                runCatching {
+                    val popularity = bytePack.readInt()
+                    result += PopularityChangeEvent(
+                        popularity = popularity,
+                        popularityText = formatPopularity(popularity)
+                    )
+                }
             }
 
             //普通包（命令）
@@ -382,6 +397,19 @@ object LiveDataWebSocket {
             "ONLINE_RANK_V2" -> {}
             "ONLINE_RANK_V3" -> {}
             "ONLINE_RANK_TOP3" -> {}
+            "POPULARITY_CHANGE" -> {
+                runCatching {
+                    val data = dataJson["data"]!!.jsonObject
+                    val popularity = data["popularity"]!!.jsonPrimitive.int
+                    val popularityText = data["popularity_text"]!!.jsonPrimitive.content
+                    return PopularityChangeEvent(
+                        popularity = popularity,
+                        popularityText = popularityText
+                    )
+                }.onFailure {
+                    logger.warn { "Parse POPULARITY_CHANGE failed: ${it.message}" }
+                }
+            }
             "PREPARING" -> {}
             "ROOM_REAL_TIME_MESSAGE_UPDATE" -> {}
             "SEND_GIFT" -> {}

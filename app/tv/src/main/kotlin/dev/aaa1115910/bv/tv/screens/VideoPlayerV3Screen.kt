@@ -70,6 +70,7 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerSeekThumbData
 import dev.aaa1115910.bv.player.entity.VideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerVideoShotData
 import dev.aaa1115910.bv.player.tv.BvPlayer
+import dev.aaa1115910.bv.player.tv.controller.LiveViewerCountTip
 import dev.aaa1115910.bv.player.tv.controller.OnlineViewerCountTip
 import dev.aaa1115910.bv.player.tv.controller.SkipTip
 import dev.aaa1115910.bv.player.tv.controller.TripleLikeTip
@@ -815,6 +816,12 @@ fun VideoPlayerV3Screen(
             OnlineViewerCountTip(
                 show = showOnlineViewerCountTip,
                 count = onlineViewerCount
+            )
+
+            // 直播人气 Tip（左下角常驻）
+            LiveViewerCountTip(
+                show = playerViewModel.isLive,
+                popularityText = playerViewModel.livePopularityText
             )
 
             // 一键三连 Tip
