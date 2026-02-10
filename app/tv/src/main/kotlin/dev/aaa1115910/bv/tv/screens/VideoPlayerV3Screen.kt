@@ -482,16 +482,28 @@ fun VideoPlayerV3Screen(
                     }
                 },
                 onRefreshVideo = {
-                    val time = playerViewModel.videoPlayer?.currentPosition ?: 0
-                    logger.info { "Reload video and back to time: ${time.formatHourMinSec()}" }
-                    scope.launch {
-                        playerViewModel.playQuality()
-                        delay(300)
-                        playerViewModel.videoPlayer?.seekTo(time)
-                        playerViewModel.danmakuPlayer?.seekTo(time)
-                        playerViewModel.danmakuPlayer?.pause()
-                        playerViewModel.videoPlayer?.start()
+                    if (playerViewModel.isLive) {
+                        // 直播模式：重新获取直播流 URL
+                        logger.info { "Reload live stream for room ${playerViewModel.liveRoomId}" }
+                        playerViewModel.loadLiveStreamWithQuality(
+                            playerViewModel.liveRoomId,
+                            playerViewModel.currentLiveQn
+                        )
+                    } else {
+                        val time = playerViewModel.videoPlayer?.currentPosition ?: 0
+                        logger.info { "Reload video and back to time: ${time.formatHourMinSec()}" }
+                        scope.launch {
+                            playerViewModel.playQuality()
+                            delay(300)
+                            playerViewModel.videoPlayer?.seekTo(time)
+                            playerViewModel.danmakuPlayer?.seekTo(time)
+                            playerViewModel.danmakuPlayer?.pause()
+                            playerViewModel.videoPlayer?.start()
+                        }
                     }
+                },
+                onLiveRetry = {
+                    playerViewModel.retryLiveStream()
                 },
                 onShowComment = { showCommentPanel = true },
                 onResolutionChange = { resolutionCode, afterChange ->

@@ -88,6 +88,10 @@ class VideoPlayerV3ViewModel(
         super.onCleared()
         logger.fInfo { "VideoPlayerV3ViewModel onCleared" }
         
+        // 清理直播重连任务
+        liveRetryJob?.cancel()
+        liveRetryJob = null
+        
         // 清理直播弹幕资源
         stopLiveDanmaku()
         
@@ -177,6 +181,9 @@ class VideoPlayerV3ViewModel(
     var currentLiveQualityDescription by mutableStateOf("")
     private var liveQnDescMap: Map<Int, String> = emptyMap()
     
+    // 直播自动重连
+    private var liveRetryJob: Job? = null
+
     // 直播弹幕管理
     private var liveWebSocket: Job? = null
     private var liveWebSocketInner: Job? = null
@@ -859,6 +866,10 @@ class VideoPlayerV3ViewModel(
      * @param qn 请求的画质编号，默认30000（最高值，服务端会自动降级）
      */
     fun loadLiveStreamWithQuality(roomId: Int, qn: Int = 30000) {
+        // 取消之前的重连任务
+        liveRetryJob?.cancel()
+        liveRetryJob = null
+
         viewModelScope.launch(Dispatchers.IO) {
             logger.fInfo { "Load live stream with quality: roomId=$roomId, qn=$qn" }
             withContext(Dispatchers.Main) { loadState = RequestState.Doing }
@@ -924,6 +935,56 @@ class VideoPlayerV3ViewModel(
     fun changeLiveQuality(qn: Int) {
         logger.fInfo { "Change live quality to: $qn" }
         loadLiveStreamWithQuality(liveRoomId, qn)
+    }
+
+    /**
+     * 直播流错误时自动重连
+     * 延迟 2 秒后重新获取直播流 URL 并播放。
+     * 使用 liveRetryJob 做防抖：新的重连请求会取消上一次未执行的延迟重试。
+     * 当直播间已关闭（liveStatus != 1）时，fetchLiveStreamUrl 返回 null，自动停止重试。
+     */
+    fun retryLiveStream() {
+        if (!isLive) return
+        logger.fInfo { "Scheduling live stream retry in 2s for room $liveRoomId" }
+
+        // 防抖：取消上一次待执行的重试
+        liveRetryJob?.cancel()
+        liveRetryJob = viewModelScope.launch(Dispatchers.IO) {
+            delay(2000)
+            // 仅在播放器未在播放时重试
+            val playing = withContext(Dispatchers.Main) { videoPlayer?.isPlaying == true }
+            if (playing) {
+                logger.fInfo { "Player is already playing, skip retry" }
+                return@launch
+            }
+            logger.fInfo { "Retrying live stream for room $liveRoomId, qn=$currentLiveQn" }
+            withContext(Dispatchers.Main) {
+                loadState = RequestState.Doing
+                // 重连时先清除错误状态，让 UI 不再显示错误
+                errorMessage = ""
+            }
+            val playInfo = LiveStreamUrlFetcher.fetchLiveStreamUrl(liveRoomId, currentLiveQn)
+            if (playInfo == null) {
+                // fetchLiveStreamUrl 内部已判断 liveStatus != 1 并 Toast "主播未开播"
+                // 此时不再继续重试
+                logger.fInfo { "Live stream fetch returned null, live may have ended" }
+                withContext(Dispatchers.Main) {
+                    loadState = RequestState.Failed
+                    errorMessage = "直播已结束或获取直播流失败"
+                }
+                return@launch
+            }
+            // 成功获取新 URL，重新播放
+            withContext(Dispatchers.Main) {
+                liveStreamUrl = playInfo.streamUrl
+                currentLiveQn = playInfo.currentQn
+                videoPlayer?.playUrl(videoUrl = playInfo.streamUrl)
+                videoPlayer?.prepare()
+                videoPlayer?.start()
+                loadState = RequestState.Success
+            }
+            logger.fInfo { "Live stream retry successful, new URL loaded" }
+        }
     }
 
     /**

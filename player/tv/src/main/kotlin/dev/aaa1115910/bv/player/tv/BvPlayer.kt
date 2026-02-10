@@ -113,6 +113,7 @@ fun BvPlayer(
     onShowDanmakuChange: (Boolean) -> Unit = {},
     onLoopPlayModeChange: (Boolean) -> Unit = {},
     onRefreshVideo: () -> Unit = {},
+    onLiveRetry: () -> Unit = {},
     onShowComment: () -> Unit = {},
     onTripleLike: () -> Unit = {},
     useTripleLikeOnLongPress: Boolean = false,
@@ -384,9 +385,18 @@ fun BvPlayer(
     val videoPlayerListener = object : VideoPlayerListener {
         override fun onError(error: Exception) {
             logger.info { "onError: $error" }
-            scope.launch(Dispatchers.Main) {
-                isError = true
-                exception = error.cause as Exception?
+            if (videoPlayerConfigData.isLive) {
+                // 直播模式：自动重连，不立即显示错误 UI（参考 wiliwili 的 retryRequestData）
+                logger.info { "Live mode: triggering auto retry" }
+                scope.launch(Dispatchers.Main) {
+                    isBuffering = true  // 显示缓冲状态代替错误状态
+                }
+                onLiveRetry()
+            } else {
+                scope.launch(Dispatchers.Main) {
+                    isError = true
+                    exception = error.cause as Exception?
+                }
             }
         }
 
