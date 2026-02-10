@@ -5,6 +5,7 @@ import dev.aaa1115910.biliapi.http.entity.live.DanmakuEvent
 import dev.aaa1115910.biliapi.http.entity.live.FrameHeader
 import dev.aaa1115910.biliapi.http.entity.live.HostListItem
 import dev.aaa1115910.biliapi.http.entity.live.LiveEvent
+import dev.aaa1115910.biliapi.http.entity.live.OnlineRankCountEvent
 import dev.aaa1115910.biliapi.http.entity.live.PopularityChangeEvent
 import dev.aaa1115910.biliapi.http.entity.live.readFrameHeader
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
@@ -223,13 +224,8 @@ object LiveDataWebSocket {
         when (head.type) {
             //心跳包回复（人气值）
             3 -> {
-                runCatching {
-                    val popularity = bytePack.readInt()
-                    result += PopularityChangeEvent(
-                        popularity = popularity,
-                        popularityText = formatPopularity(popularity)
-                    )
-                }
+                // 不从心跳解析人气值，使用 POPULARITY_CHANGE CMD 事件更新
+                runCatching { bytePack.readInt() }
             }
 
             //普通包（命令）
@@ -385,7 +381,7 @@ object LiveDataWebSocket {
             "INTERACT_WORD" -> {}
             "INTERACT_WORD_V2" -> {}
             "LIVE" -> {
-                println(dataJson)
+                logger.info { "[EVENT-LIVE] $dataJson" }
             }
 
             "LIVE_INTERACTIVE_GAME" -> {}
@@ -393,11 +389,23 @@ object LiveDataWebSocket {
             "LIKE_INFO_V3_UPDATE" -> {}
             "LOG_IN_NOTICE" -> {}
             "NOTICE_MSG" -> {}
-            "ONLINE_RANK_COUNT" -> {}
+            "ONLINE_RANK_COUNT" -> {
+                runCatching {
+                    val data = dataJson["data"]!!.jsonObject
+                    val count = data["count"]!!.jsonPrimitive.int
+                    return OnlineRankCountEvent(count = count)
+                }.onFailure {
+                    logger.warn { "Parse ONLINE_RANK_COUNT failed: ${it.message}" }
+                }
+            }
             "ONLINE_RANK_V2" -> {}
             "ONLINE_RANK_V3" -> {}
             "ONLINE_RANK_TOP3" -> {}
+            "POPULAR_RANK_CHANGED" -> {
+                logger.info { "[EVENT-POPULAR_RANK_CHANGED] $dataJson" }
+            }
             "POPULARITY_CHANGE" -> {
+                logger.info { "[EVENT-POPULARITY_CHANGE] $dataJson" }
                 runCatching {
                     val data = dataJson["data"]!!.jsonObject
                     val popularity = data["popularity"]!!.jsonPrimitive.int

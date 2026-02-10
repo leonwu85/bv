@@ -28,6 +28,7 @@ import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.http.BiliLiveHttpApi
 import dev.aaa1115910.biliapi.http.entity.live.DanmakuEvent
 import dev.aaa1115910.biliapi.http.entity.live.LiveEvent
+import dev.aaa1115910.biliapi.http.entity.live.OnlineRankCountEvent
 import dev.aaa1115910.biliapi.http.entity.live.PopularityChangeEvent
 import dev.aaa1115910.biliapi.repositories.VideoPlayRepository
 import dev.aaa1115910.biliapi.websocket.LiveDataWebSocket
@@ -185,8 +186,9 @@ class VideoPlayerV3ViewModel(
     // 直播自动重连
     private var liveRetryJob: Job? = null
 
-    // 直播人气值
-    var livePopularityText by mutableStateOf("")
+    // 直播人气值与高能观众
+    var livePopularityText by mutableStateOf("")   // "2.5万人气" (POPULARITY_CHANGE)
+    var liveOnlineCount by mutableStateOf("")      // "4333 高能观众" (ONLINE_RANK_COUNT)
 
     // 直播弹幕管理
     private var liveWebSocket: Job? = null
@@ -1079,6 +1081,9 @@ class VideoPlayerV3ViewModel(
                         is PopularityChangeEvent -> {
                             livePopularityText = event.popularityText
                         }
+                        is OnlineRankCountEvent -> {
+                            liveOnlineCount = "${event.count} 高能观众"
+                        }
                     }
                 }
             }.onFailure { e ->
@@ -1102,7 +1107,6 @@ class VideoPlayerV3ViewModel(
         liveDanmakuChannel = null
         liveDanmakuConsumer?.cancel()
         liveDanmakuConsumer = null
-        livePopularityText = ""
         viewModelScope.launch(Dispatchers.Main) {
             liveDanmakuBuffer.clear()
         }

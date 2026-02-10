@@ -29,6 +29,14 @@ class VideoPlayerV3Activity : ComponentActivity() {
     companion object {
         private val logger = KotlinLogging.logger { }
         private var currentInstance: WeakReference<VideoPlayerV3Activity>? = null
+
+        private fun formatPopularity(count: Int): String {
+            return when {
+                count >= 100_000_000 -> String.format("%.1f亿人气", count / 100_000_000.0)
+                count >= 10_000 -> String.format("%.1f万人气", count / 10_000.0)
+                else -> "${count}人气"
+            }
+        }
         
         /**
          * 启动直播播放
@@ -37,7 +45,8 @@ class VideoPlayerV3Activity : ComponentActivity() {
             context: Context,
             roomId: Int,
             title: String,
-            upName: String = ""
+            upName: String = "",
+            watchedNum: Int = 0
         ) {
             val runtime = Runtime.getRuntime()
             val usedMemory = runtime.totalMemory() - runtime.freeMemory()
@@ -60,6 +69,7 @@ class VideoPlayerV3Activity : ComponentActivity() {
                     putExtra("liveRoomId", roomId)
                     putExtra("title", title)
                     putExtra("upName", upName)
+                    putExtra("liveWatchedNum", watchedNum)
                 }
             )
         }
@@ -216,14 +226,16 @@ class VideoPlayerV3Activity : ComponentActivity() {
             val roomId = intent.getIntExtra("liveRoomId", 0)
             val title = intent.getStringExtra("title") ?: "Unknown Title"
             val upName = intent.getStringExtra("upName") ?: ""
+            val watchedNum = intent.getIntExtra("liveWatchedNum", 0)
             
-            logger.fInfo { "Launch live parameter: [roomId=$roomId]" }
+            logger.fInfo { "Launch live parameter: [roomId=$roomId, watchedNum=$watchedNum]" }
             
             playerViewModel.apply {
                 this.title = title
                 this.upName = upName
                 this.isLive = true
                 this.liveRoomId = roomId
+                this.livePopularityText = if (watchedNum > 0) formatPopularity(watchedNum) else ""
                 
                 // 通过 ViewModel 加载直播流（带画质选择，加载成功后自动启动弹幕）
                 loadLiveStreamWithQuality(roomId)

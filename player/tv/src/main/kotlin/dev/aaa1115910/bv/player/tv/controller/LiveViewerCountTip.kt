@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,17 +22,19 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
 /**
- * 直播观看人气显示组件（右上角常驻）
+ * 直播观看人气显示组件（左下角常驻）
  *
  * @param modifier 修饰符
  * @param show 是否显示
  * @param popularityText 人气文本，如 "2.5万人气"
+ * @param onlineCount 高能观众文本，如 "4333 高能观众"
  */
 @Composable
 fun LiveViewerCountTip(
     modifier: Modifier = Modifier,
     show: Boolean,
-    popularityText: String
+    popularityText: String,
+    onlineCount: String = ""
 ) {
     AnimatedVisibility(
         visible = show,
@@ -47,23 +50,33 @@ fun LiveViewerCountTip(
                     .padding(start = 16.dp, bottom = 32.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val iconColor = Color.White.copy(alpha = 0.3f)
+                val contentColor = Color.White.copy(alpha = 0.5f)
 
                 Icon(
                     imageVector = Icons.Default.Group,
                     contentDescription = null,
-                    tint = iconColor
+                    tint = contentColor
                 )
-                Text(
-                    modifier = Modifier.padding(start = 4.dp),
-                    text = popularityText,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        color = Color.White.copy(alpha = 0.3f),
-                        fontSize = 16.sp
-                    ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                val displayText = buildString {
+                    if (popularityText.isNotEmpty()) append(popularityText)
+                    if (onlineCount.isNotEmpty()) {
+                        if (isNotEmpty()) append(" · ")
+                        append(onlineCount)
+                    }
+                }
+                if (displayText.isNotEmpty()) {
+                    Text(
+                        modifier = Modifier.padding(start = 4.dp),
+                        text = displayText,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            color = contentColor,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }

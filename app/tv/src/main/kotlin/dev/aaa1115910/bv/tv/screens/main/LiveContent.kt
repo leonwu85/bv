@@ -212,7 +212,8 @@ fun LiveContent(
                                 context = context,
                                 roomId = room.roomId,
                                 title = room.title,
-                                upName = room.uname
+                                upName = room.uname,
+                                watchedNum = room.watchedShow?.num ?: (room.online / 10)
                             )
                         },
                         onFocus = {

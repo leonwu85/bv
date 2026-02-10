@@ -17,3 +17,7 @@ data class PopularityChangeEvent(
     val popularity: Int,
     val popularityText: String
 ) : LiveEvent
+
+data class OnlineRankCountEvent(
+    val count: Int
+) : LiveEvent
