@@ -519,6 +519,16 @@ fun BvPlayer(
             lastHeartbeatPosition = position
         }
 
+        override fun onVideoSizeChanged(width: Int, height: Int) {
+            logger.info { "onVideoSizeChanged: ${width}x${height}" }
+            if (width > 0 && height > 0) {
+                scope.launch(Dispatchers.Main) {
+                    defaultAspectRatio = width / height.toFloat()
+                    updateVideoAspectRatio()
+                }
+            }
+        }
+
         override fun onProgress(position: Long, duration: Long, buffered: Int) {
             scope.launch(Dispatchers.Main.immediate) {
                 val pos = position.coerceAtLeast(0L)

@@ -300,6 +300,10 @@ class ExoMediaPlayer(
     override val videoHeight: Int
         get() = mPlayer?.videoSize?.height ?: 0
 
+    override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+        mPlayerEventListener?.onVideoSizeChanged(videoSize.width, videoSize.height)
+    }
+
     override fun onPlayerError(error: PlaybackException) {
         mPlayerEventListener?.onError(error)
     }

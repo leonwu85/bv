@@ -39,4 +39,7 @@ interface VideoPlayerListener {
     /** seekable 状态变化 */
     fun onSeekableChanged(seekable: Boolean) {}
 
+    /** 视频尺寸变化 */
+    fun onVideoSizeChanged(width: Int, height: Int) {}
+
 }
