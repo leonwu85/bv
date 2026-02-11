@@ -280,10 +280,14 @@ fun BvPlayer(
             dataFilter = listOf(typeFilter),
             visibility = videoPlayerConfigData.showDanmaku,
             alpha = danmakuOpacity,
-            screenPart = safeArea
+            screenPart = safeArea,
+            liveMode = videoPlayerConfigData.isLive,
+            maxLiveScreenDanmakuCount = 100,
+            liveMaxPendingCount = 200,
+            liveMergeCache = true
         )
         danmakuConfig.updateFilter()
-        logger.info { "Init danmaku config: $danmakuConfig" }
+        logger.info { "Init danmaku config (liveMode=${videoPlayerConfigData.isLive}): $danmakuConfig" }
         mDanmakuPlayer?.updateConfig(danmakuConfig)
     }
 
@@ -316,9 +320,10 @@ fun BvPlayer(
             retainerPolicy = RETAINER_BILIBILI,
             textSizeScale = videoPlayerConfigData.currentDanmakuScale,
             alpha = videoPlayerConfigData.currentDanmakuOpacity,
-            screenPart = videoPlayerConfigData.currentDanmakuArea.coerceIn(0f, 1f)
+            screenPart = videoPlayerConfigData.currentDanmakuArea.coerceIn(0f, 1f),
+            liveMode = videoPlayerConfigData.isLive
         )
-        logger.info { "Update danmaku config: $danmakuConfig" }
+        logger.info { "Update danmaku config (liveMode=${videoPlayerConfigData.isLive}): $danmakuConfig" }
         mDanmakuPlayer?.updateConfig(danmakuConfig)
     }
 
