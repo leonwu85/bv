@@ -324,9 +324,14 @@ object LiveDataWebSocket {
             "DANMU_MSG" -> {
                 runCatching {
                     val infoArray = dataJson["info"]!!.jsonArray
-                    
-                    // 弹幕内容 info[1]
-                    val danmakuContent = infoArray[1].jsonPrimitive.content
+
+                    // 弹幕内容 info[1]，需要检查是否为字符串（有些情况下是 JSON 对象）
+                    val contentElement = infoArray[1]
+                    if (contentElement !is kotlinx.serialization.json.JsonPrimitive) {
+                        logger.warn { "DANMU_MSG content is not a string, skipping: $contentElement" }
+                        return@runCatching
+                    }
+                    val danmakuContent = contentElement.jsonPrimitive.content
                     
                     // 弹幕属性 info[0]
                     val attrArray = infoArray[0].jsonArray
