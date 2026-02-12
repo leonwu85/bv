@@ -67,6 +67,7 @@ import dev.aaa1115910.bv.player.tv.controller.SkipEdTip
 import dev.aaa1115910.bv.player.tv.controller.SkipOpTip
 import dev.aaa1115910.bv.player.tv.controller.VideoPlayerController
 import dev.aaa1115910.bv.util.countDownTimer
+import dev.aaa1115910.bv.player.util.DanmakuMaskFinder
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.formatHourMinSec
 import dev.aaa1115910.bv.util.requestFocus
@@ -244,12 +245,13 @@ fun BvPlayer(
     }
 
     val updateDanmakuMaskForPosition: suspend (Long) -> Unit = { position ->
-        val danmakuMasks = videoPlayerDanmakuMaskData.danmakuMasks.firstOrNull {
-            position in it.range
-        }?.frames?.firstOrNull { position in it.range }
+        val maskFrame = DanmakuMaskFinder.findMaskFrame(
+            videoPlayerDanmakuMaskData.danmakuMasks,
+            position
+        )
         withContext(Dispatchers.Main) {
-            if (currentDanmakuMaskFrame != danmakuMasks) {
-                currentDanmakuMaskFrame = danmakuMasks
+            if (currentDanmakuMaskFrame != maskFrame) {
+                currentDanmakuMaskFrame = maskFrame
             }
         }
     }
