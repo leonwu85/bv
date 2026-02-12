@@ -48,6 +48,7 @@ import dev.aaa1115910.bv.player.entity.RequestState
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoAspectRatio
 import dev.aaa1115910.bv.player.entity.VideoCodec
+import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.VideoListItemData
 import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.repository.VideoInfoRepository
@@ -182,6 +183,9 @@ class VideoPlayerV3ViewModel(
     var currentLiveQn by mutableIntStateOf(0)
     var currentLiveQualityDescription by mutableStateOf("")
     private var liveQnDescMap: Map<Int, String> = emptyMap()
+
+    // 直播编码管理
+    var currentLiveCodec by mutableStateOf(Prefs.defaultLiveCodec)
     
     // 直播自动重连
     private var liveRetryJob: Job? = null
@@ -885,7 +889,7 @@ class VideoPlayerV3ViewModel(
                 ensureDanmakuPlayer()
             }
 
-            val playInfo = LiveStreamUrlFetcher.fetchLiveStreamUrl(roomId, qn)
+            val playInfo = LiveStreamUrlFetcher.fetchLiveStreamUrl(roomId, qn, currentLiveCodec)
             if (playInfo == null) {
                 withContext(Dispatchers.Main) {
                     loadState = RequestState.Failed
@@ -944,6 +948,17 @@ class VideoPlayerV3ViewModel(
     }
 
     /**
+     * 切换直播编码格式
+     * @param codec 目标编码格式
+     */
+    fun changeLiveCodec(codec: LiveCodec) {
+        logger.fInfo { "Change live codec to: $codec" }
+        currentLiveCodec = codec
+        Prefs.defaultLiveCodec = codec
+        loadLiveStreamWithQuality(liveRoomId, currentLiveQn)
+    }
+
+    /**
      * 直播流错误时自动重连
      * 延迟 2 秒后重新获取直播流 URL 并播放。
      * 使用 liveRetryJob 做防抖：新的重连请求会取消上一次未执行的延迟重试。
@@ -969,7 +984,7 @@ class VideoPlayerV3ViewModel(
                 // 重连时先清除错误状态，让 UI 不再显示错误
                 errorMessage = ""
             }
-            val playInfo = LiveStreamUrlFetcher.fetchLiveStreamUrl(liveRoomId, currentLiveQn)
+            val playInfo = LiveStreamUrlFetcher.fetchLiveStreamUrl(liveRoomId, currentLiveQn, currentLiveCodec)
             if (playInfo == null) {
                 // fetchLiveStreamUrl 内部已判断 liveStatus != 1 并 Toast "主播未开播"
                 // 此时不再继续重试

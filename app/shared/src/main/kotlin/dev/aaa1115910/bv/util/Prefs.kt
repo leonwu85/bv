@@ -24,6 +24,7 @@ import dev.aaa1115910.bv.player.entity.PlayMode
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoCodec
+import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.PlayerLoadNextAction
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
@@ -402,6 +403,14 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowDanmakuRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowDanmakuKey, value) }
 
+    var defaultLiveCodec: LiveCodec
+        get() = LiveCodec.fromCode(
+            runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDefaultLiveCodecRequest).first() }
+        )
+        set(value) = runBlocking {
+            dsm.editPreference(PrefKeys.prefDefaultLiveCodecKey, value.ordinal)
+        }
+
     // 首页导航项排序和隐藏状态
     val homeNavItemsOrderFlow: Flow<String>
         get() = dsm.getPreferenceFlow(PrefKeys.prefHomeNavItemsOrderRequest)
@@ -512,6 +521,7 @@ object PrefKeys {
     val prefShowUGCVideoInfoKey = booleanPreferencesKey("pref_show_ugc_video_info")
     val prefIsLoopKey = booleanPreferencesKey("player_is_loop")
     val prefShowDanmakuKey = booleanPreferencesKey("player_show_danmaku")
+    val prefDefaultLiveCodecKey = intPreferencesKey("dlc")
     val prefPlayerLoadNextActionKey = intPreferencesKey("player_load_next_action")
     val prefPlayerDefaultStartPositionKey = intPreferencesKey("player_default_start_position")
     val prefShowLiveInSidebarKey = booleanPreferencesKey("show_live_in_sidebar")
@@ -595,6 +605,7 @@ object PrefKeys {
     val prefShowUGCVideoInfoRequest = PreferenceRequest(prefShowUGCVideoInfoKey, true)
     val prefIsLoopRequest = PreferenceRequest(prefIsLoopKey, false)
     val prefShowDanmakuRequest = PreferenceRequest(prefShowDanmakuKey, true)
+    val prefDefaultLiveCodecRequest = PreferenceRequest(prefDefaultLiveCodecKey, LiveCodec.HLS.ordinal)
     val prefPlayerLoadNextActionRequest = PreferenceRequest(prefPlayerLoadNextActionKey, PlayerLoadNextAction.DoNothing.value)
     val prefPlayerDefaultStartPositionRequest = PreferenceRequest(prefPlayerDefaultStartPositionKey, PlayerDefaultStartPosition.History.value)
     val prefShowLiveInSidebarRequest = PreferenceRequest(prefShowLiveInSidebarKey, false)

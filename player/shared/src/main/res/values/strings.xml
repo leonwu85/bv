@@ -44,6 +44,12 @@
     <string name="video_codec_dvh1" tools:ignore="Typos">Dolby Vision (DVH1)</string>
     <string name="video_codec_hevc">H.265</string>
     <string name="video_codec_hvc1" tools:ignore="Typos">Dolby Vision (HVC1)</string>
+
+    <!-- 直播编码格式选项 -->
+    <string name="live_codec_hls">HLS（自动）</string>
+    <string name="live_codec_flv">FLV</string>
+    <string name="live_codec_avc">HLS（AVC）</string>
+
     <string name="video_player_menu_danmaku_area">显示区域</string>
     <string name="video_player_menu_danmaku_mask">防遮挡</string>
     <string name="video_player_menu_danmaku_opacity">不透明度</string>

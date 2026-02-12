@@ -49,6 +49,7 @@ import dev.aaa1115910.bv.player.entity.PlayMode
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoAspectRatio
 import dev.aaa1115910.bv.player.entity.VideoCodec
+import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.VideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.VideoPlayerMenuNavItem
 import dev.aaa1115910.bv.player.entity.VideoRotation
@@ -71,6 +72,7 @@ fun MenuController(
     onPlaySpeedChange: (Float) -> Unit = {},
     onAudioChange: (Audio) -> Unit,
     onLiveQualityChange: (Int) -> Unit = {},
+    onLiveCodecChange: (LiveCodec) -> Unit = {},
     onDanmakuSwitchChange: (List<DanmakuType>) -> Unit,
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
@@ -108,6 +110,7 @@ fun MenuController(
                 onPlaySpeedChange = onPlaySpeedChange,
                 onAudioChange = onAudioChange,
                 onLiveQualityChange = onLiveQualityChange,
+                onLiveCodecChange = onLiveCodecChange,
                 onDanmakuSwitchChange = onDanmakuSwitchChange,
                 onDanmakuSizeChange = onDanmakuSizeChange,
                 onDanmakuOpacityChange = onDanmakuOpacityChange,
@@ -135,6 +138,7 @@ fun MenuController(
     onPlaySpeedChange: (Float) -> Unit,
     onAudioChange: (Audio) -> Unit,
     onLiveQualityChange: (Int) -> Unit = {},
+    onLiveCodecChange: (LiveCodec) -> Unit = {},
     onDanmakuSwitchChange: (List<DanmakuType>) -> Unit,
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
@@ -175,6 +179,7 @@ fun MenuController(
                     onRotationChange = onRotationChange,
                     onAudioChange = onAudioChange,
                     onLiveQualityChange = onLiveQualityChange,
+                    onLiveCodecChange = onLiveCodecChange,
                     onDanmakuSwitchChange = onDanmakuSwitchChange,
                     onDanmakuSizeChange = onDanmakuSizeChange,
                     onDanmakuOpacityChange = onDanmakuOpacityChange,
@@ -229,6 +234,7 @@ private fun MenuList(
     onPlaySpeedChange: (Float) -> Unit,
     onAudioChange: (Audio) -> Unit,
     onLiveQualityChange: (Int) -> Unit = {},
+    onLiveCodecChange: (LiveCodec) -> Unit = {},
     onDanmakuSwitchChange: (List<DanmakuType>) -> Unit,
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
@@ -256,6 +262,7 @@ private fun MenuList(
                     onPlaySpeedChange = onPlaySpeedChange,
                     onAudioChange = onAudioChange,
                     onLiveQualityChange = onLiveQualityChange,
+                    onLiveCodecChange = onLiveCodecChange,
                     onFocusStateChange = onFocusStateChange
                 )
             }

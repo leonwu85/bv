@@ -139,6 +139,8 @@ data class VideoPlayerConfigData(
     val availableLiveQualities: List<Pair<Int, String>> = emptyList(),
     val currentLiveQn: Int = 0,
     val currentLiveQualityDescription: String = "",
+    val availableLiveCodecs: List<LiveCodec> = LiveCodec.entries,
+    val currentLiveCodec: LiveCodec = LiveCodec.HLS,
 )
 
 data class VideoPlayerDanmakuMasksData(

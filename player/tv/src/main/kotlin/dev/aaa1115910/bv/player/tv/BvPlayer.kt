@@ -55,6 +55,7 @@ import dev.aaa1115910.bv.player.entity.RequestState
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoAspectRatio
 import dev.aaa1115910.bv.player.entity.VideoCodec
+import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.VideoListItem
 import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.player.entity.VideoPlayerClockState
@@ -98,6 +99,7 @@ fun BvPlayer(
     onPlaySpeedChange: (Float) -> Unit,
     onAudioChange: (Audio, afterChange: suspend () -> Unit) -> Unit,
     onLiveQualityChange: (Int) -> Unit = {},
+    onLiveCodecChange: (LiveCodec) -> Unit = {},
     onDanmakuSwitchChange: (List<DanmakuType>) -> Unit,
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
@@ -818,6 +820,7 @@ fun BvPlayer(
                 }
             },
             onLiveQualityChange = onLiveQualityChange,
+            onLiveCodecChange = onLiveCodecChange,
             onDanmakuSwitchChange = { enabledDanmakuTypes ->
                 logger.info { "On enabled danmaku type change: $enabledDanmakuTypes" }
                 onDanmakuSwitchChange(enabledDanmakuTypes)

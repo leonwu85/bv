@@ -3,6 +3,7 @@ package dev.aaa1115910.bv.util
 import android.widget.Toast
 import dev.aaa1115910.biliapi.entity.live.LiveCodec
 import dev.aaa1115910.biliapi.entity.live.LiveRoomPlayInfoResponse
+import dev.aaa1115910.bv.player.entity.LiveCodec as AppLiveCodec
 import dev.aaa1115910.biliapi.entity.live.LiveStream
 import dev.aaa1115910.biliapi.repositories.LiveRepository
 import dev.aaa1115910.bv.BVApp
@@ -23,9 +24,14 @@ object LiveStreamUrlFetcher {
      * 获取直播流URL
      * @param roomId 直播间ID
      * @param qn 画质编号，默认30000（杜比，最高值），服务端会自动降级到实际最高可用画质
+     * @param preferredCodec 首选编码格式，默认 HLS 自动选择最佳编码
      * @return 直播播放信息，包含流URL和可用画质列表，如果未开播或获取失败则返回null
      */
-    suspend fun fetchLiveStreamUrl(roomId: Int, qn: Int = 30000): LivePlayInfo? = withContext(Dispatchers.IO) {
+    suspend fun fetchLiveStreamUrl(
+        roomId: Int,
+        qn: Int = 30000,
+        preferredCodec: AppLiveCodec = AppLiveCodec.HLS
+    ): LivePlayInfo? = withContext(Dispatchers.IO) {
         try {
             val sessData = Prefs.sessData
             val response = liveRepository.getLiveRoomPlayInfo(roomId, qn, sessData)
@@ -72,7 +78,7 @@ object LiveStreamUrlFetcher {
             }
 
             // 解析播放URL和画质信息
-            val result = parsePlayUrl(response)
+            val result = parsePlayUrl(response, preferredCodec)
             if (result == null) {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(
@@ -114,36 +120,82 @@ object LiveStreamUrlFetcher {
     )
 
     /**
-     * 解析播放URL，优先级: HLS > FLV
-     * 注意：必须优先 HLS，因为 FLV 协议只有 flv 格式，而 ExoPlayer 的 FLV 提取器
-     * 不支持 HEVC (H.265)。HLS 协议提供 fmp4/ts 容器，可正常播放 HEVC。
+     * 解析播放URL
+     * @param response 直播房间播放信息响应
+     * @param preferredCodec 首选编码格式
      */
-    private fun parsePlayUrl(response: LiveRoomPlayInfoResponse): ParseResult? {
+    private fun parsePlayUrl(
+        response: LiveRoomPlayInfoResponse,
+        preferredCodec: AppLiveCodec
+    ): ParseResult? {
         val streams = response.data?.playUrlInfo?.playurl?.stream ?: return null
-        
-        // 优先查找 http_hls (HLS) — 支持 HEVC/AV1 等现代编码
-        val hlsStream = streams.find { it.protocolName == "http_hls" }
-        if (hlsStream != null) {
-            val result = buildUrlFromStream(hlsStream)
-            if (result != null) {
-                logger.info { "Using HLS stream" }
-                return result
+
+        when (preferredCodec) {
+            AppLiveCodec.HLS -> {
+                // HLS 自动选择最佳编码（HEVC > AV1 > AVC）
+                val hlsStream = streams.find { it.protocolName == "http_hls" }
+                if (hlsStream != null) {
+                    val result = buildUrlFromStream(hlsStream, null)
+                    if (result != null) {
+                        logger.info { "Using HLS stream with auto codec" }
+                        return result
+                    }
+                }
+                // 回退到 FLV
+                val flvStream = streams.find { it.protocolName == "http_stream" }
+                if (flvStream != null) {
+                    val result = buildUrlFromStream(flvStream, "avc")
+                    if (result != null) {
+                        logger.info { "Using FLV stream (fallback)" }
+                        return result
+                    }
+                }
+            }
+            AppLiveCodec.FLV -> {
+                // 强制使用 FLV（仅支持 AVC）
+                val flvStream = streams.find { it.protocolName == "http_stream" }
+                if (flvStream != null) {
+                    val result = buildUrlFromStream(flvStream, "avc")
+                    if (result != null) {
+                        logger.info { "Using FLV stream" }
+                        return result
+                    }
+                }
+                // 回退到 HLS
+                val hlsStream = streams.find { it.protocolName == "http_hls" }
+                if (hlsStream != null) {
+                    val result = buildUrlFromStream(hlsStream, "avc")
+                    if (result != null) {
+                        logger.info { "Using HLS stream with AVC (fallback)" }
+                        return result
+                    }
+                }
+            }
+            AppLiveCodec.AVC -> {
+                // HLS 强制 AVC
+                val hlsStream = streams.find { it.protocolName == "http_hls" }
+                if (hlsStream != null) {
+                    val result = buildUrlFromStream(hlsStream, "avc")
+                    if (result != null) {
+                        logger.info { "Using HLS stream with AVC" }
+                        return result
+                    }
+                }
+                // 回退到 FLV
+                val flvStream = streams.find { it.protocolName == "http_stream" }
+                if (flvStream != null) {
+                    val result = buildUrlFromStream(flvStream, "avc")
+                    if (result != null) {
+                        logger.info { "Using FLV stream (fallback)" }
+                        return result
+                    }
+                }
             }
         }
 
-        // 其次查找 http_stream (FLV) — 仅支持 AVC (H.264)
-        val flvStream = streams.find { it.protocolName == "http_stream" }
-        if (flvStream != null) {
-            val result = buildUrlFromStream(flvStream)
-            if (result != null) {
-                logger.info { "Using FLV stream" }
-                return result
-            }
-        }
-
-        // 使用第一个可用的流
+        // 使用第一个可用的流作为兜底
         for (stream in streams) {
-            val result = buildUrlFromStream(stream)
+            val result = buildUrlFromStream(stream, null)
             if (result != null) {
                 logger.info { "Using fallback stream: ${stream.protocolName}" }
                 return result
@@ -169,16 +221,24 @@ object LiveStreamUrlFetcher {
     }
 
     /**
-     * 从流信息构建URL，按 codec 优先级选择编解码器
+     * 从流信息构建URL
+     * @param stream 直播流信息
+     * @param preferredCodecName 首选编码名称，null 表示按优先级自动选择
      */
-    private fun buildUrlFromStream(stream: LiveStream): ParseResult? {
+    private fun buildUrlFromStream(stream: LiveStream, preferredCodecName: String?): ParseResult? {
         // 优先选择 fmp4，其次 ts，最后 flv
         val formatOrder = listOf("fmp4", "ts", "flv")
-        
+
         for (formatName in formatOrder) {
             val format = stream.format.find { it.formatName == formatName }
             if (format != null && format.codec.isNotEmpty()) {
-                val codec = selectBestCodec(format.codec) ?: continue
+                val codec = if (preferredCodecName != null) {
+                    // 指定编码时，查找指定编码
+                    format.codec.find { it.codecName == preferredCodecName && it.urlInfo.isNotEmpty() }
+                } else {
+                    // 自动选择最佳编码
+                    selectBestCodec(format.codec)
+                } ?: continue
                 val urlInfo = codec.urlInfo.first()
                 val fullUrl = "${urlInfo.host}${codec.baseUrl}${urlInfo.extra}"
                 logger.debug { "Built URL with format $formatName, codec ${codec.codecName}: $fullUrl" }
@@ -193,7 +253,11 @@ object LiveStreamUrlFetcher {
         // 如果没有找到特定格式，使用第一个可用的
         for (format in stream.format) {
             if (format.codec.isNotEmpty()) {
-                val codec = selectBestCodec(format.codec) ?: continue
+                val codec = if (preferredCodecName != null) {
+                    format.codec.find { it.codecName == preferredCodecName && it.urlInfo.isNotEmpty() }
+                } else {
+                    selectBestCodec(format.codec)
+                } ?: continue
                 val urlInfo = codec.urlInfo.first()
                 val fullUrl = "${urlInfo.host}${codec.baseUrl}${urlInfo.extra}"
                 logger.debug { "Built URL with fallback format ${format.formatName}, codec ${codec.codecName}: $fullUrl" }

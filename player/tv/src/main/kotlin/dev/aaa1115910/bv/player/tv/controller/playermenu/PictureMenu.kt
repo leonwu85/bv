@@ -31,6 +31,7 @@ import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoAspectRatio
 import dev.aaa1115910.bv.player.entity.VideoCodec
+import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.VideoPlayerPictureMenuItem
 import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.player.tv.controller.LocalMenuFocusStateData
@@ -51,6 +52,7 @@ fun PictureMenuList(
     onPlaySpeedChange: (Float) -> Unit,
     onAudioChange: (Audio) -> Unit,
     onLiveQualityChange: (Int) -> Unit = {},
+    onLiveCodecChange: (LiveCodec) -> Unit = {},
     onFocusStateChange: (MenuFocusState) -> Unit
 ) {
     val context = LocalContext.current
@@ -103,18 +105,41 @@ fun PictureMenuList(
                     )
                 }
 
-                VideoPlayerPictureMenuItem.Codec -> RadioMenuList(
-                    modifier = menuItemsModifier,
-                    items = videoPlayerConfigData.availableVideoCodec
-                        .map { it.getDisplayName(context) },
-                    selected = videoPlayerConfigData.availableVideoCodec
-                        .indexOf(videoPlayerConfigData.currentVideoCodec),
-                    onSelectedChanged = { onCodecChange(videoPlayerConfigData.availableVideoCodec[it]) },
-                    onFocusBackToParent = {
-                        onFocusStateChange(MenuFocusState.Menu)
-                        parentMenuFocusRequester.requestFocus()
+                VideoPlayerPictureMenuItem.Codec -> {
+                    if (videoPlayerConfigData.isLive) {
+                        // 直播模式：显示 HLS/FLV/AVC 选项
+                        println("PictureMenu: isLive=true, availableLiveCodecs=${videoPlayerConfigData.availableLiveCodecs}, currentLiveCodec=${videoPlayerConfigData.currentLiveCodec}")
+                        RadioMenuList(
+                            modifier = menuItemsModifier,
+                            items = videoPlayerConfigData.availableLiveCodecs
+                                .map { it.getDisplayName(context) },
+                            selected = videoPlayerConfigData.availableLiveCodecs
+                                .indexOf(videoPlayerConfigData.currentLiveCodec),
+                            onSelectedChanged = {
+                                println("PictureMenu: onSelectedChanged called with index=$it")
+                                onLiveCodecChange(videoPlayerConfigData.availableLiveCodecs[it])
+                            },
+                            onFocusBackToParent = {
+                                onFocusStateChange(MenuFocusState.Menu)
+                                parentMenuFocusRequester.requestFocus()
+                            }
+                        )
+                    } else {
+                        // 点播模式：显示原有编码选项
+                        RadioMenuList(
+                            modifier = menuItemsModifier,
+                            items = videoPlayerConfigData.availableVideoCodec
+                                .map { it.getDisplayName(context) },
+                            selected = videoPlayerConfigData.availableVideoCodec
+                                .indexOf(videoPlayerConfigData.currentVideoCodec),
+                            onSelectedChanged = { onCodecChange(videoPlayerConfigData.availableVideoCodec[it]) },
+                            onFocusBackToParent = {
+                                onFocusStateChange(MenuFocusState.Menu)
+                                parentMenuFocusRequester.requestFocus()
+                            }
+                        )
                     }
-                )
+                }
 
                 VideoPlayerPictureMenuItem.AspectRatio -> RadioMenuList(
                     modifier = menuItemsModifier,

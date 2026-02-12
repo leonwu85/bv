@@ -280,7 +280,8 @@ fun VideoPlayerV3Screen(
             isLive = playerViewModel.isLive,
             availableLiveQualities = playerViewModel.availableLiveQualities.toList(),
             currentLiveQn = playerViewModel.currentLiveQn,
-            currentLiveQualityDescription = playerViewModel.currentLiveQualityDescription
+            currentLiveQualityDescription = playerViewModel.currentLiveQualityDescription,
+            currentLiveCodec = playerViewModel.currentLiveCodec
         ),
         LocalVideoPlayerDanmakuMasksData provides VideoPlayerDanmakuMasksData(
             danmakuMasks = playerViewModel.danmakuMasks,
@@ -543,6 +544,10 @@ fun VideoPlayerV3Screen(
                 },
                 onLiveQualityChange = { qn ->
                     playerViewModel.changeLiveQuality(qn)
+                },
+                onLiveCodecChange = { codec ->
+                    println("VideoPlayerV3Screen: onLiveCodecChange called with codec=$codec")
+                    playerViewModel.changeLiveCodec(codec)
                 },
                 onDanmakuSwitchChange = { enabledDanmakuTypes ->
                     Prefs.defaultDanmakuTypes = enabledDanmakuTypes
