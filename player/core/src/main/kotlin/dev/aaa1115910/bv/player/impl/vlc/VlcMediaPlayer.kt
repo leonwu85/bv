@@ -530,11 +530,11 @@ class VlcMediaPlayer(
             logger.debug { "Failed to access VLC 4 getTracks(): ${e.message}" }
         }
 
-        // 回退到 VLC 3 API: trackCount + getTrack(index)
+        // 回退到 VLC 3 API: getTrackCount() + getTrack(index)
         return try {
-            val trackCountField = media.javaClass.getDeclaredField("trackCount")
-            trackCountField.isAccessible = true
-            val trackCount = trackCountField.getInt(media) as Int
+            val getTrackCountMethod = media.javaClass.getDeclaredMethod("getTrackCount")
+            getTrackCountMethod.isAccessible = true
+            val trackCount = getTrackCountMethod.invoke(media) as Int
 
             val getTrackMethod = media.javaClass.getDeclaredMethod("getTrack", Int::class.javaPrimitiveType)
             getTrackMethod.isAccessible = true
@@ -546,7 +546,7 @@ class VlcMediaPlayer(
                     tracks.add(track)
                 }
             }
-            logger.debug { "Using VLC 3 API (trackCount + getTrack), found ${tracks.size} tracks" }
+            logger.debug { "Using VLC 3 API (getTrackCount + getTrack), found ${tracks.size} tracks" }
             tracks
         } catch (e: Exception) {
             logger.error(e) { "Failed to get tracks using VLC 3 API: ${e.message}" }

@@ -194,12 +194,17 @@ class VideoPlayerV3ViewModel(
     var livePopularityText by mutableStateOf("")   // "2.5万人气" (POPULARITY_CHANGE)
     var liveOnlineCount by mutableStateOf("")      // "4333 高能观众" (ONLINE_RANK_COUNT)
 
+    // 人气和高能观众更新频率限制（至少间隔 10 秒）
+    private var lastPopularityUpdateTime = 0L
+    private var lastOnlineCountUpdateTime = 0L
+
     // 直播弹幕管理
     private var liveWebSocket: Job? = null
     private var liveWebSocketInner: Job? = null
     private var liveDanmakuConsumer: Job? = null
     private var liveDanmakuChannel: Channel<DanmakuEvent>? = null
     private val liveDanmakuBuffer = mutableListOf<DanmakuItemData>()
+    private var liveDanmakuFlushJob: Job? = null
     
     var coin by mutableStateOf(0)
     var favorite by mutableStateOf(0)
@@ -1077,7 +1082,7 @@ class VideoPlayerV3ViewModel(
                 // 创建 Channel 和单消费者协程，避免每条弹幕创建一个协程
                 val channel = Channel<DanmakuEvent>(capacity = Channel.BUFFERED)
                 liveDanmakuChannel = channel
-                liveDanmakuConsumer = viewModelScope.launch(Dispatchers.Main) {
+                liveDanmakuConsumer = viewModelScope.launch(Dispatchers.IO) {
                     for (event in channel) {
                         addLiveDanmaku(event)
                     }
@@ -1094,10 +1099,18 @@ class VideoPlayerV3ViewModel(
                     when (event) {
                         is DanmakuEvent -> channel.trySend(event)
                         is PopularityChangeEvent -> {
-                            livePopularityText = event.popularityText
+                            val now = System.currentTimeMillis()
+                            if (now - lastPopularityUpdateTime >= 10_000) {
+                                livePopularityText = event.popularityText
+                                lastPopularityUpdateTime = now
+                            }
                         }
                         is OnlineRankCountEvent -> {
-                            liveOnlineCount = "${event.count} 高能观众"
+                            val now = System.currentTimeMillis()
+                            if (now - lastOnlineCountUpdateTime >= 10_000) {
+                                liveOnlineCount = "${event.count} 高能观众"
+                                lastOnlineCountUpdateTime = now
+                            }
                         }
                     }
                 }
@@ -1105,7 +1118,10 @@ class VideoPlayerV3ViewModel(
                 logger.fError { "Live danmaku connection failed: ${e.message}\n${e.stackTraceToString()}" }
             }
         }
-        
+
+        // 启动批量发送定时任务
+        startLiveDanmakuFlushJob()
+
         logger.fInfo { "Live danmaku started" }
     }
     
@@ -1114,6 +1130,10 @@ class VideoPlayerV3ViewModel(
      */
     fun stopLiveDanmaku() {
         logger.fInfo { "Stopping live danmaku" }
+
+        // 停止批量发送定时任务
+        stopLiveDanmakuFlushJob()
+
         liveWebSocket?.cancel()
         liveWebSocket = null
         liveWebSocketInner?.cancel()
@@ -1122,9 +1142,12 @@ class VideoPlayerV3ViewModel(
         liveDanmakuChannel = null
         liveDanmakuConsumer?.cancel()
         liveDanmakuConsumer = null
-        viewModelScope.launch(Dispatchers.Main) {
+
+        // 清空缓冲区
+        synchronized(liveDanmakuBuffer) {
             liveDanmakuBuffer.clear()
         }
+
         logger.fInfo { "Live danmaku stopped" }
     }
     
@@ -1132,12 +1155,9 @@ class VideoPlayerV3ViewModel(
      * 添加直播弹幕到缓冲区
      */
     private fun addLiveDanmaku(event: DanmakuEvent) {
-        // 使用 AkDanmaku 引擎的内部时钟作为弹幕位置，确保弹幕在当前可见的时间窗口内
-        val currentPosition = danmakuPlayer?.getCurrentTimeMs() ?: 0L
-        
         val danmakuItem = DanmakuItemData(
             danmakuId = System.currentTimeMillis(),
-            position = currentPosition,
+            position = 0L, 
             content = event.content,
             mode = when (event.mode) {
                 4 -> DanmakuItemData.DANMAKU_MODE_CENTER_TOP
@@ -1147,38 +1167,64 @@ class VideoPlayerV3ViewModel(
             textSize = event.fontSize,
             textColor = Color(event.color).toArgb()
         )
-        
-        val player = danmakuPlayer
-        if (player != null) {
-            try {
-                player.send(danmakuItem)
-                logger.fDebug { "Live danmaku sent: '${event.content}', pos=$currentPosition" }
-            } catch (e: Exception) {
-                logger.fError { "Failed to send live danmaku: ${e.message}" }
-            }
-        } else {
-            logger.fWarn { "Cannot send live danmaku: danmakuPlayer is null" }
+
+        // 添加到缓冲区
+        synchronized(liveDanmakuBuffer) {
+            liveDanmakuBuffer.add(danmakuItem)
         }
     }
-    
+
     /**
-     * 刷新直播弹幕缓冲区（已废弃，弹幕通过 send() 直接发送）
+     * 启动直播弹幕批量发送定时任务
      */
-    @Deprecated("弹幕已通过 DanmakuPlayer.send() 直接发送，无需缓冲刷新")
-    private fun flushLiveDanmakuBuffer() {
-        if (liveDanmakuBuffer.isEmpty()) return
-        
-        logger.fInfo { "Flushing ${liveDanmakuBuffer.size} danmaku items, total: ${danmakuData.size}" }
-        
-        // 将缓冲区中的弹幕添加到主弹幕列表
-        danmakuData.addAll(liveDanmakuBuffer)
-        
-        // 更新弹幕播放器
-        danmakuPlayer?.updateData(danmakuData)
-        danmakuPlayer?.start()
-        logger.fInfo { "Danmaku player updated, danmakuPlayer: $danmakuPlayer" }
-        
-        // 清空缓冲区
-        liveDanmakuBuffer.clear()
+    private fun startLiveDanmakuFlushJob() {
+        liveDanmakuFlushJob?.cancel()
+        liveDanmakuFlushJob = viewModelScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                delay(1000) // 每秒执行一次
+                flushLiveDanmakuBuffer()
+            }
+        }
+    }
+
+    /**
+     * 批量发送缓冲区中的弹幕
+     */
+    private suspend fun flushLiveDanmakuBuffer() {
+        val itemsToSend = synchronized(liveDanmakuBuffer) {
+            if (liveDanmakuBuffer.isEmpty()) return@synchronized emptyList()
+            val items = liveDanmakuBuffer.toList()
+            liveDanmakuBuffer.clear()
+            items
+        }
+
+        if (itemsToSend.isEmpty()) return
+
+        val player = danmakuPlayer ?: return
+        val sendPosition = player.getCurrentTimeMs() + 1000L
+
+        // 更新每条弹幕的 position
+        val updatedItems = itemsToSend.map {
+            DanmakuItemData(
+                danmakuId = it.danmakuId,
+                position = sendPosition,
+                content = it.content,
+                mode = it.mode,
+                textSize = it.textSize,
+                textColor = it.textColor
+            )
+        }
+
+        withContext(Dispatchers.Main) {
+            danmakuPlayer?.updateData(updatedItems)
+        }
+    }
+
+    /**
+     * 停止直播弹幕批量发送定时任务
+     */
+    private fun stopLiveDanmakuFlushJob() {
+        liveDanmakuFlushJob?.cancel()
+        liveDanmakuFlushJob = null
     }
 }
