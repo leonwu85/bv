@@ -6,14 +6,20 @@ import java.io.ByteArrayOutputStream
 
 fun ByteArray.brotliDecompress(): ByteArray {
     val inputStream = BrotliInputStream(ByteArrayInputStream(this))
-    val outputStream = ByteArrayOutputStream()
+    // 预估解压后大小，减少扩容次数
+    val estimatedSize = this.size * 4
+    val outputStream = ByteArrayOutputStream(estimatedSize.coerceAtLeast(4096))
     return outputStream.use {
-        val buffer = ByteArray(4096)
+        // 增大缓冲区，减少循环次数
+        val buffer = ByteArray(8192)
         var count: Int
-        while (inputStream.read(buffer).also { count = it } != -1) {
-            outputStream.write(buffer, 0, count)
+        try {
+            while (inputStream.read(buffer).also { count = it } != -1) {
+                outputStream.write(buffer, 0, count)
+            }
+        } finally {
+            inputStream.close()
         }
-        inputStream.close()
         outputStream.toByteArray()
     }
 }

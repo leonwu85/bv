@@ -26,10 +26,12 @@ import io.ktor.websocket.Frame
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.io.readByteArray
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -43,6 +45,12 @@ import kotlinx.serialization.json.put
 object LiveDataWebSocket {
     private lateinit var client: HttpClient
     private val logger = KotlinLogging.logger { }
+
+    // 预配置的 Json 实例，复用以提高解析效率
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+    }
 
     /** 最大重连次数 */
     private const val MAX_RECONNECT_ATTEMPTS = 5
@@ -161,14 +169,41 @@ object LiveDataWebSocket {
                                     delay(30_000)
                                 }
                             }
-                            while (isActive) {
-                                val frame = incoming.receive()
-                                val eventData = frame.data
+
+                            // 使用固定数量的消费者协程处理消息，避免每条消息创建新协程
+                            val messageChannel = Channel<ByteArray>(Channel.BUFFERED)
+                            val workerCount = 2 // 固定使用2个消费者协程
+                            val activeWorkers = AtomicInteger(workerCount)
+
+                            // 启动固定数量的消费者协程
+                            repeat(workerCount) {
                                 launch {
-                                    handleLiveEventData(eventData).forEach { event ->
-                                        onEvent(event)
+                                    try {
+                                        for (eventData in messageChannel) {
+                                            handleLiveEventData(eventData).forEach { event ->
+                                                onEvent(event)
+                                            }
+                                        }
+                                    } finally {
+                                        if (activeWorkers.decrementAndGet() == 0) {
+                                            messageChannel.close()
+                                        }
                                     }
                                 }
+                            }
+
+                            // 接收消息并发送到 Channel
+                            try {
+                                while (isActive) {
+                                    val frame = incoming.receive()
+                                    val eventData = frame.data
+                                    if (!messageChannel.trySend(eventData).isSuccess) {
+                                        // Channel 满了，丢弃消息（背压处理）
+                                        logger.warn { "Message channel full, dropping message" }
+                                    }
+                                }
+                            } finally {
+                                messageChannel.close()
                             }
                         }
                     } catch (e: CancellationException) {
@@ -316,7 +351,7 @@ object LiveDataWebSocket {
     }
 
     private fun handleLiveCMDEventString(strData: String): LiveEvent? {
-        val dataJson = Json.parseToJsonElement(strData).jsonObject
+        val dataJson = json.parseToJsonElement(strData).jsonObject
         val cmd = dataJson["cmd"]!!.jsonPrimitive.content
 
         when (cmd) {
