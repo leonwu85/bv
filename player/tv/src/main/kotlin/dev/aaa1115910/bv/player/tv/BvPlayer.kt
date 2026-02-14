@@ -167,6 +167,12 @@ fun BvPlayer(
     var currentPlaySpeed by remember { mutableFloatStateOf(videoPlayerConfigData.currentVideoSpeed) }
     var aspectRatioValue by remember { mutableFloatStateOf(16f / 9f) }
     var lastPlayed by remember { mutableLongStateOf(0L) }
+    
+    var pendingDanmakuPosition by remember { mutableLongStateOf(-1L) }
+    
+    var danmakuNeedsResume by remember { mutableStateOf(false) }
+    
+    var lastDanmakuSeekTime by remember { mutableLongStateOf(0L) }
     var defaultAspectRatio by remember { mutableFloatStateOf(16 / 9f) }
     var lastHeartbeatPosition by remember { mutableLongStateOf(0L) }
     var showInfoProvider: () -> Boolean by remember { mutableStateOf({ false }) }
@@ -422,26 +428,47 @@ fun BvPlayer(
                 logger.info { "Reset default play speed: $currentPlaySpeed" }
                 videoPlayer.speed = currentPlaySpeed
                 mDanmakuPlayer?.updatePlaySpeed(currentPlaySpeed)
+
+                // 如果视频正在播放，同步恢复弹幕
+                if (videoPlayer.isPlaying) {
+                    logger.info { "onReady: video is playing, resuming danmaku" }
+                    mDanmakuPlayer?.start()
+                }
             }
         }
 
         override fun onPlay() {
             logger.info { "onPlay" }
             scope.launch(Dispatchers.Main) {
-                // 优先使用历史播放位置同步弹幕，否则使用当前播放位置
-                val danmakuPosition = if (lastPlayed > 0) lastPlayed else videoPlayer.currentPosition
-                logger.info { "onPlay: danmakuPosition=${danmakuPosition.formatHourMinSec()}, currentPosition=${videoPlayer.currentPosition.formatHourMinSec()}" }
-
-                // 防止 onPlay 被多次调用
                 val wasPlaying = isPlaying
                 isPlaying = true
                 isBuffering = false
-                lastHeartbeatPosition = danmakuPosition
-                updateBackToHistory()
+                val currentTime = System.currentTimeMillis()
 
-                if (!wasPlaying) {
-                    mDanmakuPlayer?.seekTo(danmakuPosition)
+                if (danmakuNeedsResume && pendingDanmakuPosition >= 0) {
+                    val pos = pendingDanmakuPosition
+                    danmakuNeedsResume = false
+                    pendingDanmakuPosition = -1
+                    logger.info { "onPlay: resuming danmaku from pendingDanmakuPosition=${pos.formatHourMinSec()}" }
+                    mDanmakuPlayer?.seekTo(pos)
                     mDanmakuPlayer?.start()
+                    lastDanmakuSeekTime = currentTime
+                    lastHeartbeatPosition = pos
+                    updateBackToHistory()
+                } else if (!wasPlaying) {
+                    val timeSinceLastSeek = currentTime - lastDanmakuSeekTime
+                    if (timeSinceLastSeek < 3000) {
+                        logger.info { "onPlay: skip seek (timeSinceLastSeek=${timeSinceLastSeek}ms)" }
+                        mDanmakuPlayer?.start()
+                    } else {
+                        val danmakuPosition = if (lastPlayed > 0) lastPlayed else videoPlayer.currentPosition
+                        logger.info { "onPlay: danmakuPosition=${danmakuPosition.formatHourMinSec()}, currentPosition=${videoPlayer.currentPosition.formatHourMinSec()}" }
+                        mDanmakuPlayer?.seekTo(danmakuPosition)
+                        mDanmakuPlayer?.start()
+                        lastDanmakuSeekTime = currentTime
+                        lastHeartbeatPosition = danmakuPosition
+                        updateBackToHistory()
+                    }
                 }
             }
         }
@@ -458,6 +485,7 @@ fun BvPlayer(
             logger.info { "onBuffering" }
             scope.launch(Dispatchers.Main) {
                 isBuffering = true
+                isPlaying = false
             }
             mDanmakuPlayer?.pause()
         }
@@ -755,6 +783,8 @@ fun BvPlayer(
             onResolutionChange = { resolution ->
                 videoPlayer.pause()
                 val current = videoPlayer.currentPosition
+                pendingDanmakuPosition = current
+                danmakuNeedsResume = true
                 onResolutionChange(resolution) {
                     //scope.launch(Dispatchers.Default) {
                     //    playerViewModel.updateAvailableCodec()
@@ -770,6 +800,8 @@ fun BvPlayer(
             onCodecChange = { videoCodec ->
                 videoPlayer.pause()
                 val current = videoPlayer.currentPosition
+                pendingDanmakuPosition = current
+                danmakuNeedsResume = true
                 onCodecChange(videoCodec) {
                     withContext(Dispatchers.Main) {
                         videoPlayer.seekTo(current)
