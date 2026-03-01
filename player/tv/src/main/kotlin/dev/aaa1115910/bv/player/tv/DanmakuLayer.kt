@@ -13,20 +13,26 @@ import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskFrame
 import dev.aaa1115910.bv.player.AkDanmakuPlayer
 import dev.aaa1115910.bv.player.util.danmakuMask
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
+import com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer
 
 /**
- * 可稳定引用的弹幕层句柄，父级持有该句柄后，只要内部字段变化，
- * 仅弹幕层自身重组，避免父级（包含日志/时钟等频繁变化状态）级联重组。
+ * 可稳定引用的弹幕层句柄
+ * 仅弹幕层自身重组，避免父级
  */
 @Stable
 class DanmakuLayerHandle(
-    initialDanmakuPlayer: DanmakuPlayer? = null
+    initialDanmakuPlayer: DanmakuPlayer? = null,
+    initialIsLiveMode: Boolean = false
 ) {
     // 内部保存引用，对外通过 updateDanmakuPlayer 更新，避免与 JVM setter 同名冲突
     var danmakuPlayer: DanmakuPlayer? by mutableStateOf(initialDanmakuPlayer)
         private set
 
-    // 当前蒙版帧（null 表示无蒙版）
+    // 是否为直播模式
+    var isLiveMode: Boolean by mutableStateOf(initialIsLiveMode)
+        private set
+
+    // 当前蒙版帧
     var maskFrame: DanmakuMaskFrame? by mutableStateOf(null)
         private set
 
@@ -38,8 +44,20 @@ class DanmakuLayerHandle(
     var videoAspectRatio: Float by mutableStateOf(0f)
         private set
 
+    // 直播模式回调
+    var onLiveDanmakuPlayerReady: ((LiveDanmakuPlayer) -> Unit)? by mutableStateOf(null)
+        private set
+
+    fun updateOnLiveDanmakuPlayerReady(callback: ((LiveDanmakuPlayer) -> Unit)?) {
+        if (onLiveDanmakuPlayerReady !== callback) onLiveDanmakuPlayerReady = callback
+    }
+
     fun updateDanmakuPlayer(player: DanmakuPlayer?) {
         if (danmakuPlayer !== player) danmakuPlayer = player
+    }
+
+    fun updateIsLiveMode(isLive: Boolean) {
+        if (isLiveMode != isLive) isLiveMode = isLive
     }
 
     fun update(
@@ -59,9 +77,7 @@ fun DanmakuLayer(
     handle: DanmakuLayerHandle,
 ) {
     val player = handle.danmakuPlayer
-    if (player == null) return
 
-    // 根据 maskFrame 动态应用蒙版 Modifier（避免无意义的额外 Modifier 组合）
     val maskModifier = if (handle.maskFrame != null && handle.videoAspectRatio > 0f) {
         Modifier.danmakuMask(handle.maskFrame, handle.videoAspectRatio)
     } else Modifier
@@ -74,7 +90,9 @@ fun DanmakuLayer(
     ) {
         AkDanmakuPlayer(
             modifier = Modifier.fillMaxWidth().fillMaxHeight(),
-            danmakuPlayer = player
+            danmakuPlayer = player,
+            isLiveMode = handle.isLiveMode,
+            onLiveDanmakuPlayerReady = handle.onLiveDanmakuPlayerReady
         )
     }
 }

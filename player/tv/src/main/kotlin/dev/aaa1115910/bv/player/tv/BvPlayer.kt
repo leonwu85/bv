@@ -120,6 +120,8 @@ fun BvPlayer(
     onShowComment: () -> Unit = {},
     onTripleLike: () -> Unit = {},
     useTripleLikeOnLongPress: Boolean = false,
+    isLive: Boolean = false,
+    onLiveDanmakuPlayerReady: ((com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer) -> Unit)? = null,
     userActionContent: @Composable (
         modifier: Modifier,
         focusMap: Map<String, FocusRequester>,
@@ -264,7 +266,12 @@ fun BvPlayer(
 
 
     // 独立弹幕层句柄（Stable），父级重组频率降低
-    val danmakuLayerHandle = remember { DanmakuLayerHandle() }
+    val danmakuLayerHandle = remember { DanmakuLayerHandle(initialIsLiveMode = isLive) }
+
+    // 设置直播弹幕回调
+    LaunchedEffect(onLiveDanmakuPlayerReady) {
+        danmakuLayerHandle.updateOnLiveDanmakuPlayerReady(onLiveDanmakuPlayerReady)
+    }
 
     val initDanmakuConfig: () -> Unit = {
         val danmakuTypes = videoPlayerConfigData.currentDanmakuEnabledList
@@ -299,6 +306,7 @@ fun BvPlayer(
         danmakuConfig.updateFilter()
         logger.info { "Init danmaku config (liveMode=${videoPlayerConfigData.isLive}): $danmakuConfig" }
         mDanmakuPlayer?.updateConfig(danmakuConfig)
+        danmakuLayerHandle.updateIsLiveMode(isLive)
     }
 
     val updateDanmakuConfigTypeFilter: () -> Unit = {

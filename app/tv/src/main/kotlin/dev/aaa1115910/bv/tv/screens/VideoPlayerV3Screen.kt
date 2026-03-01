@@ -598,6 +598,10 @@ fun VideoPlayerV3Screen(
                     }
                 },
                 useTripleLikeOnLongPress = Prefs.playerLongPressAction == PlayerLongPressAction.TripleLike,
+                isLive = playerViewModel.isLive,
+                onLiveDanmakuPlayerReady = { player ->
+                    playerViewModel.setLivePlayer(player)
+                },
                 onOpenUpSpace = {
                     UpInfoActivity.actionStart(
                         context,

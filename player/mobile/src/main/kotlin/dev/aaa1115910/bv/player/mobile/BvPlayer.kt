@@ -78,6 +78,8 @@ fun BvPlayer(
     videoPlayer: AbstractVideoPlayer,
     danmakuPlayer: DanmakuPlayer?,
     danmakuOpacity: Float,
+    isLive: Boolean = false,
+    onLiveDanmakuPlayerReady: ((com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer) -> Unit)? = null,
 ) {
     val logger = KotlinLogging.logger("BvPlayer")
     // 直接调用 danmakuPlayer 会始终为 null
@@ -148,7 +150,8 @@ fun BvPlayer(
             retainerPolicy = RETAINER_BILIBILI,
             textSizeScale = videoPlayerConfigData.currentDanmakuScale,
             dataFilter = listOf(typeFilter),
-            alpha = danmakuOpacity
+            alpha = danmakuOpacity,
+            liveMode = isLive
         )
         danmakuConfig.updateFilter()
         mDanmakuPlayer?.updateConfig(danmakuConfig)
@@ -401,7 +404,9 @@ fun BvPlayer(
             AkDanmakuPlayer(
                 modifier = Modifier
                     .fillMaxHeight(videoPlayerConfigData.currentDanmakuArea),
-                danmakuPlayer = mDanmakuPlayer
+                danmakuPlayer = mDanmakuPlayer,
+                isLiveMode = isLive,
+                onLiveDanmakuPlayerReady = onLiveDanmakuPlayerReady
             )
         }
     }

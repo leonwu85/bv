@@ -12,8 +12,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kuaishou.akdanmaku.DanmakuConfig
 import com.kuaishou.akdanmaku.data.DanmakuItemData
+import com.kuaishou.akdanmaku.ext.RETAINER_BILIBILI
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
+import com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.PlayData
 import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskSegment
@@ -85,6 +88,7 @@ class VideoPlayerV3ViewModel(
 
     var videoPlayer: AbstractVideoPlayer? by mutableStateOf(null)
     var danmakuPlayer: DanmakuPlayer? by mutableStateOf(null)
+    var liveDanmakuPlayer: LiveDanmakuPlayer? by mutableStateOf(null)
     var show by mutableStateOf(false)
     
     override fun onCleared() {
@@ -108,6 +112,8 @@ class VideoPlayerV3ViewModel(
         try {
             danmakuPlayer?.release()
             danmakuPlayer = null
+            liveDanmakuPlayer?.release()
+            liveDanmakuPlayer = null
             danmakuData.clear()
             danmakuMasks.clear()
         } catch (e: Exception) {
@@ -203,8 +209,6 @@ class VideoPlayerV3ViewModel(
     private var liveWebSocketInner: Job? = null
     private var liveDanmakuConsumer: Job? = null
     private var liveDanmakuChannel: Channel<DanmakuEvent>? = null
-    private val liveDanmakuBuffer = mutableListOf<DanmakuItemData>()
-    private var liveDanmakuFlushJob: Job? = null
     
     var coin by mutableStateOf(0)
     var favorite by mutableStateOf(0)
@@ -230,10 +234,27 @@ class VideoPlayerV3ViewModel(
     var currentCid by mutableLongStateOf(0L)
     private var currentEpid = 0
 
-    private suspend fun ensureDanmakuPlayer() = withContext(Dispatchers.Main) {
+    private suspend fun ensureDanmakuPlayer(isLive: Boolean = false) = withContext(Dispatchers.Main) {
         danmakuPlayer?.release()
-        danmakuPlayer = DanmakuPlayer(SimpleRenderer())
-        logger.fInfo { "(Re)create DanmakuPlayer: $danmakuPlayer" }
+        danmakuPlayer = if (isLive) {
+            // 直播模式：LiveDanmakuPlayer 需要在 Compose 中创建（需要 DanmakuSurfaceView）
+            // 这里设置为 null，实际 player 由 Compose 回调设置
+            logger.fInfo { "Live mode: LiveDanmakuPlayer will be created in Compose" }
+            null
+        } else {
+            // 普通模式
+            DanmakuPlayer(SimpleRenderer()).also {
+                logger.fInfo { "(Re)create DanmakuPlayer: $it" }
+            }
+        }
+    }
+
+    /**
+     * 设置从 Compose 创建的 LiveDanmakuPlayer
+     */
+    fun setLivePlayer(player: LiveDanmakuPlayer) {
+        liveDanmakuPlayer = player
+        logger.fInfo { "LiveDanmakuPlayer set from Compose: $player" }
     }
 
     fun loadPlayUrl(
@@ -891,7 +912,7 @@ class VideoPlayerV3ViewModel(
 
             // 仅在首次加载时初始化弹幕播放器，画质切换时不重复创建
             if (danmakuPlayer == null) {
-                ensureDanmakuPlayer()
+                ensureDanmakuPlayer(isLive = true)
             }
 
             val playInfo = LiveStreamUrlFetcher.fetchLiveStreamUrl(roomId, qn, currentLiveCodec)
@@ -1119,9 +1140,6 @@ class VideoPlayerV3ViewModel(
             }
         }
 
-        // 启动批量发送定时任务
-        startLiveDanmakuFlushJob()
-
         logger.fInfo { "Live danmaku started" }
     }
     
@@ -1130,9 +1148,6 @@ class VideoPlayerV3ViewModel(
      */
     fun stopLiveDanmaku() {
         logger.fInfo { "Stopping live danmaku" }
-
-        // 停止批量发送定时任务
-        stopLiveDanmakuFlushJob()
 
         liveWebSocket?.cancel()
         liveWebSocket = null
@@ -1143,21 +1158,17 @@ class VideoPlayerV3ViewModel(
         liveDanmakuConsumer?.cancel()
         liveDanmakuConsumer = null
 
-        // 清空缓冲区
-        synchronized(liveDanmakuBuffer) {
-            liveDanmakuBuffer.clear()
-        }
-
         logger.fInfo { "Live danmaku stopped" }
     }
     
     /**
-     * 添加直播弹幕到缓冲区
+     * 实时发送直播弹幕
      */
     private fun addLiveDanmaku(event: DanmakuEvent) {
+        logger.fInfo { "addLiveDanmaku called: content=${event.content}, liveDanmakuPlayer=$liveDanmakuPlayer" }
         val danmakuItem = DanmakuItemData(
             danmakuId = System.currentTimeMillis(),
-            position = 0L, 
+            position = 0L,
             content = event.content,
             mode = when (event.mode) {
                 4 -> DanmakuItemData.DANMAKU_MODE_CENTER_TOP
@@ -1168,63 +1179,10 @@ class VideoPlayerV3ViewModel(
             textColor = Color(event.color).toArgb()
         )
 
-        // 添加到缓冲区
-        synchronized(liveDanmakuBuffer) {
-            liveDanmakuBuffer.add(danmakuItem)
+        // 直播模式
+        viewModelScope.launch(Dispatchers.Main) {
+            logger.fInfo { "Emitting danmaku: liveDanmakuPlayer=$liveDanmakuPlayer" }
+            liveDanmakuPlayer?.emit(danmakuItem)
         }
-    }
-
-    /**
-     * 启动直播弹幕批量发送定时任务
-     */
-    private fun startLiveDanmakuFlushJob() {
-        liveDanmakuFlushJob?.cancel()
-        liveDanmakuFlushJob = viewModelScope.launch(Dispatchers.IO) {
-            while (isActive) {
-                delay(1000) // 每秒执行一次
-                flushLiveDanmakuBuffer()
-            }
-        }
-    }
-
-    /**
-     * 批量发送缓冲区中的弹幕
-     */
-    private suspend fun flushLiveDanmakuBuffer() {
-        val itemsToSend = synchronized(liveDanmakuBuffer) {
-            if (liveDanmakuBuffer.isEmpty()) return@synchronized emptyList()
-            val items = liveDanmakuBuffer.toList()
-            liveDanmakuBuffer.clear()
-            items
-        }
-
-        if (itemsToSend.isEmpty()) return
-
-        val player = danmakuPlayer ?: return
-        val sendPosition = player.getCurrentTimeMs() + 1000L
-
-        // 更新每条弹幕的 position
-        val updatedItems = itemsToSend.map {
-            DanmakuItemData(
-                danmakuId = it.danmakuId,
-                position = sendPosition,
-                content = it.content,
-                mode = it.mode,
-                textSize = it.textSize,
-                textColor = it.textColor
-            )
-        }
-
-        withContext(Dispatchers.Main) {
-            danmakuPlayer?.updateData(updatedItems)
-        }
-    }
-
-    /**
-     * 停止直播弹幕批量发送定时任务
-     */
-    private fun stopLiveDanmakuFlushJob() {
-        liveDanmakuFlushJob?.cancel()
-        liveDanmakuFlushJob = null
     }
 }

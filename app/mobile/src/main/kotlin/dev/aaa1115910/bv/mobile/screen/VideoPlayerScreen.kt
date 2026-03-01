@@ -391,7 +391,11 @@ fun VideoPlayerScreen(
                                     continuePlayNext = true
                                 )
                             },
-                            danmakuOpacity = playerViewModel.currentDanmakuOpacity
+                            danmakuOpacity = playerViewModel.currentDanmakuOpacity,
+                            isLive = playerViewModel.isLive,
+                            onLiveDanmakuPlayerReady = { player ->
+                                playerViewModel.setLivePlayer(player)
+                            }
                         )
                     }
                 }
