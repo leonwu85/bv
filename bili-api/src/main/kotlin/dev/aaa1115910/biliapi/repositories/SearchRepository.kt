@@ -185,7 +185,7 @@ enum class SearchType(
     MediaBangumi(httpTypeParam = "media_bangumi", grpcTypeParam = 7),
     MediaFt(httpTypeParam = "media_ft", grpcTypeParam = 8),
     BiliUser(httpTypeParam = "bili_user", grpcTypeParam = 2),
-    //Live grpcTypeParam = 4/5
+    LiveRoom(httpTypeParam = "live_room", grpcTypeParam = 4),
     //Article grpcTypeParam = 6
 }
 
@@ -245,6 +245,7 @@ data class SearchTypeResult(
     val videos: List<Video> = emptyList(),
     val pgcs: List<Pgc> = emptyList(),
     val users: List<User> = emptyList(),
+    val liveRooms: List<LiveRoom> = emptyList(),
     val page: SearchTypePage,
     val pageSize: Int? = 20
 ) {
@@ -270,6 +271,14 @@ data class SearchTypeResult(
                 is dev.aaa1115910.biliapi.http.entity.search.SearchBiliUserResult -> {
                     SearchTypeResult(
                         users = result.searchTypeResults.map { User.fromSearchUserResult(it as dev.aaa1115910.biliapi.http.entity.search.SearchBiliUserResult) },
+                        page = SearchTypePage(nextPageForWeb = result.page + 1),
+                        pageSize = result.pageSize
+                    )
+                }
+
+                is dev.aaa1115910.biliapi.http.entity.search.SearchLiveRoomResult -> {
+                    SearchTypeResult(
+                        liveRooms = result.searchTypeResults.map { LiveRoom.fromSearchLiveRoomResult(it as dev.aaa1115910.biliapi.http.entity.search.SearchLiveRoomResult) },
                         page = SearchTypePage(nextPageForWeb = result.page + 1),
                         pageSize = result.pageSize
                     )
@@ -402,6 +411,31 @@ data class SearchTypeResult(
                     name = user.author.title,
                     avatar = user.author.cover,
                     sign = user.author.sign
+                )
+        }
+    }
+
+    data class LiveRoom(
+        val roomId: Int,
+        val title: String,
+        val uname: String,
+        val cover: String,
+        val online: Int,
+        val cateName: String,
+        val uid: Long,
+        val uface: String
+    ) : SearchTypeResultItem {
+        companion object {
+            fun fromSearchLiveRoomResult(liveRoom: dev.aaa1115910.biliapi.http.entity.search.SearchLiveRoomResult) =
+                LiveRoom(
+                    roomId = liveRoom.roomId,
+                    title = liveRoom.title,
+                    uname = liveRoom.uname,
+                    cover = if (liveRoom.cover.startsWith("//")) "https:${liveRoom.cover}" else liveRoom.cover,
+                    online = liveRoom.online,
+                    cateName = liveRoom.cateName,
+                    uid = liveRoom.uid,
+                    uface = if (liveRoom.uFace.startsWith("//")) "https:${liveRoom.uFace}" else liveRoom.uFace
                 )
         }
     }

@@ -440,3 +440,53 @@ data class SearchVideoResult(
     @SerialName("is_intervene")
     val isIntervene: Int
 ) : SearchResultItem()
+
+/**
+ * 直播间(live_room)
+ *
+ * @param type 结果类型 固定为live_room
+ * @param roomid 直播间ID
+ * @param title 直播标题 关键字用xml标签<em class="keyword">标注
+ * @param uname 主播昵称
+ * @param cover 直播封面url
+ * @param online 在线观看人数
+ * @param cateName 分区名
+ * @param uid 主播mid
+ * @param uface 主播头像url
+ * @param liveTime 开播时间
+ * @param tags 直播TAG
+ * @param attentions 关注数
+ * @param rankOffset 搜索结果排名值
+ * @param rankIndex
+ * @param rankScore 结果排序量化值
+ * @param userCover
+ * @param pic
+ */
+@Serializable
+data class SearchLiveRoomResult(
+    val type: String = "",
+    @SerialName("roomid")
+    val roomId: Int = 0,
+    val title: String = "",
+    val uname: String = "",
+    val cover: String = "",
+    val online: Int = 0,
+    @SerialName("cate_name")
+    val cateName: String = "",
+    val uid: Long = 0,
+    @SerialName("uface")
+    val uFace: String = "",
+    @SerialName("live_time")
+    val liveTime: String = "",
+    val tags: String = "",
+    val attentions: Int = 0,
+    @SerialName("rank_offset")
+    val rankOffset: Int = 0,
+    @SerialName("rank_index")
+    val rankIndex: Int = 0,
+    @SerialName("rank_score")
+    val rankScore: Int = 0,
+    @SerialName("user_cover")
+    val userCover: String = "",
+    val pic: String = ""
+) : SearchResultItem()

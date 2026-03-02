@@ -47,11 +47,13 @@ import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
 import dev.aaa1115910.biliapi.entity.ApiType
+import dev.aaa1115910.biliapi.entity.live.LiveRoomItem
 import dev.aaa1115910.biliapi.entity.ugc.toSmartDate
 import dev.aaa1115910.biliapi.repositories.SearchType
 import dev.aaa1115910.biliapi.repositories.SearchTypeResult
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.tv.R as TvR
+import dev.aaa1115910.bv.tv.component.live.LiveRoomCard
 import dev.aaa1115910.bv.tv.component.videocard.SeasonCard
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.entity.carddata.SeasonCardData
@@ -60,6 +62,7 @@ import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
+import dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity
 import dev.aaa1115910.bv.tv.screens.user.UpCard
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.util.Prefs
@@ -97,6 +100,7 @@ fun SearchResultScreen(
         SearchType.MediaBangumi -> searchResultViewModel.mediaBangumiSearchResult
         SearchType.MediaFt -> searchResultViewModel.mediaFtSearchResult
         SearchType.BiliUser -> searchResultViewModel.biliUserSearchResult
+        SearchType.LiveRoom -> searchResultViewModel.liveRoomSearchResult
     }
 
     var showFilter by remember { mutableStateOf(false) }
@@ -133,6 +137,16 @@ fun SearchResultScreen(
                 )
             }
 
+            is SearchTypeResult.LiveRoom -> {
+                VideoPlayerV3Activity.actionStartLive(
+                    context = context,
+                    roomId = resultItem.roomId,
+                    title = resultItem.title.removeHtmlTags(),
+                    upName = resultItem.uname,
+                    watchedNum = resultItem.online
+                )
+            }
+
             else -> {}
         }
     }
@@ -166,6 +180,7 @@ fun SearchResultScreen(
             SearchType.Video -> gridColumns
             SearchType.MediaBangumi, SearchType.MediaFt -> gridColumns + 2
             SearchType.BiliUser -> gridColumns - 1
+            SearchType.LiveRoom -> gridColumns
         }
     }
 
@@ -226,15 +241,26 @@ fun SearchResultScreen(
                 .padding(innerPadding)
                 .fillMaxSize()
         ) {
+            val searchTypes = remember { SearchType.entries.filter { it != SearchType.LiveRoom } }
+            val allSearchTypes = remember { SearchType.entries.toList() }
+            val visibleSearchTypes = if (Prefs.showLiveInSidebar) allSearchTypes else searchTypes
+
+            LaunchedEffect(visibleSearchTypes) {
+                if (searchResultViewModel.searchType == SearchType.LiveRoom &&
+                    !Prefs.showLiveInSidebar) {
+                    searchResultViewModel.searchType = SearchType.Video
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center
             ) {
                 TabRow(
-                    selectedTabIndex = searchResultViewModel.searchType.ordinal,
+                    selectedTabIndex = visibleSearchTypes.indexOf(searchResultViewModel.searchType),
                     separator = { Spacer(modifier = Modifier.width(12.dp)) },
                 ) {
-                    SearchType.entries.forEach { type ->
+                    visibleSearchTypes.forEach { type ->
                         val isSelected = type == searchResultViewModel.searchType
                         val tabModifier =
                             if (isSelected) Modifier.focusRequester(tabRowFocusRequester) else Modifier
@@ -285,6 +311,7 @@ fun SearchResultScreen(
                             SearchType.MediaBangumi -> searchResult.mediaBangumis
                             SearchType.MediaFt -> searchResult.mediaFts
                             SearchType.BiliUser -> searchResult.biliUsers
+                            SearchType.LiveRoom -> searchResult.liveRooms
                         }
                     ) { index, searchResultItem ->
                         SearchResultListItem(
@@ -368,6 +395,24 @@ private fun SearchResultListItem(
             )
         }
 
+        is SearchTypeResult.LiveRoom -> {
+            LiveRoomCard(
+                modifier = modifier,
+                data = LiveRoomItem(
+                    roomId = searchResult.roomId,
+                    uid = searchResult.uid,
+                    title = searchResult.title.removeHtmlTags(),
+                    uname = searchResult.uname,
+                    online = searchResult.online,
+                    cover = searchResult.cover,
+                    face = searchResult.uface,
+                    areaName = searchResult.cateName
+                ),
+                onClick = onClick,
+                onFocus = onFocus
+            )
+        }
+
         else -> {
 
         }
@@ -379,4 +424,5 @@ fun SearchType.getDisplayName(context: Context) = when (this) {
     SearchType.MediaBangumi -> context.getString(R.string.search_result_type_name_media_bangumi)
     SearchType.MediaFt -> context.getString(R.string.search_result_type_name_media_ft)
     SearchType.BiliUser -> context.getString(R.string.search_result_type_name_bili_user)
+    SearchType.LiveRoom -> context.getString(R.string.search_result_type_name_live_room)
 }
