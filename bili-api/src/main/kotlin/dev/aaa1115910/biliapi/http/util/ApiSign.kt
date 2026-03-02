@@ -20,6 +20,10 @@ import java.security.MessageDigest
 
 private const val APP_KEY = "dfca71928277209b"
 private const val APP_SEC = "b5475a8825547a4fc26c7d518eaaa02e"
+
+private const val WEB_APP_KEY = "aa1e74ee4874176e"
+private const val WEB_APP_SEC = "54e6a9a31b911cd5fc0daa66ebf94bc4"
+private const val WEB_BUILD = "1001011000"
 private val mixinKeyEncTab = listOf(
     46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49,
     33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40, 61,
@@ -65,6 +69,33 @@ fun HttpRequestBuilder.encAppGet() {
 
     parameter("sign", sign)
     println("sign: $sign")
+}
+
+/**
+ * 用于直播推荐等需要此签名的 API
+ */
+fun HttpRequestBuilder.encWebAppGet() {
+    parameter("appkey", WEB_APP_KEY)
+    parameter("build", WEB_BUILD)
+    parameter("ts", System.currentTimeMillis())
+
+    val sortedParams = url.encodedParameters.entries()
+        .associate { it.key to it.value.first() }
+        .toSortedMap()
+        .also {
+            url.parameters.clear()
+            it.entries.forEach { (key, value) -> parameter(key, value) }
+        }
+
+    val sortedParamsString = sortedParams
+        .map { (key, value) -> "$key=$value" }
+        .joinToString("&")
+
+    val sign = MessageDigest.getInstance("MD5").digest((sortedParamsString + WEB_APP_SEC).toByteArray())
+        .joinToString("") { "%02x".format(it) }
+
+    parameter("sign", sign)
+    println("web sign: $sign")
 }
 
 suspend fun HttpRequestBuilder.encWbi() {

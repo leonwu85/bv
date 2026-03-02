@@ -1,10 +1,13 @@
 package dev.aaa1115910.biliapi.repositories
 
 import dev.aaa1115910.biliapi.entity.live.LiveAreaResponse
+import dev.aaa1115910.biliapi.entity.live.LiveFeedResponse
+import dev.aaa1115910.biliapi.entity.live.LiveFollowResponse
 import dev.aaa1115910.biliapi.entity.live.LiveRoomListResponse
 import dev.aaa1115910.biliapi.entity.live.LiveRoomPlayInfoResponse
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
 import dev.aaa1115910.biliapi.http.util.encAppGet
+import dev.aaa1115910.biliapi.http.util.encWebAppGet
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -96,6 +99,48 @@ class LiveRepository(
                 parameter("panorama", 1)
                 if (sessData.isNotEmpty()) {
                     header("Cookie", "SESSDATA=$sessData")
+                }
+            }.body()
+        }
+
+    /**
+     * 获取直播推荐列表
+     * @param parentAreaId 一级分区ID（0=推荐全部）
+     * @param areaId 二级分区ID（0=该一级分区全部）
+     * @param page 页码，从1开始
+     */
+    suspend fun getLiveFeed(parentAreaId: Int = 0, areaId: Int = 0, page: Int = 1): LiveFeedResponse = withContext(Dispatchers.IO) {
+        client.get("https://api.live.bilibili.com/xlive/app-interface/v2/index/feedV2") {
+            parameter("parent_area_id", parentAreaId)
+            parameter("area_id", areaId)
+            parameter("device", "switch")
+            parameter("page", page)
+            parameter("platform", "web")
+            parameter("scale", "xxhdpi")
+            parameter("source_name", "pc")
+            parameter("mobi_app", "pc_electron")
+            // 添加登录凭证以获取关注列表
+            if (!authRepository.sessionData.isNullOrBlank()) {
+                header("Cookie", "SESSDATA=${authRepository.sessionData}")
+            }
+            encWebAppGet()
+        }.body()
+    }
+
+    /**
+     * 获取关注的正在直播的主播列表
+     * @param page 页码，从1开始
+     * @param pageSize 每页数量，默认30
+     */
+    suspend fun getLiveFollowing(page: Int = 1, pageSize: Int = 30): LiveFollowResponse =
+        withContext(Dispatchers.IO) {
+            client.get("https://api.live.bilibili.com/xlive/web-ucenter/user/following") {
+                parameter("page", page)
+                parameter("page_size", pageSize)
+                parameter("ignoreRecord", 1)
+                parameter("hit_ab", true)
+                if (authRepository.accessToken != null) {
+                    parameter("access_key", authRepository.accessToken)
                 }
             }.body()
         }
