@@ -354,7 +354,8 @@ fun BvPlayer(
         logger.info { "Update video player aspectRatio: $aspectRatioValue" }
     }
 
-    val sendHeartbeat: () -> Unit = {
+    val sendHeartbeat: () -> Unit = sendHeartbeat@{
+        if (videoPlayerConfigData.isLive) return@sendHeartbeat
         scope.launch(Dispatchers.IO) {
             val time = withContext(Dispatchers.Main) {
                 val currentTime = (videoPlayer.currentPosition.coerceAtLeast(0L) / 1000).toInt()
@@ -570,6 +571,8 @@ fun BvPlayer(
         }
 
         override fun onProgress(position: Long, duration: Long, buffered: Int) {
+            if (videoPlayerConfigData.isLive) return
+
             scope.launch(Dispatchers.Main.immediate) {
                 val pos = position.coerceAtLeast(0L)
                 val dur = duration.coerceAtLeast(0L)
@@ -654,7 +657,7 @@ fun BvPlayer(
     DisposableEffect(Unit) {
         onDispose {
             // 在释放播放器前发送心跳，确保退出时进度被正确记录
-            if (!videoPlayerConfigData.incognitoMode) {
+            if (!videoPlayerConfigData.incognitoMode && !videoPlayerConfigData.isLive) {
                 // 获取当前时间并直接调用上传方法
                 val currentTime = (videoPlayer.currentPosition.coerceAtLeast(0L) / 1000).toInt()
                 val totalTime = (videoPlayer.duration.coerceAtLeast(0L) / 1000).toInt()
