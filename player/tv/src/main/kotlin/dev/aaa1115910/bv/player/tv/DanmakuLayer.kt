@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.player.tv
 
+import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -11,7 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskFrame
 import dev.aaa1115910.bv.player.AkDanmakuPlayer
-import dev.aaa1115910.bv.player.util.danmakuMask
+import dev.aaa1115910.bv.player.util.danmakuMaskBitmap
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer
 
@@ -32,8 +33,12 @@ class DanmakuLayerHandle(
     var isLiveMode: Boolean by mutableStateOf(initialIsLiveMode)
         private set
 
-    // 当前蒙版帧
+    // 当前蒙版帧（保留用于调试）
     var maskFrame: DanmakuMaskFrame? by mutableStateOf(null)
+        private set
+
+    // 预渲染的蒙版 Bitmap
+    var maskBitmap: Bitmap? by mutableStateOf(null)
         private set
 
     // 是否显示弹幕
@@ -62,10 +67,12 @@ class DanmakuLayerHandle(
 
     fun update(
         mask: DanmakuMaskFrame? = maskFrame,
+        bitmap: Bitmap? = maskBitmap,
         visible: Boolean? = null,
         videoAspectRatio: Float? = null
     ) {
         if (maskFrame !== mask) maskFrame = mask
+        if (maskBitmap !== bitmap) maskBitmap = bitmap
         visible?.let { if (this.visible != it) this.visible = it }
         videoAspectRatio?.let { if (this.videoAspectRatio != it) this.videoAspectRatio = it }
     }
@@ -78,8 +85,9 @@ fun DanmakuLayer(
 ) {
     val player = handle.danmakuPlayer
 
-    val maskModifier = if (handle.maskFrame != null && handle.videoAspectRatio > 0f) {
-        Modifier.danmakuMask(handle.maskFrame, handle.videoAspectRatio)
+    // 使用预渲染的 Bitmap
+    val maskModifier = if (handle.maskBitmap != null && handle.videoAspectRatio > 0f) {
+        Modifier.danmakuMaskBitmap(handle.maskBitmap, handle.videoAspectRatio)
     } else Modifier
 
     Box(

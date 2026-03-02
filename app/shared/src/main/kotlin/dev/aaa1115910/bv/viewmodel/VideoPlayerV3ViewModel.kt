@@ -802,6 +802,9 @@ class VideoPlayerV3ViewModel(
     }
 
     private suspend fun updateDanmakuMask() {
+        // 直播模式不获取蒙版数据
+        if (isLive) return
+
         runCatching {
             val masks = videoPlayRepository.getDanmakuMask(
                 aid = currentAid,

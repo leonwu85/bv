@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.player.tv
 
+import android.graphics.Bitmap
 import android.os.CountDownTimer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
@@ -68,6 +69,7 @@ import dev.aaa1115910.bv.player.tv.controller.SkipOpTip
 import dev.aaa1115910.bv.player.tv.controller.VideoPlayerController
 import dev.aaa1115910.bv.util.countDownTimer
 import dev.aaa1115910.bv.player.util.DanmakuMaskFinder
+import dev.aaa1115910.bv.player.util.renderMaskFrameToBitmap
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.formatHourMinSec
 import dev.aaa1115910.bv.util.requestFocus
@@ -186,6 +188,10 @@ fun BvPlayer(
     var hideBackToHistoryTimer: CountDownTimer? by remember { mutableStateOf(null) }
 
     var currentDanmakuMaskFrame: DanmakuMaskFrame? by remember { mutableStateOf(null) }
+    var currentDanmakuMaskBitmap: Bitmap? by remember { mutableStateOf(null) }
+
+    // 预渲染的蒙版 Bitmap 缓存（帧 -> Bitmap）
+    val danmakuMaskBitmapCache = remember { mutableMapOf<DanmakuMaskFrame, Bitmap>() }
 
     // 跳过片头片尾相关状态
     var showSkipOpTip by remember { mutableStateOf(false) }
@@ -257,11 +263,25 @@ fun BvPlayer(
             videoPlayerDanmakuMaskData.danmakuMasks,
             position
         )
-        withContext(Dispatchers.Main) {
-            if (currentDanmakuMaskFrame != maskFrame) {
+
+        // 只有找到新帧时才更新，null 时保持当前蒙版（避免帧空隙导致蒙版闪烁）
+        if (maskFrame != null && currentDanmakuMaskFrame != maskFrame) {
+            // 优先使用缓存中的 Bitmap，避免实时渲染
+            val bitmap = danmakuMaskBitmapCache[maskFrame] ?: run {
+                // 缓存未命中，实时渲染并缓存
+                val renderedBitmap = withContext(Dispatchers.Default) {
+                    renderMaskFrameToBitmap(maskFrame)
+                }
+                danmakuMaskBitmapCache[maskFrame] = renderedBitmap
+                renderedBitmap
+            }
+
+            withContext(Dispatchers.Main) {
                 currentDanmakuMaskFrame = maskFrame
+                currentDanmakuMaskBitmap = bitmap
             }
         }
+        // 如果 maskFrame 为 null（帧空隙），不做任何操作，保持当前蒙版
     }
 
 
@@ -586,13 +606,7 @@ fun BvPlayer(
                     checkSkipTask(pos)
                 }
 
-                if (videoPlayerDanmakuMaskData.danmakuMasks.isNotEmpty()) {
-                    scope.launch(Dispatchers.Default) {
-                        updateDanmakuMaskForPosition(pos)
-                    }
-                } else if (currentDanmakuMaskFrame != null) {
-                    currentDanmakuMaskFrame = null
-                }
+                // 蒙版更新已移至独立定时器
 
                 if (!videoPlayerConfigData.incognitoMode && isPlaying) {
                     if (pos - lastHeartbeatPosition >= 15_000) {
@@ -606,6 +620,31 @@ fun BvPlayer(
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus(scope)
+    }
+
+    // 使用 rememberUpdatedState 确保获取最新的蒙版数据
+    val currentDanmakuMasks by rememberUpdatedState(videoPlayerDanmakuMaskData.danmakuMasks)
+    val currentIsPlaying by rememberUpdatedState(isPlaying)
+    val currentDanmakuMaskEnabled by rememberUpdatedState(videoPlayerConfigData.currentDanmakuMask)
+    val currentIsLive by rememberUpdatedState(videoPlayerConfigData.isLive)
+
+    // 独立定时器：高频更新蒙版（每 33ms，约 30fps）
+    // 直播模式下不启用蒙版
+    LaunchedEffect(Unit) {
+        while (true) {
+            if (!currentIsLive && currentDanmakuMasks.isNotEmpty() && currentIsPlaying && currentDanmakuMaskEnabled) {
+                val position = videoPlayer.currentPosition
+                if (position >= 0) {
+                    updateDanmakuMaskForPosition(position)
+                }
+            }
+            delay(33)
+        }
+    }
+
+    // 当蒙版数据变化时，清除旧缓存
+    LaunchedEffect(videoPlayerDanmakuMaskData.danmakuMasks.size) {
+        danmakuMaskBitmapCache.clear()
     }
 
     LaunchedEffect(videoPlayerConfigData.isLoop, videoPlayerConfigData.showDanmaku) {
@@ -947,6 +986,7 @@ fun BvPlayer(
                 danmakuLayerHandle = danmakuLayerHandle,
                 visible = videoPlayerConfigData.showDanmaku,
                 maskFrame = currentDanmakuMaskFrame.takeIf { videoPlayerConfigData.currentDanmakuMask },
+                maskBitmap = currentDanmakuMaskBitmap.takeIf { videoPlayerConfigData.currentDanmakuMask },
                 videoAspectRatio = aspectRatioValue
             )
         
@@ -1005,11 +1045,13 @@ private fun DanmakuLayerSideEffects(
     danmakuLayerHandle: DanmakuLayerHandle,
     visible: Boolean,
     maskFrame: DanmakuMaskFrame?,
+    maskBitmap: Bitmap?,
     videoAspectRatio: Float,
 ) {
-    LaunchedEffect(visible, maskFrame, videoAspectRatio) {
+    LaunchedEffect(visible, maskFrame, maskBitmap, videoAspectRatio) {
         danmakuLayerHandle.update(
             mask = maskFrame,
+            bitmap = maskBitmap,
             visible = visible,
             videoAspectRatio = videoAspectRatio,
         )

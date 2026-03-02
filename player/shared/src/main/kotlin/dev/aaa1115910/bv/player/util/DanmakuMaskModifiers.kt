@@ -102,3 +102,50 @@ fun Modifier.danmakuMask(
         is DanmakuMobMaskFrame -> danmakuMobMask(frame, videoAspectRatio)
     }
 }
+
+/**
+ * 预渲染蒙版帧到 Bitmap
+ * 可在后台线程调用，避免阻塞主线程
+ */
+fun renderMaskFrameToBitmap(frame: DanmakuMaskFrame): Bitmap {
+    return when (frame) {
+        is DanmakuWebMaskFrame -> renderWebMaskToBitmap(frame)
+        is DanmakuMobMaskFrame -> renderMobMaskToBitmap(frame)
+    }
+}
+
+private fun renderWebMaskToBitmap(frame: DanmakuWebMaskFrame): Bitmap {
+    val svgObj = runCatching {
+        SVG.getFromString(frame.svg)
+    }.getOrNull() ?: return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+
+    val svgWidth = svgObj.documentWidth.toInt()
+    val svgHeight = svgObj.documentHeight.toInt()
+
+    val bitmap = Bitmap.createBitmap(svgWidth, svgHeight, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    svgObj.renderToCanvas(canvas)
+
+    return bitmap
+}
+
+private fun renderMobMaskToBitmap(frame: DanmakuMobMaskFrame): Bitmap {
+    val bitmap = Bitmap.createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888)
+    frame.image.forEachIndexed { index, byte ->
+        val y = index / frame.width
+        val x = index % frame.width
+        bitmap.setPixel(x, y, if (byte.toInt() == 0) Color.BLACK else Color.TRANSPARENT)
+    }
+    return bitmap
+}
+
+/**
+ * 使用预渲染的 Bitmap 应用蒙版
+ */
+fun Modifier.danmakuMaskBitmap(
+    bitmap: Bitmap?,
+    videoAspectRatio: Float = 0f
+): Modifier = composed {
+    if (bitmap == null) return@composed this
+    bitmapMask(bitmap, videoAspectRatio)
+}
