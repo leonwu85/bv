@@ -344,7 +344,8 @@ data class DynamicItem(
     data class DynamicFooterModule(
         val like: Int,
         val comment: Int,
-        val share: Int
+        val share: Int,
+        val isLiked: Boolean = false
     ) {
         companion object {
             fun fromModuleStat(moduleStat: dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Stat?) =
@@ -352,7 +353,8 @@ data class DynamicItem(
                     DynamicFooterModule(
                         like = moduleStat.like.count,
                         comment = moduleStat.comment.count,
-                        share = moduleStat.forward.count
+                        share = moduleStat.forward.count,
+                        isLiked = moduleStat.like.status
                     )
                 }
 
@@ -360,7 +362,8 @@ data class DynamicItem(
                 DynamicFooterModule(
                     like = moduleStat.like.toInt(),
                     comment = moduleStat.reply.toInt(),
-                    share = moduleStat.repost.toInt()
+                    share = moduleStat.repost.toInt(),
+                    isLiked = moduleStat.likeInfo.isLike
                 )
 
             fun fromModuleBottom(moduleButtom: bilibili.app.dynamic.v2.ModuleButtom) =

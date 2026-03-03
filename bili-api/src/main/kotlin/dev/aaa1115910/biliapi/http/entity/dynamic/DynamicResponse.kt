@@ -386,7 +386,7 @@ data class DynamicItem(
             data class StatItem(
                 val count: Int,
                 val forbidden: Boolean,
-                val statue: Boolean = false
+                val status: Boolean = false
             )
         }
     }
