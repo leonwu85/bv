@@ -78,6 +78,8 @@ fun MenuController(
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
     onDanmakuMaskChange: (Boolean) -> Unit = {},
+    onDanmakuFilterLevelChange: (Int) -> Unit = {},
+    isLive: Boolean = false,
     onSubtitleChange: (Subtitle) -> Unit,
     onSubtitleSizeChange: (TextUnit) -> Unit,
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
@@ -116,6 +118,8 @@ fun MenuController(
                 onDanmakuOpacityChange = onDanmakuOpacityChange,
                 onDanmakuAreaChange = onDanmakuAreaChange,
                 onDanmakuMaskChange = onDanmakuMaskChange,
+                onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
+                isLive = isLive,
                 onSubtitleChange = onSubtitleChange,
                 onSubtitleSizeChange = onSubtitleSizeChange,
                 onSubtitleBackgroundOpacityChange = onSubtitleBackgroundOpacityChange,
@@ -144,6 +148,8 @@ fun MenuController(
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
     onDanmakuMaskChange: (Boolean) -> Unit = {},
+    onDanmakuFilterLevelChange: (Int) -> Unit = {},
+    isLive: Boolean = false,
     onSubtitleChange: (Subtitle) -> Unit,
     onSubtitleSizeChange: (TextUnit) -> Unit,
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
@@ -185,6 +191,8 @@ fun MenuController(
                     onDanmakuOpacityChange = onDanmakuOpacityChange,
                     onDanmakuAreaChange = onDanmakuAreaChange,
                     onDanmakuMaskChange = onDanmakuMaskChange,
+                    onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
+                    isLive = isLive,
                     onFocusStateChange = { focusState = it },
                     onSubtitleChange = onSubtitleChange,
                     onSubtitleSizeChange = onSubtitleSizeChange,
@@ -240,6 +248,8 @@ private fun MenuList(
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
     onDanmakuMaskChange: (Boolean) -> Unit = {},
+    onDanmakuFilterLevelChange: (Int) -> Unit = {},
+    isLive: Boolean = false,
     onSubtitleChange: (Subtitle) -> Unit,
     onSubtitleSizeChange: (TextUnit) -> Unit,
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
@@ -274,7 +284,9 @@ private fun MenuList(
                     onDanmakuOpacityChange = onDanmakuOpacityChange,
                     onDanmakuAreaChange = onDanmakuAreaChange,
                     onFocusStateChange = onFocusStateChange,
-                    onDanmakuMaskChange = onDanmakuMaskChange
+                    onDanmakuMaskChange = onDanmakuMaskChange,
+                    onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
+                    isLive = isLive
                 )
             }
 

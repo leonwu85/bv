@@ -208,6 +208,11 @@
     <string name="settings_item_codec">默认视频编码</string>
     <string name="settings_item_info">设备信息</string>
     <string name="settings_item_live">直播</string>
+    <string name="settings_item_danmaku_filter">弹幕过滤</string>
+    <string name="settings_player_danmaku_filter_level_title">视频弹幕过滤等级</string>
+    <string name="settings_player_danmaku_filter_level_text">过滤等级低于设定值的弹幕（1-10，1为显示全部）</string>
+    <string name="settings_live_danmaku_filter_level_title">直播弹幕过滤等级</string>
+    <string name="settings_live_danmaku_filter_level_text">过滤用户等级低于设定值的弹幕（0-60，0为显示全部）</string>
     <string name="settings_item_network">网络设置</string>
     <string name="settings_item_other">更多设置</string>
     <string name="settings_item_player_type">播放器内核</string>

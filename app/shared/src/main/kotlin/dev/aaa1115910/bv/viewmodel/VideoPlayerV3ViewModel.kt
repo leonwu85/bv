@@ -157,6 +157,8 @@ class VideoPlayerV3ViewModel(
     }
     var currentDanmakuArea by mutableFloatStateOf(Prefs.defaultDanmakuArea)
     var currentDanmakuMask by mutableStateOf(Prefs.defaultDanmakuMask)
+    var currentDanmakuFilterLevel by mutableIntStateOf(Prefs.defaultDanmakuFilterLevel)
+    var currentLiveDanmakuFilterLevel by mutableIntStateOf(Prefs.defaultLiveDanmakuFilterLevel)
     var currentSubtitleId by mutableLongStateOf(-1L)
     var currentSubtitleData = mutableStateListOf<SubtitleItem>()
     var currentSubtitleType by mutableStateOf(SubtitleType.CC)
@@ -575,7 +577,13 @@ class VideoPlayerV3ViewModel(
             withContext(Dispatchers.Main) {
                 danmakuData.clear()
             }
-            danmakuXmlData.data.asSequence()
+            val filteredDanmaku = danmakuXmlData.data.filter { it.level >= currentDanmakuFilterLevel }
+            val filteredCount = total - filteredDanmaku.size
+            if (filteredCount > 0) {
+                addLogs("过滤了 $filteredCount 条低等级弹幕（等级 < $currentDanmakuFilterLevel）")
+                logger.fInfo { "Filtered $filteredCount danmaku with level < $currentDanmakuFilterLevel" }
+            }
+            filteredDanmaku.asSequence()
                 .chunked(batchSize) // 按批次切分原始数据
                 .forEachIndexed { index, rawBatch ->
                     val convertedBatch = rawBatch.map {
@@ -1169,6 +1177,13 @@ class VideoPlayerV3ViewModel(
      */
     private fun addLiveDanmaku(event: DanmakuEvent) {
         logger.fInfo { "addLiveDanmaku called: content=${event.content}, liveDanmakuPlayer=$liveDanmakuPlayer" }
+
+        // 添加用户等级过滤逻辑
+        if (event.userLevel < currentLiveDanmakuFilterLevel) {
+            logger.fInfo { "Filtered live danmaku: userLevel=${event.userLevel} < $currentLiveDanmakuFilterLevel" }
+            return
+        }
+
         val danmakuItem = DanmakuItemData(
             danmakuId = System.currentTimeMillis(),
             position = 0L,

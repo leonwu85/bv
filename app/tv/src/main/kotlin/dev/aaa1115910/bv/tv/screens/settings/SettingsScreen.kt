@@ -42,6 +42,7 @@ import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.tv.screens.settings.content.AboutSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.ApiSetting
+import dev.aaa1115910.bv.tv.screens.settings.content.DanmakuFilterSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.InfoSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.LiveStreamingSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.NetworkSetting
@@ -153,6 +154,7 @@ enum class SettingsMenuNavItem(private val strRes: Int) {
     Player(R.string.settings_item_player),
     UI(R.string.settings_item_ui),
     Live(R.string.settings_item_live),
+    DanmakuFilter(R.string.settings_item_danmaku_filter),
     Api(R.string.settings_item_api),
     Other(R.string.settings_item_other),
     Storage(R.string.settings_item_storage),
@@ -189,6 +191,7 @@ fun SettingContent(
                 SettingsMenuNavItem.Storage -> StorageSetting()
                 SettingsMenuNavItem.Api -> ApiSetting()
                 SettingsMenuNavItem.Live -> LiveStreamingSetting()
+                SettingsMenuNavItem.DanmakuFilter -> DanmakuFilterSetting()
             }
         }
     }

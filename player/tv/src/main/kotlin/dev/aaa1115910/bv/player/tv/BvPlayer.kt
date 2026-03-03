@@ -109,6 +109,7 @@ fun BvPlayer(
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
     onDanmakuMaskChange: (Boolean) -> Unit,
+    onDanmakuFilterLevelChange: (Int) -> Unit = {},
     onSubtitleChange: (Subtitle) -> Unit,
     onSubtitleSizeChange: (TextUnit) -> Unit,
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
@@ -296,8 +297,7 @@ fun BvPlayer(
                     renderMaskFrameToBitmap(maskFrame)
                 }
                 danmakuMaskBitmapCache.put(maskFrame, renderedBitmap)
-                renderedBitmap
-            }
+                renderedBitma
 
             withContext(Dispatchers.Main) {
                 currentDanmakuMaskFrame = maskFrame
@@ -961,6 +961,10 @@ fun BvPlayer(
             onDanmakuMaskChange = { mask ->
                 logger.info { "On danmaku mask change: $mask" }
                 onDanmakuMaskChange(mask)
+            },
+            onDanmakuFilterLevelChange = { filterLevel ->
+                logger.info { "On danmaku filter level change: $filterLevel" }
+                onDanmakuFilterLevelChange(filterLevel)
             },
             onSubtitleChange = { subtitle ->
                 onSubtitleChange(subtitle)

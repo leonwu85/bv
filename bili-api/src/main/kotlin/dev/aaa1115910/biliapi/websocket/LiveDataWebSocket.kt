@@ -390,6 +390,15 @@ object LiveDataWebSocket {
                         }
                     }
 
+                    // 用户等级 info[4][0]
+                    var userLevel = 0
+                    runCatching {
+                        val userLevelArray = infoArray[4].jsonArray
+                        if (userLevelArray.size > 0) {
+                            userLevel = userLevelArray[0].jsonPrimitive.int
+                        }
+                    }
+
                     return DanmakuEvent(
                         content = danmakuContent,
                         mid = senderMid,
@@ -398,7 +407,8 @@ object LiveDataWebSocket {
                         medalLevel = medalLevel,
                         mode = mode,
                         fontSize = fontSize,
-                        color = color
+                        color = color,
+                        userLevel = userLevel
                     )
                 }.onFailure {
                     logger.warn { "Parse danmaku content failed: ${it.message}" }

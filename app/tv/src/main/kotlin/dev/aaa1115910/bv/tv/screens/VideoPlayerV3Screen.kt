@@ -263,6 +263,8 @@ fun VideoPlayerV3Screen(
             currentDanmakuOpacity = playerViewModel.currentDanmakuOpacity,
             currentDanmakuArea = playerViewModel.currentDanmakuArea,
             currentDanmakuMask = playerViewModel.currentDanmakuMask,
+            currentDanmakuFilterLevel = playerViewModel.currentDanmakuFilterLevel,
+            currentLiveDanmakuFilterLevel = playerViewModel.currentLiveDanmakuFilterLevel,
             currentSubtitleId = playerViewModel.currentSubtitleId,
             currentSubtitleData = playerViewModel.currentSubtitleData,
             currentSubtitleFontSize = playerViewModel.currentSubtitleFontSize,
@@ -568,6 +570,15 @@ fun VideoPlayerV3Screen(
                 onDanmakuMaskChange = { mask ->
                     Prefs.defaultDanmakuMask = mask
                     playerViewModel.currentDanmakuMask = mask
+                },
+                onDanmakuFilterLevelChange = { filterLevel ->
+                    if (playerViewModel.isLive) {
+                        Prefs.defaultLiveDanmakuFilterLevel = filterLevel
+                        playerViewModel.currentLiveDanmakuFilterLevel = filterLevel
+                    } else {
+                        Prefs.defaultDanmakuFilterLevel = filterLevel
+                        playerViewModel.currentDanmakuFilterLevel = filterLevel
+                    }
                 },
                 onSubtitleChange = { subtitle ->
                     playerViewModel.loadSubtitle(subtitle.id)

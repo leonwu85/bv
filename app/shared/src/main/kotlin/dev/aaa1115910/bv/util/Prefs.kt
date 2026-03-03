@@ -463,6 +463,14 @@ object Prefs {
     var vlcLibsVersion: String
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefVlcLibsVersionRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefVlcLibsVersionKey, value) }
+
+    var defaultDanmakuFilterLevel: Int
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDefaultDanmakuFilterLevelRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDefaultDanmakuFilterLevelKey, value) }
+
+    var defaultLiveDanmakuFilterLevel: Int
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDefaultLiveDanmakuFilterLevelRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDefaultLiveDanmakuFilterLevelKey, value) }
 }
 
 object PrefKeys {
@@ -534,6 +542,8 @@ object PrefKeys {
     val prefEnableTunneling = booleanPreferencesKey("enable_tunneling")
     val prefEnableAudioPlaybackParams = booleanPreferencesKey("enable_audio_playback_params")
     val prefVlcLibsVersionKey = stringPreferencesKey("vlc_libs_version")
+    val prefDefaultDanmakuFilterLevelKey = intPreferencesKey("default_danmaku_filter_level")
+    val prefDefaultLiveDanmakuFilterLevelKey = intPreferencesKey("default_live_danmaku_filter_level")
 
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
@@ -621,4 +631,6 @@ object PrefKeys {
     val prefEnableTunnelingRequest = PreferenceRequest(prefEnableTunneling, true)
     val prefEnableAudioPlaybackParamsRequest = PreferenceRequest(prefEnableAudioPlaybackParams, true)
     val prefVlcLibsVersionRequest = PreferenceRequest(prefVlcLibsVersionKey, "")
+    val prefDefaultDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultDanmakuFilterLevelKey, 1)
+    val prefDefaultLiveDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultLiveDanmakuFilterLevelKey, 0)
 }

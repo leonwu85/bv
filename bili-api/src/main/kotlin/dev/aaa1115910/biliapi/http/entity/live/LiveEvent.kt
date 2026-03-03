@@ -10,7 +10,8 @@ data class DanmakuEvent(
     val medalLevel: Int? = null,
     val mode: Int = 1,              // 弹幕模式：1=滚动，4=顶部，5=底部
     val fontSize: Int = 25,         // 字号大小
-    val color: Int = 0xFFFFFF       // 颜色（十进制RGB整数）
+    val color: Int = 0xFFFFFF,      // 颜色（十进制RGB整数）
+    val userLevel: Int = 0          // 用户等级 (0-60)
 ) : LiveEvent
 
 data class PopularityChangeEvent(
