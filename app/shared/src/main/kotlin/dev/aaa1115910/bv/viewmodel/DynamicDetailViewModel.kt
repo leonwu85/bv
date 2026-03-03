@@ -4,7 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
+import dev.aaa1115910.biliapi.repositories.LikeRepository
 import dev.aaa1115910.biliapi.repositories.UserRepository
 import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.util.Prefs
@@ -13,12 +15,14 @@ import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.android.annotation.KoinViewModel
 
 @KoinViewModel
 class DynamicDetailViewModel(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val likeRepository: LikeRepository
 ) : ViewModel() {
     companion object {
         private val logger = KotlinLogging.logger { }
@@ -27,6 +31,14 @@ class DynamicDetailViewModel(
     var dynamicId by mutableStateOf("")
     var dynamicItem by mutableStateOf<DynamicItem?>(null)
 
+    // 点赞相关状态
+    var isLiked by mutableStateOf(false)
+        private set
+    var likeCount by mutableStateOf(0)
+        private set
+    var isLiking by mutableStateOf(false)
+        private set
+
     suspend fun loadDynamic() {
         logger.fInfo { "Loading dynamic detail: $dynamicId" }
         runCatching {
@@ -34,11 +46,48 @@ class DynamicDetailViewModel(
                 dynamicId = dynamicId,
                 preferApiType = Prefs.apiType
             )
+            // 加载完成后初始化点赞状态（从动态数据中直接读取）
+            dynamicItem?.let { item ->
+                likeCount = item.footer?.like ?: 0
+                isLiked = item.footer?.isLiked ?: false
+            }
         }.onFailure {
             logger.fException(it) { "Failed to load dynamic" }
             withContext(Dispatchers.Main) {
                 "Failed to load dynamic: ${it.message}".toast(BVApp.context)
             }
+        }
+    }
+
+    fun toggleLike() {
+        if (isLiking) return
+        val itemId = dynamicItem?.id ?: return
+
+        viewModelScope.launch {
+            isLiking = true
+            runCatching {
+                if (isLiked) {
+                    likeRepository.delDynamicLike(
+                        dynamicId = itemId,
+                        preferApiType = Prefs.apiType
+                    )
+                    isLiked = false
+                    likeCount = maxOf(0, likeCount - 1)
+                } else {
+                    likeRepository.addDynamicLike(
+                        dynamicId = itemId,
+                        preferApiType = Prefs.apiType
+                    )
+                    isLiked = true
+                    likeCount += 1
+                }
+            }.onFailure {
+                logger.fException(it) { "Failed to toggle like" }
+                withContext(Dispatchers.Main) {
+                    "操作失败: ${it.message}".toast(BVApp.context)
+                }
+            }
+            isLiking = false
         }
     }
 }

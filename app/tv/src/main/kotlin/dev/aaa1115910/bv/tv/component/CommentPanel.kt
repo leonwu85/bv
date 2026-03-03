@@ -86,7 +86,8 @@ import androidx.compose.ui.platform.LocalDensity
  * 评论浮层组件
  *
  * @param show 是否显示浮层
- * @param oid 视频 aid
+ * @param oid 评论对象 ID
+ * @param type 评论类型（1=视频, 11=动态图文, 17=动态等）
  * @param onHide 关闭浮层回调
  * @param episodes 正片剧集列表（用于选集切换）
  * @param sections 章节选集列表（用于选集切换）
@@ -97,6 +98,7 @@ import androidx.compose.ui.platform.LocalDensity
 fun CommentPanel(
     show: Boolean,
     oid: Long,
+    type: Long = 1L,
     onHide: () -> Unit,
     episodes: List<Episode> = emptyList(),
     sections: List<Section> = emptyList(),
@@ -196,7 +198,7 @@ fun CommentPanel(
                 val page = if (reset) CommentPage() else currentPage
                 val data = commentRepository.getComments(
                     id = currentOid,
-                    type = 1L, // 视频评论
+                    type = type,
                     sort = CommentSort.Hot,
                     page = page,
                     preferApiType = Prefs.apiType

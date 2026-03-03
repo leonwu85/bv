@@ -824,6 +824,55 @@ object BiliHttpApi {
     }
 
     /**
+     * 为动态点赞或取消点赞
+     *
+     * @param dynamicId 动态ID
+     * @param like true=点赞, false=取消点赞
+     * @param csrf bili_jct
+     * @param sessData SESSDATA
+     */
+    suspend fun sendDynamicLike(
+        dynamicId: String,
+        like: Boolean = true,
+        csrf: String? = null,
+        sessData: String? = null
+    ): Pair<Boolean, String> {
+        checkToken(null, sessData)
+        val response = client.post("https://api.vc.bilibili.com/dynamic_like/v1/dynamic_like/thumb") {
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        append("dynamic_id", dynamicId)
+                        append("up", if (like) "1" else "2")
+                        csrf?.let { append("csrf", it) }
+                    }
+                ))
+            sessData?.let { header("Cookie", "SESSDATA=$it;") }
+        }.body<BiliResponseWithoutData>()
+        return Pair(response.code == 0, response.message)
+    }
+
+    /**
+     * 检查动态是否已点赞
+     *
+     * @param dynamicId 动态ID
+     * @param sessData SESSDATA
+     */
+    suspend fun checkDynamicLiked(
+        dynamicId: String,
+        sessData: String? = null
+    ): Boolean {
+        checkToken(null, sessData)
+        val response = client.get("/x/dynamic/has/like") {
+            parameter("dynamic_id", dynamicId)
+            sessData?.let { header("Cookie", "SESSDATA=$it;") }
+        }
+        return runCatching {
+            json.decodeFromString<BiliResponse<Int>>(response.bodyAsText()).getResponseData() == 1
+        }.getOrDefault(false)
+    }
+
+    /**
      * 为视频[avid]或[bvid]点赞或取消赞
      *
      * @param like 是否顺便点赞

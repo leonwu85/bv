@@ -70,4 +70,44 @@ class LikeRepository(
             throw Exception("取消点赞失败: $message")
         }
     }
+
+    suspend fun addDynamicLike(
+        dynamicId: String,
+        preferApiType: ApiType = ApiType.Web
+    ) {
+        val (success, message) = BiliHttpApi.sendDynamicLike(
+            dynamicId = dynamicId,
+            like = true,
+            sessData = authRepository.sessionData,
+            csrf = authRepository.biliJct
+        )
+        if (!success) {
+            throw Exception("动态点赞失败: $message")
+        }
+    }
+
+    suspend fun delDynamicLike(
+        dynamicId: String,
+        preferApiType: ApiType = ApiType.Web
+    ) {
+        val (success, message) = BiliHttpApi.sendDynamicLike(
+            dynamicId = dynamicId,
+            like = false,
+            sessData = authRepository.sessionData,
+            csrf = authRepository.biliJct
+        )
+        if (!success) {
+            throw Exception("取消动态点赞失败: $message")
+        }
+    }
+
+    suspend fun checkDynamicLike(
+        dynamicId: String,
+        preferApiType: ApiType = ApiType.Web
+    ): Boolean {
+        return BiliHttpApi.checkDynamicLiked(
+            dynamicId = dynamicId,
+            sessData = authRepository.sessionData
+        )
+    }
 }

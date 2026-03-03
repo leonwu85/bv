@@ -63,14 +63,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.LocalContentColor
 import coil.compose.AsyncImage
 import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.entity.user.DynamicType
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
+import dev.aaa1115910.bv.tv.component.CommentPanel
 import dev.aaa1115910.bv.util.fInfo
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import dev.aaa1115910.bv.viewmodel.DynamicDetailViewModel
@@ -90,7 +93,7 @@ fun DynamicDetailScreen(
 
     var dynamicItem by remember { mutableStateOf<DynamicItem?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var isLiked by remember { mutableStateOf(false) }
+    var showCommentPanel by remember { mutableStateOf(false) }
 
     LaunchedEffect(dynamicId) {
         logger.fInfo { "Loading dynamic detail for id: $dynamicId" }
@@ -102,6 +105,7 @@ fun DynamicDetailScreen(
 
     val contentFocusRequester = remember { FocusRequester() }
     val commentButtonFocusRequester = remember { FocusRequester() }
+    val likeButtonFocusRequester = remember { FocusRequester() }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -110,6 +114,14 @@ fun DynamicDetailScreen(
     LaunchedEffect(isLoading) {
         if (!isLoading) {
             contentFocusRequester.requestFocus()
+        }
+    }
+
+    // 评论浮层关闭后，焦点返回到评论按钮
+    LaunchedEffect(showCommentPanel) {
+        if (!showCommentPanel && !isLoading && dynamicItem != null) {
+            delay(100) // 等待动画完成
+            commentButtonFocusRequester.requestFocus()
         }
     }
 
@@ -263,19 +275,21 @@ fun DynamicDetailScreen(
                     // 点赞按钮
                     Button(
                         modifier = Modifier
-                            .focusRequester(commentButtonFocusRequester)
-                            .onFocusChanged { focusState ->
-                                // 当评论按钮获得焦点时，说明用户从底部区域开始导航
-                            },
+                            .focusRequester(likeButtonFocusRequester),
                         onClick = {
-                            isLiked = !isLiked
-                            // TODO: 调用点赞API
+                            dynamicDetailViewModel.toggleLike()
                         },
+                        enabled = !dynamicDetailViewModel.isLiking,
                         colors = ButtonDefaults.colors(
-                            containerColor = if (isLiked)
+                            containerColor = if (dynamicDetailViewModel.isLiked)
                                 MaterialTheme.colorScheme.primary
                             else
-                                MaterialTheme.colorScheme.surfaceContainerHigh
+                                MaterialTheme.colorScheme.surfaceContainerHigh,
+                            focusedContainerColor = if (dynamicDetailViewModel.isLiked)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.inverseSurface,
+                            focusedContentColor = Color.Black
                         )
                     ) {
                         Row(
@@ -283,33 +297,38 @@ fun DynamicDetailScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Icon(
-                                imageVector = if (isLiked)
+                                imageVector = if (dynamicDetailViewModel.isLiked)
                                     Icons.Default.Favorite
                                 else
                                     Icons.Default.FavoriteBorder,
                                 contentDescription = "点赞",
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(20.dp),
+                                tint = LocalContentColor.current
                             )
                             Text(
-                                text = if (isLiked) "已赞" else "点赞",
-                                fontSize = 14.sp
+                                text = if (dynamicDetailViewModel.isLiked) "已赞" else "点赞",
+                                fontSize = 14.sp,
+                                color = LocalContentColor.current
                             )
-                            dynamicItem!!.footer?.like?.let { count ->
-                                Text(
-                                    text = count.toString(),
-                                    fontSize = 14.sp
-                                )
-                            }
+                            Text(
+                                text = dynamicDetailViewModel.likeCount.toString(),
+                                fontSize = 14.sp,
+                                color = LocalContentColor.current
+                            )
                         }
                     }
 
                     // 评论按钮
                     Button(
+                        modifier = Modifier
+                            .focusRequester(commentButtonFocusRequester),
                         onClick = {
-                            // TODO: 跳转到评论页面
+                            showCommentPanel = true
                         },
                         colors = ButtonDefaults.colors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
+                            focusedContentColor = Color.Black
                         )
                     ) {
                         Row(
@@ -319,16 +338,19 @@ fun DynamicDetailScreen(
                             Icon(
                                 imageVector = Icons.Default.ModeComment,
                                 contentDescription = "评论",
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(20.dp),
+                                tint = LocalContentColor.current
                             )
                             Text(
                                 text = "评论",
-                                fontSize = 14.sp
+                                fontSize = 14.sp,
+                                color = LocalContentColor.current
                             )
                             dynamicItem!!.footer?.comment?.let { count ->
                                 Text(
                                     text = count.toString(),
-                                    fontSize = 14.sp
+                                    fontSize = 14.sp,
+                                    color = LocalContentColor.current
                                 )
                             }
                         }
@@ -336,6 +358,16 @@ fun DynamicDetailScreen(
                 }
             }
         }
+    }
+
+    // 评论浮层
+    dynamicItem?.let { item ->
+        CommentPanel(
+            show = showCommentPanel,
+            oid = item.commentId,
+            type = item.commentType,
+            onHide = { showCommentPanel = false }
+        )
     }
 }
 
