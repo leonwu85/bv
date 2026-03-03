@@ -2,6 +2,7 @@ package dev.aaa1115910.bv.player.tv
 
 import android.graphics.Bitmap
 import android.os.CountDownTimer
+import android.util.LruCache
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -198,8 +199,22 @@ fun BvPlayer(
     var currentDanmakuMaskFrame: DanmakuMaskFrame? by remember { mutableStateOf(null) }
     var currentDanmakuMaskBitmap: Bitmap? by remember { mutableStateOf(null) }
 
-    // 预渲染的蒙版 Bitmap 缓存（帧 -> Bitmap）
-    val danmakuMaskBitmapCache = remember { mutableMapOf<DanmakuMaskFrame, Bitmap>() }
+    // 预渲染的蒙版 Bitmap 缓存
+    val danmakuMaskBitmapCache = remember {
+        object : LruCache<DanmakuMaskFrame, Bitmap>(100) {
+            override fun entryRemoved(
+                evicted: Boolean,
+                key: DanmakuMaskFrame,
+                oldValue: Bitmap,
+                newValue: Bitmap?
+            ) {
+                // 当缓存条目被移除时，释放 Bitmap
+                if (evicted && !oldValue.isRecycled) {
+                    oldValue.recycle()
+                }
+            }
+        }
+    }
 
     // 跳过片头片尾相关状态
     var showSkipOpTip by remember { mutableStateOf(false) }
@@ -275,12 +290,12 @@ fun BvPlayer(
         // 只有找到新帧时才更新，null 时保持当前蒙版（避免帧空隙导致蒙版闪烁）
         if (maskFrame != null && currentDanmakuMaskFrame != maskFrame) {
             // 优先使用缓存中的 Bitmap，避免实时渲染
-            val bitmap = danmakuMaskBitmapCache[maskFrame] ?: run {
+            val bitmap = danmakuMaskBitmapCache.get(maskFrame) ?: run {
                 // 缓存未命中，实时渲染并缓存
                 val renderedBitmap = withContext(Dispatchers.Default) {
                     renderMaskFrameToBitmap(maskFrame)
                 }
-                danmakuMaskBitmapCache[maskFrame] = renderedBitmap
+                danmakuMaskBitmapCache.put(maskFrame, renderedBitmap)
                 renderedBitmap
             }
 
@@ -657,7 +672,7 @@ fun BvPlayer(
 
     // 当蒙版数据变化时，清除旧缓存
     LaunchedEffect(videoPlayerDanmakuMaskData.danmakuMasks.size) {
-        danmakuMaskBitmapCache.clear()
+        danmakuMaskBitmapCache.evictAll()
     }
 
     LaunchedEffect(videoPlayerConfigData.isLoop, videoPlayerConfigData.showDanmaku) {
@@ -737,6 +752,11 @@ fun BvPlayer(
             }
 
             videoPlayer.release()
+
+            // 清理蒙版 Bitmap 缓存，释放内存
+            danmakuMaskBitmapCache.evictAll()
+            currentDanmakuMaskBitmap = null
+            currentDanmakuMaskFrame = null
         }
     }
 

@@ -104,6 +104,9 @@ fun LiveContent(
         }
     }
 
+    // 判断当前是否有子分区导航
+    val hasSubNav = liveViewModel.currentTabType == LiveTabType.Area && liveViewModel.subAreaList.isNotEmpty()
+
     BackHandler(focusOnContent || subNavHasFocus || parentNavHasFocus) {
         logger.info { "onFocusBackToNav" }
         if (subNavHasFocus) {
@@ -114,7 +117,12 @@ fun LiveContent(
             drawerItemFocusRequesters[DrawerItem.Live]?.requestFocus()
             return@BackHandler
         }
-        subNavFocusRequester.requestFocus(scope)
+        // 如果没有子分区导航，直接返回到主分区导航
+        if (hasSubNav) {
+            subNavFocusRequester.requestFocus(scope)
+        } else {
+            navFocusRequester.requestFocus(scope)
+        }
     }
 
     // 构建主分区导航项列表：推荐 + 关注 + 分区列表
