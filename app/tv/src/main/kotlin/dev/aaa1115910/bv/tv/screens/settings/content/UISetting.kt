@@ -48,6 +48,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.RadioButton
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.entity.DynamicPageStyle
 import dev.aaa1115910.bv.entity.ThemeType
 import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
@@ -76,11 +77,13 @@ fun UISetting(
     var showHomeNavItemsDialog by remember { mutableStateOf(false) }
     var showLongPressActionDialog by remember { mutableStateOf(false) }
     var showOnlineViewerCountDialog by remember { mutableStateOf(false) }
+    var showDynamicPageStyleDialog by remember { mutableStateOf(false) }
     val density by Prefs.densityFlow.collectAsState(context.resources.displayMetrics.widthPixels / 960f)
     val themeType by Prefs.themeTypeFlow.collectAsState(Prefs.themeType)
     val showOnlineViewerCount by Prefs.showOnlineViewerCountFlow.collectAsState(Prefs.showOnlineViewerCount)
     var defaultHomeTab by remember { mutableStateOf(HomeTopNavItem.entries.getOrElse(Prefs.defaultHomeTab) { HomeTopNavItem.Recommend }) }
     var gridColumns by remember { mutableStateOf(Prefs.gridColumns) }
+    var dynamicPageStyle by remember { mutableStateOf(Prefs.dynamicPageStyle) }
 
     Box(modifier = modifier) {
         Column(
@@ -161,6 +164,14 @@ fun UISetting(
                         onClick = { showOnlineViewerCountDialog = true }
                     )
                 }
+                item {
+                    SettingListItem(
+                        title = "动态页面样式",
+                        supportText = "切换动态页面的显示样式",
+                        valueText = dynamicPageStyle.getDisplayName(context),
+                        onClick = { showDynamicPageStyleDialog = true }
+                    )
+                }
             }
         }
     }
@@ -222,6 +233,16 @@ fun UISetting(
         onHideDialog = { showOnlineViewerCountDialog = false },
         showOnlineViewerCount = showOnlineViewerCount,
         onShowOnlineViewerCountChange = { Prefs.showOnlineViewerCount = it }
+    )
+
+    DynamicPageStyleDialog(
+        show = showDynamicPageStyleDialog,
+        onHideDialog = { showDynamicPageStyleDialog = false },
+        dynamicPageStyle = dynamicPageStyle,
+        onDynamicPageStyleChange = {
+            dynamicPageStyle = it
+            Prefs.dynamicPageStyle = it
+        }
     )
 }
 
@@ -729,6 +750,43 @@ private fun OnlineViewerCountDialog(
                             trailingContent = {
                                 RadioButton(
                                     selected = showOnlineViewerCount == value,
+                                    onClick = null
+                                )
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+}
+
+@Composable
+private fun DynamicPageStyleDialog(
+    modifier: Modifier = Modifier,
+    show: Boolean,
+    onHideDialog: () -> Unit,
+    dynamicPageStyle: DynamicPageStyle,
+    onDynamicPageStyleChange: (DynamicPageStyle) -> Unit
+) {
+    if (show) {
+        TvAlertDialog(
+            modifier = modifier,
+            onDismissRequest = { onHideDialog() },
+            title = { Text(text = "动态页面样式") },
+            text = {
+                Column {
+                    DynamicPageStyle.entries.forEach {
+                        ListItem(
+                            selected = dynamicPageStyle == it,
+                            onClick = { onDynamicPageStyleChange(it) },
+                            headlineContent = {
+                                Text(text = it.getDisplayName(LocalContext.current))
+                            },
+                            trailingContent = {
+                                RadioButton(
+                                    selected = dynamicPageStyle == it,
                                     onClick = null
                                 )
                             }

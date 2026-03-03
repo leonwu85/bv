@@ -760,4 +760,14 @@
     <!-- VLC Player Settings -->
     <string name="settings_player_vlc_auto_rotate_title">VLC 自动旋转</string>
     <string name="settings_player_vlc_auto_rotate_text">根据视频元数据自动旋转画面（切换时会短暂暂停）</string>
+
+    <!-- Dynamic Tab -->
+    <string name="dynamic_tab_all">全部</string>
+    <string name="dynamic_tab_video">视频</string>
+    <string name="dynamic_tab_pgc">追番</string>
+    <string name="dynamic_tab_article">专栏</string>
+
+    <!-- Dynamic Page Style -->
+    <string name="dynamic_style_new">新版（带分类）</string>
+    <string name="dynamic_style_legacy">旧版（无分类）</string>
 </resources>

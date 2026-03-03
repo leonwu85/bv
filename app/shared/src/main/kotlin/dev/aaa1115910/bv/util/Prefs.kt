@@ -26,6 +26,7 @@ import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.PlayerLoadNextAction
+import dev.aaa1115910.bv.entity.DynamicPageStyle
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -471,6 +472,14 @@ object Prefs {
     var defaultLiveDanmakuFilterLevel: Int
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDefaultLiveDanmakuFilterLevelRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDefaultLiveDanmakuFilterLevelKey, value) }
+
+    var dynamicPageStyle: DynamicPageStyle
+        get() = runBlocking {
+            DynamicPageStyle.fromValue(dsm.getPreferenceFlow(PrefKeys.prefDynamicPageStyleRequest).first())
+        }
+        set(value) = runBlocking {
+            dsm.editPreference(PrefKeys.prefDynamicPageStyleKey, value.value)
+        }
 }
 
 object PrefKeys {
@@ -544,6 +553,7 @@ object PrefKeys {
     val prefVlcLibsVersionKey = stringPreferencesKey("vlc_libs_version")
     val prefDefaultDanmakuFilterLevelKey = intPreferencesKey("default_danmaku_filter_level")
     val prefDefaultLiveDanmakuFilterLevelKey = intPreferencesKey("default_live_danmaku_filter_level")
+    val prefDynamicPageStyleKey = intPreferencesKey("dynamic_page_style")
 
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
@@ -633,4 +643,5 @@ object PrefKeys {
     val prefVlcLibsVersionRequest = PreferenceRequest(prefVlcLibsVersionKey, "")
     val prefDefaultDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultDanmakuFilterLevelKey, 1)
     val prefDefaultLiveDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultLiveDanmakuFilterLevelKey, 0)
+    val prefDynamicPageStyleRequest = PreferenceRequest(prefDynamicPageStyleKey, DynamicPageStyle.New.value)
 }
