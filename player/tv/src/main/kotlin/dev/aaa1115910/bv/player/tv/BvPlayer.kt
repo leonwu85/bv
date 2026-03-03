@@ -297,8 +297,8 @@ fun BvPlayer(
                     renderMaskFrameToBitmap(maskFrame)
                 }
                 danmakuMaskBitmapCache.put(maskFrame, renderedBitmap)
-                renderedBitma
-
+                renderedBitmap
+            }
             withContext(Dispatchers.Main) {
                 currentDanmakuMaskFrame = maskFrame
                 currentDanmakuMaskBitmap = bitmap
