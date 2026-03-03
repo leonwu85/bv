@@ -12,6 +12,12 @@
 
     <application tools:targetApi="tiramisu">
         <activity
+            android:name=".activities.dynamic.DynamicDetailActivity"
+            android:enableOnBackInvokedCallback="false"
+            android:exported="false"
+            android:label="@string/title_activity_dynamic_detail"
+            android:theme="@style/Theme.BV.TV" />
+        <activity
             android:name=".activities.user.UserLockSettingsActivity"
             android:enableOnBackInvokedCallback="false"
             android:exported="true"

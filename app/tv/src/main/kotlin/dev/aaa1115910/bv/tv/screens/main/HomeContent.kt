@@ -31,6 +31,7 @@ import androidx.tv.material3.Text
 import dev.aaa1115910.bv.tv.component.HomeTopNavItem
 import dev.aaa1115910.bv.tv.component.TopNav
 import dev.aaa1115910.bv.tv.screens.main.home.DynamicsScreen
+import dev.aaa1115910.bv.tv.screens.main.home.NewDynamicsScreen
 import dev.aaa1115910.bv.tv.screens.main.home.PopularScreen
 import dev.aaa1115910.bv.tv.screens.main.home.RecommendScreen
 import dev.aaa1115910.bv.tv.screens.user.FavoriteScreen
@@ -43,6 +44,7 @@ import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.requestFocus
 import dev.aaa1115910.bv.viewmodel.UserViewModel
+import dev.aaa1115910.bv.entity.DynamicPageStyle
 import dev.aaa1115910.bv.viewmodel.home.DynamicViewModel
 import dev.aaa1115910.bv.viewmodel.home.PopularViewModel
 import dev.aaa1115910.bv.viewmodel.home.RecommendViewModel
@@ -311,7 +313,11 @@ fun HomeContent(
                     HomeTopNavItem.Popular -> PopularScreen(lazyGridState = popularState)
                     HomeTopNavItem.Dynamics -> {
                         if (userViewModel.isLogin) {
-                            DynamicsScreen(lazyGridState = dynamicState)
+                            if (Prefs.dynamicPageStyle == DynamicPageStyle.New) {
+                                NewDynamicsScreen(lazyGridState = dynamicState)
+                            } else {
+                                DynamicsScreen(lazyGridState = dynamicState)
+                            }
                         } else {
                             LoginRequiredScreen()
                         }
