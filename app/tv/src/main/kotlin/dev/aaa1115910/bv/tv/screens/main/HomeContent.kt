@@ -87,8 +87,8 @@ fun HomeContent(
     var focusOnContent by remember { mutableStateOf(false) }
     var topNavHasFocus by remember { mutableStateOf(false) }
 
-    // 记住动态页子 Tab 的选中索引
-    var dynamicSubTabIndex by remember { mutableIntStateOf(0) }
+    // 记住动态页子 Tab 的选中索引，默认值从设置中读取
+    var dynamicSubTabIndex by remember { mutableIntStateOf(Prefs.dynamicDefaultTab.ordinal) }
     
     // 用于管理延迟加载的Job
     var loadJob by remember { mutableStateOf<Job?>(null) }
