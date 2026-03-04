@@ -740,7 +740,7 @@ private fun DynamicDrawContent(draw: DynamicItem.DynamicDrawModule?) {
             }
         }
         // 文字
-        if (draw.text.isNotBlank()) {
+        if (draw.text.isNotBlank() && draw.text != "empty text") {
             Text(
                 text = draw.text,
                 style = MaterialTheme.typography.bodyMedium,

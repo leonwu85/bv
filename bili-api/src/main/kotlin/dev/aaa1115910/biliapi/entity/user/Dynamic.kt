@@ -1,10 +1,13 @@
 package dev.aaa1115910.biliapi.entity.user
 
+import bilibili.app.dynamic.v2.DescType
 import bilibili.app.dynamic.v2.DynModuleType
 import bilibili.app.dynamic.v2.Module
 import bilibili.app.dynamic.v2.ModuleDynamic.ModuleItemCase
 import bilibili.app.dynamic.v2.Paragraph
+import bilibili.app.dynamic.v2.TextNode
 import bilibili.app.dynamic.v2.VideoType
+import bilibili.app.dynamic.v2.emoteOrNull
 import dev.aaa1115910.biliapi.entity.Picture
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.SerialName
@@ -12,6 +15,114 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import okhttp3.internal.toLongOrDefault
+
+/**
+ * 富文本节点类型
+ */
+enum class RichTextNodeType {
+    Text, Emoji, At, Other
+}
+
+/**
+ * 富文本节点，统一 Web API 和 gRPC 的表情数据表示
+ */
+data class RichTextNode(
+    val text: String,
+    val type: RichTextNodeType,
+    val emoji: RichTextEmoji? = null
+)
+
+/**
+ * 富文本表情数据
+ * @param iconUrl 表情图片 URL
+ * @param size 表情尺寸，1=小表情(行内), 2=大表情
+ */
+data class RichTextEmoji(
+    val iconUrl: String,
+    val size: Int = 1
+)
+
+/**
+ * 将 Web API 的 Desc.richTextNodes 转换为统一的 RichTextNode 列表
+ */
+private fun dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Dynamic.Desc.toRichTextNodes(): List<RichTextNode> =
+    richTextNodes.map { node ->
+        when (node.type) {
+            "RICH_TEXT_NODE_TYPE_EMOJI" -> RichTextNode(
+                text = node.origText,
+                type = RichTextNodeType.Emoji,
+                emoji = node.emoji?.let {
+                    RichTextEmoji(iconUrl = it.iconUrl, size = it.size)
+                }
+            )
+
+            "RICH_TEXT_NODE_TYPE_AT" -> RichTextNode(
+                text = node.origText,
+                type = RichTextNodeType.At
+            )
+
+            else -> RichTextNode(
+                text = node.origText,
+                type = RichTextNodeType.Text
+            )
+        }
+    }
+
+/**
+ * 将 gRPC 的 TextNode 列表（来自 ModuleOpusSummary）转换为统一的 RichTextNode 列表
+ */
+private fun List<TextNode>.toRichTextNodes(): List<RichTextNode> =
+    map { node ->
+        when (node.nodeType) {
+            TextNode.TextNodeType.EMOTE -> RichTextNode(
+                text = node.rawText,
+                type = RichTextNodeType.Emoji,
+                emoji = node.emoteOrNull?.let {
+                    RichTextEmoji(
+                        iconUrl = it.emoteUrl,
+                        size = it.emoteWidth.emojiSize.coerceIn(1, 2)
+                    )
+                }
+            )
+
+            TextNode.TextNodeType.AT -> RichTextNode(
+                text = node.rawText,
+                type = RichTextNodeType.At
+            )
+
+            else -> RichTextNode(
+                text = node.rawText,
+                type = RichTextNodeType.Text
+            )
+        }
+    }
+
+/**
+ * 将 gRPC 的 Description 列表（来自 ModuleDesc）转换为统一的 RichTextNode 列表
+ */
+private fun List<bilibili.app.dynamic.v2.Description>.toRichTextNodesFromDesc(): List<RichTextNode> =
+    map { desc ->
+        when (desc.type) {
+            DescType.desc_type_emoji -> RichTextNode(
+                text = desc.text,
+                type = RichTextNodeType.Emoji,
+                emoji = RichTextEmoji(
+                    iconUrl = desc.iconUrl,
+                    size = desc.emojiSize.coerceIn(1, 2)
+                )
+            )
+
+            DescType.desc_type_aite -> RichTextNode(
+                text = desc.text,
+                type = RichTextNodeType.At
+            )
+
+            else -> RichTextNode(
+                text = desc.text,
+                type = RichTextNodeType.Text
+            )
+        }
+    }
 
 data class DynamicData(
     val dynamics: List<DynamicItem>,
@@ -374,20 +485,28 @@ data class DynamicItem(
     data class DynamicDrawModule(
         val title: String?,
         val text: String,
-        val images: List<Picture>
+        val images: List<Picture>,
+        val richTextNodes: List<RichTextNode> = emptyList()
     ) {
         companion object {
-            fun fromModuleDynamic(moduleDynamic: dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Dynamic) =
-                DynamicDrawModule(
+            fun fromModuleDynamic(moduleDynamic: dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Dynamic): DynamicDrawModule {
+                val desc = moduleDynamic.desc
+                val opus = moduleDynamic.major?.opus
+                val richNodes = desc?.toRichTextNodes()
+                    ?: opus?.summary?.toRichTextNodes()
+                    ?: emptyList()
+                return DynamicDrawModule(
                     title = null,
-                    text = moduleDynamic.desc?.text
-                        ?: moduleDynamic.major?.opus?.summary?.text
+                    text = desc?.text
+                        ?: opus?.summary?.text
                         ?: "empty text",
                     images = (moduleDynamic.major?.draw?.items?.map(Picture::fromPicture)
-                        ?: moduleDynamic.major?.opus?.pics?.map(Picture::fromPicture))
+                        ?: opus?.pics?.map(Picture::fromPicture))
                         ?.distinctBy { it.url }
-                        ?: emptyList()
+                        ?: emptyList(),
+                    richTextNodes = richNodes
                 )
+            }
 
             fun fromModuleOpusSummaryAndModuleDynamic(
                 moduleOpusSummary: bilibili.app.dynamic.v2.ModuleOpusSummary,
@@ -395,6 +514,7 @@ data class DynamicItem(
             ): DynamicDrawModule {
                 var title = ""
                 var text = ""
+                var richTextNodes = emptyList<RichTextNode>()
                 val images = mutableListOf<Picture>()
 
                 when (val titleContentType = moduleOpusSummary.title.contentCase) {
@@ -405,8 +525,11 @@ data class DynamicItem(
                 }
 
                 when (val summaryContentType = moduleOpusSummary.summary.contentCase) {
-                    Paragraph.ContentCase.TEXT -> text = moduleOpusSummary.summary.text.nodesList
-                        .joinToString("") { it.rawText }
+                    Paragraph.ContentCase.TEXT -> {
+                        val nodes = moduleOpusSummary.summary.text.nodesList
+                        text = nodes.joinToString("") { it.rawText }
+                        richTextNodes = nodes.toRichTextNodes()
+                    }
 
                     else -> println("not implemented: ModuleOpusSummary summaryContentType: $summaryContentType")
                 }
@@ -423,7 +546,8 @@ data class DynamicItem(
                 return DynamicDrawModule(
                     title = title,
                     text = text,
-                    images = images.distinctBy { it.url }
+                    images = images.distinctBy { it.url },
+                    richTextNodes = richTextNodes
                 )
             }
 
@@ -437,6 +561,7 @@ data class DynamicItem(
                 val images = mutableListOf<Picture>()
 
                 text = moduleDesc.descList.joinToString("") { it.text }
+                val richTextNodes = moduleDesc.descList.toRichTextNodesFromDesc()
 
                 if (moduleParagraph != null && moduleParagraph.isArticleTitle) {
 
@@ -461,32 +586,44 @@ data class DynamicItem(
                 return DynamicDrawModule(
                     title = title,
                     text = text,
-                    images = images.distinctBy { it.url }
+                    images = images.distinctBy { it.url },
+                    richTextNodes = richTextNodes
                 )
             }
         }
     }
 
     data class DynamicWordModule(
-        val text: String
+        val text: String,
+        val richTextNodes: List<RichTextNode> = emptyList()
     ) {
         companion object {
-            fun fromModuleDynamic(moduleDynamic: dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Dynamic) =
-                DynamicWordModule(
-                    text = moduleDynamic.major?.opus?.summary?.text
-                        ?: moduleDynamic.desc?.text
-                        ?: "empty content"
+            fun fromModuleDynamic(moduleDynamic: dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Dynamic): DynamicWordModule {
+                val desc = moduleDynamic.desc
+                val opus = moduleDynamic.major?.opus
+                val richNodes = opus?.summary?.toRichTextNodes()
+                    ?: desc?.toRichTextNodes()
+                    ?: emptyList()
+                return DynamicWordModule(
+                    text = opus?.summary?.text
+                        ?: desc?.text
+                        ?: "empty content",
+                    richTextNodes = richNodes
                 )
+            }
 
-            fun fromModuleOpusSummary(moduleOpusSummary: bilibili.app.dynamic.v2.ModuleOpusSummary) =
-                DynamicWordModule(
-                    text = moduleOpusSummary.summary.text.nodesList
-                        .joinToString("") { it.rawText }
+            fun fromModuleOpusSummary(moduleOpusSummary: bilibili.app.dynamic.v2.ModuleOpusSummary): DynamicWordModule {
+                val nodes = moduleOpusSummary.summary.text.nodesList
+                return DynamicWordModule(
+                    text = nodes.joinToString("") { it.rawText },
+                    richTextNodes = nodes.toRichTextNodes()
                 )
+            }
 
             fun fromModuleDesc(moduleDesc: bilibili.app.dynamic.v2.ModuleDesc) =
                 DynamicWordModule(
-                    text = moduleDesc.text
+                    text = moduleDesc.text,
+                    richTextNodes = moduleDesc.descList.toRichTextNodesFromDesc()
                 )
         }
     }

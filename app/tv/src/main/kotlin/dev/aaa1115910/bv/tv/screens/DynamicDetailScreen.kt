@@ -68,6 +68,7 @@ import coil.compose.AsyncImage
 import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.entity.user.DynamicType
+import dev.aaa1115910.bv.component.DynamicRichText
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.component.CommentPanel
@@ -489,8 +490,9 @@ private fun DynamicContentSection(
                         )
                     }
                     if (draw.text.isNotBlank()) {
-                        Text(
-                            text = draw.text,
+                        DynamicRichText(
+                            richTextNodes = draw.richTextNodes,
+                            fallbackText = draw.text,
                             style = MaterialTheme.typography.bodyLarge,
                             fontSize = 16.sp
                         )
@@ -516,8 +518,9 @@ private fun DynamicContentSection(
             }
             DynamicType.Word -> {
                 dynamicItem.word?.let { word ->
-                    Text(
-                        text = word.text,
+                    DynamicRichText(
+                        richTextNodes = word.richTextNodes,
+                        fallbackText = word.text,
                         style = MaterialTheme.typography.bodyLarge,
                         fontSize = 16.sp
                     )
@@ -568,8 +571,9 @@ private fun DynamicContentSection(
             DynamicType.Forward -> {
                 dynamicItem.word?.let { word ->
                     if (word.text.isNotBlank()) {
-                        Text(
-                            text = word.text,
+                        DynamicRichText(
+                            richTextNodes = word.richTextNodes,
+                            fallbackText = word.text,
                             style = MaterialTheme.typography.bodyLarge,
                             fontSize = 16.sp
                         )
