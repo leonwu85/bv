@@ -1,6 +1,7 @@
 package dev.aaa1115910.bv.tv.screens.main.home
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -41,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -66,6 +69,7 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.entity.user.DynamicType
+import dev.aaa1115910.biliapi.entity.user.DynamicVideo
 import dev.aaa1115910.bv.entity.DynamicTabType
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
@@ -89,33 +93,59 @@ import org.koin.androidx.compose.koinViewModel
 fun NewDynamicsScreen(
     modifier: Modifier = Modifier,
     lazyGridState: LazyGridState = rememberLazyGridState(),
+    initialSelectedTabIndex: Int = 0,
+    onSelectedTabChanged: (Int) -> Unit = {},
     dynamicViewModel: DynamicViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    val tabRowFocusRequester = remember { FocusRequester() }
+    var selectedTabIndex by remember { mutableIntStateOf(initialSelectedTabIndex) }
     var currentFocusedIndex by remember { mutableIntStateOf(-1) }
+    var contentHasFocus by remember { mutableStateOf(false) }
+
+    // 当子 Tab 切换时通知父组件记住选择
+    LaunchedEffect(selectedTabIndex) {
+        onSelectedTabChanged(selectedTabIndex)
+    }
 
     val selectedTabType = DynamicTabType.entries[selectedTabIndex]
 
-    // 根据选中的 Tab 过滤数据
-    val filteredList = remember(dynamicViewModel.dynamicAllList, selectedTabType) {
-        when (selectedTabType) {
-            DynamicTabType.All -> dynamicViewModel.dynamicAllList
-            DynamicTabType.Video -> dynamicViewModel.dynamicAllList.filter { it.type == DynamicType.Av }
-            DynamicTabType.Pgc -> dynamicViewModel.dynamicAllList.filter { it.type == DynamicType.Pgc }
-            DynamicTabType.Article -> dynamicViewModel.dynamicAllList.filter {
-                it.type == DynamicType.Article || it.type == DynamicType.Draw || it.type == DynamicType.Word
-            }
-        }
+    // 根据选中的 Tab 获取对应的数据列表
+    val currentList: List<DynamicItem> = when (selectedTabType) {
+        DynamicTabType.All -> dynamicViewModel.dynamicAllList
+        DynamicTabType.Video -> emptyList() // 视频标签页单独处理
+        DynamicTabType.Pgc -> dynamicViewModel.dynamicPgcList
+        DynamicTabType.Article -> dynamicViewModel.dynamicArticleList
     }
 
-    val shouldLoadMore by remember {
-        derivedStateOf { dynamicViewModel.dynamicAllList.isNotEmpty() && currentFocusedIndex + 12 > dynamicViewModel.dynamicAllList.size }
+    // 获取当前标签的加载状态
+    val (isLoading, hasMore) = when (selectedTabType) {
+        DynamicTabType.All -> dynamicViewModel.loadingAll to dynamicViewModel.allHasMore
+        DynamicTabType.Video -> dynamicViewModel.loadingVideo to dynamicViewModel.videoHasMore
+        DynamicTabType.Pgc -> dynamicViewModel.loadingPgc to dynamicViewModel.pgcHasMore
+        DynamicTabType.Article -> dynamicViewModel.loadingArticle to dynamicViewModel.articleHasMore
     }
-    val showTip by remember {
-        derivedStateOf { dynamicViewModel.dynamicAllList.isNotEmpty() && currentFocusedIndex >= 0 }
+
+    val showTip = (selectedTabType == DynamicTabType.Video && dynamicViewModel.dynamicVideoList.isNotEmpty() || currentList.isNotEmpty()) && currentFocusedIndex >= 0
+
+    // 视频点击处理器
+    val onClickVideo: (DynamicVideo) -> Unit = { video ->
+        VideoInfoActivity.actionStart(
+            context = context,
+            aid = video.aid,
+            proxyArea = ProxyArea.checkProxyArea(video.title)
+        )
+    }
+
+    val onLongClickVideo: (DynamicVideo) -> Unit = { video ->
+        UpInfoActivity.actionStart(
+            context,
+            mid = video.authorId,
+            name = video.author,
+            face = video.authorFace
+        )
     }
 
     val onClickDynamicItem: (DynamicItem) -> Unit = { dynamic ->
@@ -156,25 +186,47 @@ fun NewDynamicsScreen(
         )
     }
 
-    LaunchedEffect(shouldLoadMore) {
-        if (shouldLoadMore) {
+    // 获取当前列表大小（用于加载更多判断）
+    val currentListSize = if (selectedTabType == DynamicTabType.Video) {
+        dynamicViewModel.dynamicVideoList.size
+    } else {
+        currentList.size
+    }
+
+    // 加载更多
+    LaunchedEffect(currentListSize, currentFocusedIndex, selectedTabType) {
+        val needLoadMore = currentListSize > 0 && currentFocusedIndex + 12 > currentListSize
+        if (needLoadMore && hasMore && !isLoading) {
             scope.launch(Dispatchers.IO) {
-                dynamicViewModel.loadMoreAll()
+                dynamicViewModel.loadMoreByType(selectedTabType)
             }
         }
     }
 
     // 当 Tab 切换时加载数据
-    LaunchedEffect(Unit) {
-        if (dynamicViewModel.dynamicAllList.isEmpty()) {
-            dynamicViewModel.loadMoreAll()
+    LaunchedEffect(selectedTabType) {
+        val isEmpty = if (selectedTabType == DynamicTabType.Video) {
+            dynamicViewModel.dynamicVideoList.isEmpty()
+        } else {
+            currentList.isEmpty()
         }
+        if (isEmpty && hasMore) {
+            scope.launch(Dispatchers.IO) {
+                dynamicViewModel.loadMoreByType(selectedTabType)
+            }
+        }
+    }
+
+    // 在内容区域按返回键时，先将焦点给到子 TabRow
+    BackHandler(contentHasFocus) {
+        tabRowFocusRequester.requestFocus()
     }
 
     if (dynamicViewModel.isLogin) {
         Column(modifier = modifier.fillMaxSize()) {
             // Tab Row
             DynamicTabRow(
+                tabRowFocusRequester = tabRowFocusRequester,
                 selectedTabIndex = selectedTabIndex,
                 onTabSelected = { index ->
                     selectedTabIndex = index
@@ -197,29 +249,35 @@ fun NewDynamicsScreen(
             }
 
             // 根据选中的 Tab 显示不同的布局
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onFocusChanged { contentHasFocus = it.hasFocus }
+            ) {
             when (selectedTabType) {
                 DynamicTabType.Video -> {
                     // 视频页使用旧的 grid 布局和 SmallVideoCard
                     VideoDynamicContent(
-                        filteredList = filteredList,
-                        onClickDynamicItem = onClickDynamicItem,
-                        onLongClickDynamicItem = onLongClickDynamicItem,
+                        videoList = dynamicViewModel.dynamicVideoList,
+                        onClickVideo = onClickVideo,
+                        onLongClickVideo = onLongClickVideo,
                         onFocus = { currentFocusedIndex = it },
-                        loadingAll = dynamicViewModel.loadingAll,
-                        allHasMore = dynamicViewModel.allHasMore
+                        isLoading = isLoading,
+                        hasMore = hasMore
                     )
                 }
                 else -> {
                     // 其他页面使用瀑布流布局
                     StaggeredDynamicContent(
-                        filteredList = filteredList,
+                        filteredList = currentList,
                         onClickDynamicItem = onClickDynamicItem,
                         onLongClickDynamicItem = onLongClickDynamicItem,
                         onFocus = { currentFocusedIndex = it },
-                        loadingAll = dynamicViewModel.loadingAll,
-                        allHasMore = dynamicViewModel.allHasMore
+                        isLoading = isLoading,
+                        hasMore = hasMore
                     )
                 }
+            }
             }
         }
     } else {
@@ -235,26 +293,27 @@ fun NewDynamicsScreen(
 @Composable
 private fun DynamicTabRow(
     modifier: Modifier = Modifier,
+    tabRowFocusRequester: FocusRequester,
     selectedTabIndex: Int,
     onTabSelected: (Int) -> Unit
 ) {
-    val focusRequester = remember { FocusRequester() }
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         delay(100)
-        focusRequester.requestFocus()
+        tabRowFocusRequester.requestFocus()
     }
 
     TabRow(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(vertical = 8.dp)
+            .focusRestorer(tabRowFocusRequester),
         selectedTabIndex = selectedTabIndex
     ) {
         DynamicTabType.entries.forEachIndexed { index, tab ->
             Tab(
-                modifier = if (index == selectedTabIndex) Modifier.focusRequester(focusRequester) else Modifier,
+                modifier = if (index == selectedTabIndex) Modifier.focusRequester(tabRowFocusRequester) else Modifier,
                 selected = index == selectedTabIndex,
                 onFocus = { onTabSelected(index) },
                 onClick = { onTabSelected(index) }
@@ -273,12 +332,12 @@ private fun DynamicTabRow(
 // 视频页内容 - 使用旧的 Grid 布局和 SmallVideoCard
 @Composable
 private fun VideoDynamicContent(
-    filteredList: List<DynamicItem>,
-    onClickDynamicItem: (DynamicItem) -> Unit,
-    onLongClickDynamicItem: (DynamicItem) -> Unit,
+    videoList: List<DynamicVideo>,
+    onClickVideo: (DynamicVideo) -> Unit,
+    onLongClickVideo: (DynamicVideo) -> Unit,
     onFocus: (Int) -> Unit,
-    loadingAll: Boolean,
-    allHasMore: Boolean
+    isLoading: Boolean,
+    hasMore: Boolean
 ) {
     val context = LocalContext.current
     val padding = dimensionResource(R.dimen.grid_padding) / 2
@@ -306,29 +365,27 @@ private fun VideoDynamicContent(
             verticalArrangement = Arrangement.spacedBy(spacedBy),
             horizontalArrangement = Arrangement.spacedBy(spacedBy)
         ) {
-            itemsIndexed(filteredList) { index, item ->
-                item.video?.let { video ->
-                    SmallVideoCard(
-                        data = remember(video.aid) {
-                            VideoCardData(
-                                avid = video.aid,
-                                title = video.title,
-                                cover = video.cover,
-                                playString = video.play,
-                                danmakuString = video.danmaku,
-                                upName = item.author.author,
-                                timeString = video.duration,
-                                pubTime = item.author.pubTime
-                            )
-                        },
-                        onClick = { onClickDynamicItem(item) },
-                        onLongClick = { onLongClickDynamicItem(item) },
-                        onFocus = { onFocus(index) }
-                    )
-                }
+            itemsIndexed(videoList) { index, video ->
+                SmallVideoCard(
+                    data = remember(video.aid) {
+                        VideoCardData(
+                            avid = video.aid,
+                            title = video.title,
+                            cover = video.cover,
+                            playString = video.play.toString(),
+                            danmakuString = video.danmaku.toString(),
+                            upName = video.author,
+                            timeString = video.duration.toString(),
+                            pubTime = video.pubTime
+                        )
+                    },
+                    onClick = { onClickVideo(video) },
+                    onLongClick = { onLongClickVideo(video) },
+                    onFocus = { onFocus(index) }
+                )
             }
 
-            if (loadingAll) {
+            if (isLoading) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
@@ -339,7 +396,7 @@ private fun VideoDynamicContent(
                 }
             }
 
-            if (!allHasMore && filteredList.isNotEmpty()) {
+            if (!hasMore && videoList.isNotEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Text(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -360,8 +417,8 @@ private fun StaggeredDynamicContent(
     onClickDynamicItem: (DynamicItem) -> Unit,
     onLongClickDynamicItem: (DynamicItem) -> Unit,
     onFocus: (Int) -> Unit,
-    loadingAll: Boolean,
-    allHasMore: Boolean
+    isLoading: Boolean,
+    hasMore: Boolean
 ) {
     val context = LocalContext.current
     val staggeredGridState = rememberLazyStaggeredGridState()
@@ -397,7 +454,7 @@ private fun StaggeredDynamicContent(
                 )
             }
 
-            if (loadingAll) {
+            if (isLoading) {
                 item(span = StaggeredGridItemSpan.FullLine) {
                     Box(
                         modifier = Modifier
@@ -410,7 +467,7 @@ private fun StaggeredDynamicContent(
                 }
             }
 
-            if (!allHasMore && filteredList.isNotEmpty()) {
+            if (!hasMore && filteredList.isNotEmpty()) {
                 item(span = StaggeredGridItemSpan.FullLine) {
                     Text(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
