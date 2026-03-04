@@ -49,6 +49,7 @@ import androidx.tv.material3.RadioButton
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.DynamicPageStyle
+import dev.aaa1115910.bv.entity.DynamicTabType
 import dev.aaa1115910.bv.entity.ThemeType
 import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
@@ -78,12 +79,14 @@ fun UISetting(
     var showLongPressActionDialog by remember { mutableStateOf(false) }
     var showOnlineViewerCountDialog by remember { mutableStateOf(false) }
     var showDynamicPageStyleDialog by remember { mutableStateOf(false) }
+    var showDynamicDefaultTabDialog by remember { mutableStateOf(false) }
     val density by Prefs.densityFlow.collectAsState(context.resources.displayMetrics.widthPixels / 960f)
     val themeType by Prefs.themeTypeFlow.collectAsState(Prefs.themeType)
     val showOnlineViewerCount by Prefs.showOnlineViewerCountFlow.collectAsState(Prefs.showOnlineViewerCount)
     var defaultHomeTab by remember { mutableStateOf(HomeTopNavItem.entries.getOrElse(Prefs.defaultHomeTab) { HomeTopNavItem.Recommend }) }
     var gridColumns by remember { mutableStateOf(Prefs.gridColumns) }
     var dynamicPageStyle by remember { mutableStateOf(Prefs.dynamicPageStyle) }
+    var dynamicDefaultTab by remember { mutableStateOf(Prefs.dynamicDefaultTab) }
 
     Box(modifier = modifier) {
         Column(
@@ -172,6 +175,16 @@ fun UISetting(
                         onClick = { showDynamicPageStyleDialog = true }
                     )
                 }
+                if (dynamicPageStyle == DynamicPageStyle.New) {
+                    item {
+                        SettingListItem(
+                            title = "新动态页默认页面",
+                            supportText = "设置新动态页打开时的默认页面",
+                            valueText = dynamicDefaultTab.getDisplayName(context),
+                            onClick = { showDynamicDefaultTabDialog = true }
+                        )
+                    }
+                }
             }
         }
     }
@@ -242,6 +255,16 @@ fun UISetting(
         onDynamicPageStyleChange = {
             dynamicPageStyle = it
             Prefs.dynamicPageStyle = it
+        }
+    )
+
+    DynamicDefaultTabDialog(
+        show = showDynamicDefaultTabDialog,
+        onHideDialog = { showDynamicDefaultTabDialog = false },
+        dynamicDefaultTab = dynamicDefaultTab,
+        onDynamicDefaultTabChange = {
+            dynamicDefaultTab = it
+            Prefs.dynamicDefaultTab = it
         }
     )
 }
@@ -787,6 +810,44 @@ private fun DynamicPageStyleDialog(
                             trailingContent = {
                                 RadioButton(
                                     selected = dynamicPageStyle == it,
+                                    onClick = null
+                                )
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+}
+
+@Composable
+private fun DynamicDefaultTabDialog(
+    modifier: Modifier = Modifier,
+    show: Boolean,
+    onHideDialog: () -> Unit,
+    dynamicDefaultTab: DynamicTabType,
+    onDynamicDefaultTabChange: (DynamicTabType) -> Unit
+) {
+    val options = listOf(DynamicTabType.All, DynamicTabType.Video)
+    if (show) {
+        TvAlertDialog(
+            modifier = modifier,
+            onDismissRequest = { onHideDialog() },
+            title = { Text(text = "新动态页默认页面") },
+            text = {
+                Column {
+                    options.forEach {
+                        ListItem(
+                            selected = dynamicDefaultTab == it,
+                            onClick = { onDynamicDefaultTabChange(it) },
+                            headlineContent = {
+                                Text(text = it.getDisplayName(LocalContext.current))
+                            },
+                            trailingContent = {
+                                RadioButton(
+                                    selected = dynamicDefaultTab == it,
                                     onClick = null
                                 )
                             }

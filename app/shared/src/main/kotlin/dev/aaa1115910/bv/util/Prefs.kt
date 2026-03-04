@@ -27,6 +27,7 @@ import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.PlayerLoadNextAction
 import dev.aaa1115910.bv.entity.DynamicPageStyle
+import dev.aaa1115910.bv.entity.DynamicTabType
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -480,6 +481,14 @@ object Prefs {
         set(value) = runBlocking {
             dsm.editPreference(PrefKeys.prefDynamicPageStyleKey, value.value)
         }
+
+    var dynamicDefaultTab: DynamicTabType
+        get() = runBlocking {
+            DynamicTabType.fromValue(dsm.getPreferenceFlow(PrefKeys.prefDynamicDefaultTabRequest).first())
+        }
+        set(value) = runBlocking {
+            dsm.editPreference(PrefKeys.prefDynamicDefaultTabKey, value.value)
+        }
 }
 
 object PrefKeys {
@@ -554,6 +563,7 @@ object PrefKeys {
     val prefDefaultDanmakuFilterLevelKey = intPreferencesKey("default_danmaku_filter_level")
     val prefDefaultLiveDanmakuFilterLevelKey = intPreferencesKey("default_live_danmaku_filter_level")
     val prefDynamicPageStyleKey = intPreferencesKey("dynamic_page_style")
+    val prefDynamicDefaultTabKey = intPreferencesKey("dynamic_default_tab")
 
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
@@ -644,4 +654,5 @@ object PrefKeys {
     val prefDefaultDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultDanmakuFilterLevelKey, 1)
     val prefDefaultLiveDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultLiveDanmakuFilterLevelKey, 0)
     val prefDynamicPageStyleRequest = PreferenceRequest(prefDynamicPageStyleKey, DynamicPageStyle.New.value)
+    val prefDynamicDefaultTabRequest = PreferenceRequest(prefDynamicDefaultTabKey, DynamicTabType.All.value)
 }
