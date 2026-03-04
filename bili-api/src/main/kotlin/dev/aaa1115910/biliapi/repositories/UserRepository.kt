@@ -251,10 +251,20 @@ class UserRepository(
         updateBaseline: String,
         preferApiType: ApiType = ApiType.Web
     ): DynamicData {
+        return getDynamicsByType("all", page, offset, updateBaseline, preferApiType)
+    }
+
+    suspend fun getDynamicsByType(
+        type: String,
+        page: Int,
+        offset: String,
+        updateBaseline: String,
+        preferApiType: ApiType = ApiType.Web
+    ): DynamicData {
         return when (preferApiType) {
             ApiType.Web -> {
                 val responseData = BiliHttpApi.getDynamicList(
-                    type = "all",
+                    type = type,
                     page = page,
                     offset = offset,
                     sessData = authRepository.sessionData ?: ""

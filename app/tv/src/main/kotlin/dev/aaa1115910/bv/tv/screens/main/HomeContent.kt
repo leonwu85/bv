@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -85,6 +86,9 @@ fun HomeContent(
     
     var focusOnContent by remember { mutableStateOf(false) }
     var topNavHasFocus by remember { mutableStateOf(false) }
+
+    // 记住动态页子 Tab 的选中索引
+    var dynamicSubTabIndex by remember { mutableIntStateOf(0) }
     
     // 用于管理延迟加载的Job
     var loadJob by remember { mutableStateOf<Job?>(null) }
@@ -314,7 +318,11 @@ fun HomeContent(
                     HomeTopNavItem.Dynamics -> {
                         if (userViewModel.isLogin) {
                             if (Prefs.dynamicPageStyle == DynamicPageStyle.New) {
-                                NewDynamicsScreen(lazyGridState = dynamicState)
+                                NewDynamicsScreen(
+                                    lazyGridState = dynamicState,
+                                    initialSelectedTabIndex = dynamicSubTabIndex,
+                                    onSelectedTabChanged = { dynamicSubTabIndex = it }
+                                )
                             } else {
                                 DynamicsScreen(lazyGridState = dynamicState)
                             }
