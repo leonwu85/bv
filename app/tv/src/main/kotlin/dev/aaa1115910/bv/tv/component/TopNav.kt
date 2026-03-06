@@ -15,8 +15,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.input.key.Key
@@ -38,6 +40,7 @@ import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.isKeyDown
 import kotlinx.coroutines.delay
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun TopNav(
     modifier: Modifier = Modifier,
@@ -81,6 +84,7 @@ fun TopNav(
     ) {
         TabRow(
             modifier = Modifier
+                .focusProperties { enter = { focusRequester } }
                 .focusRestorer(focusRequester)
                 .onPreviewKeyEvent {
                     if (it.isKeyDown()) {

@@ -152,7 +152,8 @@ class VideoPlayerV3Activity : ComponentActivity() {
         // 设置当前实例为弱引用
         currentInstance = WeakReference(this)
 
-        initVideoPlayer()
+        val isLive = intent.getBooleanExtra("isLive", false)
+        initVideoPlayer(isLive = isLive)
         //initDanmakuPlayer()
         getParamsFromIntent()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -192,8 +193,8 @@ class VideoPlayerV3Activity : ComponentActivity() {
         }
     }
 
-    private fun initVideoPlayer() {
-        dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity.Companion.logger.info { "Init video player: ${Prefs.playerType.name}" }
+    private fun initVideoPlayer(isLive: Boolean = false) {
+        dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity.Companion.logger.info { "Init video player: ${Prefs.playerType.name}, isLive=$isLive" }
         val options = VideoPlayerOptions(
             userAgent = when (Prefs.apiType) {
                 ApiType.Web -> dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_WEB
@@ -205,7 +206,8 @@ class VideoPlayerV3Activity : ComponentActivity() {
             },
             enableFfmpegAudioRenderer = Prefs.enableFfmpegAudioRenderer,
             enableAsyncQueueing = Prefs.enableAsyncQueueing,
-            enableTunneling = Prefs.enableTunneling,
+            // 直播场景关闭 tunneling，避免 CCodecBufferChannel "no latch time for frame" 导致弹幕卡顿
+            enableTunneling = if (isLive) false else Prefs.enableTunneling,
             enableAudioPlaybackParams = Prefs.enableAudioPlaybackParams
         )
         val videoPlayer = when (Prefs.playerType) {

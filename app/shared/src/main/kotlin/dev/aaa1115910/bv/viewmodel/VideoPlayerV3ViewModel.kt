@@ -1176,8 +1176,6 @@ class VideoPlayerV3ViewModel(
      * 实时发送直播弹幕
      */
     private fun addLiveDanmaku(event: DanmakuEvent) {
-        logger.fInfo { "addLiveDanmaku called: content=${event.content}, liveDanmakuPlayer=$liveDanmakuPlayer" }
-
         // 添加用户等级过滤逻辑
         if (event.userLevel < currentLiveDanmakuFilterLevel) {
             logger.fInfo { "Filtered live danmaku: userLevel=${event.userLevel} < $currentLiveDanmakuFilterLevel" }
@@ -1199,7 +1197,6 @@ class VideoPlayerV3ViewModel(
 
         // 直播模式
         viewModelScope.launch(Dispatchers.Main) {
-            logger.fInfo { "Emitting danmaku: liveDanmakuPlayer=$liveDanmakuPlayer" }
             liveDanmakuPlayer?.emit(danmakuItem)
         }
     }
