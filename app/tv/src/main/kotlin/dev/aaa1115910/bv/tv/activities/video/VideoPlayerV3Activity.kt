@@ -206,8 +206,7 @@ class VideoPlayerV3Activity : ComponentActivity() {
             },
             enableFfmpegAudioRenderer = Prefs.enableFfmpegAudioRenderer,
             enableAsyncQueueing = Prefs.enableAsyncQueueing,
-            // 直播场景关闭 tunneling，避免 CCodecBufferChannel "no latch time for frame" 导致弹幕卡顿
-            enableTunneling = if (isLive) false else Prefs.enableTunneling,
+            enableTunneling = Prefs.enableTunneling,
             enableAudioPlaybackParams = Prefs.enableAudioPlaybackParams
         )
         val videoPlayer = when (Prefs.playerType) {
