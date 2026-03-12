@@ -19,6 +19,7 @@ import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import com.kuaishou.akdanmaku.ui.DanmakuSurfaceView
 import com.kuaishou.akdanmaku.ui.DanmakuView
 import com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer
+import dev.aaa1115910.bv.player.renderer.OptimizedTextRenderer
 import dev.aaa1115910.bv.player.renderer.SimpleRenderer
 
 /**
@@ -91,7 +92,7 @@ fun AkDanmakuPlayer(
 
                     val player = LiveDanmakuPlayer(
                         surfaceView = this,
-                        renderer = SimpleRenderer(),
+                        renderer = OptimizedTextRenderer.createHighPerformance(),
                         config = DanmakuConfig(liveMode = true)
                     )
                     liveDanmakuPlayer = player
