@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaItem.LiveConfiguration
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM
@@ -39,6 +40,19 @@ private data class BufferConfig(
     val prioritizeTime: Boolean // 是否优先考虑时间阈值
 )
 
+/**
+ * 直播专用缓冲配置
+ */
+private data class LiveBufferConfig(
+    val minBufferMs: Int,
+    val maxBufferMs: Int,
+    val bufferForPlaybackMs: Int,      // 开始播放前的缓冲时间
+    val bufferForPlaybackAfterRebufferMs: Int,  // 重新缓冲后的播放缓冲
+    val backBufferMs: Int,
+    val targetBufferBytes: Int,
+    val prioritizeTime: Boolean
+)
+
 @OptIn(UnstableApi::class)
 class ExoMediaPlayer(
     private val context: Context,
@@ -61,7 +75,10 @@ class ExoMediaPlayer(
 
     @OptIn(UnstableApi::class)
     private val dataSourceFactory =
-        OkHttpDataSource.Factory(OkHttpUtil.generateCustomSslOkHttpClient(context)).apply {
+        OkHttpDataSource.Factory(
+            if (options.isLive) OkHttpUtil.generateLiveOkHttpClient(context)
+            else OkHttpUtil.generateCustomSslOkHttpClient(context)
+        ).apply {
             options.userAgent?.let { setUserAgent(it) }
             options.referer?.let { setDefaultRequestProperties(mapOf("referer" to it)) }
         }
@@ -91,22 +108,12 @@ class ExoMediaPlayer(
             }
         }
 
-        // 创建智能缓冲策略，根据设备性能和视频质量动态调整
-        val bufferConfig = calculateSmartBufferConfig()
-        val loadControl = DefaultLoadControl.Builder()
-            // 动态设置缓冲区大小
-            .setBufferDurationsMs(
-                bufferConfig.minBufferMs, // 最小缓冲时间
-                bufferConfig.maxBufferMs, // 最大缓冲时间
-                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS, // 开始播放前的缓冲时间
-                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS // 重新缓冲后的播放缓冲
-            )
-            // 优先考虑时间阈值还是缓冲大小。true：优先考虑时间阈值
-            .setPrioritizeTimeOverSizeThresholds(bufferConfig.prioritizeTime)
-            // 根据系统内存计算缓冲区大小
-            .setTargetBufferBytes(bufferConfig.targetBufferBytes)
-            .setBackBuffer(bufferConfig.backBufferMs, false) // 动态回退缓冲
-            .build()
+        // 为直播选择不同的缓冲策略
+        val loadControl = if (options.isLive) {
+            createLiveLoadControl()
+        } else {
+            createVodLoadControl()
+        }
 
         val exoPlayerBuilder = ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
@@ -157,11 +164,40 @@ class ExoMediaPlayer(
         val uri = android.net.Uri.parse(url)
         val path = uri.path?.lowercase() ?: ""
         return if (path.endsWith(".m3u8")) {
-            HlsMediaSource.Factory(dataSourceFactory)
-                .createMediaSource(MediaItem.fromUri(uri))
+            createHlsMediaSource(uri)
         } else {
             ProgressiveMediaSource.Factory(dataSourceFactory)
                 .createMediaSource(MediaItem.fromUri(uri))
+        }
+    }
+
+    /**
+     * 创建 HLS 媒体源
+     */
+    @OptIn(UnstableApi::class)
+    private fun createHlsMediaSource(uri: android.net.Uri): MediaSource {
+        val hlsFactory = HlsMediaSource.Factory(dataSourceFactory)
+
+        if (options.isLive) {
+            // 直播专用配置
+            val mediaItem = MediaItem.Builder()
+                .setUri(uri)
+                .setLiveConfiguration(
+                    LiveConfiguration.Builder()
+                        .setTargetOffsetMs(C.TIME_UNSET)  // 自动跟随播放列表
+                        .setMinOffsetMs(1000)  // 最小延迟1秒
+                        .setMaxOffsetMs(30000)  // 最大延迟30秒
+                        .setMinPlaybackSpeed(0.95f)  // 最小播放速度（追帧）
+                        .setMaxPlaybackSpeed(1.05f)  // 最大播放速度
+                        .build()
+                )
+                .build()
+
+            Log.d("ExoMediaPlayer", "HLS Live source created with live configuration")
+            return hlsFactory.createMediaSource(mediaItem)
+        } else {
+            // 点播配置
+            return hlsFactory.createMediaSource(MediaItem.fromUri(uri))
         }
     }
 
@@ -306,6 +342,106 @@ class ExoMediaPlayer(
 
     override fun onPlayerError(error: PlaybackException) {
         mPlayerEventListener?.onError(error)
+    }
+
+    /**
+     * 直播专用的 LoadControl
+     */
+    @OptIn(UnstableApi::class)
+    private fun createLiveLoadControl(): DefaultLoadControl {
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val memoryInfo = android.app.ActivityManager.MemoryInfo()
+        activityManager.getMemoryInfo(memoryInfo)
+
+        val deviceTier = determineDeviceTier(activityManager, memoryInfo)
+        val config = calculateLiveBufferConfig(deviceTier, memoryInfo.availMem)
+
+        Log.d("ExoMediaPlayer", "Live buffer config: minBuffer=${config.minBufferMs}ms, " +
+            "maxBuffer=${config.maxBufferMs}ms, bufferForPlayback=${config.bufferForPlaybackMs}ms, " +
+            "bufferAfterRebuffer=${config.bufferForPlaybackAfterRebufferMs}ms")
+
+        return DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                config.minBufferMs,
+                config.maxBufferMs,
+                config.bufferForPlaybackMs,
+                config.bufferForPlaybackAfterRebufferMs
+            )
+            .setPrioritizeTimeOverSizeThresholds(config.prioritizeTime)
+            .setTargetBufferBytes(config.targetBufferBytes)
+            .setBackBuffer(config.backBufferMs, false)
+            .build()
+    }
+
+    /**
+     * 点播用的 LoadControl
+     * 保持现有的缓冲逻辑
+     */
+    @OptIn(UnstableApi::class)
+    private fun createVodLoadControl(): DefaultLoadControl {
+        val bufferConfig = calculateSmartBufferConfig()
+        return DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                bufferConfig.minBufferMs,
+                bufferConfig.maxBufferMs,
+                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
+                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
+            )
+            .setPrioritizeTimeOverSizeThresholds(bufferConfig.prioritizeTime)
+            .setTargetBufferBytes(bufferConfig.targetBufferBytes)
+            .setBackBuffer(bufferConfig.backBufferMs, false)
+            .build()
+    }
+
+    /**
+     * 确定设备性能等级
+     */
+    private fun determineDeviceTier(
+        activityManager: android.app.ActivityManager,
+        memoryInfo: android.app.ActivityManager.MemoryInfo
+    ): DeviceTier {
+        val totalMemory = memoryInfo.totalMem
+        val isLowRam = activityManager.isLowRamDevice
+        return when {
+            isLowRam || totalMemory < 3L * 1024 * 1024 * 1024 -> DeviceTier.LOW
+            totalMemory < 6L * 1024 * 1024 * 1024 -> DeviceTier.MID
+            else -> DeviceTier.HIGH
+        }
+    }
+
+    /**
+     * 直播专用缓冲配置
+     */
+    private fun calculateLiveBufferConfig(deviceTier: DeviceTier, availableMemory: Long): LiveBufferConfig {
+        return when (deviceTier) {
+            DeviceTier.LOW -> LiveBufferConfig(
+                minBufferMs = 3000,    // 3秒最小缓冲
+                maxBufferMs = 8000,    // 8秒最大缓冲
+                bufferForPlaybackMs = 1000,  // 1秒快速起播
+                bufferForPlaybackAfterRebufferMs = 2000,  // 2秒快速恢复
+                backBufferMs = 0,
+                targetBufferBytes = calculateBufferSize(availableMemory, 0.06, 3, 30),
+                prioritizeTime = true  // 直播优先时间阈值
+            )
+            DeviceTier.MID -> LiveBufferConfig(
+                minBufferMs = 4000,
+                maxBufferMs = 10000,
+                bufferForPlaybackMs = 1000,
+                bufferForPlaybackAfterRebufferMs = 2500,
+                backBufferMs = 0,
+                targetBufferBytes = calculateBufferSize(availableMemory, 0.10, 5, 80),
+                prioritizeTime = true
+            )
+            DeviceTier.HIGH -> LiveBufferConfig(
+                minBufferMs = 5000,
+                maxBufferMs = 15000,
+                bufferForPlaybackMs = 1500,
+                bufferForPlaybackAfterRebufferMs = 3000,
+                backBufferMs = 0,
+                targetBufferBytes = calculateBufferSize(availableMemory, 0.15, 8, 150),
+                prioritizeTime = true
+            )
+        }
     }
 
     /**

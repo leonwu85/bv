@@ -6,5 +6,6 @@ data class VideoPlayerOptions(
     val enableFfmpegAudioRenderer: Boolean = false,
     val enableAsyncQueueing: Boolean = true,
     val enableTunneling: Boolean = true,
-    val enableAudioPlaybackParams: Boolean = true
+    val enableAudioPlaybackParams: Boolean = true,
+    val isLive: Boolean = false
 )
