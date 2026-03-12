@@ -144,7 +144,10 @@ fun HttpClient.encApiSign() = plugin(HttpSend)
         // 为 Web 请求自动添加 buvid3 cookie
         val isAppRequest =
             request.url.parameters.contains("access_key") || request.url.host == "app.bilibili.com"
-        if (!isAppRequest) {
+        // playurl 接口不需要添加 buvid3
+        val isPlayUrlRequest = request.url.encodedPath.contains("/x/player/playurl") ||
+                request.url.encodedPath.contains("/x/player/wbi/playurl")
+        if (!isAppRequest && !isPlayUrlRequest) {
             val buvid3 = BiliHttpApi.buvid3Provider()
             val existingCookie = request.headers["Cookie"] ?: ""
             if (!buvid3.isNullOrBlank() && !existingCookie.contains("buvid3=")) {
