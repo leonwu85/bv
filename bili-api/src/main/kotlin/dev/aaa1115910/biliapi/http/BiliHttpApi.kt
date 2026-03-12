@@ -111,6 +111,11 @@ object BiliHttpApi {
     private var endPoint: String = "api.bilibili.com"
     private lateinit var client: HttpClient
 
+    // 用于获取 sessData 的提供者，由应用层设置
+    var sessDataProvider: () -> String = { "" }
+    // 用于获取 buvid3 的提供者，由应用层设置
+    var buvid3Provider: () -> String? = { null }
+
     private val json = Json {
         coerceInputValues = true
         ignoreUnknownKeys = true
@@ -428,9 +433,14 @@ object BiliHttpApi {
      * 通过[sessData]获取用户个人信息
      */
     suspend fun getUserSelfInfo(
+        buvid3: String? = null,
         sessData: String = ""
     ): BiliResponse<MyInfoData> = client.get("/x/space/myinfo") {
-        header("Cookie", "SESSDATA=$sessData;")
+        if (buvid3 != null && sessData.isNotEmpty()) {
+            header("Cookie", "buvid3=$buvid3; SESSDATA=$sessData;")
+        } else {
+            header("Cookie", "SESSDATA=$sessData;")
+        }
     }.body()
 
     /**
@@ -1592,13 +1602,27 @@ object BiliHttpApi {
      *
      * 内含 wbi keys
      */
-    suspend fun getWebInterfaceNav(): BiliResponse<NavResponseData> =
-        client.get("/x/web-interface/nav").body()
+    suspend fun getWebInterfaceNav(
+        buvid3: String? = null,
+        sessData: String = ""
+    ): BiliResponse<NavResponseData> =
+        client.get("/x/web-interface/nav") {
+            if (buvid3 != null && sessData.isNotEmpty()) {
+                header("Cookie", "buvid3=$buvid3; SESSDATA=$sessData;")
+            } else if (sessData.isNotEmpty()) {
+                header("Cookie", "SESSDATA=$sessData;")
+            }
+        }.body()
 
     /**
      * 更新 wbi keys
+     * @param sessData 用户登录凭证，默认使用 sessDataProvider 获取
+     * @param buvid3 设备标识，默认使用 buvid3Provider 获取
      */
-    suspend fun updateWbi() {
+    suspend fun updateWbi(
+        sessData: String = sessDataProvider(),
+        buvid3: String? = buvid3Provider()
+    ) {
         val needToUpdate =
             wbiImgKey == null || wbiSubKey == null || System.currentTimeMillis() - wbiLastRefreshDate < 2 * 60 * 60 * 1000L
         if (!needToUpdate) {
@@ -1608,7 +1632,7 @@ object BiliHttpApi {
 
         println("Updating wbi keys...")
         runCatching {
-            val wbiData = getWebInterfaceNav().data!!.wbiImg
+            val wbiData = getWebInterfaceNav(buvid3 = buvid3, sessData = sessData).data!!.wbiImg
             wbiImgKey = wbiData.getImgKey()
             wbiSubKey = wbiData.getSubKey()
             wbiLastRefreshDate = System.currentTimeMillis()
@@ -1626,13 +1650,18 @@ object BiliHttpApi {
         freshType: Int = 4,
         pageSize: Int = 30,
         idx: Int = 1,
+        buvid3: String? = null,
         sessData: String? = null
     ): BiliResponse<RcmdTopData> = client.get("/x/web-interface/wbi/index/top/feed/rcmd") {
         parameter("fresh_type", freshType)
         parameter("ps", pageSize)
         parameter("fresh_idx", idx)
         parameter("fresh_idx_1h", idx)
-        sessData?.let { header("Cookie", "SESSDATA=$it;") }
+        if (sessData != null && buvid3 != null) {
+            header("Cookie", "buvid3=$buvid3; SESSDATA=$sessData;")
+        } else {
+            sessData?.let { header("Cookie", "SESSDATA=$it;") }
+        }
     }.body()
 
     /**

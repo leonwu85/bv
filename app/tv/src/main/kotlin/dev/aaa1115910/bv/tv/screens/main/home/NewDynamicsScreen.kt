@@ -719,7 +719,7 @@ private fun DynamicDrawContent(draw: DynamicItem.DynamicDrawModule?) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                draw.images.take(3).forEach { image ->
+                draw.images.take(1).forEach { image ->
                     AsyncImage(
                         model = image.url,
                         contentDescription = null,
@@ -730,9 +730,9 @@ private fun DynamicDrawContent(draw: DynamicItem.DynamicDrawModule?) {
                         contentScale = ContentScale.Crop
                     )
                 }
-                if (draw.images.size > 3) {
+                if (draw.images.size > 1) {
                     Text(
-                        text = "+${draw.images.size - 3} 张图片",
+                        text = "+${draw.images.size - 1} 张图片",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
