@@ -251,7 +251,7 @@ data class DynamicItem(
                     DynamicPgcModule.fromModulePgc(item.modules.moduleDynamic.major!!.pgc!!)
 
                 DynamicType.Article -> dynamicItem.article =
-                    DynamicArticleModule.fromModuleArticle(item.modules.moduleDynamic.major!!.article!!)
+                    DynamicArticleModule.fromModuleDynamic(item.modules.moduleDynamic)
 
                 DynamicType.None -> dynamicItem.none =
                     DynamicNoneModule.fromModuleDynamic(item.modules.moduleDynamic.major!!.none!!)
@@ -787,6 +787,33 @@ data class DynamicItem(
                     covers = moduleArticle.coversList,
                     id = moduleArticle.id.toInt()
                 )
+            }
+
+            fun fromModuleDynamic(moduleDynamic: dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Dynamic): DynamicArticleModule {
+                val article = moduleDynamic.major?.article
+                val opus = moduleDynamic.major?.opus
+
+                return if (article != null) {
+                    fromModuleArticle(article)
+                } else if (opus != null) {
+                    DynamicArticleModule(
+                        title = opus.title ?: "",
+                        text = opus.summary.text,
+                        url = opus.jumpUrl,
+                        label = "",
+                        id = 0,
+                        covers = opus.pics.map { it.url }
+                    )
+                } else {
+                    DynamicArticleModule(
+                        title = "",
+                        text = moduleDynamic.desc?.text ?: "",
+                        url = "",
+                        label = "",
+                        id = 0,
+                        covers = emptyList()
+                    )
+                }
             }
         }
     }

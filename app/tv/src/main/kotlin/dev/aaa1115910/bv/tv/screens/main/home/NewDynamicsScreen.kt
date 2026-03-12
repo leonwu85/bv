@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -28,6 +30,7 @@ import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -55,6 +58,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,7 +77,8 @@ import dev.aaa1115910.biliapi.entity.user.DynamicVideo
 import dev.aaa1115910.bv.entity.DynamicTabType
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
-import dev.aaa1115910.bv.tv.R
+import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.tv.R as tvR
 import dev.aaa1115910.bv.tv.activities.user.FollowActivity
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
@@ -241,7 +246,7 @@ fun NewDynamicsScreen(
                         .fillMaxWidth()
                         .offset(x = (-20).dp, y = (-8).dp)
                         .padding(top = 8.dp, end = 24.dp),
-                    text = stringResource(R.string.entry_follow_screen),
+                    text = stringResource(tvR.string.entry_follow_screen),
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                     fontSize = 12.sp,
                     textAlign = TextAlign.End
@@ -340,8 +345,8 @@ private fun VideoDynamicContent(
     hasMore: Boolean
 ) {
     val context = LocalContext.current
-    val padding = dimensionResource(R.dimen.grid_padding) / 2
-    val spacedBy = dimensionResource(R.dimen.grid_spacedBy) / 2
+    val padding = dimensionResource(tvR.dimen.grid_padding) / 2
+    val spacedBy = dimensionResource(tvR.dimen.grid_spacedBy) / 2
     val gridColumns = Prefs.gridColumns
 
     ProvideListBringIntoViewSpec {
@@ -372,10 +377,10 @@ private fun VideoDynamicContent(
                             avid = video.aid,
                             title = video.title,
                             cover = video.cover,
-                            playString = video.play.toString(),
-                            danmakuString = video.danmaku.toString(),
+                            play = video.play,
+                            danmaku = video.danmaku,
                             upName = video.author,
-                            timeString = video.duration.toString(),
+                            time = video.duration * 1000L,
                             pubTime = video.pubTime
                         )
                     },
@@ -617,20 +622,41 @@ private fun DynamicVideoContent(video: DynamicItem.DynamicVideoModule?) {
                     color = Color.White,
                     fontSize = 12.sp
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     if (video.play.isNotBlank()) {
-                        Text(
-                            text = video.play,
-                            color = Color.White,
-                            fontSize = 12.sp
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_play_count),
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(Modifier.width(2.dp))
+                            Text(
+                                text = video.play,
+                                color = Color.White,
+                                fontSize = 12.sp
+                            )
+                        }
                     }
                     if (video.danmaku.isNotBlank()) {
-                        Text(
-                            text = video.danmaku,
-                            color = Color.White,
-                            fontSize = 12.sp
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_danmaku_count),
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(Modifier.width(2.dp))
+                            Text(
+                                text = video.danmaku,
+                                color = Color.White,
+                                fontSize = 12.sp
+                            )
+                        }
                     }
                 }
             }
