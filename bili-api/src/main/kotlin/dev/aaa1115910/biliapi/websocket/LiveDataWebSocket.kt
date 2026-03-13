@@ -359,7 +359,7 @@ object LiveDataWebSocket {
             "DANMU_MSG" -> {
                 runCatching {
                     val infoArray = dataJson["info"]!!.jsonArray
-
+                    logger.info { "dataJson:$dataJson" }
                     // 弹幕内容 info[1]，需要检查是否为字符串（有些情况下是 JSON 对象）
                     val contentElement = infoArray[1]
                     if (contentElement !is kotlinx.serialization.json.JsonPrimitive) {
@@ -399,6 +399,41 @@ object LiveDataWebSocket {
                         }
                     }
 
+                    // 解析表情信息
+                    // 优先从 info[0][15].extra.emots 获取多个表情
+                    // 如果为空，则从 info[0][13] 获取单个表情
+                    var emojiMap: Map<String, String> = emptyMap()
+                    runCatching {
+                        // 尝试从 info[0][15].extra.emots 获取
+                        if (attrArray.size > 15) {
+                            val extraObj = attrArray[15].jsonObject
+                            val extraStr = extraObj["extra"]?.jsonPrimitive?.content
+                            if (!extraStr.isNullOrEmpty()) {
+                                val extraJson = json.parseToJsonElement(extraStr).jsonObject
+                                val emots = extraJson["emots"]?.jsonObject
+                                if (emots != null) {
+                                    emojiMap = emots.mapValues { (_, value) ->
+                                        value.jsonObject["url"]?.jsonPrimitive?.content ?: ""
+                                    }.filterValues { it.isNotEmpty() }
+                                }
+                            }
+                        }
+                        // 如果 emots 为空，尝试从 info[0][13] 获取单个表情
+                        if (emojiMap.isEmpty() && attrArray.size > 13) {
+                            val emoticonObj = attrArray[13].jsonObject
+                            val url = emoticonObj["url"]?.jsonPrimitive?.content
+                            val emoticonUnique = emoticonObj["emoticon_unique"]?.jsonPrimitive?.content
+                            if (!url.isNullOrEmpty() && !emoticonUnique.isNullOrEmpty()) {
+                                // emoticon_unique 格式如 "upower_[C酱兔兔纪念装扮_哇啊]"，需要提取表情文本
+                                // 弹幕内容就是表情文本，如 "[C酱兔兔纪念装扮_哇啊]"
+                                val emojiKey = danmakuContent
+                                if (emojiKey.startsWith("[") && emojiKey.endsWith("]")) {
+                                    emojiMap = mapOf(emojiKey to url)
+                                }
+                            }
+                        }
+                    }
+
                     return DanmakuEvent(
                         content = danmakuContent,
                         mid = senderMid,
@@ -408,7 +443,8 @@ object LiveDataWebSocket {
                         mode = mode,
                         fontSize = fontSize,
                         color = color,
-                        userLevel = userLevel
+                        userLevel = userLevel,
+                        emojiMap = emojiMap
                     )
                 }.onFailure {
                     logger.warn { "Parse danmaku content failed: ${it.message}" }

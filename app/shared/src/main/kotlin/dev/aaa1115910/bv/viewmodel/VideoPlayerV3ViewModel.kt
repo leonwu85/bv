@@ -1192,9 +1192,12 @@ class VideoPlayerV3ViewModel(
                 else -> DanmakuItemData.DANMAKU_MODE_ROLLING
             },
             textSize = event.fontSize,
-            textColor = Color(event.color).toArgb()
+            textColor = Color(event.color).toArgb(),
+            emojiMap = event.emojiMap
         )
-
+        if (event.emojiMap.isNotEmpty()) {
+            println("EDanmakuItemData: ${danmakuItem.content}, emojiMap=${danmakuItem.emojiMap}")
+        }
         // 直播模式
         viewModelScope.launch(Dispatchers.Main) {
             liveDanmakuPlayer?.emit(danmakuItem)
