@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.ModeComment
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -350,6 +351,44 @@ fun DynamicDetailScreen(
                             dynamicItem!!.footer?.comment?.let { count ->
                                 Text(
                                     text = count.toString(),
+                                    fontSize = 14.sp,
+                                    color = LocalContentColor.current
+                                )
+                            }
+                        }
+                    }
+
+                    // 跳转原动态视频按钮（仅转发类型的动态且有原视频时显示）
+                    if (dynamicItem!!.type == DynamicType.Forward &&
+                        dynamicItem!!.orig?.type == DynamicType.Av &&
+                        dynamicItem!!.orig?.video != null) {
+                        Button(
+                            onClick = {
+                                dynamicItem!!.orig?.video?.let { video ->
+                                    VideoInfoActivity.actionStart(
+                                        context = context,
+                                        aid = video.aid
+                                    )
+                                }
+                            },
+                            colors = ButtonDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
+                                focusedContentColor = Color.Black
+                            )
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.PlayArrow,
+                                    contentDescription = "跳转原视频",
+                                    modifier = Modifier.size(20.dp),
+                                    tint = LocalContentColor.current
+                                )
+                                Text(
+                                    text = "跳转原视频",
                                     fontSize = 14.sp,
                                     color = LocalContentColor.current
                                 )
