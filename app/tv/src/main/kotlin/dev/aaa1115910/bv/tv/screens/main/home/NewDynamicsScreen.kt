@@ -100,6 +100,8 @@ fun NewDynamicsScreen(
     lazyGridState: LazyGridState = rememberLazyGridState(),
     initialSelectedTabIndex: Int = 0,
     onSelectedTabChanged: (Int) -> Unit = {},
+    onLeftKeyEvent: () -> Unit = {},
+    onRightKeyEvent: () -> Unit = {},
     dynamicViewModel: DynamicViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
@@ -236,22 +238,23 @@ fun NewDynamicsScreen(
                 onTabSelected = { index ->
                     selectedTabIndex = index
                     currentFocusedIndex = -1
-                }
+                },
+                onTabClick = { index ->
+                    if (index == selectedTabIndex) {
+                        // 再次点击当前 Tab，触发刷新
+                        scope.launch(Dispatchers.IO) {
+                            dynamicViewModel.refreshByType(selectedTabType)
+                            dynamicViewModel.loadMoreByType(selectedTabType)
+                        }
+                    } else {
+                        // 切换 Tab
+                        selectedTabIndex = index
+                        currentFocusedIndex = -1
+                    }
+                },
+                onLeftKeyEvent = onLeftKeyEvent,
+                onRightKeyEvent = onRightKeyEvent
             )
-
-            // Content
-            if (showTip) {
-                Text(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .offset(x = (-20).dp, y = (-8).dp)
-                        .padding(top = 8.dp, end = 24.dp),
-                    text = stringResource(tvR.string.entry_follow_screen),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    fontSize = 12.sp,
-                    textAlign = TextAlign.End
-                )
-            }
 
             // 根据选中的 Tab 显示不同的布局
             Box(
@@ -259,6 +262,20 @@ fun NewDynamicsScreen(
                     .fillMaxSize()
                     .onFocusChanged { contentHasFocus = it.hasFocus }
             ) {
+                // Tip 叠加层
+                if (showTip) {
+                    Text(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp, end = 20.dp)
+                            .offset(x = (-20).dp, y = (-24).dp)
+                            .align(Alignment.TopEnd),
+                        text = stringResource(tvR.string.entry_follow_screen),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.End
+                    )
+                }
             when (selectedTabType) {
                 DynamicTabType.Video -> {
                     // 视频页使用旧的 grid 布局和 SmallVideoCard
@@ -300,7 +317,10 @@ private fun DynamicTabRow(
     modifier: Modifier = Modifier,
     tabRowFocusRequester: FocusRequester,
     selectedTabIndex: Int,
-    onTabSelected: (Int) -> Unit
+    onTabSelected: (Int) -> Unit,
+    onTabClick: (Int) -> Unit,
+    onLeftKeyEvent: () -> Unit = {},
+    onRightKeyEvent: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -312,8 +332,23 @@ private fun DynamicTabRow(
     TabRow(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
-            .focusRestorer(tabRowFocusRequester),
+            .padding(vertical = 0.dp)
+            .focusRestorer(tabRowFocusRequester)
+            .onPreviewKeyEvent {
+                if (it.type == KeyEventType.KeyDown) {
+                    // 在第一个子 tab 按左键，跳转到父级上一个 tab
+                    if (it.key == Key.DirectionLeft && selectedTabIndex == 0) {
+                        onLeftKeyEvent()
+                        return@onPreviewKeyEvent true
+                    }
+                    // 在最后一个子 tab 按右键，跳转到父级下一个 tab
+                    if (it.key == Key.DirectionRight && selectedTabIndex == DynamicTabType.entries.lastIndex) {
+                        onRightKeyEvent()
+                        return@onPreviewKeyEvent true
+                    }
+                }
+                false
+            },
         selectedTabIndex = selectedTabIndex
     ) {
         DynamicTabType.entries.forEachIndexed { index, tab ->
@@ -321,7 +356,7 @@ private fun DynamicTabRow(
                 modifier = if (index == selectedTabIndex) Modifier.focusRequester(tabRowFocusRequester) else Modifier,
                 selected = index == selectedTabIndex,
                 onFocus = { onTabSelected(index) },
-                onClick = { onTabSelected(index) }
+                onClick = { onTabClick(index) }
             ) {
                 Text(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
@@ -381,7 +416,9 @@ private fun VideoDynamicContent(
                             danmaku = video.danmaku,
                             upName = video.author,
                             time = video.duration * 1000L,
-                            pubTime = video.pubTime
+                            pubTime = video.pubTime,
+                            isChargingArc = video.isChargingArc,
+                            badgeText = video.chargingArcBadge
                         )
                     },
                     onClick = { onClickVideo(video) },
@@ -609,6 +646,25 @@ private fun DynamicVideoContent(video: DynamicItem.DynamicVideoModule?) {
                         )
                     )
             )
+            // 充电专属标识
+            if (video.isChargingArc) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .background(
+                            Color(0xFFFFB400).copy(alpha = 0.9f),
+                            RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = if (video.chargingArcBadge.isNotBlank()) "⚡${video.chargingArcBadge}" else "⚡充电专属",
+                        color = Color.White,
+                        fontSize = 11.sp
+                    )
+                }
+            }
             // 时长和播放信息
             Row(
                 modifier = Modifier

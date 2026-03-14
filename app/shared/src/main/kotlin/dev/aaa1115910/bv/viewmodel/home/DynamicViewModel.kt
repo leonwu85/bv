@@ -214,6 +214,15 @@ class DynamicViewModel(
         articleHistoryOffset = null
     }
 
+    fun refreshByType(type: DynamicTabType) {
+        when (type) {
+            DynamicTabType.All -> clearAllData()
+            DynamicTabType.Video -> clearVideoData()
+            DynamicTabType.Pgc -> clearPgcData()
+            DynamicTabType.Article -> clearArticleData()
+        }
+    }
+
     private suspend fun loadPgcData() {
         if (!pgcHasMore || !bvUserRepository.isLogin) return
         loadingPgc = true

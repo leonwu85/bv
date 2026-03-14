@@ -321,7 +321,30 @@ fun HomeContent(
                                 NewDynamicsScreen(
                                     lazyGridState = dynamicState,
                                     initialSelectedTabIndex = dynamicSubTabIndex,
-                                    onSelectedTabChanged = { dynamicSubTabIndex = it }
+                                    onSelectedTabChanged = { dynamicSubTabIndex = it },
+                                    onLeftKeyEvent = {
+                                        // 在子 Tab 最左侧按左键时，跳转到父级上一个 Tab
+                                        val currentIndex = effectiveNavItems.indexOf(selectedTab)
+                                        if (currentIndex > 0) {
+                                            selectedTab = effectiveNavItems[currentIndex - 1]
+                                            scope.launch {
+                                                delay(100)
+                                                navFocusRequester.requestFocus()
+                                            }
+                                        }
+                                    },
+                                    onRightKeyEvent = {
+                                        // 在子 Tab 最右侧按右键时，跳转到父级下一个 Tab
+                                        val currentIndex = effectiveNavItems.indexOf(selectedTab)
+                                        if (currentIndex < effectiveNavItems.lastIndex) {
+                                            selectedTab = effectiveNavItems[currentIndex + 1]
+                                            // 延迟请求焦点，确保在 AnimatedContent 切换后焦点正确设置
+                                            scope.launch {
+                                                delay(100)
+                                                navFocusRequester.requestFocus()
+                                            }
+                                        }
+                                    }
                                 )
                             } else {
                                 DynamicsScreen(lazyGridState = dynamicState)
