@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -29,7 +30,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.aaa1115910.biliapi.entity.live.LiveAreaItem
 import dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity
 import dev.aaa1115910.bv.tv.component.LoadingTip
@@ -79,6 +79,8 @@ fun LiveContent(
     var subNavHasFocus by remember { mutableStateOf(false) }
 
     val currentRoomList = liveViewModel.getCurrentRoomList()
+    val currentContentKey = liveViewModel.currentContentKey()
+    var suppressLoadMore by remember { mutableStateOf(false) }
 
     val currentListOnTop by remember {
         derivedStateOf {
@@ -86,18 +88,32 @@ fun LiveContent(
         }
     }
 
+    LaunchedEffect(currentContentKey) {
+        suppressLoadMore = true
+        gridState.scrollToItem(0)
+        suppressLoadMore = false
+    }
+
     // 监听滚动位置，触发分页加载
-    LaunchedEffect(gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index, liveViewModel.currentTabType) {
+    LaunchedEffect(
+        currentContentKey,
+        gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index,
+        currentRoomList.size,
+        liveViewModel.loading
+    ) {
+        if (suppressLoadMore || currentRoomList.isEmpty() || liveViewModel.loading || !liveViewModel.currentHasMore()) {
+            return@LaunchedEffect
+        }
         val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
         val totalItems = currentRoomList.size
-        if (lastVisibleIndex >= totalItems - 5 && liveViewModel.currentHasMore() && !liveViewModel.loading) {
+        if (lastVisibleIndex >= totalItems - 5) {
             logger.info { "Trigger load more, lastVisibleIndex: $lastVisibleIndex, totalItems: $totalItems" }
             liveViewModel.loadMore()
         }
     }
 
     // 恢复焦点到上次点击的直播间
-    LaunchedEffect(currentRoomList.size) {
+    LaunchedEffect(currentContentKey, currentRoomList.size) {
         if (liveViewModel.lastFocusedRoomIndex > 0 &&
             liveViewModel.lastFocusedRoomIndex < currentRoomList.size) {
             gridState.scrollToItem(liveViewModel.lastFocusedRoomIndex)
@@ -206,39 +222,38 @@ fun LiveContent(
                 // 第二行：子分区
                 if (liveViewModel.currentTabType == LiveTabType.Area &&
                     liveViewModel.subAreaList.isNotEmpty()) {
-                    val subNavItems = remember(liveViewModel.currentParentGroup, liveViewModel.subAreaList.size) {
-                        liveViewModel.subAreaList.map { SubAreaNavItem(it) }
-                    }
-                    TopNav(
-                        modifier = Modifier
-                            .focusRequester(subNavFocusRequester)
-                            .padding(end = 80.dp)
-                            .onFocusChanged { subNavHasFocus = it.hasFocus },
-                        items = subNavItems,
-                        isLargePadding = !focusOnContent && currentListOnTop,
-                        initialSelectedItem = subNavItems.firstOrNull {
-                            (it as? SubAreaNavItem)?.area?.id == liveViewModel.currentSubArea?.id
-                        },
-                        onSelectedChanged = { nav ->
-                            (nav as? SubAreaNavItem)?.let {
-                                liveViewModel.lastFocusedRoomIndex = 0
-                                liveViewModel.switchSubArea(it.area)
-                                scope.launch { gridState.scrollToItem(0) }
-                            }
-                        },
-                        onClick = { nav ->
-                            (nav as? SubAreaNavItem)?.let { item ->
-                                if (item.area.id == liveViewModel.currentSubArea?.id) {
+                    val subNavItems = liveViewModel.subAreaList.map { SubAreaNavItem(it) }
+                    key(liveViewModel.currentParentGroup?.id) {
+                        TopNav(
+                            modifier = Modifier
+                                .focusRequester(subNavFocusRequester)
+                                .padding(end = 80.dp)
+                                .onFocusChanged { subNavHasFocus = it.hasFocus },
+                            items = subNavItems,
+                            isLargePadding = !focusOnContent && currentListOnTop,
+                            initialSelectedItem = subNavItems.firstOrNull {
+                                it.area.id == liveViewModel.currentSubArea?.id
+                            },
+                            onSelectedChanged = { nav ->
+                                (nav as? SubAreaNavItem)?.let {
                                     liveViewModel.lastFocusedRoomIndex = 0
-                                    liveViewModel.refresh()
-                                    scope.launch { gridState.scrollToItem(0) }
+                                    liveViewModel.switchSubArea(it.area)
                                 }
+                            },
+                            onClick = { nav ->
+                                (nav as? SubAreaNavItem)?.let { item ->
+                                    if (item.area.id == liveViewModel.currentSubArea?.id) {
+                                        liveViewModel.lastFocusedRoomIndex = 0
+                                        liveViewModel.refresh()
+                                        scope.launch { gridState.scrollToItem(0) }
+                                    }
+                                }
+                            },
+                            onLeftKeyEvent = {
+                                navFocusRequester.requestFocus(scope)
                             }
-                        },
-                        onLeftKeyEvent = {
-                            navFocusRequester.requestFocus(scope)
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }

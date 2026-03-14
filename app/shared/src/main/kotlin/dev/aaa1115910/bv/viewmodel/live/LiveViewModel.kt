@@ -13,7 +13,9 @@ import dev.aaa1115910.biliapi.repositories.LiveRepository
 import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.android.annotation.KoinViewModel
@@ -32,6 +34,12 @@ class LiveViewModel(
     private val liveRepository: LiveRepository
 ) : ViewModel() {
     private val logger = KotlinLogging.logger("LiveViewModel")
+
+    private data class AreaRoomCache(
+        val rooms: List<LiveRoomItem>,
+        val nextPage: Int,
+        val hasMore: Boolean
+    )
 
     // ==================== Tab 状态 ====================
 
@@ -115,7 +123,21 @@ class LiveViewModel(
     /**
      * 是否正在加载
      */
-    var loading by mutableStateOf(false)
+    var recommendLoading by mutableStateOf(false)
+        private set
+
+    var followingLoading by mutableStateOf(false)
+        private set
+
+    var areaLoading by mutableStateOf(false)
+        private set
+
+    val loading: Boolean
+        get() = when (currentTabType) {
+            LiveTabType.Recommend -> recommendLoading
+            LiveTabType.Following -> followingLoading
+            LiveTabType.Area -> areaLoading
+        }
 
     /**
      * 是否有下一页（分区模式）
@@ -131,6 +153,16 @@ class LiveViewModel(
      * 上次聚焦的直播间索引（用于从播放器返回时恢复焦点）
      */
     var lastFocusedRoomIndex by mutableStateOf(0)
+
+    private var recommendJob: Job? = null
+    private var followingJob: Job? = null
+    private var areaJob: Job? = null
+
+    private var recommendRequestVersion = 0
+    private var followingRequestVersion = 0
+    private var areaRequestVersion = 0
+
+    private val areaRoomCache = mutableMapOf<String, AreaRoomCache>()
 
     init {
         loadAreas()
@@ -171,52 +203,63 @@ class LiveViewModel(
      * 加载推荐直播间
      */
     fun loadRecommend(refresh: Boolean = false) {
-        if (loading) return
+        if (recommendLoading && !refresh) return
+        if (refresh) {
+            recommendJob?.cancel()
+        }
 
-        viewModelScope.launch(Dispatchers.IO) {
-            loading = true
-            if (refresh) {
-                recommendPage = 1
-                withContext(Dispatchers.Main) {
-                    recommendList.clear()
-                    recommendHasMore = true
-                }
-            }
+        val targetPage = if (refresh) 1 else recommendPage
+        val requestVersion = ++recommendRequestVersion
+        recommendLoading = true
 
-            runCatching {
-                val response = liveRepository.getLiveFeed(page = recommendPage)
+        recommendJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val response = liveRepository.getLiveFeed(page = targetPage)
                 if (response.code == 0) {
-                    val newRooms = mutableListOf<LiveRoomItem>()
-                    // 从 card_list 中提取直播间
-                    response.data.cardList.forEach { card ->
+                    val incomingRooms = response.data.cardList.mapNotNull { card ->
                         if (card.cardType == "small_card_v1") {
-                            card.cardData?.smallCardV1?.toLiveRoomItem()?.let {
-                                newRooms.add(it)
-                            }
+                            card.cardData?.smallCardV1?.toLiveRoomItem()
+                        } else {
+                            null
                         }
-                    }
+                    }.distinctBy { it.roomId }
 
                     withContext(Dispatchers.Main) {
-                        val existingIds = recommendList.map { it.roomId }.toHashSet()
-                        val uniqueNewRooms = newRooms.filter { it.roomId !in existingIds }
-                        recommendList.addAll(uniqueNewRooms)
-                        recommendHasMore = response.data.hasMore == 1
-                        if (recommendHasMore) {
-                            recommendPage++
+                        if (requestVersion != recommendRequestVersion) return@withContext
+
+                        if (refresh) {
+                            recommendList.clear()
+                            recommendList.addAll(incomingRooms)
+                        } else {
+                            val existingIds = recommendList.map { it.roomId }.toHashSet()
+                            val uniqueNewRooms = incomingRooms.filter { it.roomId !in existingIds }
+                            recommendList.addAll(uniqueNewRooms)
                         }
+
+                        recommendHasMore = response.data.hasMore == 1
+                        recommendPage = if (recommendHasMore) targetPage + 1 else targetPage
                     }
                 } else {
                     withContext(Dispatchers.Main) {
+                        if (requestVersion != recommendRequestVersion) return@withContext
                         "加载推荐失败: ${response.message}".toast(BVApp.context)
                     }
                 }
-            }.onFailure { e ->
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 logger.error(e) { "Failed to load live feed" }
                 withContext(Dispatchers.Main) {
+                    if (requestVersion != recommendRequestVersion) return@withContext
                     "加载推荐失败: ${e.message}".toast(BVApp.context)
                 }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    if (requestVersion == recommendRequestVersion) {
+                        recommendLoading = false
+                    }
+                }
             }
-            loading = false
         }
     }
 
@@ -226,50 +269,63 @@ class LiveViewModel(
      * 加载关注主播直播
      */
     fun loadFollowing(refresh: Boolean = false) {
-        if (loading) return
+        if (followingLoading && !refresh) return
+        if (refresh) {
+            followingJob?.cancel()
+        }
 
-        viewModelScope.launch(Dispatchers.IO) {
-            loading = true
-            if (refresh) {
-                followingPage = 1
-                withContext(Dispatchers.Main) {
-                    followingList.clear()
-                    followingHasMore = false  // 关注列表不支持分页
-                }
-            }
+        val requestVersion = ++followingRequestVersion
+        followingLoading = true
 
-            runCatching {
+        followingJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
                 val response = liveRepository.getLiveFeed(page = 1)
 
                 if (response.code == 0) {
-                    val newRooms = mutableListOf<LiveRoomItem>()
-                    response.data.cardList.forEach { card ->
+                    val incomingRooms = response.data.cardList.flatMap { card ->
                         if (card.cardType == "my_idol_v1") {
-                            card.cardData?.myIdolV1?.list?.forEach { item ->
-                                newRooms.add(item.toLiveRoomItem())
-                            }
+                            card.cardData?.myIdolV1?.list?.map { it.toLiveRoomItem() }.orEmpty()
+                        } else {
+                            emptyList()
                         }
-                    }
+                    }.distinctBy { it.roomId }
 
                     withContext(Dispatchers.Main) {
-                        followingLiveCount = newRooms.size
-                        val existingIds = followingList.map { it.roomId }.toHashSet()
-                        val uniqueNewRooms = newRooms.filter { it.roomId !in existingIds }
-                        followingList.addAll(uniqueNewRooms)
+                        if (requestVersion != followingRequestVersion) return@withContext
+
+                        followingLiveCount = incomingRooms.size
+                        if (refresh) {
+                            followingList.clear()
+                            followingList.addAll(incomingRooms)
+                        } else {
+                            val existingIds = followingList.map { it.roomId }.toHashSet()
+                            val uniqueNewRooms = incomingRooms.filter { it.roomId !in existingIds }
+                            followingList.addAll(uniqueNewRooms)
+                        }
+                        followingPage = 1
                         followingHasMore = false
                     }
                 } else {
                     withContext(Dispatchers.Main) {
+                        if (requestVersion != followingRequestVersion) return@withContext
                         "加载关注直播失败: ${response.message}".toast(BVApp.context)
                     }
                 }
-            }.onFailure { e ->
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 logger.error(e) { "Failed to load live following" }
                 withContext(Dispatchers.Main) {
+                    if (requestVersion != followingRequestVersion) return@withContext
                     "加载关注直播失败: ${e.message}".toast(BVApp.context)
                 }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    if (requestVersion == followingRequestVersion) {
+                        followingLoading = false
+                    }
+                }
             }
-            loading = false
         }
     }
 
@@ -313,7 +369,14 @@ class LiveViewModel(
         // 默认选中第一个子分区
         if (group.list.isNotEmpty()) {
             currentSubArea = group.list[0]
-            loadRooms(refresh = true)
+            restoreAreaCacheOrLoad(group.list[0])
+        } else {
+            areaJob?.cancel()
+            areaRequestVersion++
+            areaLoading = false
+            roomList.clear()
+            hasMore = false
+            currentPage = 1
         }
     }
 
@@ -323,7 +386,7 @@ class LiveViewModel(
     fun switchSubArea(area: LiveAreaItem) {
         if (currentSubArea?.id == area.id) return
         currentSubArea = area
-        loadRooms(refresh = true)
+        restoreAreaCacheOrLoad(area)
     }
 
     /**
@@ -332,48 +395,70 @@ class LiveViewModel(
      */
     fun loadRooms(refresh: Boolean = false) {
         val area = currentSubArea ?: return
-        if (loading) return
+        if (areaLoading && !refresh) return
+        if (refresh) {
+            areaJob?.cancel()
+        }
 
-        viewModelScope.launch(Dispatchers.IO) {
-            loading = true
-            if (refresh) {
-                currentPage = 1
-                withContext(Dispatchers.Main) {
-                    roomList.clear()
-                    hasMore = true
-                }
-            }
+        val areaContextKey = buildAreaContextKey(area.parentId, area.id)
+        val targetPage = if (refresh) 1 else currentPage
+        val requestVersion = ++areaRequestVersion
+        areaLoading = true
 
-            runCatching {
+        areaJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
                 val response = liveRepository.getLiveRoomList(
                     parentAreaId = area.parentId,
                     areaId = area.id,
-                    page = currentPage,
+                    page = targetPage,
                     pageSize = 30
                 )
                 if (response.code == 0) {
                     withContext(Dispatchers.Main) {
-                        val existingIds = roomList.map { it.roomId }.toHashSet()
-                        val newRooms = response.data.list.filter { it.roomId !in existingIds }
-                        roomList.addAll(newRooms)
-                        hasMore = response.data.list.size >= 30
-                        if (hasMore) {
-                            currentPage++
+                        if (requestVersion != areaRequestVersion) return@withContext
+                        if (getCurrentAreaContextKey() != areaContextKey) return@withContext
+
+                        val incomingRooms = response.data.list.distinctBy { it.roomId }
+                        if (refresh) {
+                            roomList.clear()
+                            roomList.addAll(incomingRooms)
+                        } else {
+                            val existingIds = roomList.map { it.roomId }.toHashSet()
+                            val newRooms = incomingRooms.filter { it.roomId !in existingIds }
+                            roomList.addAll(newRooms)
                         }
+                        hasMore = response.data.list.size >= 30
+                        currentPage = if (hasMore) targetPage + 1 else targetPage
+                        areaRoomCache[areaContextKey] = AreaRoomCache(
+                            rooms = roomList.toList(),
+                            nextPage = currentPage,
+                            hasMore = hasMore
+                        )
                     }
-                    logger.info { "Loaded ${response.data.list.size} rooms for area ${area.name}, page $currentPage" }
+                    logger.info { "Loaded ${response.data.list.size} rooms for area ${area.name}, page $targetPage" }
                 } else {
                     withContext(Dispatchers.Main) {
+                        if (requestVersion != areaRequestVersion) return@withContext
+                        if (getCurrentAreaContextKey() != areaContextKey) return@withContext
                         "加载直播间列表失败: ${response.message}".toast(BVApp.context)
                     }
                 }
-            }.onFailure { e ->
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 logger.error(e) { "Failed to load live rooms" }
                 withContext(Dispatchers.Main) {
+                    if (requestVersion != areaRequestVersion) return@withContext
+                    if (getCurrentAreaContextKey() != areaContextKey) return@withContext
                     "加载直播间列表失败: ${e.message}".toast(BVApp.context)
                 }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    if (requestVersion == areaRequestVersion && getCurrentAreaContextKey() == areaContextKey) {
+                        areaLoading = false
+                    }
+                }
             }
-            loading = false
         }
     }
 
@@ -407,20 +492,28 @@ class LiveViewModel(
     fun loadMore() {
         when (currentTabType) {
             LiveTabType.Recommend -> {
-                if (recommendHasMore && !loading) {
+                if (recommendHasMore && !recommendLoading) {
                     loadRecommend(refresh = false)
                 }
             }
             LiveTabType.Following -> {
-                if (followingHasMore && !loading) {
+                if (followingHasMore && !followingLoading) {
                     loadFollowing(refresh = false)
                 }
             }
             LiveTabType.Area -> {
-                if (hasMore && !loading) {
+                if (hasMore && !areaLoading) {
                     loadRooms(refresh = false)
                 }
             }
+        }
+    }
+
+    fun currentContentKey(): String {
+        return when (currentTabType) {
+            LiveTabType.Recommend -> "recommend"
+            LiveTabType.Following -> "following"
+            LiveTabType.Area -> "area:${getCurrentAreaContextKey()}"
         }
     }
 
@@ -433,5 +526,31 @@ class LiveViewModel(
             LiveTabType.Following -> followingHasMore
             LiveTabType.Area -> hasMore
         }
+    }
+
+    private fun getCurrentAreaContextKey(): String {
+        val area = currentSubArea ?: return ""
+        return buildAreaContextKey(area.parentId, area.id)
+    }
+
+    private fun restoreAreaCacheOrLoad(area: LiveAreaItem) {
+        val areaContextKey = buildAreaContextKey(area.parentId, area.id)
+        val cache = areaRoomCache[areaContextKey]
+        if (cache != null) {
+            areaJob?.cancel()
+            areaRequestVersion++
+            areaLoading = false
+            roomList.clear()
+            roomList.addAll(cache.rooms)
+            currentPage = cache.nextPage
+            hasMore = cache.hasMore
+            logger.info { "Restore cached rooms for area ${area.name}, size=${cache.rooms.size}, nextPage=${cache.nextPage}" }
+            return
+        }
+        loadRooms(refresh = true)
+    }
+
+    private fun buildAreaContextKey(parentAreaId: String, areaId: String): String {
+        return "$parentAreaId:$areaId"
     }
 }

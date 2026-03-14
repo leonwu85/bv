@@ -68,7 +68,17 @@ fun TopNav(
 
     var tabMoved by remember { mutableStateOf(true) }
 
+    LaunchedEffect(items, initialSelectedItem) {
+        if (items.isEmpty()) return@LaunchedEffect
+
+        val nextSelectedItem = initialSelectedItem?.takeIf { it in items } ?: items.first()
+        selectedNav = nextSelectedItem
+        selectedTabIndex = items.indexOf(nextSelectedItem).takeIf { it >= 0 } ?: 0
+        tabMoved = true
+    }
+
     LaunchedEffect(selectedNav) {
+        if (selectedNav !in items) return@LaunchedEffect
         delay(200)
         onSelectedChanged(selectedNav)
         // 别急着向下移动焦点，动画还没结束
