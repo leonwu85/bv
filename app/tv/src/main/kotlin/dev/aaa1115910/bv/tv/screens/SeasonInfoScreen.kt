@@ -738,7 +738,8 @@ fun SeasonEpisodeButton(
     onClick: () -> Unit
 ) {
     val isPreview = LocalInspectionMode.current
-    val borderColor = if (isLastPlayed) Color(0xFFE39B17) else null
+    val lastPlayedColor = Color(0xFFE39B17)
+    val focusedColor = Color(0xFFF1CD8B)
 
     Surface(
         modifier = modifier,
@@ -750,24 +751,22 @@ fun SeasonEpisodeButton(
         scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1.05f),
         shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
         border = ClickableSurfaceDefaults.border(
-            border = borderColor?.let {
+            border = if (isLastPlayed) {
                 Border(
-                    border = BorderStroke(2.dp, it),
+                    border = BorderStroke(2.dp, lastPlayedColor),
                     shape = MaterialTheme.shapes.medium
                 )
-            } ?: Border.None,
-            focusedBorder = borderColor?.let {
+            } else Border.None,
+            focusedBorder = Border(
+                border = BorderStroke(2.dp, if (isLastPlayed) lastPlayedColor else focusedColor),
+                shape = MaterialTheme.shapes.medium
+            ),
+            pressedBorder = if (isLastPlayed) {
                 Border(
-                    border = BorderStroke(2.dp, it),
+                    border = BorderStroke(2.dp, lastPlayedColor),
                     shape = MaterialTheme.shapes.medium
                 )
-            } ?: Border.None,
-            pressedBorder = borderColor?.let {
-                Border(
-                    border = BorderStroke(2.dp, it),
-                    shape = MaterialTheme.shapes.medium
-                )
-            } ?: Border.None
+            } else Border.None
         ),
         onClick = onClick
     ) {
