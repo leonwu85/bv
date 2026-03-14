@@ -1551,8 +1551,8 @@ private fun VideoPartButton(
         modifier = modifier.onFocusChanged { hasFocus = it.hasFocus },
         colors = ClickableSurfaceDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            focusedContainerColor = Color(0xFF555555),
-            pressedContainerColor = Color(0xFF555555)
+            focusedContainerColor = Color(0xFF382b46),
+            pressedContainerColor = Color(0xFF382b46)
         ),
         scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1f),
         shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
