@@ -98,7 +98,8 @@ object LiveStreamUrlFetcher {
                 isLive = true,
                 currentQn = result.currentQn,
                 acceptQn = result.acceptQn,
-                qnDescMap = qnDescMap
+                qnDescMap = qnDescMap,
+                expiresAt = result.expiresAt
             )
         } catch (e: Exception) {
             logger.error(e) { "Failed to fetch live stream URL for room $roomId" }
@@ -116,8 +117,22 @@ object LiveStreamUrlFetcher {
     private data class ParseResult(
         val url: String,
         val currentQn: Int,
-        val acceptQn: List<Int>
+        val acceptQn: List<Int>,
+        val expiresAt: Long = 0
     )
+
+    /**
+     * 从URL的extra参数中解析expires时间戳
+     * @param extra URL查询参数字符串，如 "?expires=1773483819&..."
+     * @return 过期时间的毫秒时间戳，解析失败返回0
+     */
+    fun parseExpiresFromExtra(extra: String): Long {
+        return runCatching {
+            val regex = Regex("""[?&]expires=(\d+)""")
+            val match = regex.find(extra)
+            match?.groupValues?.get(1)?.toLong()?.times(1000) ?: 0L
+        }.getOrElse { 0L }
+    }
 
     /**
      * 解析播放URL
@@ -241,11 +256,13 @@ object LiveStreamUrlFetcher {
                 } ?: continue
                 val urlInfo = codec.urlInfo.first()
                 val fullUrl = "${urlInfo.host}${codec.baseUrl}${urlInfo.extra}"
+                val expiresAt = parseExpiresFromExtra(urlInfo.extra)
                 logger.debug { "Built URL with format $formatName, codec ${codec.codecName}: $fullUrl" }
                 return ParseResult(
                     url = fullUrl,
                     currentQn = codec.currentQn,
-                    acceptQn = codec.acceptQn
+                    acceptQn = codec.acceptQn,
+                    expiresAt = expiresAt
                 )
             }
         }
@@ -260,11 +277,13 @@ object LiveStreamUrlFetcher {
                 } ?: continue
                 val urlInfo = codec.urlInfo.first()
                 val fullUrl = "${urlInfo.host}${codec.baseUrl}${urlInfo.extra}"
+                val expiresAt = parseExpiresFromExtra(urlInfo.extra)
                 logger.debug { "Built URL with fallback format ${format.formatName}, codec ${codec.codecName}: $fullUrl" }
                 return ParseResult(
                     url = fullUrl,
                     currentQn = codec.currentQn,
-                    acceptQn = codec.acceptQn
+                    acceptQn = codec.acceptQn,
+                    expiresAt = expiresAt
                 )
             }
         }
@@ -275,6 +294,7 @@ object LiveStreamUrlFetcher {
 
 /**
  * 直播播放信息
+ * @param expiresAt URL过期时间戳（毫秒），0表示未知
  */
 data class LivePlayInfo(
     val roomId: Int,
@@ -282,5 +302,6 @@ data class LivePlayInfo(
     val isLive: Boolean = true,
     val currentQn: Int = 0,
     val acceptQn: List<Int> = emptyList(),
-    val qnDescMap: Map<Int, String> = emptyMap()
+    val qnDescMap: Map<Int, String> = emptyMap(),
+    val expiresAt: Long = 0
 )

@@ -94,11 +94,15 @@ class VideoPlayerV3ViewModel(
     override fun onCleared() {
         super.onCleared()
         logger.fInfo { "VideoPlayerV3ViewModel onCleared" }
-        
+
         // 清理直播重连任务
         liveRetryJob?.cancel()
         liveRetryJob = null
-        
+
+        // 清理直播URL刷新任务
+        liveUrlRefreshJob?.cancel()
+        liveUrlRefreshJob = null
+
         // 清理直播弹幕资源
         stopLiveDanmaku()
         
@@ -194,9 +198,27 @@ class VideoPlayerV3ViewModel(
 
     // 直播编码管理
     var currentLiveCodec by mutableStateOf(Prefs.defaultLiveCodec)
-    
+
+    // 直播流URL过期时间（毫秒时间戳）
+    var liveStreamExpiresAt by mutableLongStateOf(0L)
+
     // 直播自动重连
     private var liveRetryJob: Job? = null
+
+    // 直播URL主动刷新
+    private var liveUrlRefreshJob: Job? = null
+    private var consecutiveRefreshFailures = 0
+
+    companion object {
+        // 提前刷新的时间（毫秒），默认60秒
+        private const val REFRESH_BEFORE_EXPIRY_MS = 60_000L
+        // 最小刷新间隔（毫秒），防止频繁刷新
+        private const val MIN_REFRESH_INTERVAL_MS = 30_000L
+        // 刷新失败后的重试间隔（毫秒）
+        private const val REFRESH_RETRY_INTERVAL_MS = 10_000L
+        // 最大连续刷新失败次数
+        private const val MAX_REFRESH_FAILURES = 3
+    }
 
     // 直播人气值与高能观众
     var livePopularityText by mutableStateOf("")   // "2.5万人气" (POPULARITY_CHANGE)
@@ -916,6 +938,11 @@ class VideoPlayerV3ViewModel(
         // 取消之前的重连任务
         liveRetryJob?.cancel()
         liveRetryJob = null
+        // 取消之前的URL刷新任务
+        liveUrlRefreshJob?.cancel()
+        liveUrlRefreshJob = null
+        // 重置刷新失败计数
+        consecutiveRefreshFailures = 0
 
         viewModelScope.launch(Dispatchers.IO) {
             logger.fInfo { "Load live stream with quality: roomId=$roomId, qn=$qn" }
@@ -937,6 +964,7 @@ class VideoPlayerV3ViewModel(
 
             withContext(Dispatchers.Main) {
                 liveStreamUrl = playInfo.streamUrl
+                liveStreamExpiresAt = playInfo.expiresAt
                 currentLiveQn = playInfo.currentQn
                 liveQnDescMap = playInfo.qnDescMap
 
@@ -951,6 +979,7 @@ class VideoPlayerV3ViewModel(
 
                 currentLiveQualityDescription = playInfo.qnDescMap[playInfo.currentQn] ?: "未知画质"
                 logger.fInfo { "Live quality: current=${playInfo.currentQn} ($currentLiveQualityDescription), available=$qualities" }
+                logger.fDebug { "Live stream URL expires at: ${playInfo.expiresAt}" }
             }
 
             runCatching {
@@ -965,6 +994,8 @@ class VideoPlayerV3ViewModel(
                 if (liveWebSocket == null) {
                     startLiveDanmaku(roomId)
                 }
+                // 调度URL刷新
+                scheduleLiveUrlRefresh()
             }.onFailure { e ->
                 logger.fError { "Failed to load live stream: ${e.message}" }
                 withContext(Dispatchers.Main) {
@@ -1007,6 +1038,10 @@ class VideoPlayerV3ViewModel(
 
         // 防抖：取消上一次待执行的重试
         liveRetryJob?.cancel()
+        // 取消URL刷新任务
+        liveUrlRefreshJob?.cancel()
+        liveUrlRefreshJob = null
+
         liveRetryJob = viewModelScope.launch(Dispatchers.IO) {
             delay(2000)
             // 仅在播放器未在播放时重试
@@ -1035,6 +1070,7 @@ class VideoPlayerV3ViewModel(
             // 成功获取新 URL，重新播放
             withContext(Dispatchers.Main) {
                 liveStreamUrl = playInfo.streamUrl
+                liveStreamExpiresAt = playInfo.expiresAt
                 currentLiveQn = playInfo.currentQn
                 videoPlayer?.playUrl(videoUrl = playInfo.streamUrl)
                 videoPlayer?.prepare()
@@ -1042,6 +1078,100 @@ class VideoPlayerV3ViewModel(
                 loadState = RequestState.Success
             }
             logger.fInfo { "Live stream retry successful, new URL loaded" }
+            // 重置刷新失败计数并重新调度刷新
+            consecutiveRefreshFailures = 0
+            scheduleLiveUrlRefresh()
+        }
+    }
+
+    /**
+     * 调度直播流URL的主动刷新
+     * 在URL过期前REFRESH_BEFORE_EXPIRY_MS毫秒自动刷新
+     */
+    private fun scheduleLiveUrlRefresh() {
+        // 取消之前的刷新任务
+        liveUrlRefreshJob?.cancel()
+
+        if (!isLive || liveStreamExpiresAt <= 0) {
+            logger.fDebug { "No need to schedule refresh: isLive=$isLive, expiresAt=$liveStreamExpiresAt" }
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        val timeUntilExpiry = liveStreamExpiresAt - now
+        val refreshDelay = (timeUntilExpiry - REFRESH_BEFORE_EXPIRY_MS)
+            .coerceAtLeast(MIN_REFRESH_INTERVAL_MS)
+
+        logger.fInfo { "Scheduling live URL refresh in ${refreshDelay}ms (expires at $liveStreamExpiresAt)" }
+
+        liveUrlRefreshJob = viewModelScope.launch(Dispatchers.IO) {
+            delay(refreshDelay)
+            refreshLiveStreamUrl()
+        }
+    }
+
+    /**
+     * 刷新直播流URL（无缝切换）
+     */
+    private suspend fun refreshLiveStreamUrl() {
+        if (!isLive) return
+
+        logger.fInfo { "Refreshing live stream URL for room $liveRoomId" }
+
+        try {
+            val playInfo = LiveStreamUrlFetcher.fetchLiveStreamUrl(
+                liveRoomId,
+                currentLiveQn,
+                currentLiveCodec
+            )
+
+            if (playInfo == null) {
+                // 刷新失败，可能是直播已结束
+                consecutiveRefreshFailures++
+                logger.fWarn { "Failed to refresh live URL (attempt $consecutiveRefreshFailures), live may have ended" }
+
+                if (consecutiveRefreshFailures >= MAX_REFRESH_FAILURES) {
+                    // 多次失败，可能直播已结束，停止刷新
+                    logger.fWarn { "Max refresh failures reached, stopping refresh" }
+                    withContext(Dispatchers.Main) {
+                        loadState = RequestState.Failed
+                        errorMessage = "直播可能已结束"
+                    }
+                    return
+                }
+
+                // 如果直播未结束但刷新失败，稍后重试
+                delay(REFRESH_RETRY_INTERVAL_MS)
+                scheduleLiveUrlRefresh()
+                return
+            }
+
+            // 重置失败计数
+            consecutiveRefreshFailures = 0
+
+            // 更新URL和过期时间
+            withContext(Dispatchers.Main) {
+                liveStreamUrl = playInfo.streamUrl
+                liveStreamExpiresAt = playInfo.expiresAt
+                currentLiveQn = playInfo.currentQn
+            }
+
+            // 无缝切换：更新播放器URL
+            withContext(Dispatchers.Main) {
+                videoPlayer?.playUrl(videoUrl = playInfo.streamUrl)
+            }
+
+            logger.fInfo { "Live URL refreshed successfully, new expiresAt=$liveStreamExpiresAt" }
+
+            // 调度下一次刷新
+            scheduleLiveUrlRefresh()
+        } catch (e: Exception) {
+            logger.fError { "Error refreshing live URL: ${e.message}" }
+            consecutiveRefreshFailures++
+            if (consecutiveRefreshFailures < MAX_REFRESH_FAILURES) {
+                delay(REFRESH_RETRY_INTERVAL_MS)
+                scheduleLiveUrlRefresh()
+            }
         }
     }
 
