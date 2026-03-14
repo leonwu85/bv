@@ -11,11 +11,18 @@ import dev.aaa1115910.biliapi.entity.user.DynamicData
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.entity.user.DynamicVideoData
 import dev.aaa1115910.biliapi.entity.user.FollowedUser
+import dev.aaa1115910.biliapi.entity.user.ArticleParagraph
+import dev.aaa1115910.biliapi.entity.user.ArticlePicture
+import dev.aaa1115910.biliapi.entity.user.ArticleTextNode
+import dev.aaa1115910.biliapi.entity.user.TextNodeType
 import dev.aaa1115910.biliapi.entity.user.SpaceVideoData
 import dev.aaa1115910.biliapi.entity.user.SpaceVideoOrder
 import dev.aaa1115910.biliapi.entity.user.SpaceVideoPage
 import dev.aaa1115910.biliapi.grpc.utils.handleGrpcException
 import dev.aaa1115910.biliapi.http.BiliHttpApi
+import dev.aaa1115910.biliapi.http.entity.dynamic.OpusParagraph
+import dev.aaa1115910.biliapi.http.entity.dynamic.OpusTextNode
+import dev.aaa1115910.biliapi.http.entity.dynamic.ArticleViewData
 import dev.aaa1115910.biliapi.http.entity.user.FollowAction
 import dev.aaa1115910.biliapi.http.entity.user.FollowActionSource
 import dev.aaa1115910.biliapi.http.entity.user.RelationType
@@ -319,6 +326,138 @@ class UserRepository(
                 }
                 result!!
             }
+        }
+    }
+
+    /**
+     * 获取 Opus (专栏/图文) 详情
+     * 用于获取专栏的完整段落内容
+     *
+     * @return 段落列表
+     */
+    suspend fun getOpusDetail(
+        opusId: String,
+        preferApiType: ApiType = ApiType.Web
+    ): List<ArticleParagraph> {
+        return when (preferApiType) {
+            ApiType.Web -> {
+                runCatching {
+                    val responseData = BiliHttpApi.getOpusDetail(
+                        opusId = opusId,
+                        sessData = authRepository.sessionData ?: ""
+                    ).getResponseData()
+
+                    // 检查是否需要 fallback 到传统专栏 API
+                    val fallbackId = responseData.fallback?.id
+                    if (fallbackId != null) {
+                        // 使用传统专栏 API 获取内容
+                        val articleData = BiliHttpApi.getArticleView(
+                            cvId = fallbackId,
+                            sessData = authRepository.sessionData ?: ""
+                        ).getResponseData()
+                        // 从 articleView 的 opus.content.paragraphs 获取段落
+                        parseOpusParagraphs(articleData.opus?.content?.paragraphs ?: emptyList())
+                    } else {
+                        // 从 modules 列表中找到 MODULE_TYPE_CONTENT 类型的模块
+                        val contentModule = responseData.item?.modules?.find { it.moduleType == "MODULE_TYPE_CONTENT" }
+                        parseOpusParagraphs(contentModule?.moduleContent?.paragraphs ?: emptyList())
+                    }
+                }.getOrElse { emptyList() }
+            }
+
+            ApiType.App -> {
+                // App 端暂时使用 Web API
+                runCatching {
+                    val responseData = BiliHttpApi.getOpusDetail(
+                        opusId = opusId,
+                        sessData = authRepository.sessionData ?: ""
+                    ).getResponseData()
+
+                    // 检查是否需要 fallback 到传统专栏 API
+                    val fallbackId = responseData.fallback?.id
+                    if (fallbackId != null) {
+                        // 使用传统专栏 API 获取内容
+                        val articleData = BiliHttpApi.getArticleView(
+                            cvId = fallbackId,
+                            sessData = authRepository.sessionData ?: ""
+                        ).getResponseData()
+                        // 从 articleView 的 opus.content.paragraphs 获取段落
+                        parseOpusParagraphs(articleData.opus?.content?.paragraphs ?: emptyList())
+                    } else {
+                        // 从 modules 列表中找到 MODULE_TYPE_CONTENT 类型的模块
+                        val contentModule = responseData.item?.modules?.find { it.moduleType == "MODULE_TYPE_CONTENT" }
+                        parseOpusParagraphs(contentModule?.moduleContent?.paragraphs ?: emptyList())
+                    }
+                }.getOrElse { emptyList() }
+            }
+        }
+    }
+
+    /**
+     * 解析 Opus 段落数据
+     */
+    private fun parseOpusParagraphs(paragraphs: List<OpusParagraph>): List<ArticleParagraph> {
+        return paragraphs.mapNotNull { para ->
+            when (para.paraType) {
+                1 -> { // TEXT
+                    val nodes = para.text?.nodes?.mapNotNull { node ->
+                        parseOpusTextNode(node)
+                    } ?: emptyList()
+                    if (nodes.isNotEmpty()) {
+                        ArticleParagraph.TextParagraph(nodes = nodes)
+                    } else null
+                }
+                2 -> { // PICTURES
+                    val pictures = para.pic?.pics?.map { pic ->
+                        ArticlePicture(
+                            url = pic.url ?: "",
+                            width = pic.width ?: 0,
+                            height = pic.height ?: 0
+                        )
+                    } ?: emptyList()
+                    if (pictures.isNotEmpty()) {
+                        ArticleParagraph.PicturesParagraph(pictures = pictures)
+                    } else null
+                }
+                3 -> { // LINE
+                    val picture = para.line?.pic?.let { pic ->
+                        ArticlePicture(
+                            url = pic.url ?: "",
+                            width = pic.width ?: 0,
+                            height = pic.height ?: 0
+                        )
+                    }
+                    ArticleParagraph.LineParagraph(picture = picture)
+                }
+                else -> null
+            }
+        }
+    }
+
+    /**
+     * 解析 Opus 文本节点
+     */
+    private fun parseOpusTextNode(node: OpusTextNode): ArticleTextNode? {
+        return when {
+            node.emote != null -> ArticleTextNode(
+                text = node.emote.text ?: node.rawText,
+                type = TextNodeType.Emoji,
+                emojiUrl = node.emote.iconUrl
+            )
+            node.rich != null -> ArticleTextNode(
+                text = node.rich.text ?: node.rawText,
+                type = TextNodeType.Link,
+                linkUrl = node.rich.jumpUrl
+            )
+            node.word != null -> ArticleTextNode(
+                text = node.word.words ?: node.rawText,
+                type = TextNodeType.Plain,
+                isBold = node.word.style?.bold ?: false,
+                isItalic = node.word.style?.italic ?: false
+            )
+            else -> if (node.rawText.isNotBlank()) {
+                ArticleTextNode(text = node.rawText, type = TextNodeType.Plain)
+            } else null
         }
     }
 

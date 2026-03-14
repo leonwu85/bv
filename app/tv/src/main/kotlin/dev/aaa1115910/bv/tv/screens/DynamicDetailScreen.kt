@@ -67,11 +67,13 @@ import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.LocalContentColor
 import coil.compose.AsyncImage
 import dev.aaa1115910.biliapi.entity.Picture
+import dev.aaa1115910.biliapi.entity.user.ArticleParagraph
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.entity.user.DynamicType
 import dev.aaa1115910.bv.component.DynamicRichText
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
+import dev.aaa1115910.bv.tv.component.ArticleContent
 import dev.aaa1115910.bv.tv.component.CommentPanel
 import dev.aaa1115910.bv.util.fInfo
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -103,6 +105,11 @@ fun DynamicDetailScreen(
         dynamicDetailViewModel.loadDynamic()
         dynamicItem = dynamicDetailViewModel.dynamicItem
         isLoading = false
+
+        // 如果是专栏类型，加载完整内容
+        if (dynamicItem?.type == DynamicType.Article) {
+            dynamicDetailViewModel.loadArticleContent()
+        }
     }
 
     val contentFocusRequester = remember { FocusRequester() }
@@ -236,6 +243,7 @@ fun DynamicDetailScreen(
                     item {
                         DynamicContentSection(
                             dynamicItem = dynamicItem!!,
+                            articleParagraphs = dynamicDetailViewModel.articleParagraphs,
                             onClickVideo = { aid ->
                                 VideoInfoActivity.actionStart(
                                     context = context,
@@ -414,6 +422,7 @@ fun DynamicDetailScreen(
 @Composable
 private fun DynamicContentSection(
     dynamicItem: DynamicItem,
+    articleParagraphs: List<ArticleParagraph> = emptyList(),
     onClickVideo: (Long) -> Unit,
     onClickPgc: (Int, Int) -> Unit
 ) {
@@ -572,24 +581,35 @@ private fun DynamicContentSection(
                         style = MaterialTheme.typography.titleMedium,
                         fontSize = 18.sp
                     )
-                    if (article.covers.isNotEmpty()) {
-                        AsyncImage(
-                            model = article.covers.first(),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxWidth(0.6f)
-                                .height(180.dp)
-                                .clip(RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
+
+                    // 如果有完整段落内容，显示完整内容
+                    val paragraphs = articleParagraphs
+                    if (paragraphs.isNotEmpty()) {
+                        ArticleContent(
+                            paragraphs = paragraphs
                         )
+                    } else {
+                        // 回退到摘要显示
+                        if (article.covers.isNotEmpty()) {
+                            AsyncImage(
+                                model = article.covers.first(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxWidth(0.6f)
+                                    .height(180.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                        if (article.text.isNotBlank()) {
+                            Text(
+                                text = article.text,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontSize = 16.sp
+                            )
+                        }
                     }
-                    if (article.text.isNotBlank()) {
-                        Text(
-                            text = article.text,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontSize = 16.sp
-                        )
-                    }
+
                     // 专栏标签
                     Box(
                         modifier = Modifier

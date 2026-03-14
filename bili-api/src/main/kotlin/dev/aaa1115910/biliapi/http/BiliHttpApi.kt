@@ -10,6 +10,8 @@ import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuResponse
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicData
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicDetailData
+import dev.aaa1115910.biliapi.http.entity.dynamic.ArticleViewData
+import dev.aaa1115910.biliapi.http.entity.dynamic.OpusDetailData
 import dev.aaa1115910.biliapi.http.entity.history.HistoryData
 import dev.aaa1115910.biliapi.http.entity.home.RcmdIndexData
 import dev.aaa1115910.biliapi.http.entity.home.RcmdTopData
@@ -432,6 +434,38 @@ object BiliHttpApi {
         parameter("timezone_offset", timezoneOffset)
         parameter("id", id)
         features?.let { parameter("features", it) }
+        header("Cookie", "SESSDATA=$sessData;")
+    }.body()
+
+    /**
+     * 获取 Opus (专栏/图文) 详情
+     *
+     * @param opusId Opus ID (通常是动态ID)
+     * @param sessData 用户会话数据
+     */
+    suspend fun getOpusDetail(
+        opusId: String,
+        timezoneOffset: Int = -480,
+        sessData: String = ""
+    ): BiliResponse<OpusDetailData> = client.get("/x/polymer/web-dynamic/v1/opus/detail") {
+        parameter("timezone_offset", timezoneOffset)
+        parameter("id", opusId)
+        parameter("features", "itemOpusStyle")
+        header("Cookie", "SESSDATA=$sessData;")
+    }.body()
+
+    /**
+     * 获取传统专栏详情
+     * 用于 Opus fallback 场景
+     *
+     * @param cvId 传统专栏 ID (cvid)
+     * @param sessData 用户会话数据
+     */
+    suspend fun getArticleView(
+        cvId: String,
+        sessData: String = ""
+    ): BiliResponse<ArticleViewData> = client.get("/x/article/view") {
+        parameter("id", cvId)
         header("Cookie", "SESSDATA=$sessData;")
     }.body()
 

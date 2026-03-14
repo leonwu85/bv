@@ -1125,3 +1125,62 @@ private fun bilibili.app.dynamic.v2.DynamicItem.getItemNullModule() =
 
 private fun bilibili.app.dynamic.v2.DynamicItem.getParagraphModule() =
     modulesList.firstOrNull { it.isParagraphModel() }?.moduleParagraph
+
+// ============== 专栏段落数据模型 ==============
+
+/**
+ * 段落类型枚举
+ */
+enum class ParagraphType {
+    Text, Pictures, Line, Unknown
+}
+
+/**
+ * 文本节点类型枚举
+ */
+enum class TextNodeType {
+    Plain, Emoji, Link
+}
+
+/**
+ * 段落数据模型 - sealed class
+ */
+sealed class ArticleParagraph {
+    abstract val type: ParagraphType
+
+    data class TextParagraph(
+        override val type: ParagraphType = ParagraphType.Text,
+        val nodes: List<ArticleTextNode>
+    ) : ArticleParagraph()
+
+    data class PicturesParagraph(
+        override val type: ParagraphType = ParagraphType.Pictures,
+        val pictures: List<ArticlePicture>
+    ) : ArticleParagraph()
+
+    data class LineParagraph(
+        override val type: ParagraphType = ParagraphType.Line,
+        val picture: ArticlePicture? = null
+    ) : ArticleParagraph()
+}
+
+/**
+ * 文本节点
+ */
+data class ArticleTextNode(
+    val text: String,
+    val type: TextNodeType = TextNodeType.Plain,
+    val emojiUrl: String? = null,
+    val linkUrl: String? = null,
+    val isBold: Boolean = false,
+    val isItalic: Boolean = false
+)
+
+/**
+ * 图片数据
+ */
+data class ArticlePicture(
+    val url: String,
+    val width: Int,
+    val height: Int
+)

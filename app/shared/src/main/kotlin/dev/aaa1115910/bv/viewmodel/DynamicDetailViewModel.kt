@@ -5,7 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.aaa1115910.biliapi.entity.user.ArticleParagraph
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
+import dev.aaa1115910.biliapi.entity.user.DynamicType
 import dev.aaa1115910.biliapi.repositories.LikeRepository
 import dev.aaa1115910.biliapi.repositories.UserRepository
 import dev.aaa1115910.bv.BVApp
@@ -30,6 +32,14 @@ class DynamicDetailViewModel(
 
     var dynamicId by mutableStateOf("")
     var dynamicItem by mutableStateOf<DynamicItem?>(null)
+
+    // 专栏内容相关状态
+    var articleParagraphs by mutableStateOf<List<ArticleParagraph>>(emptyList())
+        private set
+    var isLoadingArticle by mutableStateOf(false)
+        private set
+    var articleLoadError by mutableStateOf<String?>(null)
+        private set
 
     // 点赞相关状态
     var isLiked by mutableStateOf(false)
@@ -57,6 +67,33 @@ class DynamicDetailViewModel(
                 "Failed to load dynamic: ${it.message}".toast(BVApp.context)
             }
         }
+    }
+
+    /**
+     * 加载专栏完整内容
+     * 在 loadDynamic 之后调用，仅对 Article 类型动态有效
+     */
+    suspend fun loadArticleContent() {
+        if (dynamicItem?.type != DynamicType.Article) return
+        if (isLoadingArticle) return
+
+        isLoadingArticle = true
+        articleLoadError = null
+
+        logger.fInfo { "Loading article content for: $dynamicId" }
+        runCatching {
+            articleParagraphs = userRepository.getOpusDetail(
+                opusId = dynamicId,
+                preferApiType = Prefs.apiType
+            )
+            logger.fInfo { "Loaded ${articleParagraphs.size} paragraphs" }
+        }.onFailure {
+            logger.fException(it) { "Failed to load article content" }
+            articleLoadError = it.message
+            // 加载失败不显示 toast，回退到摘要显示
+        }
+
+        isLoadingArticle = false
     }
 
     fun toggleLike() {
