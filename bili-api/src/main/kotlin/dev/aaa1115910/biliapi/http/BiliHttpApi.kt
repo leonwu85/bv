@@ -97,6 +97,7 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.utils.io.InternalAPI
 import io.ktor.utils.io.jvm.javaio.toInputStream
 import kotlinx.coroutines.CoroutineScope
+import bilibili.community.service.dm.v1.DmSegMobileReply
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -314,8 +315,9 @@ object BiliHttpApi {
     }.body()
 
     /**
-     * 通过[cid]获取视频弹幕
+     * 通过[cid]获取视频弹幕 (旧接口，已废弃)
      */
+    @Deprecated("使用 getDanmakuSeg 替代", ReplaceWith("getDanmakuSeg(cid, avid, sessData)"))
     suspend fun getDanmakuXml(
         cid: Long,
         sessData: String = ""
@@ -352,6 +354,48 @@ object BiliHttpApi {
         }
 
         return DanmakuResponse(chatServer, chatId, maxLimit, state, realName, source, data)
+    }
+
+    /**
+     * 通过[cid]和[avid]获取视频弹幕
+     * 支持分段获取
+     *
+     * @param cid 视频 cid
+     * @param avid 视频 avid
+     * @param segmentIndex 分段索引，从 1 开始
+     * @param sessData 用户认证 cookie
+     * @return 弹幕数据列表
+     */
+    suspend fun getDanmakuSeg(
+        cid: Long,
+        avid: Long,
+        segmentIndex: Int = 1,
+        sessData: String = ""
+    ): List<DanmakuData> {
+        val responseBytes = client.get("/x/v2/dm/wbi/web/seg.so") {
+            parameter("type", 1) // 1:视频
+            parameter("oid", cid)
+            parameter("pid", avid)
+            parameter("segment_index", segmentIndex)
+            header("Cookie", "SESSDATA=$sessData;")
+        }.readRawBytes()
+
+        val reply = bilibili.community.service.dm.v1.DmSegMobileReply.parseFrom(responseBytes)
+
+        return reply.elemsList.map { elem ->
+            DanmakuData(
+                time = elem.progress / 1000f, // ms -> s
+                type = elem.mode,
+                size = elem.fontsize,
+                color = elem.color,
+                timestamp = (elem.ctime / 1000).toInt(), // ms -> s
+                pool = elem.pool,
+                midHash = elem.midHash,
+                dmid = elem.id,
+                level = elem.weight, // weight 用于屏蔽等级
+                text = elem.content
+            )
+        }
     }
 
     /**

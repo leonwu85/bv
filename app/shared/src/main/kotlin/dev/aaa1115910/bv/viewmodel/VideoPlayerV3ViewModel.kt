@@ -593,13 +593,33 @@ class VideoPlayerV3ViewModel(
 
     suspend fun loadDanmaku(cid: Long) {
         runCatching {
-            val danmakuXmlData = BiliHttpApi.getDanmakuXml(cid = cid, sessData = Prefs.sessData)
-            val total = danmakuXmlData.data.size
             val batchSize = 600 // 分批大小，可根据设备性能调节
             withContext(Dispatchers.Main) {
                 danmakuData.clear()
             }
-            val filteredDanmaku = danmakuXmlData.data.filter { it.level >= currentDanmakuFilterLevel }
+
+            // 使用新的 WBI 签名接口获取弹幕
+            val allDanmakuData = mutableListOf<dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData>()
+            var segmentIndex = 1
+            val maxSegments = 20 // 最多获取 20 段，覆盖约 120 分钟
+
+            while (segmentIndex <= maxSegments) {
+                val segmentData = BiliHttpApi.getDanmakuSeg(
+                    cid = cid,
+                    avid = currentAid,
+                    segmentIndex = segmentIndex,
+                    sessData = Prefs.sessData
+                )
+                if (segmentData.isEmpty()) {
+                    // 当前分段没有弹幕
+                    break
+                }
+                allDanmakuData.addAll(segmentData)
+                segmentIndex++
+            }
+
+            val total = allDanmakuData.size
+            val filteredDanmaku = allDanmakuData.filter { it.level >= currentDanmakuFilterLevel }
             val filteredCount = total - filteredDanmaku.size
             if (filteredCount > 0) {
                 addLogs("过滤了 $filteredCount 条低等级弹幕（等级 < $currentDanmakuFilterLevel）")
