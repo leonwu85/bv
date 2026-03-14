@@ -139,6 +139,16 @@ class BVApp : Application() {
         val lastVersionCode = Prefs.lastVersionCode
         if (lastVersionCode >= BuildConfig.VERSION_CODE) return
         Log.i("BVApp", "updateMigration from $lastVersionCode")
+
+        // 新安装时，根据接口偏好设置防遮挡默认值
+        if (lastVersionCode == 0) {
+            // 如果用户选择了 APP 接口，则关闭防遮挡
+            if (Prefs.apiType == dev.aaa1115910.biliapi.entity.ApiType.App) {
+                Prefs.defaultDanmakuMask = false
+            }
+            // 否则保持默认开启（已通过 PreferenceRequest 默认值实现）
+        }
+
         if (lastVersionCode < 576) {
             // 从 Prefs 中读取登录数据写入 UserDB
             if (Prefs.isLogin) {
