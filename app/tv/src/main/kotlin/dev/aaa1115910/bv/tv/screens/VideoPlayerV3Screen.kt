@@ -841,7 +841,7 @@ fun VideoPlayerV3Screen(
 
             // 直播人气 Tip（左下角常驻）
             LiveViewerCountTip(
-                show = playerViewModel.isLive,
+                show = playerViewModel.isLive && Prefs.showLivePopularity,
                 popularityText = playerViewModel.livePopularityText,
                 onlineCount = playerViewModel.liveOnlineCount
             )

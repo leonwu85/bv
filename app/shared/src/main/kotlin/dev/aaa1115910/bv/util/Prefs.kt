@@ -213,6 +213,10 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowLiveInSidebarRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowLiveInSidebarKey, value) }
 
+    var showLivePopularity: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowLivePopularityRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowLivePopularityKey, value) }
+
     var buvid: String
         get() = runBlocking {
             val id = dsm.getPreferenceFlow(PrefKeys.prefBuvidRequest).first()
@@ -556,6 +560,7 @@ object PrefKeys {
     val prefPlayerDefaultStartPositionKey = intPreferencesKey("player_default_start_position")
     val prefPlayerEnableStartPositionSwitchKey = booleanPreferencesKey("player_enable_start_position_switch")
     val prefShowLiveInSidebarKey = booleanPreferencesKey("show_live_in_sidebar")
+    val prefShowLivePopularityKey = booleanPreferencesKey("show_live_popularity")
     val prefHomeNavItemsOrderKey = stringPreferencesKey("home_nav_items_order")
     val prefSkipPgcIntroOutroKey = booleanPreferencesKey("skip_pgc_intro_outro")
     val prefPlayerLongPressActionKey = intPreferencesKey("player_long_press_action")
@@ -645,6 +650,7 @@ object PrefKeys {
     val prefPlayerDefaultStartPositionRequest = PreferenceRequest(prefPlayerDefaultStartPositionKey, PlayerDefaultStartPosition.History.value)
     val prefPlayerEnableStartPositionSwitchRequest = PreferenceRequest(prefPlayerEnableStartPositionSwitchKey, false)
     val prefShowLiveInSidebarRequest = PreferenceRequest(prefShowLiveInSidebarKey, false)
+    val prefShowLivePopularityRequest = PreferenceRequest(prefShowLivePopularityKey, true)
     val prefHomeNavItemsOrderRequest = PreferenceRequest(
         prefHomeNavItemsOrderKey,
         "0,1,2,3,4,5,6"  // 默认全部显示，按原始顺序

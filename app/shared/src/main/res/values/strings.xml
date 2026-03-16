@@ -264,6 +264,8 @@
     <string name="player_long_press_action_triple_like">一键三连</string>
     <string name="settings_live_enable">显示直播</string>
     <string name="settings_live_enable_desc">在侧边栏显示直播入口</string>
+    <string name="settings_live_popularity">显示直播间人气</string>
+    <string name="settings_live_popularity_desc">在直播播放页显示人气和高能观众</string>
     <string name="settings_version_check_update_button">爷要更新</string>
     <string name="settings_version_current_version">当前版本: %1$s</string>
     <string name="settings_version_latest_version">最新版本: %1$s</string>

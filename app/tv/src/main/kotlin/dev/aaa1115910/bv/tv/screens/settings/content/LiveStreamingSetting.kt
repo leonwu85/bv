@@ -31,6 +31,7 @@ fun LiveStreamingSetting(
 ) {
     val context = LocalContext.current
     var showLiveInSidebar by remember { mutableStateOf(Prefs.showLiveInSidebar) }
+    var showLivePopularity by remember { mutableStateOf(Prefs.showLivePopularity) }
 
     Box(modifier = modifier) {
         Column(
@@ -56,6 +57,17 @@ fun LiveStreamingSetting(
                         onCheckedChange = {
                             showLiveInSidebar = it
                             Prefs.showLiveInSidebar = it
+                        }
+                    )
+                }
+                item {
+                    SettingSwitchListItem(
+                        title = stringResource(R.string.settings_live_popularity),
+                        supportText = stringResource(R.string.settings_live_popularity_desc),
+                        checked = showLivePopularity,
+                        onCheckedChange = {
+                            showLivePopularity = it
+                            Prefs.showLivePopularity = it
                         }
                     )
                 }
