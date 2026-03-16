@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.ModeComment
+import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -71,6 +72,7 @@ import dev.aaa1115910.biliapi.entity.user.ArticleParagraph
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.entity.user.DynamicType
 import dev.aaa1115910.bv.component.DynamicRichText
+import dev.aaa1115910.bv.tv.activities.dynamic.DynamicDetailActivity
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.component.ArticleContent
@@ -397,6 +399,41 @@ fun DynamicDetailScreen(
                                 )
                                 Text(
                                     text = "跳转原视频",
+                                    fontSize = 14.sp,
+                                    color = LocalContentColor.current
+                                )
+                            }
+                        }
+                    }
+
+                    // 跳转原动态按钮（仅转发类型的动态、原动态不是视频类型、且有原动态ID时显示）
+                    if (dynamicItem!!.type == DynamicType.Forward &&
+                        dynamicItem!!.orig?.type != DynamicType.Av &&
+                        !dynamicItem!!.orig?.id.isNullOrBlank()) {
+                        Button(
+                            onClick = {
+                                dynamicItem!!.orig?.id?.let { origId ->
+                                    DynamicDetailActivity.actionStart(context, origId)
+                                }
+                            },
+                            colors = ButtonDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
+                                focusedContentColor = Color.Black
+                            )
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.OpenInNew,
+                                    contentDescription = "跳转原动态",
+                                    modifier = Modifier.size(20.dp),
+                                    tint = LocalContentColor.current
+                                )
+                                Text(
+                                    text = "跳转原动态",
                                     fontSize = 14.sp,
                                     color = LocalContentColor.current
                                 )

@@ -215,7 +215,8 @@ data class DynamicItem(
     var article: DynamicArticleModule? = null,
     var none: DynamicNoneModule? = null,
     val footer: DynamicFooterModule? = null,
-    var orig: DynamicItem? = null
+    var orig: DynamicItem? = null,
+    var jumpUrl: String? = null
 ) {
     companion object {
         fun fromDynamicItem(item: dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem): DynamicItem {
@@ -236,6 +237,7 @@ data class DynamicItem(
                 DynamicType.Forward -> dynamicItem.apply {
                     word = DynamicWordModule.fromModuleDynamic(item.modules.moduleDynamic)
                     orig = fromDynamicItem(item.orig!!)
+                    jumpUrl = item.orig?.basic?.jumpUrl
                 }
 
                 DynamicType.Word -> dynamicItem.word =

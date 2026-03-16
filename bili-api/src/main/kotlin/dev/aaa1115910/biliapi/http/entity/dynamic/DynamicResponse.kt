@@ -33,7 +33,9 @@ data class DynamicItem(
     val modules: Modules,
     val orig: DynamicItem? = null,
     val type: String,
-    val visible: Boolean
+    val visible: Boolean,
+    @SerialName("jump_url")
+    val jumpUrl: String? = null
 ) {
     @Serializable
     data class Basic(
@@ -41,6 +43,8 @@ data class DynamicItem(
         val commentIdStr: String,
         @SerialName("comment_type")
         val commentType: Long,
+        @SerialName("jump_url")
+        val jumpUrl: String? = null,
         @SerialName("like_icon")
         val likeIcon: LikeIcon,
         @SerialName("rid_str")
@@ -167,12 +171,12 @@ data class DynamicItem(
                 val jumpUrl: String,
                 @SerialName("reserve_total")
                 val reserveTotal: Int,
-                val rid: Int,
+                val rid: Long,
                 val state: Int,
                 val stypc: Int? = null,
                 val title: String,
                 @SerialName("up_mid")
-                val upMid: Int
+                val upMid: Long
             ) {
                 @Serializable
                 data class Desc(
