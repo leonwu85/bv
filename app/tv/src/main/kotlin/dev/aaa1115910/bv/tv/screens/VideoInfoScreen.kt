@@ -203,6 +203,7 @@ fun VideoInfoScreen(
 
     var tip by remember { mutableStateOf("Loading") }
     var showUGCVideoInfo by remember { mutableStateOf(Prefs.showUGCVideoInfo) }
+    val usePureBlackBackground = !showUGCVideoInfo
     var fromSeason by remember { mutableStateOf(false) }
     var fromPlayer by remember { mutableStateOf(false) }
     var paused by remember { mutableStateOf(false) }
@@ -622,7 +623,7 @@ fun VideoInfoScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surface),
+                .background(if (usePureBlackBackground) Color.Black else MaterialTheme.colorScheme.surface),
             contentAlignment = Alignment.Center
         ) {
             if (tip == "Loading") {
@@ -636,29 +637,35 @@ fun VideoInfoScreen(
         }
     } else {
         Scaffold(
-            modifier = modifier
+            modifier = modifier,
+            containerColor = if (usePureBlackBackground) Color.Black else MaterialTheme.colorScheme.surface
         ) { innerPadding ->
             Box(
-                Modifier.padding(innerPadding)
+                Modifier
+                    .fillMaxSize()
+                    .background(if (usePureBlackBackground) Color.Black else Color.Transparent)
+                    .padding(innerPadding)
             ) {
-                // 图片加载成功后，动画 alpha，从 0 -> 0.6f
-                val bgLoaded = remember { mutableStateOf(false) }
-                val animatedAlpha by animateFloatAsState(
-                    targetValue = if (bgLoaded.value) 0.6f else 0f,
-                    animationSpec = tween(durationMillis = 500)
-                )
-                AsyncImage(
-                    modifier = Modifier.fillMaxSize(),
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(videoDetailViewModel.videoDetail?.cover)
-                        .transformations(BlurTransformation(LocalContext.current, 20f, 5f))
-                        .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    alpha = animatedAlpha,
-                    onSuccess = { bgLoaded.value = true },
-                    onError = { bgLoaded.value = false }
-                )
+                if (!usePureBlackBackground) {
+                    // 图片加载成功后，动画 alpha，从 0 -> 0.6f
+                    val bgLoaded = remember { mutableStateOf(false) }
+                    val animatedAlpha by animateFloatAsState(
+                        targetValue = if (bgLoaded.value) 0.6f else 0f,
+                        animationSpec = tween(durationMillis = 500)
+                    )
+                    AsyncImage(
+                        modifier = Modifier.fillMaxSize(),
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(videoDetailViewModel.videoDetail?.cover)
+                            .transformations(BlurTransformation(LocalContext.current, 20f, 5f))
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alpha = animatedAlpha,
+                        onSuccess = { bgLoaded.value = true },
+                        onError = { bgLoaded.value = false }
+                    )
+                }
 
                 LazyColumn(
                     modifier = Modifier

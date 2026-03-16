@@ -108,6 +108,7 @@ import dev.aaa1115910.bv.tv.component.buttons.SeasonInfoButtons
 import dev.aaa1115910.bv.tv.util.launchPlayerActivity
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.ImageSize
+import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.focusedBorder
 import dev.aaa1115910.bv.util.focusedScale
@@ -169,6 +170,7 @@ fun SeasonInfoScreen(
     var paused by remember { mutableStateOf(false) }
     var showSeasonSelector by remember { mutableStateOf(false) }
     var showCommentPanel by remember { mutableStateOf(false) }
+    val usePureBlackBackground = !Prefs.showUGCVideoInfo
     val playButtonFocusRequester = remember { FocusRequester() }
     val commentButtonFocusRequester = remember { FocusRequester() }
 
@@ -286,7 +288,7 @@ fun SeasonInfoScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surface),
+                .background(if (usePureBlackBackground) Color.Black else MaterialTheme.colorScheme.surface),
             contentAlignment = Alignment.Center
 
         ) {
@@ -319,29 +321,35 @@ fun SeasonInfoScreen(
         }
 
         Scaffold(
-            modifier = modifier
+            modifier = modifier,
+            containerColor = if (usePureBlackBackground) Color.Black else MaterialTheme.colorScheme.surface
         ) { innerPadding ->
             Box(
-                Modifier.padding(innerPadding)
+                Modifier
+                    .fillMaxSize()
+                    .background(if (usePureBlackBackground) Color.Black else Color.Transparent)
+                    .padding(innerPadding)
             ) {
-                // 图片加载成功后，动画 alpha，从 0 -> 0.6f
-                val bgLoaded = remember { mutableStateOf(false) }
-                val animatedAlpha by animateFloatAsState(
-                    targetValue = if (bgLoaded.value) 0.6f else 0f,
-                    animationSpec = tween(durationMillis = 500)
-                )
-                AsyncImage(
-                    modifier = Modifier.fillMaxSize(),
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(blurBackgroundCover)
-                        .transformations(BlurTransformation(LocalContext.current, 20f, 5f))
-                        .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    alpha = animatedAlpha,
-                    onSuccess = { bgLoaded.value = true },
-                    onError = { bgLoaded.value = false }
-                )
+                if (!usePureBlackBackground) {
+                    // 图片加载成功后，动画 alpha，从 0 -> 0.6f
+                    val bgLoaded = remember { mutableStateOf(false) }
+                    val animatedAlpha by animateFloatAsState(
+                        targetValue = if (bgLoaded.value) 0.6f else 0f,
+                        animationSpec = tween(durationMillis = 500)
+                    )
+                    AsyncImage(
+                        modifier = Modifier.fillMaxSize(),
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(blurBackgroundCover)
+                            .transformations(BlurTransformation(LocalContext.current, 20f, 5f))
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alpha = animatedAlpha,
+                        onSuccess = { bgLoaded.value = true },
+                        onError = { bgLoaded.value = false }
+                    )
+                }
 
                 LazyColumn(
                     modifier = Modifier
