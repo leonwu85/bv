@@ -48,6 +48,7 @@ import dev.aaa1115910.bv.tv.screens.settings.content.LiveStreamingSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.NetworkSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.OtherSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.PlayerSetting
+import dev.aaa1115910.bv.tv.screens.settings.content.SponsorBlockSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.StorageSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.UISetting
 import dev.aaa1115910.bv.ui.theme.BVTheme
@@ -155,6 +156,7 @@ enum class SettingsMenuNavItem(private val strRes: Int) {
     UI(R.string.settings_item_ui),
     Live(R.string.settings_item_live),
     DanmakuFilter(R.string.settings_item_danmaku_filter),
+    SponsorBlock(R.string.settings_item_sponsor_block),
     Api(R.string.settings_item_api),
     Other(R.string.settings_item_other),
     Storage(R.string.settings_item_storage),
@@ -184,6 +186,7 @@ fun SettingContent(
             when (currentMenu) {
                 SettingsMenuNavItem.Player -> PlayerSetting()
                 SettingsMenuNavItem.Info -> InfoSetting()
+                SettingsMenuNavItem.SponsorBlock -> SponsorBlockSetting()
                 SettingsMenuNavItem.About -> AboutSetting()
                 SettingsMenuNavItem.Other -> OtherSetting()
                 SettingsMenuNavItem.Network -> NetworkSetting()

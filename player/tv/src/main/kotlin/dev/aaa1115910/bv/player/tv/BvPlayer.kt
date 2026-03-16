@@ -36,6 +36,7 @@ import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskFrame
 import dev.aaa1115910.biliapi.http.entity.video.ClipInfo
 import dev.aaa1115910.biliapi.http.entity.video.ClipType
 import dev.aaa1115910.biliapi.entity.video.Subtitle
+import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.BvVideoPlayer
 import dev.aaa1115910.bv.player.impl.exo.ExoMediaPlayer
@@ -65,6 +66,7 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerDebugInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekState
 import dev.aaa1115910.bv.player.entity.VideoPlayerStateData
 import dev.aaa1115910.bv.player.entity.DefaultStartPosition
+import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.player.tv.controller.SkipEdTip
 import dev.aaa1115910.bv.player.tv.controller.SkipOpTip
 import dev.aaa1115910.bv.player.tv.controller.VideoPlayerController
@@ -126,6 +128,17 @@ fun BvPlayer(
     useTripleLikeOnLongPress: Boolean = false,
     isLive: Boolean = false,
     onLiveDanmakuPlayerReady: ((com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer) -> Unit)? = null,
+
+    // SponsorBlock 相关参数
+    enableSponsorBlock: Boolean = false,
+    sponsorBlockSkipMode: SponsorBlockSkipMode = SponsorBlockSkipMode.Manual,
+    sponsorSegments: List<dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment> = emptyList(),
+    showSponsorBlockTip: Boolean = false,
+    currentSponsorSegment: dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment? = null,
+    onShowSponsorBlockTip: (dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment) -> Unit = {},
+    onSkipSponsorSegment: () -> Unit = {},
+    onDismissSponsorBlockTip: () -> Unit = {},
+
     userActionContent: @Composable (
         modifier: Modifier,
         focusMap: Map<String, FocusRequester>,
@@ -643,6 +656,23 @@ fun BvPlayer(
                     checkSkipTask(pos)
                 }
 
+                // SponsorBlock 片段检测
+                if (enableSponsorBlock && sponsorSegments.isNotEmpty() && isPlaying && !showSponsorBlockTip) {
+                    val thresholdMs = -500L  // 提前 0.5 秒开始提示
+                    val segment = sponsorSegments.firstOrNull {
+                        pos >= (it.startTime + thresholdMs) && pos < it.endTime
+                    }
+                    if (segment != null && currentSponsorSegment != segment) {
+                        if (sponsorBlockSkipMode == SponsorBlockSkipMode.Auto) {
+                            // 自动
+                            onSkipSponsorSegment()
+                        } else {
+                            // 手动
+                            onShowSponsorBlockTip(segment)
+                        }
+                    }
+                }
+
                 // 蒙版更新已移至独立定时器
 
                 if (!videoPlayerConfigData.incognitoMode && isPlaying) {
@@ -1029,7 +1059,18 @@ fun BvPlayer(
             onLoadNextVideo = onLoadNextVideo,
             onShowComment = onShowComment,
             onTripleLike = onTripleLike,
-            useTripleLikeOnLongPress = useTripleLikeOnLongPress
+            useTripleLikeOnLongPress = useTripleLikeOnLongPress,
+
+            // SponsorBlock 相关参数
+            enableSponsorBlock = enableSponsorBlock,
+            sponsorSegments = sponsorSegments,
+            showSponsorBlockTip = showSponsorBlockTip,
+            currentSponsorSegment = currentSponsorSegment,
+            onSkipSponsorSegment = {
+                logger.info { "Skip sponsor segment" }
+                onSkipSponsorSegment()
+            },
+            onDismissSponsorBlockTip = onDismissSponsorBlockTip
         ) {
             LaunchedEffect(Unit) {
                 videoPlayer.setOptions()

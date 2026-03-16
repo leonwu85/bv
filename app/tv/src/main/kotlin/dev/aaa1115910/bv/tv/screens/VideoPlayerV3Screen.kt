@@ -58,6 +58,7 @@ import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
 import dev.aaa1115910.bv.player.entity.PlayerLoadNextAction
 import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
 import dev.aaa1115910.bv.player.entity.Resolution
+import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.player.entity.VideoListItemData
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.player.entity.VideoPlayerConfigData
@@ -630,6 +631,24 @@ fun VideoPlayerV3Screen(
                     Prefs.isLoop = it
                     playerViewModel.isLoop = it
                 },
+
+                // SponsorBlock 相关参数
+                enableSponsorBlock = playerViewModel.enableSponsorBlock,
+                sponsorBlockSkipMode = playerViewModel.sponsorBlockSkipMode,
+                sponsorSegments = playerViewModel.sponsorSegments,
+                showSponsorBlockTip = playerViewModel.showSponsorBlockTip,
+                currentSponsorSegment = playerViewModel.currentSponsorSegment,
+                onShowSponsorBlockTip = { segment ->
+                    playerViewModel.currentSponsorSegment = segment
+                    playerViewModel.showSponsorBlockTip = true
+                },
+                onSkipSponsorSegment = {
+                    playerViewModel.skipSponsorSegment()
+                },
+                onDismissSponsorBlockTip = {
+                    playerViewModel.dismissSponsorBlockTip()
+                },
+
                 userActionContent = { 
                     modifier,
                     focusMap, 

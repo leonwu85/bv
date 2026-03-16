@@ -33,7 +33,10 @@ import dev.aaa1115910.biliapi.http.entity.live.DanmakuEvent
 import dev.aaa1115910.biliapi.http.entity.live.LiveEvent
 import dev.aaa1115910.biliapi.http.entity.live.OnlineRankCountEvent
 import dev.aaa1115910.biliapi.http.entity.live.PopularityChangeEvent
+import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment
+import dev.aaa1115910.biliapi.http.SponsorBlockHttpApi
 import dev.aaa1115910.biliapi.repositories.VideoPlayRepository
+import dev.aaa1115910.biliapi.util.AvBvConverter
 import dev.aaa1115910.biliapi.websocket.LiveDataWebSocket
 import dev.aaa1115910.bilisubtitle.SubtitleParser
 import dev.aaa1115910.bilisubtitle.entity.SubtitleItem
@@ -54,6 +57,7 @@ import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.VideoListItemData
 import dev.aaa1115910.bv.player.entity.VideoRotation
+import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.repository.VideoInfoRepository
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fError
@@ -258,6 +262,13 @@ class VideoPlayerV3ViewModel(
     var currentCid by mutableLongStateOf(0L)
     private var currentEpid = 0
 
+    // SponsorBlock 相关状态
+    var enableSponsorBlock by mutableStateOf(Prefs.enableSponsorBlock)
+    var sponsorBlockSkipMode by mutableStateOf(Prefs.sponsorBlockSkipMode)
+    var sponsorSegments by mutableStateOf<List<SponsorSegment>>(emptyList())
+    var showSponsorBlockTip by mutableStateOf(false)
+    var currentSponsorSegment by mutableStateOf<SponsorSegment?>(null)
+
     private suspend fun ensureDanmakuPlayer(isLive: Boolean = false) = withContext(Dispatchers.Main) {
         danmakuPlayer?.release()
         danmakuPlayer = if (isLive) {
@@ -313,6 +324,9 @@ class VideoPlayerV3ViewModel(
             // addLogs("加载弹幕中")
             loadDanmaku(cid)
             updateDanmakuMask()
+
+            // 加载 SponsorBlock 片段
+            loadSponsorSegments(AvBvConverter.av2bv(avid), cid)
 
             updateVideoShot()
 
@@ -656,6 +670,84 @@ class VideoPlayerV3ViewModel(
             addLogs("已加载 ${danmakuData.size} 条弹幕")
             logger.fInfo { "Load danmaku success, size=${danmakuData.size}" }
         }
+    }
+    /**
+     * 加载 SponsorBlock 片段数据
+     */
+    fun loadSponsorSegments(bvid: String, cid: Long) {
+        if (!enableSponsorBlock) {
+            logger.fInfo { "SponsorBlock is disabled, skip loading segments" }
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            addLogs("加载 SponsorBlock 片段")
+            logger.fInfo { "Loading SponsorBlock segments for $bvid/$cid" }
+
+            SponsorBlockHttpApi.getSkipSegments(
+                bvid = bvid,
+                cid = cid,
+                categories = listOf("sponsor")  // 暂时只获取赞助广告类别
+            ).fold(
+                onSuccess = { segments ->
+                    sponsorSegments = segments
+                    addLogs("加载到 ${segments.size} 个片段")
+                    logger.fInfo { "Loaded ${segments.size} sponsor segments" }
+                },
+                onFailure = { error ->
+                    sponsorSegments = emptyList()
+                    addLogs("加载片段失败: ${error.message}")
+                    logger.fWarn { "Failed to load sponsor segments: ${error.message}" }
+                }
+            )
+        }
+    }
+
+    /**
+     * 检查当前播放位置是否需要显示SponsorBlock提示
+     * @param currentPositionMs 当前播放位置（毫秒）
+     */
+    fun checkSponsorBlockPosition(currentPositionMs: Long) {
+        if (!enableSponsorBlock || sponsorSegments.isEmpty() || showSponsorBlockTip) {
+            return
+        }
+
+        val thresholdMs = -500L  // 提前 0.5 秒开始提示
+        val segment = sponsorSegments.firstOrNull {
+            currentPositionMs >= (it.startTime + thresholdMs) &&
+            currentPositionMs < it.endTime
+        }
+
+        if (segment != null) {
+            currentSponsorSegment = segment
+            showSponsorBlockTip = true
+            logger.fDebug { "Showing SponsorBlock tip for segment: ${segment.category}" }
+        }
+    }
+
+    /**
+     * 跳过当前SponsorBlock片段
+     */
+    fun skipSponsorSegment() {
+        val segment = currentSponsorSegment
+        if (segment != null) {
+            val targetPosition = segment.endTime
+            videoPlayer?.seekTo(targetPosition)
+            danmakuPlayer?.seekTo(targetPosition)
+            viewModelScope.launch(Dispatchers.Main) {
+                addLogs("跳过片段: ${segment.category}")
+            }
+            logger.fInfo { "Skipped sponsor segment, seeking to $targetPosition ms" }
+        }
+        dismissSponsorBlockTip()
+    }
+
+    /**
+     * 关闭SponsorBlock提示
+     */
+    fun dismissSponsorBlockTip() {
+        showSponsorBlockTip = false
+        currentSponsorSegment = null
     }
 
     private suspend fun updateSubtitle() {
