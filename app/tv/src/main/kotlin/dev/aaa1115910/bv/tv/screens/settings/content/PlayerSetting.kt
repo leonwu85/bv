@@ -56,6 +56,7 @@ fun PlayerSetting(
     var playerExitWhenAllIsPlayed by remember { mutableStateOf(Prefs.playerExitWhenAllIsPlayed) }
     var playerLoadNextAction by remember { mutableStateOf(Prefs.playerLoadNextAction) }
     var playerDefaultStartPosition by remember { mutableStateOf(Prefs.playerDefaultStartPosition) }
+    var playerEnableStartPositionSwitch by remember { mutableStateOf(Prefs.playerEnableStartPositionSwitch) }
     var defaultPlaybackSpeed by remember { mutableDoubleStateOf(Prefs.defaultPlaySpeed.toDouble()) }
     var playerSeekForwardStep by remember { mutableDoubleStateOf(Prefs.playerSeekForwardStep.toDouble()) }
     var playerSeekBackwardStep by remember { mutableDoubleStateOf(Prefs.playerSeekBackwardStep.toDouble()) }
@@ -230,6 +231,23 @@ fun PlayerSetting(
                     onValueChange = {
                         playerDefaultStartPosition = it
                         Prefs.playerDefaultStartPosition = it
+                    }
+                )
+            }
+            item {
+                SettingSwitchListItem(
+                    title = stringResource(
+                        if (playerDefaultStartPosition == PlayerDefaultStartPosition.History) {
+                            R.string.settings_player_enable_start_position_switch_to_beginning_title
+                        } else {
+                            R.string.settings_player_enable_start_position_switch_to_history_title
+                        }
+                    ),
+                    supportText = stringResource(R.string.settings_player_enable_start_position_switch_text),
+                    checked = playerEnableStartPositionSwitch,
+                    onCheckedChange = {
+                        playerEnableStartPositionSwitch = it
+                        Prefs.playerEnableStartPositionSwitch = it
                     }
                 )
             }

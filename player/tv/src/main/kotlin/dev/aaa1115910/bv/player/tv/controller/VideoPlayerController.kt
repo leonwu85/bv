@@ -256,7 +256,11 @@ fun VideoPlayerController(
                 when (it.key) {
                     Key.DirectionCenter, Key.Enter, Key.Spacebar -> {
                         @Suppress("KotlinConstantConditions")
-                        if (!showClickableControllers && videoPlayerStateData.showBackToHistory) {
+                        if (
+                            videoPlayerConfigData.enableStartPositionSwitch &&
+                            !showClickableControllers &&
+                            videoPlayerStateData.showBackToHistory
+                        ) {
                             if (it.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
                             onBackToHistory()
                             return@onPreviewKeyEvent true

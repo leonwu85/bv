@@ -747,6 +747,9 @@
     <string name="settings_player_load_next_action_play_next_part_or_recommend">剧集和分P的下一个或推荐视频</string>
     <string name="settings_player_default_start_position_title">播放默认开始位置</string>
     <string name="settings_player_default_start_position_text">设置视频开始播放的位置</string>
+    <string name="settings_player_enable_start_position_switch_to_beginning_title">播放开始 5 秒内点按确定返回视频开头</string>
+    <string name="settings_player_enable_start_position_switch_to_history_title">播放开始 5 秒内点按确定跳转历史位置</string>
+    <string name="settings_player_enable_start_position_switch_text">开启后显示提示，播放开始后的 5 秒内按确定键会执行该跳转</string>
     <string name="settings_player_default_start_position_history">历史位置</string>
     <string name="settings_player_default_start_position_beginning">从开头开始</string>
     <string name="player_skip_tip_back_to_history">上次看到 %s 点击确认键跳转</string>

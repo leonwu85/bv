@@ -277,6 +277,7 @@ fun VideoPlayerV3Screen(
             showRelatedVideos = playerViewModel.showRelatedVideos,
             showNextVideoBtn = Prefs.playerLoadNextAction != PlayerLoadNextAction.DoNothing,
             defaultStartPosition = Prefs.playerDefaultStartPosition.toPlayerType(),
+            enableStartPositionSwitch = Prefs.playerEnableStartPositionSwitch,
             clipInfoList = playerViewModel.clipInfoList,
             skipPgcIntroOutro = Prefs.skipPgcIntroOutro,
             isLive = playerViewModel.isLive,

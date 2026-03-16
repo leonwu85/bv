@@ -447,7 +447,7 @@ fun BvPlayer(
     val updateBackToHistory: () -> Unit = {
         // 此处使用 videoPlayerHistoryData.lastPlayed 无法获取到新值
         //if (videoPlayerHistoryData.lastPlayed > 0 && hideBackToHistoryTimer == null) {
-        if (lastPlayed > 0 && hideBackToHistoryTimer == null) {
+        if (videoPlayerConfigData.enableStartPositionSwitch && lastPlayed > 0 && hideBackToHistoryTimer == null) {
             logger.info { "show showBackToHistory: ${videoPlayerHistoryData.lastPlayed}" }
             scope.launch(Dispatchers.Main) {
                 showBackToHistory = true

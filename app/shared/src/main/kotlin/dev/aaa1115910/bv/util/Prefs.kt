@@ -377,6 +377,10 @@ object Prefs {
         }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefPlayerDefaultStartPositionKey, value.value) }
 
+    var playerEnableStartPositionSwitch: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefPlayerEnableStartPositionSwitchRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefPlayerEnableStartPositionSwitchKey, value) }
+
     var playerExitWhenAllIsPlayed: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefPlayerExitWhenAllIsPlayedRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefPlayerExitWhenAllIsPlayedKey, value) }
@@ -550,6 +554,7 @@ object PrefKeys {
     val prefDefaultLiveCodecKey = intPreferencesKey("dlc")
     val prefPlayerLoadNextActionKey = intPreferencesKey("player_load_next_action")
     val prefPlayerDefaultStartPositionKey = intPreferencesKey("player_default_start_position")
+    val prefPlayerEnableStartPositionSwitchKey = booleanPreferencesKey("player_enable_start_position_switch")
     val prefShowLiveInSidebarKey = booleanPreferencesKey("show_live_in_sidebar")
     val prefHomeNavItemsOrderKey = stringPreferencesKey("home_nav_items_order")
     val prefSkipPgcIntroOutroKey = booleanPreferencesKey("skip_pgc_intro_outro")
@@ -638,6 +643,7 @@ object PrefKeys {
     val prefDefaultLiveCodecRequest = PreferenceRequest(prefDefaultLiveCodecKey, LiveCodec.HLS.ordinal)
     val prefPlayerLoadNextActionRequest = PreferenceRequest(prefPlayerLoadNextActionKey, PlayerLoadNextAction.DoNothing.value)
     val prefPlayerDefaultStartPositionRequest = PreferenceRequest(prefPlayerDefaultStartPositionKey, PlayerDefaultStartPosition.History.value)
+    val prefPlayerEnableStartPositionSwitchRequest = PreferenceRequest(prefPlayerEnableStartPositionSwitchKey, false)
     val prefShowLiveInSidebarRequest = PreferenceRequest(prefShowLiveInSidebarKey, false)
     val prefHomeNavItemsOrderRequest = PreferenceRequest(
         prefHomeNavItemsOrderKey,
