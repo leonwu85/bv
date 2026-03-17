@@ -728,9 +728,10 @@ class VideoPlayerV3ViewModel(
     /**
      * 跳过当前SponsorBlock片段
      */
-    fun skipSponsorSegment() {
-        val segment = currentSponsorSegment
+    fun skipSponsorSegment(segmentOverride: dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment? = null) {
+        val segment = segmentOverride ?: currentSponsorSegment
         if (segment != null) {
+            currentSponsorSegment = segment
             val targetPosition = segment.endTime
             videoPlayer?.seekTo(targetPosition)
             danmakuPlayer?.seekTo(targetPosition)
@@ -738,6 +739,8 @@ class VideoPlayerV3ViewModel(
                 addLogs("跳过片段: ${segment.category}")
             }
             logger.fInfo { "Skipped sponsor segment, seeking to $targetPosition ms" }
+        } else {
+            logger.fWarn { "Skip sponsor segment ignored because no active segment was available" }
         }
         dismissSponsorBlockTip()
     }

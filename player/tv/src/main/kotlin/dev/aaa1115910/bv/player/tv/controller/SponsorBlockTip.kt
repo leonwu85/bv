@@ -71,9 +71,9 @@ fun SponsorBlockTip(
             Surface(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(bottom = 32.dp),
+                    .padding(bottom = 64.dp),
                 colors = SurfaceDefaults.colors(
-                    containerColor = Color.Black.copy(alpha = 0.7f)
+                    containerColor = Color.Black.copy(alpha = 0.4f)
                 ),
                 shape = MaterialTheme.shapes.medium
             ) {

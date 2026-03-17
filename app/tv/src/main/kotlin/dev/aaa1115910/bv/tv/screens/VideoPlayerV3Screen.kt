@@ -642,8 +642,8 @@ fun VideoPlayerV3Screen(
                     playerViewModel.currentSponsorSegment = segment
                     playerViewModel.showSponsorBlockTip = true
                 },
-                onSkipSponsorSegment = {
-                    playerViewModel.skipSponsorSegment()
+                onSkipSponsorSegment = { segment ->
+                    playerViewModel.skipSponsorSegment(segment)
                 },
                 onDismissSponsorBlockTip = {
                     playerViewModel.dismissSponsorBlockTip()

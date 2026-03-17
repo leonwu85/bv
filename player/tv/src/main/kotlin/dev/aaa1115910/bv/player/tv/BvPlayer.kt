@@ -136,7 +136,7 @@ fun BvPlayer(
     showSponsorBlockTip: Boolean = false,
     currentSponsorSegment: dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment? = null,
     onShowSponsorBlockTip: (dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment) -> Unit = {},
-    onSkipSponsorSegment: () -> Unit = {},
+    onSkipSponsorSegment: (dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment?) -> Unit = {},
     onDismissSponsorBlockTip: () -> Unit = {},
 
     userActionContent: @Composable (
@@ -236,16 +236,28 @@ fun BvPlayer(
     var skipOpTipText by remember { mutableStateOf("即将跳过片头") }
     var skipEdTipText by remember { mutableStateOf("即将跳过片尾") }
     var processedClipIndices by remember { mutableStateOf(setOf<Int>()) }
+    var processedSponsorSegments by remember { mutableStateOf(setOf<SponsorSegment>()) }
 
     // 使用 rememberUpdatedState 来跟踪 clipInfoList 和 skipPgcIntroOutro 的最新值
     // 这样可以在非 Composable 上下文（定时器回调）中读取到最新值
     val currentClipInfoList by rememberUpdatedState(videoPlayerConfigData.clipInfoList)
     val currentSkipPgcIntroOutro by rememberUpdatedState(videoPlayerConfigData.skipPgcIntroOutro)
+    val currentEnableSponsorBlock by rememberUpdatedState(enableSponsorBlock)
+    val currentSponsorBlockSkipMode by rememberUpdatedState(sponsorBlockSkipMode)
+    val currentSponsorSegments by rememberUpdatedState(sponsorSegments)
+    val currentShowSponsorBlockTip by rememberUpdatedState(showSponsorBlockTip)
+    val currentSponsorSegment by rememberUpdatedState(currentSponsorSegment)
+    val currentOnShowSponsorBlockTip by rememberUpdatedState(onShowSponsorBlockTip)
+    val currentOnSkipSponsorSegment by rememberUpdatedState(onSkipSponsorSegment)
 
     // 当 clipInfoList 变化时，重置已处理的 clip 索引
     // 这确保了切换到新视频时，跳过片头/片尾功能能够正常工作
     LaunchedEffect(videoPlayerConfigData.clipInfoList) {
         processedClipIndices = emptySet()
+    }
+
+    LaunchedEffect(sponsorSegments) {
+        processedSponsorSegments = emptySet()
     }
 
     // 跳过片头片尾检测任务
@@ -657,18 +669,22 @@ fun BvPlayer(
                 }
 
                 // SponsorBlock 片段检测
-                if (enableSponsorBlock && sponsorSegments.isNotEmpty() && isPlaying && !showSponsorBlockTip) {
-                    val thresholdMs = -500L  // 提前 0.5 秒开始提示
-                    val segment = sponsorSegments.firstOrNull {
+                if (currentEnableSponsorBlock && currentSponsorSegments.isNotEmpty() && isPlaying && !currentShowSponsorBlockTip) {
+                    val thresholdMs = 0  // 提前 0 秒开始提示
+                    val segment = currentSponsorSegments.firstOrNull {
                         pos >= (it.startTime + thresholdMs) && pos < it.endTime
                     }
-                    if (segment != null && currentSponsorSegment != segment) {
-                        if (sponsorBlockSkipMode == SponsorBlockSkipMode.Auto) {
+                    if (segment != null && segment !in processedSponsorSegments) {
+                        processedSponsorSegments = processedSponsorSegments + segment
+                        logger.info {
+                            "SponsorBlock segment matched at ${pos}ms, range=${segment.startTime}-${segment.endTime}, mode=$currentSponsorBlockSkipMode, firstHit=true"
+                        }
+                        if (currentSponsorBlockSkipMode == SponsorBlockSkipMode.Auto) {
                             // 自动
-                            onSkipSponsorSegment()
+                            currentOnSkipSponsorSegment(segment)
                         } else {
                             // 手动
-                            onShowSponsorBlockTip(segment)
+                            currentOnShowSponsorBlockTip(segment)
                         }
                     }
                 }
@@ -1068,7 +1084,7 @@ fun BvPlayer(
             currentSponsorSegment = currentSponsorSegment,
             onSkipSponsorSegment = {
                 logger.info { "Skip sponsor segment" }
-                onSkipSponsorSegment()
+                onSkipSponsorSegment(currentSponsorSegment)
             },
             onDismissSponsorBlockTip = onDismissSponsorBlockTip
         ) {
