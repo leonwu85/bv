@@ -80,7 +80,13 @@ class HistoryViewModel(
                         jumpToSeason = isPgc,
                         epId = historyItem.epid,
                         seasonId = historyItem.seasonId ?: if (isPgc) historyItem.kid.toInt() else null,
-                        pubTime = historyItem.viewAt.toSmartDate() + context.getString(R.string.view_at)
+                        pubTime = historyItem.viewAt.toSmartDate() + context.getString(R.string.view_at),
+                        historyBusiness = when (historyItem.type) {
+                            HistoryItemType.Archive -> "archive"
+                            HistoryItemType.Pgc -> "pgc"
+                            HistoryItemType.Unknown -> null
+                        },
+                        historyKid = historyItem.kid
                     )
                 )
             }
@@ -110,6 +116,72 @@ class HistoryViewModel(
         withContext(Dispatchers.Main) {
             updating = false
         }
+    }
+
+    var deleting by mutableStateOf(false)
+        private set
+
+    var deletePhase by mutableStateOf(0)
+        private set
+
+    var pendingFocusIndex by mutableStateOf(-1)
+        private set
+
+    fun deleteHistory(history: VideoCardData, targetIndex: Int) {
+        val business = history.historyBusiness ?: return
+        val kid = history.historyKid ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            deleting = true
+            runCatching {
+                val success = historyRepository.deleteHistory(
+                    business = business,
+                    kid = kid,
+                    preferApiType = Prefs.apiType
+                )
+                if (success) {
+                    pendingFocusIndex = targetIndex
+                    withContext(Dispatchers.Main) {
+                        deletePhase = 1
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        histories.removeAll {
+                            it.historyBusiness == business && it.historyKid == kid
+                        }
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        deletePhase = 2
+                    }
+
+                    logger.fInfo { "Delete history success: business=$business, kid=$kid" }
+                    withContext(Dispatchers.Main) {
+                        BVApp.context.getString(R.string.history_delete_success)
+                            .toast(BVApp.context)
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        BVApp.context.getString(R.string.history_delete_failed)
+                            .toast(BVApp.context)
+                    }
+                }
+            }.onFailure {
+                logger.fWarn { "Delete history failed: ${it.stackTraceToString()}" }
+                withContext(Dispatchers.Main) {
+                    BVApp.context.getString(R.string.history_delete_failed)
+                        .toast(BVApp.context)
+                }
+            }
+            withContext(Dispatchers.Main) {
+                deleting = false
+            }
+        }
+    }
+
+    fun resetDeletePhase() {
+        deletePhase = 0
+        pendingFocusIndex = -1
     }
 
     fun clearData() {

@@ -594,6 +594,26 @@ object BiliHttpApi {
     }.body()
 
     /**
+     * 删除历史记录[kid]
+     */
+    suspend fun deleteHistory(
+        kid: String,
+        csrf: String,
+        sessData: String
+    ): BiliResponseWithoutData = client.post("/x/v2/history/delete") {
+        header("Cookie", "SESSDATA=$sessData;")
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("kid", kid)
+                    append("jsonp", "jsonp")
+                    append("csrf", csrf)
+                }
+            )
+        )
+    }.body()
+
+    /**
      * 获取与视频[avid]或[bvid]有关的相关推荐视频
      */
     suspend fun getRelatedVideos(

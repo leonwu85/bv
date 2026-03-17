@@ -21,6 +21,8 @@ data class VideoCardData(
     val epId: Int? = null,
     val seasonId: Int? = null,
     val pubTime: String? = null,
+    val historyBusiness: String? = null,
+    val historyKid: Long? = null,
     // var pubTimeString: String = "",
     val isChargingArc: Boolean = false,
     val badgeText: String = ""

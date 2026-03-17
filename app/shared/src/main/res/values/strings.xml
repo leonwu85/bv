@@ -307,6 +307,13 @@
     <string name="toview_delete_confirm_dialog_dismiss">取消</string>
     <string name="toview_delete_success">删除成功</string>
     <string name="toview_delete_failed">删除失败</string>
+    <string name="history_menu_delete">删除历史记录</string>
+    <string name="history_delete_confirm_dialog_title">确认删除</string>
+    <string name="history_delete_confirm_dialog_text">是否删除历史记录中的 "%1$s"？</string>
+    <string name="history_delete_confirm_dialog_confirm">确认</string>
+    <string name="history_delete_confirm_dialog_dismiss">取消</string>
+    <string name="history_delete_success">删除成功</string>
+    <string name="history_delete_failed">删除失败</string>
     <string name="title_activity_user_info">用户信息</string>
     <string name="title_activity_user_lock_settings">用户锁设置</string>
     <string name="title_activity_user_switch">用户切换</string>
