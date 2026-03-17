@@ -39,4 +39,17 @@ class ToViewRepository(
             }
         }
     }
+
+    suspend fun deleteToView(
+        avid: Long,
+        preferApiType: ApiType = ApiType.Web
+    ): Boolean {
+        return runCatching {
+            BiliHttpApi.deleteToView(
+                avid = avid,
+                csrf = authRepository.biliJct!!,
+                sessData = authRepository.sessionData!!
+            ).code == 0
+        }.getOrElse { false }
+    }
 }

@@ -109,6 +109,66 @@ class ToViewViewModel(
         }
     }
 
+    var deleting by mutableStateOf(false)
+        private set
+
+    // 删除阶段状态
+    var deletePhase by mutableStateOf(0)
+        private set
+
+    // 删除后恢复焦点
+    var pendingFocusIndex by mutableStateOf(-1)
+        private set
+
+    fun deleteToView(avid: Long, targetIndex: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            deleting = true
+            runCatching {
+                val success = ToViewRepository.deleteToView(avid)
+                if (success) {
+                    pendingFocusIndex = targetIndex
+                    withContext(Dispatchers.Main) {
+                        deletePhase = 1
+                    }
+
+                    // 删除数据
+                    withContext(Dispatchers.Main) {
+                        histories.removeAll { it.avid == avid }
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        deletePhase = 2
+                    }
+
+                    logger.fInfo { "Delete toview success: aid=$avid" }
+                    withContext(Dispatchers.Main) {
+                        BVApp.context.getString(R.string.toview_delete_success)
+                            .toast(BVApp.context)
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        BVApp.context.getString(R.string.toview_delete_failed)
+                            .toast(BVApp.context)
+                    }
+                }
+            }.onFailure {
+                logger.fWarn { "Delete toview failed: ${it.stackTraceToString()}" }
+                withContext(Dispatchers.Main) {
+                    BVApp.context.getString(R.string.toview_delete_failed)
+                        .toast(BVApp.context)
+                }
+            }
+            withContext(Dispatchers.Main) {
+                deleting = false
+            }
+        }
+    }
+
+    fun resetDeletePhase() {
+        deletePhase = 0
+        pendingFocusIndex = -1
+    }
+
     fun clearData() {
         histories.clear()
         cursor = 0L

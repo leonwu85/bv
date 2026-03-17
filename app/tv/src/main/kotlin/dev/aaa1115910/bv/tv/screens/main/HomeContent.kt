@@ -376,7 +376,12 @@ fun HomeContent(
                     }
                     HomeTopNavItem.ToView -> {
                         if (userViewModel.isLogin) {
-                            ToViewScreen(showPageTitle = false)
+                            ToViewScreen(
+                                showPageTitle = false,
+                                onListEmpty = {
+                                    navFocusRequester.requestFocus()
+                                }
+                            )
                         } else {
                             LoginRequiredScreen()
                         }

@@ -178,6 +178,7 @@ fun MainScreen(
             ) {
                 DrawerContent(
                     modifier = Modifier.fillMaxWidth(),
+                    currentDrawerItem = selectedDrawerItem,
                     isLogin = userViewModel.isLogin,
                     avatar = userViewModel.face,
                     username = userViewModel.username,

@@ -575,6 +575,25 @@ object BiliHttpApi {
     }.body()
 
     /**
+     * 从稍后再看列表中删除视频[avid]
+     */
+    suspend fun deleteToView(
+        avid: Long,
+        csrf: String,
+        sessData: String
+    ): BiliResponseWithoutData = client.post("/x/v2/history/toview/v2/dels") {
+        header("Cookie", "SESSDATA=$sessData;")
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("resources", "$avid")
+                    append("csrf", csrf)
+                }
+            )
+        )
+    }.body()
+
+    /**
      * 获取与视频[avid]或[bvid]有关的相关推荐视频
      */
     suspend fun getRelatedVideos(

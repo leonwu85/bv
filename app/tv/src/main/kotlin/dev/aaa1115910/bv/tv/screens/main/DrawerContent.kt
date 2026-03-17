@@ -72,6 +72,7 @@ val currentSelectedTabs = mutableStateMapOf<DrawerItem, Int>()
 @Composable
 fun DrawerContent(
     modifier: Modifier = Modifier,
+    currentDrawerItem: DrawerItem = DrawerItem.Home,
     isLogin: Boolean = false,
     avatar: String = "",
     username: String = "",
@@ -82,14 +83,25 @@ fun DrawerContent(
     onFocusToContent: () -> Unit = {},
     onLogin: () -> Unit = {}
 ) {
-    var selectedItem by remember { mutableStateOf(DrawerItem.Home) }
+    var selectedItem by remember { mutableStateOf(currentDrawerItem) }
     // 添加一个新的状态用于即时跟踪获得焦点的项目
-    var focusedItem by remember { mutableStateOf(DrawerItem.Home) }
+    var focusedItem by remember { mutableStateOf(currentDrawerItem) }
 
     var focusOnContent by remember { mutableStateOf(true) }
     var tabMoved by remember { mutableStateOf(true) }
 
+    LaunchedEffect(currentDrawerItem) {
+        selectedItem = currentDrawerItem
+        if (focusOnContent) {
+            focusedItem = currentDrawerItem
+        }
+    }
+
     LaunchedEffect(selectedItem) {
+        if (selectedItem == currentDrawerItem) {
+            tabMoved = true
+            return@LaunchedEffect
+        }
         tabMoved = false
         delay(200)
         onDrawerItemChanged(selectedItem)
@@ -117,7 +129,9 @@ fun DrawerContent(
             }
             .onFocusChanged {
                 if (it.hasFocus) {
-                    drawerItemFocusRequesters[focusedItem]?.requestFocus()
+                    focusedItem = currentDrawerItem
+                    selectedItem = currentDrawerItem
+                    drawerItemFocusRequesters[currentDrawerItem]?.requestFocus()
                 }
             }
             .onDelayFocusChanged(delayTime = 0) {
@@ -226,7 +240,9 @@ fun DrawerContent(
                             }
                             .onFocusChanged {
                                 if (it.hasFocus) {
-                                    selectedItem = item
+                                    if (!focusOnContent) {
+                                        selectedItem = item
+                                    }
                                 }
                             },
                         onClick = {
