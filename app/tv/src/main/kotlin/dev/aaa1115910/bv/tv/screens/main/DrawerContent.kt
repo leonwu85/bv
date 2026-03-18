@@ -1,6 +1,7 @@
 package dev.aaa1115910.bv.tv.screens.main
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -53,17 +55,18 @@ import coil.compose.AsyncImage
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.ifElse
+import dev.aaa1115910.bv.util.isDpadDown
 import dev.aaa1115910.bv.util.isDpadRight
+import dev.aaa1115910.bv.util.isDpadUp
 import dev.aaa1115910.bv.util.isKeyDown
 import dev.aaa1115910.bv.util.onDelayFocusChanged
 import kotlinx.coroutines.delay
 
 // 创建全局的FocusRequester映射表，方便外部使用
 val drawerItemFocusRequesters = mutableMapOf<DrawerItem, FocusRequester>().apply {
-    DrawerItem.entries.filter { it != DrawerItem.User && it != DrawerItem.Settings }
-        .forEach { item ->
-            this[item] = FocusRequester()
-        }
+    DrawerItem.entries.forEach { item ->
+        this[item] = FocusRequester()
+    }
 }
 
 // 用于记住每个内容页当前选中的Tab
@@ -114,10 +117,29 @@ fun DrawerContent(
         onDrawerItemfocused(focusedItem)
     }
 
+    // 动态菜单项列表，基于设置决定是否显示直播
+    val showLiveInSidebar by Prefs.showLiveInSidebarFlow.collectAsState(initial = false)
+    val menuItems = remember(showLiveInSidebar) {
+        buildList {
+            add(DrawerItem.Search)
+            add(DrawerItem.Home)
+            add(DrawerItem.UGC)
+            add(DrawerItem.PGC)
+            if (showLiveInSidebar) {
+                add(DrawerItem.Live)
+            }
+        }
+    }
+    val userFocusRequester = drawerItemFocusRequesters.getValue(DrawerItem.User)
+    val settingsFocusRequester = drawerItemFocusRequesters.getValue(DrawerItem.Settings)
+    val firstMenuFocusRequester = menuItems.firstOrNull()?.let(drawerItemFocusRequesters::get)
+    val lastMenuFocusRequester = menuItems.lastOrNull()?.let(drawerItemFocusRequesters::get)
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(4.dp)
+            .focusGroup()
             .onPreviewKeyEvent { keyEvent ->
                 if (keyEvent.isDpadRight()) {
                     if (keyEvent.isKeyDown()) {
@@ -127,13 +149,6 @@ fun DrawerContent(
                 }
                 false
             }
-            .onFocusChanged {
-                if (it.hasFocus) {
-                    focusedItem = currentDrawerItem
-                    selectedItem = currentDrawerItem
-                    drawerItemFocusRequesters[currentDrawerItem]?.requestFocus()
-                }
-            }
             .onDelayFocusChanged(delayTime = 0) {
                 focusOnContent = !it.hasFocus
             },
@@ -141,6 +156,17 @@ fun DrawerContent(
     ) {
         NavigationRailItem(
             modifier = Modifier
+                .focusRequester(userFocusRequester)
+                .focusProperties {
+                    down = firstMenuFocusRequester ?: settingsFocusRequester
+                }
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.isKeyDown() && keyEvent.isDpadDown()) {
+                        (firstMenuFocusRequester ?: settingsFocusRequester).requestFocus()
+                        return@onPreviewKeyEvent true
+                    }
+                    false
+                }
                 .onFocusChanged {
                     if (it.hasFocus && !focusOnContent) {
                         focusedItem = DrawerItem.User
@@ -210,20 +236,7 @@ fun DrawerContent(
                 )
             }
         )
-        // 动态菜单项列表，基于设置决定是否显示直播
-        val showLiveInSidebar by Prefs.showLiveInSidebarFlow.collectAsState(initial = false)
-        val menuItems = remember(showLiveInSidebar) {
-            buildList {
-                add(DrawerItem.Search)
-                add(DrawerItem.Home)
-                add(DrawerItem.UGC)
-                add(DrawerItem.PGC)
-                if (showLiveInSidebar) {
-                    add(DrawerItem.Live)
-                }
-            }
-        }
-        
+
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)
         ) {
@@ -232,6 +245,28 @@ fun DrawerContent(
                 NavigationRailItem(
                         modifier = Modifier
                             .focusRequester(drawerItemFocusRequesters[item]!!)
+                            .focusProperties {
+                                if (index == 0) {
+                                    up = userFocusRequester
+                                }
+                                if (index == menuItems.lastIndex) {
+                                    down = settingsFocusRequester
+                                }
+                            }
+                            .onPreviewKeyEvent { keyEvent ->
+                                if (!keyEvent.isKeyDown()) {
+                                    return@onPreviewKeyEvent false
+                                }
+                                if (index == 0 && keyEvent.isDpadUp()) {
+                                    userFocusRequester.requestFocus()
+                                    return@onPreviewKeyEvent true
+                                }
+                                if (index == menuItems.lastIndex && keyEvent.isDpadDown()) {
+                                    settingsFocusRequester.requestFocus()
+                                    return@onPreviewKeyEvent true
+                                }
+                                false
+                            }
                             // 立即更新focusedItem以反映视觉状态
                             .onFocusChanged {
                                 if (it.hasFocus && !focusOnContent) {
@@ -272,11 +307,23 @@ fun DrawerContent(
             }
         }
         NavigationRailItem(
-            modifier = Modifier.onFocusChanged {
-                if (it.hasFocus && !focusOnContent) {
-                    focusedItem = DrawerItem.Settings
+            modifier = Modifier
+                .focusRequester(settingsFocusRequester)
+                .focusProperties {
+                    up = lastMenuFocusRequester ?: userFocusRequester
                 }
-            },
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.isKeyDown() && keyEvent.isDpadUp()) {
+                        (lastMenuFocusRequester ?: userFocusRequester).requestFocus()
+                        return@onPreviewKeyEvent true
+                    }
+                    false
+                }
+                .onFocusChanged {
+                    if (it.hasFocus && !focusOnContent) {
+                        focusedItem = DrawerItem.Settings
+                    }
+                },
             onClick = {
                 onOpenSettings()
                 focusedItem = DrawerItem.Settings

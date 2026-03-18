@@ -518,7 +518,7 @@ fun VideoInfoScreen(
                     }
                 }.onFailure {
                     val errorMessage = it.localizedMessage
-                    val isVideoNotFound = when (Prefs.apiType) {
+                    val isVideoNotFound = when (VideoDetailViewModel.DETAIL_API_TYPE) {
                         ApiType.Web -> errorMessage == "啥都木有"
                         ApiType.App -> errorMessage == "访问权限不足"
                     }

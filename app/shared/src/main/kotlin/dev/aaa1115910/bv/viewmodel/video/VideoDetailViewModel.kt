@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.video.VideoDetail
 import dev.aaa1115910.biliapi.repositories.VideoDetailRepository
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
@@ -13,7 +14,6 @@ import dev.aaa1115910.bv.player.entity.VideoListPart
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisode
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisodeTitle
 import dev.aaa1115910.bv.repository.VideoInfoRepository
-import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.swapListWithMainContext
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -26,6 +26,10 @@ class VideoDetailViewModel(
     private val videoDetailRepository: VideoDetailRepository,
     private val videoInfoRepository: VideoInfoRepository
 ) : ViewModel() {
+    companion object {
+        val DETAIL_API_TYPE = ApiType.App
+    }
+
     private val logger = KotlinLogging.logger { }
     var state by mutableStateOf(VideoInfoState.Loading)
     var videoDetail: VideoDetail? by mutableStateOf(null)
@@ -33,12 +37,12 @@ class VideoDetailViewModel(
     var relatedVideos = mutableStateListOf<VideoCardData>()
 
     suspend fun loadDetail(aid: Long, fromPgcSeason: Boolean = false, withUserActions: Boolean = true) {
-        logger.fInfo { "Load detail: [avid=$aid, preferApiType=${Prefs.apiType.name}]" }
+        logger.fInfo { "Load detail: [avid=$aid, preferApiType=${DETAIL_API_TYPE.name}]" }
         state = VideoInfoState.Loading
         runCatching {
             val videoDetailData = videoDetailRepository.getVideoDetail(
                 aid = aid,
-                preferApiType = Prefs.apiType,
+                preferApiType = DETAIL_API_TYPE,
                 withUserActions = withUserActions
             )
             withContext(Dispatchers.Main) { videoDetail = videoDetailData }
@@ -55,11 +59,11 @@ class VideoDetailViewModel(
     }
 
     suspend fun loadDetailOnlyUpdateHistory(aid: Long) {
-        logger.fInfo { "Load detail only update history: [avid=$aid, preferApiType=${Prefs.apiType.name}]" }
+        logger.fInfo { "Load detail only update history: [avid=$aid, preferApiType=${DETAIL_API_TYPE.name}]" }
         runCatching {
             val historyData = videoDetailRepository.getVideoDetail(
                 aid = aid,
-                preferApiType = Prefs.apiType,
+                preferApiType = DETAIL_API_TYPE,
                 withUserActions = false
             ).history
             withContext(Dispatchers.Main) { videoDetail?.history = historyData }
