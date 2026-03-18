@@ -30,6 +30,7 @@ import dev.aaa1115910.bv.entity.DynamicPageStyle
 import dev.aaa1115910.bv.entity.DynamicTabType
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
+import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -497,6 +498,18 @@ object Prefs {
         set(value) = runBlocking {
             dsm.editPreference(PrefKeys.prefDynamicDefaultTabKey, value.value)
         }
+
+    var enableSponsorBlock: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableSponsorBlockRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableSponsorBlockKey, value) }
+
+    var sponsorBlockSkipMode: SponsorBlockSkipMode
+        get() = runBlocking {
+            SponsorBlockSkipMode.fromValue(dsm.getPreferenceFlow(PrefKeys.prefSponsorBlockSkipModeRequest).first())
+        }
+        set(value) = runBlocking {
+            dsm.editPreference(PrefKeys.prefSponsorBlockSkipModeKey, value.value)
+        }
 }
 
 object PrefKeys {
@@ -574,6 +587,8 @@ object PrefKeys {
     val prefDefaultLiveDanmakuFilterLevelKey = intPreferencesKey("default_live_danmaku_filter_level")
     val prefDynamicPageStyleKey = intPreferencesKey("dynamic_page_style")
     val prefDynamicDefaultTabKey = intPreferencesKey("dynamic_default_tab")
+    val prefEnableSponsorBlockKey = booleanPreferencesKey("enable_sponsor_block")
+    val prefSponsorBlockSkipModeKey = intPreferencesKey("sponsor_block_skip_mode")
 
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
@@ -667,4 +682,6 @@ object PrefKeys {
     val prefDefaultLiveDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultLiveDanmakuFilterLevelKey, 0)
     val prefDynamicPageStyleRequest = PreferenceRequest(prefDynamicPageStyleKey, DynamicPageStyle.New.value)
     val prefDynamicDefaultTabRequest = PreferenceRequest(prefDynamicDefaultTabKey, DynamicTabType.All.value)
+    val prefEnableSponsorBlockRequest = PreferenceRequest(prefEnableSponsorBlockKey, false)
+    val prefSponsorBlockSkipModeRequest = PreferenceRequest(prefSponsorBlockSkipModeKey, SponsorBlockSkipMode.Manual.value)
 }

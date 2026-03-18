@@ -220,6 +220,11 @@
     <string name="settings_item_storage">存储管理</string>
     <string name="settings_item_ui">界面设置</string>
     <string name="settings_item_player">播放设置</string>
+    <string name="settings_item_sponsor_block">广告助手</string>
+    <string name="settings_sponsor_block_skip_mode_title">跳过方式</string>
+    <string name="settings_sponsor_block_skip_mode_text">选择如何跳过广告片段</string>
+    <string name="settings_sponsor_block_skip_mode_manual">手动</string>
+    <string name="settings_sponsor_block_skip_mode_auto">自动</string>
     <string name="settings_network_enable_proxy_text">使用自定义代理服务器获取部分视频播放地址</string>
     <string name="settings_network_enable_proxy_title">启用代理</string>
     <string name="settings_network_prefer_official_cdn_text">优先使用获取到的官方 CDN</string>

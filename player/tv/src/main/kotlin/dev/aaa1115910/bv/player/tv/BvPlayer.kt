@@ -36,6 +36,7 @@ import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskFrame
 import dev.aaa1115910.biliapi.http.entity.video.ClipInfo
 import dev.aaa1115910.biliapi.http.entity.video.ClipType
 import dev.aaa1115910.biliapi.entity.video.Subtitle
+import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.BvVideoPlayer
 import dev.aaa1115910.bv.player.impl.exo.ExoMediaPlayer
@@ -65,6 +66,7 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerDebugInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekState
 import dev.aaa1115910.bv.player.entity.VideoPlayerStateData
 import dev.aaa1115910.bv.player.entity.DefaultStartPosition
+import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.player.tv.controller.SkipEdTip
 import dev.aaa1115910.bv.player.tv.controller.SkipOpTip
 import dev.aaa1115910.bv.player.tv.controller.VideoPlayerController
@@ -126,6 +128,17 @@ fun BvPlayer(
     useTripleLikeOnLongPress: Boolean = false,
     isLive: Boolean = false,
     onLiveDanmakuPlayerReady: ((com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer) -> Unit)? = null,
+
+    // SponsorBlock 相关参数
+    enableSponsorBlock: Boolean = false,
+    sponsorBlockSkipMode: SponsorBlockSkipMode = SponsorBlockSkipMode.Manual,
+    sponsorSegments: List<dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment> = emptyList(),
+    showSponsorBlockTip: Boolean = false,
+    currentSponsorSegment: dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment? = null,
+    onShowSponsorBlockTip: (dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment) -> Unit = {},
+    onSkipSponsorSegment: (dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment?) -> Unit = {},
+    onDismissSponsorBlockTip: () -> Unit = {},
+
     userActionContent: @Composable (
         modifier: Modifier,
         focusMap: Map<String, FocusRequester>,
@@ -223,16 +236,28 @@ fun BvPlayer(
     var skipOpTipText by remember { mutableStateOf("即将跳过片头") }
     var skipEdTipText by remember { mutableStateOf("即将跳过片尾") }
     var processedClipIndices by remember { mutableStateOf(setOf<Int>()) }
+    var processedSponsorSegments by remember { mutableStateOf(setOf<SponsorSegment>()) }
 
     // 使用 rememberUpdatedState 来跟踪 clipInfoList 和 skipPgcIntroOutro 的最新值
     // 这样可以在非 Composable 上下文（定时器回调）中读取到最新值
     val currentClipInfoList by rememberUpdatedState(videoPlayerConfigData.clipInfoList)
     val currentSkipPgcIntroOutro by rememberUpdatedState(videoPlayerConfigData.skipPgcIntroOutro)
+    val currentEnableSponsorBlock by rememberUpdatedState(enableSponsorBlock)
+    val currentSponsorBlockSkipMode by rememberUpdatedState(sponsorBlockSkipMode)
+    val currentSponsorSegments by rememberUpdatedState(sponsorSegments)
+    val currentShowSponsorBlockTip by rememberUpdatedState(showSponsorBlockTip)
+    val currentSponsorSegment by rememberUpdatedState(currentSponsorSegment)
+    val currentOnShowSponsorBlockTip by rememberUpdatedState(onShowSponsorBlockTip)
+    val currentOnSkipSponsorSegment by rememberUpdatedState(onSkipSponsorSegment)
 
     // 当 clipInfoList 变化时，重置已处理的 clip 索引
     // 这确保了切换到新视频时，跳过片头/片尾功能能够正常工作
     LaunchedEffect(videoPlayerConfigData.clipInfoList) {
         processedClipIndices = emptySet()
+    }
+
+    LaunchedEffect(sponsorSegments) {
+        processedSponsorSegments = emptySet()
     }
 
     // 跳过片头片尾检测任务
@@ -643,6 +668,27 @@ fun BvPlayer(
                     checkSkipTask(pos)
                 }
 
+                // SponsorBlock 片段检测
+                if (currentEnableSponsorBlock && currentSponsorSegments.isNotEmpty() && isPlaying && !currentShowSponsorBlockTip) {
+                    val thresholdMs = 0  // 提前 0 秒开始提示
+                    val segment = currentSponsorSegments.firstOrNull {
+                        pos >= (it.startTime + thresholdMs) && pos < it.endTime
+                    }
+                    if (segment != null && segment !in processedSponsorSegments) {
+                        processedSponsorSegments = processedSponsorSegments + segment
+                        logger.info {
+                            "SponsorBlock segment matched at ${pos}ms, range=${segment.startTime}-${segment.endTime}, mode=$currentSponsorBlockSkipMode, firstHit=true"
+                        }
+                        if (currentSponsorBlockSkipMode == SponsorBlockSkipMode.Auto) {
+                            // 自动
+                            currentOnSkipSponsorSegment(segment)
+                        } else {
+                            // 手动
+                            currentOnShowSponsorBlockTip(segment)
+                        }
+                    }
+                }
+
                 // 蒙版更新已移至独立定时器
 
                 if (!videoPlayerConfigData.incognitoMode && isPlaying) {
@@ -1029,7 +1075,18 @@ fun BvPlayer(
             onLoadNextVideo = onLoadNextVideo,
             onShowComment = onShowComment,
             onTripleLike = onTripleLike,
-            useTripleLikeOnLongPress = useTripleLikeOnLongPress
+            useTripleLikeOnLongPress = useTripleLikeOnLongPress,
+
+            // SponsorBlock 相关参数
+            enableSponsorBlock = enableSponsorBlock,
+            sponsorSegments = sponsorSegments,
+            showSponsorBlockTip = showSponsorBlockTip,
+            currentSponsorSegment = currentSponsorSegment,
+            onSkipSponsorSegment = {
+                logger.info { "Skip sponsor segment" }
+                onSkipSponsorSegment(currentSponsorSegment)
+            },
+            onDismissSponsorBlockTip = onDismissSponsorBlockTip
         ) {
             LaunchedEffect(Unit) {
                 videoPlayer.setOptions()

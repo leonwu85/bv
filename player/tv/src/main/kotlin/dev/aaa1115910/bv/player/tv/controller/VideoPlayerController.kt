@@ -121,6 +121,15 @@ fun VideoPlayerController(
     onShowComment: () -> Unit = {},
     onTripleLike: () -> Unit = {},
     useTripleLikeOnLongPress: Boolean = false,
+
+    // SponsorBlock 相关参数
+    enableSponsorBlock: Boolean = false,
+    sponsorSegments: List<dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment> = emptyList(),
+    showSponsorBlockTip: Boolean = false,
+    currentSponsorSegment: dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment? = null,
+    onSkipSponsorSegment: () -> Unit = {},
+    onDismissSponsorBlockTip: () -> Unit = {},
+
     content: @Composable BoxScope.() -> Unit
 ) {
     val context = LocalContext.current
@@ -255,6 +264,13 @@ fun VideoPlayerController(
 
                 when (it.key) {
                     Key.DirectionCenter, Key.Enter, Key.Spacebar -> {
+                        if (showSponsorBlockTip && enableSponsorBlock) {
+                            if (it.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
+                            logger.fInfo { "[${it.key}] skip sponsor segment" }
+                            onSkipSponsorSegment()
+                            return@onPreviewKeyEvent true
+                        }
+
                         @Suppress("KotlinConstantConditions")
                         if (
                             videoPlayerConfigData.enableStartPositionSwitch &&
@@ -479,6 +495,12 @@ fun VideoPlayerController(
 //        }
         BottomSubtitle()
         SkipTips()
+        SponsorBlockTip(
+            show = showSponsorBlockTip && !showClickableControllers,
+            segment = currentSponsorSegment,
+            onSkip = onSkipSponsorSegment,
+            onDismiss = onDismissSponsorBlockTip
+        )
         PlayStateTips(
             canShowPause = !showInfo && !showSeekController
         )
