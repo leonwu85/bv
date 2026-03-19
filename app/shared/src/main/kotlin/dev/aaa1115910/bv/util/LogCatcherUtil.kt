@@ -27,13 +27,21 @@ object LogCatcherUtil {
         val originHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, exception ->
             logger.error(exception) { "======== UncaughtException ========" }
-            logLogcat()
+            writeLogFile(manual = false, thread = thread, exception = exception)
             originHandler?.uncaughtException(thread, exception)
         }
         clearOldLogFiles()
     }
 
     fun logLogcat(manual: Boolean = false) {
+        writeLogFile(manual = manual)
+    }
+
+    private fun writeLogFile(
+        manual: Boolean,
+        thread: Thread? = null,
+        exception: Throwable? = null
+    ) {
         runCatching {
             val process = Runtime.getRuntime().exec("logcat -t 10000 -v threadtime")
             val reader = BufferedReader(InputStreamReader(process.inputStream))
@@ -48,6 +56,9 @@ object LogCatcherUtil {
             with(logFile.writer()) {
                 writeDeviceInfo()
                 writeAppInfo()
+                if (thread != null && exception != null) {
+                    writeExceptionInfo(thread, exception)
+                }
                 appendLine("======== Logs ========")
                 var line: String?
                 while (reader.readLine().also { line = it } != null) {
@@ -60,6 +71,15 @@ object LogCatcherUtil {
         }.onFailure {
             logger.error(it) { "write log to file failed" }
         }
+    }
+
+    private fun OutputStreamWriter.writeExceptionInfo(thread: Thread, exception: Throwable) {
+        appendLine("======== Exception Info ========")
+        appendLine("Thread: ${thread.name} (${thread.id})")
+        appendLine("Exception Type: ${exception::class.qualifiedName ?: exception.javaClass.name}")
+        appendLine("Message: ${exception.message ?: "<no message>"}")
+        appendLine("======== Stack Trace ========")
+        appendLine(exception.stackTraceToString())
     }
 
     private fun OutputStreamWriter.writeDeviceInfo() {
