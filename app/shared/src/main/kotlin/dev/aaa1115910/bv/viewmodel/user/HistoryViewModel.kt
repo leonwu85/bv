@@ -81,6 +81,7 @@ class HistoryViewModel(
                         epId = historyItem.epid,
                         seasonId = historyItem.seasonId ?: if (isPgc) historyItem.kid.toInt() else null,
                         pubTime = historyItem.viewAt.toSmartDate() + context.getString(R.string.view_at),
+                        historyViewAt = historyItem.viewAt,
                         historyBusiness = when (historyItem.type) {
                             HistoryItemType.Archive -> "archive"
                             HistoryItemType.Pgc -> "pgc"
@@ -130,14 +131,14 @@ class HistoryViewModel(
     fun deleteHistory(history: VideoCardData, targetIndex: Int) {
         val business = history.historyBusiness ?: return
         val kid = history.historyKid ?: return
+        val viewAt = history.historyViewAt
 
         viewModelScope.launch(Dispatchers.IO) {
             deleting = true
             runCatching {
                 val success = historyRepository.deleteHistory(
                     business = business,
-                    kid = kid,
-                    preferApiType = Prefs.apiType
+                    kid = kid
                 )
                 if (success) {
                     pendingFocusIndex = targetIndex
@@ -146,9 +147,12 @@ class HistoryViewModel(
                     }
 
                     withContext(Dispatchers.Main) {
-                        histories.removeAll {
-                            it.historyBusiness == business && it.historyKid == kid
+                        val removeIndex = histories.indexOfFirst {
+                            it.historyBusiness == business &&
+                                it.historyKid == kid &&
+                                (viewAt == null || it.historyViewAt == viewAt)
                         }
+                        if (removeIndex >= 0) histories.removeAt(removeIndex)
                     }
 
                     withContext(Dispatchers.Main) {

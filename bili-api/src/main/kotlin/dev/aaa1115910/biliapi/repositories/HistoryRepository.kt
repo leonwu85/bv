@@ -46,10 +46,8 @@ class HistoryRepository(
 
     suspend fun deleteHistory(
         business: String,
-        kid: Long,
-        preferApiType: ApiType = ApiType.Web
+        kid: Long
     ): Boolean {
-        if (preferApiType != ApiType.Web) return false
         return runCatching {
             BiliHttpApi.deleteHistory(
                 kid = "${business}_$kid",

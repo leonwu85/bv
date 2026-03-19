@@ -207,7 +207,9 @@ fun HistoryScreen(
                 ) {
                     itemsIndexed(
                         items = historyViewModel.histories,
-                        key = { _, item -> "${item.historyBusiness}_${item.historyKid ?: item.avid}" }
+                        key = { index, item ->
+                            "${item.historyBusiness}_${item.historyKid ?: item.avid}_${item.historyViewAt ?: index.toLong()}"
+                        }
                     ) { index, history ->
                         Box(
                             contentAlignment = Alignment.Center
