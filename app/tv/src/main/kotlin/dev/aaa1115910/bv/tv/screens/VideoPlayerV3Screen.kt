@@ -502,7 +502,6 @@ fun VideoPlayerV3Screen(
                             playerViewModel.playQuality()
                             delay(300)
                             playerViewModel.videoPlayer?.seekTo(time)
-                            playerViewModel.danmakuPlayer?.seekTo(time)
                             playerViewModel.danmakuPlayer?.pause()
                             playerViewModel.videoPlayer?.start()
                         }

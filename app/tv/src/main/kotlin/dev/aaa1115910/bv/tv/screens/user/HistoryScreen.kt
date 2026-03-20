@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -84,8 +85,11 @@ fun HistoryScreen(
     val deleteFocusRequester = remember { FocusRequester() }
     val contentFocusAnchorRequester = remember { FocusRequester() }
     val lazyGridState = rememberLazyGridState()
-    val focusRequesters = remember(historyViewModel.histories.size) {
-        List(historyViewModel.histories.size) { FocusRequester() }
+    val focusRequesters = remember { mutableMapOf<String, FocusRequester>() }
+    val historyItemKey: (VideoCardData) -> String = remember {
+        { item ->
+            "${item.historyBusiness}_${item.historyKid ?: item.avid}_${item.historyViewAt ?: 0L}_${item.avid}"
+        }
     }
     var pendingRestoreFocusIndex by remember { mutableIntStateOf(-1) }
 
@@ -120,8 +124,7 @@ fun HistoryScreen(
     LaunchedEffect(
         pendingRestoreFocusIndex,
         showDeleteConfirmDialog,
-        historyViewModel.histories.size,
-        focusRequesters.size
+        historyViewModel.histories.size
     ) {
         if (pendingRestoreFocusIndex == -1 || showDeleteConfirmDialog) return@LaunchedEffect
         if (historyViewModel.histories.isEmpty()) {
@@ -133,11 +136,15 @@ fun HistoryScreen(
             minimumValue = 0,
             maximumValue = historyViewModel.histories.size - 1
         )
+        val targetHistory = historyViewModel.histories.getOrNull(targetIndex) ?: run {
+            pendingRestoreFocusIndex = -1
+            return@LaunchedEffect
+        }
         currentIndex = targetIndex
         lazyGridState.scrollToItem(targetIndex)
         withFrameNanos { }
         withFrameNanos { }
-        focusRequesters.getOrNull(targetIndex)?.requestFocus(scope)
+        focusRequesters[historyItemKey(targetHistory)]?.requestFocus(scope)
         pendingRestoreFocusIndex = -1
     }
 
@@ -207,15 +214,23 @@ fun HistoryScreen(
                 ) {
                     itemsIndexed(
                         items = historyViewModel.histories,
-                        key = { index, item ->
-                            "${item.historyBusiness}_${item.historyKid ?: item.avid}_${item.historyViewAt ?: index.toLong()}"
-                        }
+                        key = { _, item -> historyItemKey(item) }
                     ) { index, history ->
+                        val itemKey = historyItemKey(history)
+                        val itemFocusRequester = remember(itemKey) { FocusRequester() }
+                        DisposableEffect(itemKey, itemFocusRequester) {
+                            focusRequesters[itemKey] = itemFocusRequester
+                            onDispose {
+                                if (focusRequesters[itemKey] === itemFocusRequester) {
+                                    focusRequesters.remove(itemKey)
+                                }
+                            }
+                        }
                         Box(
                             contentAlignment = Alignment.Center
                         ) {
                             SmallVideoCard(
-                                modifier = Modifier.focusRequester(focusRequesters[index]),
+                                modifier = Modifier.focusRequester(itemFocusRequester),
                                 data = history,
                                 onClick = {
                                     if (history.jumpToSeason) {

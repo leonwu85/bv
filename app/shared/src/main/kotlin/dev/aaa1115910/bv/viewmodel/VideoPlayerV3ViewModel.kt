@@ -734,7 +734,6 @@ class VideoPlayerV3ViewModel(
             currentSponsorSegment = segment
             val targetPosition = segment.endTime
             videoPlayer?.seekTo(targetPosition)
-            danmakuPlayer?.seekTo(targetPosition)
             viewModelScope.launch(Dispatchers.Main) {
                 addLogs("跳过片段: ${segment.category}")
             }

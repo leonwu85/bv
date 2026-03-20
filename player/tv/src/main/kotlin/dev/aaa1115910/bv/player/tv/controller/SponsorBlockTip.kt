@@ -35,13 +35,13 @@ fun SponsorBlockTip(
     onSkip: (() -> Unit)? = null,
     onDismiss: (() -> Unit)? = null
 ) {
-    var remainingTime by remember { mutableIntStateOf(3) }
+    var remainingTime by remember { mutableIntStateOf(10) }
 
-    // 3秒倒计时
+    // 10秒倒计时
     LaunchedEffect(show) {
         if (show) {
-            remainingTime = 3
-            repeat(3) {
+            remainingTime = 10
+            repeat(10) {
                 delay(1000)
                 remainingTime--
             }

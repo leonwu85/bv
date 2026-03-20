@@ -198,6 +198,10 @@ fun BvPlayer(
     var pendingDanmakuPosition by remember { mutableLongStateOf(-1L) }
     
     var danmakuNeedsResume by remember { mutableStateOf(false) }
+
+    var pendingSeekDanmakuPosition by remember { mutableLongStateOf(-1L) }
+
+    var pendingSeekDanmakuShouldPlay by remember { mutableStateOf(false) }
     
     var lastDanmakuSeekTime by remember { mutableLongStateOf(0L) }
     var defaultAspectRatio by remember { mutableFloatStateOf(16 / 9f) }
@@ -260,6 +264,18 @@ fun BvPlayer(
         processedSponsorSegments = emptySet()
     }
 
+    val syncProcessedSponsorSegmentsForPosition: (Long) -> Unit = { targetPosition ->
+        processedSponsorSegments = currentSponsorSegments
+            .filterTo(mutableSetOf()) { it.endTime <= targetPosition }
+    }
+
+    val scheduleDanmakuSeekSync: (Long, Boolean) -> Unit = { targetPosition, shouldPlayAfterSeek ->
+        pendingSeekDanmakuPosition = targetPosition
+        pendingSeekDanmakuShouldPlay = shouldPlayAfterSeek
+        mDanmakuPlayer?.pause()
+        syncProcessedSponsorSegmentsForPosition(targetPosition)
+    }
+
     // 跳过片头片尾检测任务
     val checkSkipTask: (Long) -> Unit = { positionMs ->
         val currentPosition = (positionMs / 1000).toInt()  // 毫秒转秒
@@ -279,8 +295,8 @@ fun BvPlayer(
                                 showSkipOpTip = true
                                 // 显示提示后短暂延迟再跳转
                                 delay(1500)
+                                scheduleDanmakuSeekSync(clipInfo.end * 1000L, true)
                                 videoPlayer.seekTo(clipInfo.end * 1000L)
-                                mDanmakuPlayer?.seekTo(clipInfo.end * 1000L)
                                 showSkipOpTip = false
                             }
                             processedClipIndices = processedClipIndices + index
@@ -294,8 +310,8 @@ fun BvPlayer(
                                 skipEdTipText = clipInfo.toastText.ifBlank { "即将跳过片尾" }
                                 showSkipEdTip = true
                                 delay(1500)
+                                scheduleDanmakuSeekSync(clipInfo.end * 1000L, true)
                                 videoPlayer.seekTo(clipInfo.end * 1000L)
-                                mDanmakuPlayer?.seekTo(clipInfo.end * 1000L)
                                 showSkipEdTip = false
                             }
                             processedClipIndices = processedClipIndices + index
@@ -536,6 +552,13 @@ fun BvPlayer(
                 isBuffering = false
                 val currentTime = System.currentTimeMillis()
 
+                if (pendingSeekDanmakuPosition >= 0) {
+                    logger.info {
+                        "onPlay: defer danmaku sync until onSeeked, pending=${pendingSeekDanmakuPosition.formatHourMinSec()}"
+                    }
+                    return@launch
+                }
+
                 if (danmakuNeedsResume && pendingDanmakuPosition >= 0) {
                     val pos = pendingDanmakuPosition
                     danmakuNeedsResume = false
@@ -566,6 +589,9 @@ fun BvPlayer(
 
         override fun onPause() {
             logger.info { "onPause" }
+            if (pendingSeekDanmakuPosition >= 0) {
+                pendingSeekDanmakuShouldPlay = false
+            }
             mDanmakuPlayer?.pause()
             scope.launch(Dispatchers.Main) {
                 isPlaying = false
@@ -593,8 +619,8 @@ fun BvPlayer(
             if (videoPlayerConfigData.isLoop) {
                 logger.info { "onEnd: replay" }
                 scope.launch(Dispatchers.Main) {
+                    scheduleDanmakuSeekSync(0, true)
                     videoPlayer.seekTo(0)
-                    mDanmakuPlayer?.seekTo(0)
                     mDanmakuPlayer?.pause()
                     videoPlayer.start()
                 }
@@ -620,26 +646,32 @@ fun BvPlayer(
         }
 
         override fun onSeekBack(seekBackIncrementMs: Long) {
-            mDanmakuPlayer?.seekTo(seekState.position)
-            mDanmakuPlayer?.pause()
+            scheduleDanmakuSeekSync(seekState.position, isPlaying)
         }
 
         override fun onSeekForward(seekForwardIncrementMs: Long) {
-            mDanmakuPlayer?.seekTo(seekState.position)
-            mDanmakuPlayer?.pause()
+            scheduleDanmakuSeekSync(seekState.position, isPlaying)
         }
 
         override fun onSeeked(position: Long) {
             logger.info { "onSeeked: ${position.formatHourMinSec()}" }
-            // VLC seek操作完成后，同步弹幕位置
-            mDanmakuPlayer?.seekTo(position)
-            // 确保弹幕状态与视频播放状态一致
-            if (isPlaying) {
+            val syncPosition = pendingSeekDanmakuPosition.takeIf { it >= 0 } ?: position
+            val shouldPlayAfterSeek = if (pendingSeekDanmakuPosition >= 0) {
+                pendingSeekDanmakuShouldPlay
+            } else {
+                isPlaying
+            }
+            pendingSeekDanmakuPosition = -1L
+            pendingSeekDanmakuShouldPlay = false
+
+            mDanmakuPlayer?.seekTo(syncPosition)
+            if (shouldPlayAfterSeek) {
                 mDanmakuPlayer?.start()
             } else {
                 mDanmakuPlayer?.pause()
             }
-            lastHeartbeatPosition = position
+            lastDanmakuSeekTime = System.currentTimeMillis()
+            lastHeartbeatPosition = syncPosition
         }
 
         override fun onVideoSizeChanged(width: Int, height: Int) {
@@ -876,14 +908,8 @@ fun BvPlayer(
                 onExit()
             },
             onGoTime = {
+                scheduleDanmakuSeekSync(it, isPlaying)
                 videoPlayer.seekTo(it)
-                mDanmakuPlayer?.seekTo(it)
-                // 根据视频播放状态决定弹幕状态
-                if (isPlaying) {
-                    mDanmakuPlayer?.start()
-                } else {
-                    mDanmakuPlayer?.pause()
-                }
             },
             onBackToHistory = {
                 val time = if (videoPlayerConfigData.defaultStartPosition == DefaultStartPosition.History) {
@@ -892,14 +918,8 @@ fun BvPlayer(
                     videoPlayerHistoryData.lastPlayed.toLong()
                 }
                 logger.fInfo { "Back to history/beginning: ${time.formatHourMinSec()}" }
+                scheduleDanmakuSeekSync(time, isPlaying)
                 videoPlayer.seekTo(time)
-                mDanmakuPlayer?.seekTo(time)
-                // 根据视频播放状态决定弹幕状态
-                if (isPlaying) {
-                    mDanmakuPlayer?.start()
-                } else {
-                    mDanmakuPlayer?.pause()
-                }
                 //playerViewModel.lastPlayed = 0
                 onClearBackToHistoryData()
                 showBackToHistory = false

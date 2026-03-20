@@ -168,6 +168,8 @@ class VlcMediaPlayer(
 
                         logger.debug { "Seek complete: at ${seekTargetPosition}ms, shouldResume=$shouldResumeAfterSeek" }
 
+                        mPlayerEventListener?.onSeeked(seekTargetPosition)
+
                         // 恢复播放（无论是初始 seek 还是手动 seek）
                         mediaPlayer?.play()
                         isSeeking = false

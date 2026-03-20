@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -86,9 +87,7 @@ fun ToViewScreen(
     val contentFocusAnchorRequester = remember { FocusRequester() }
 
     val lazyGridState = rememberLazyGridState()
-    val focusRequesters = remember(ToViewViewModel.histories.size) {
-        List(ToViewViewModel.histories.size) { FocusRequester() }
-    }
+    val focusRequesters = remember { mutableMapOf<Long, FocusRequester>() }
     var pendingRestoreFocusIndex by remember { mutableIntStateOf(-1) }
 
     LaunchedEffect(Unit) {
@@ -123,8 +122,7 @@ fun ToViewScreen(
     LaunchedEffect(
         pendingRestoreFocusIndex,
         showDeleteConfirmDialog,
-        ToViewViewModel.histories.size,
-        focusRequesters.size
+        ToViewViewModel.histories.size
     ) {
         if (pendingRestoreFocusIndex == -1 || showDeleteConfirmDialog) return@LaunchedEffect
         if (ToViewViewModel.histories.isEmpty()) {
@@ -136,11 +134,15 @@ fun ToViewScreen(
             minimumValue = 0,
             maximumValue = ToViewViewModel.histories.size - 1
         )
+        val targetHistory = ToViewViewModel.histories.getOrNull(targetIndex) ?: run {
+            pendingRestoreFocusIndex = -1
+            return@LaunchedEffect
+        }
         currentIndex = targetIndex
         lazyGridState.scrollToItem(targetIndex)
         withFrameNanos { }
         withFrameNanos { }
-        focusRequesters.getOrNull(targetIndex)?.requestFocus(scope)
+        focusRequesters[targetHistory.avid]?.requestFocus(scope)
         pendingRestoreFocusIndex = -1
     }
 
@@ -212,8 +214,17 @@ fun ToViewScreen(
                         items = ToViewViewModel.histories,
                         key = { _, item -> item.avid }
                     ) { index, item ->
+                        val itemFocusRequester = remember(item.avid) { FocusRequester() }
+                        DisposableEffect(item.avid, itemFocusRequester) {
+                            focusRequesters[item.avid] = itemFocusRequester
+                            onDispose {
+                                if (focusRequesters[item.avid] === itemFocusRequester) {
+                                    focusRequesters.remove(item.avid)
+                                }
+                            }
+                        }
                         SmallVideoCard(
-                            modifier = Modifier.focusRequester(focusRequesters[index]),
+                            modifier = Modifier.focusRequester(itemFocusRequester),
                             data = item,
                             onClick = {
                                 VideoInfoActivity.actionStart(

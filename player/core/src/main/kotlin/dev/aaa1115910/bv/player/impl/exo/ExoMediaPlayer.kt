@@ -13,6 +13,8 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM
 import androidx.media3.common.Player.Commands
+import androidx.media3.common.Player.DISCONTINUITY_REASON_SEEK
+import androidx.media3.common.Player.PositionInfo
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -305,6 +307,18 @@ class ExoMediaPlayer(
 
     override fun onSeekForwardIncrementChanged(seekForwardIncrementMs: Long) {
         mPlayerEventListener?.onSeekForward(seekForwardIncrementMs)
+    }
+
+    override fun onPositionDiscontinuity(
+        oldPosition: PositionInfo,
+        newPosition: PositionInfo,
+        reason: Int
+    ) {
+        if (reason == DISCONTINUITY_REASON_SEEK) {
+            val position = newPosition.positionMs.coerceAtLeast(0L)
+            mPlayerEventListener?.onSeeked(position)
+            dispatchProgress()
+        }
     }
 
     override val debugInfo: String
