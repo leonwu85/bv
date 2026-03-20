@@ -210,10 +210,16 @@ fun VideoInfoScreen(
     var proxyArea by remember { mutableStateOf(ProxyArea.MainLand) }
     var intentAid by remember { mutableLongStateOf(0L) }
 
-    val containsVerticalScreenVideo by remember {
+    val currentDetailTargetIsVertical by remember(
+        videoDetailViewModel.videoDetail,
+        lastPlayedCid,
+        intentAid
+    ) {
         derivedStateOf {
-            videoDetailViewModel.videoDetail?.pages?.any { it.dimension.isVertical } ?: false
-                    || videoDetailViewModel.videoDetail?.ugcSeason?.sections?.any { section -> section.episodes.any { it.dimension!!.isVertical } } ?: false
+            videoDetailViewModel.videoDetail?.isCurrentDetailTargetVertical(
+                lastPlayedCid = lastPlayedCid,
+                intentAid = intentAid
+            ) ?: false
         }
     }
 
@@ -694,7 +700,7 @@ fun VideoInfoScreen(
                         Column(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            if (containsVerticalScreenVideo) {
+                            if (currentDetailTargetIsVertical) {
                                 ArgueTip(text = stringResource(R.string.video_info_argue_tip_vertical_screen))
                             }
                             if (videoDetailViewModel.videoDetail?.argueTip != null) {
@@ -1060,6 +1066,43 @@ fun VideoInfoScreen(
             commentButtonFocusRequester.requestFocus()
         }
     }
+}
+
+private fun VideoDetail.isCurrentDetailTargetVertical(
+    lastPlayedCid: Long,
+    intentAid: Long,
+): Boolean {
+    val episodes = ugcSeason?.sections?.flatMap { it.episodes }.orEmpty()
+    if (episodes.isNotEmpty()) {
+        if (lastPlayedCid != 0L) {
+            episodes.firstNotNullOfOrNull { episode ->
+                episode.verticalStateForCid(lastPlayedCid)
+            }?.let { return it }
+        }
+
+        if (intentAid != 0L) {
+            episodes.firstOrNull { it.aid == intentAid }?.dimension?.isVertical?.let { return it }
+        }
+
+        return false
+    }
+
+    return when {
+        lastPlayedCid != 0L -> {
+            pages.firstOrNull { it.cid == lastPlayedCid }?.dimension?.isVertical
+                ?: pages.firstOrNull()?.dimension?.isVertical
+        }
+
+        else -> pages.firstOrNull()?.dimension?.isVertical
+    } == true
+}
+
+private fun Episode.verticalStateForCid(cid: Long): Boolean? {
+    pages.firstOrNull { it.cid == cid }?.dimension?.isVertical?.let { return it }
+    if (this.cid == cid) {
+        return dimension?.isVertical
+    }
+    return null
 }
 
 @Composable
