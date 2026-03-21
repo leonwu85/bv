@@ -175,9 +175,11 @@ data class VideoDetail(
         companion object {
             fun fromPlayerIcon(playerIcon: dev.aaa1115910.biliapi.http.entity.video.VideoMoreInfo.PlayerIcon?) =
                 playerIcon?.let {
+                    val idle = playerIcon.url2 ?: return@let null
+                    val moving = playerIcon.url1 ?: return@let null
                     PlayerIcon(
-                        idle = playerIcon.url2,
-                        moving = playerIcon.url1
+                        idle = idle,
+                        moving = moving
                     )
                 }
 
