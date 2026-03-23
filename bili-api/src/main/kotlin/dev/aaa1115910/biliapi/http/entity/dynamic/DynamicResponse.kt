@@ -288,7 +288,7 @@ data class DynamicItem(
                     data class Pic(
                         val height: Int,
                         val width: Int,
-                        val size: Float,
+                        val size: Float? = null,
                         val url: String
                     )
                 }
@@ -302,7 +302,7 @@ data class DynamicItem(
                     data class Pic(
                         val height: Int,
                         val width: Int,
-                        val size: Float,
+                        val size: Float? = null,
                         val src: String,
                         val tags: List<String>
                     )
