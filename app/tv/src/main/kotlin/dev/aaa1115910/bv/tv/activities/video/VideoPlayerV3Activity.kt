@@ -146,11 +146,19 @@ class VideoPlayerV3Activity : ComponentActivity() {
 
     private val playerViewModel: VideoPlayerV3ViewModel by viewModel()
 
+    private fun resetSessionPlaySpeedToDefault() {
+        val defaultPlaySpeed = Prefs.defaultPlaySpeed
+        Prefs.currentPlaySpeed = defaultPlaySpeed
+        playerViewModel.currentPlaySpeed = defaultPlaySpeed
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         // 设置当前实例为弱引用
         currentInstance = WeakReference(this)
+
+        resetSessionPlaySpeedToDefault()
 
         val isLive = intent.getBooleanExtra("isLive", false)
         initVideoPlayer(isLive = isLive)

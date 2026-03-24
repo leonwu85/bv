@@ -351,7 +351,8 @@ fun ControllerVideoInfoBottom(
                 id = "speed",
                 text = formatSpeed(speed),
                 onClick = { showSpeedDialog = true },
-                width = 46
+                width = 46,
+                visible = !isLive
             ),
             ControlButton(
                 id = "upSpace",

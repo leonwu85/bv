@@ -530,11 +530,16 @@ fun BvPlayer(
                 initDanmakuConfig()
                 updateVideoAspectRatio()
 
-                //reset default play speed
-                onPlaySpeedChange(currentPlaySpeed)
-                logger.info { "Reset default play speed: $currentPlaySpeed" }
-                videoPlayer.speed = currentPlaySpeed
-                mDanmakuPlayer?.updatePlaySpeed(currentPlaySpeed)
+                if (videoPlayerConfigData.isLive) {
+                    logger.info { "Live playback ignores currentPlaySpeed=$currentPlaySpeed" }
+                    videoPlayer.speed = 1f
+                } else {
+                    // Apply the current session playback speed to a newly prepared player.
+                    onPlaySpeedChange(currentPlaySpeed)
+                    logger.info { "Reset default play speed: $currentPlaySpeed" }
+                    videoPlayer.speed = currentPlaySpeed
+                    mDanmakuPlayer?.updatePlaySpeed(currentPlaySpeed)
+                }
 
                 // 如果视频正在播放，同步恢复弹幕
                 if (videoPlayer.isPlaying) {
@@ -995,6 +1000,10 @@ fun BvPlayer(
                 onRotationChange(rotation)
             },
             onPlaySpeedChange = { speed ->
+                if (videoPlayerConfigData.isLive) {
+                    logger.info { "Ignore playback speed change in live mode: $speed" }
+                    return@VideoPlayerController
+                }
                 logger.info { "Set default play speed: $speed" }
                 currentPlaySpeed = speed
                 onPlaySpeedChange(speed)

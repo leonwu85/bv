@@ -60,7 +60,14 @@ fun PictureMenuList(
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
     val parentMenuFocusRequester = remember { FocusRequester() }
     val parentMenuPositionFocusRequester = remember { FocusRequester() }
-    var selectedPictureMenuItem by remember { mutableStateOf(VideoPlayerPictureMenuItem.PlaySpeed) }
+    val pictureMenuItems = remember(videoPlayerConfigData.isLive) {
+        VideoPlayerPictureMenuItem.entries.filterNot {
+            videoPlayerConfigData.isLive && it == VideoPlayerPictureMenuItem.PlaySpeed
+        }
+    }
+    var selectedPictureMenuItem by remember(videoPlayerConfigData.isLive) {
+        mutableStateOf(pictureMenuItems.first())
+    }
     val resolutionList = remember(videoPlayerConfigData.availableResolutions) {
         videoPlayerConfigData.availableResolutions.sortedByDescending { it.code }
     }
@@ -210,7 +217,7 @@ fun PictureMenuList(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(8.dp)
         ) {
-            itemsIndexed(VideoPlayerPictureMenuItem.entries.toMutableList()) { index, item ->
+            itemsIndexed(pictureMenuItems) { index, item ->
                 MenuListItem(
                     modifier = Modifier
                         .ifElse(
