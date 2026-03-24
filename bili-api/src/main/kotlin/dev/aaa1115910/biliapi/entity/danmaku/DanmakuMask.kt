@@ -115,7 +115,8 @@ data class DanmakuMask(
                             val width = stream.readShort().toInt()
                             val height = stream.readShort().toInt()
                             val time = stream.readLong()
-                            val imageBinary = ByteArray(7200)
+                            val imageByteSize = ((width * height) + 7) / 8
+                            val imageBinary = ByteArray(imageByteSize)
                             stream.read(imageBinary)
                             frameList.add(
                                 DanmakuMobMaskFrame(

@@ -81,14 +81,7 @@ fun Modifier.danmakuMobMask(
     frame: DanmakuMobMaskFrame,
     videoAspectRatio: Float = 0f
 ): Modifier = composed {
-    val binaryBitmap = Bitmap.createBitmap(40, 180, Bitmap.Config.ARGB_8888)
-    frame.image.forEachIndexed { index, byte ->
-        val y = index / 40
-        val x = index % 40
-        binaryBitmap.setPixel(x, y, if (byte.toInt() == 0) Color.BLACK else Color.TRANSPARENT)
-    }
-
-    bitmapMask(binaryBitmap, videoAspectRatio)
+    bitmapMask(renderMobMaskToBitmap(frame), videoAspectRatio)
 }
 
 fun Modifier.danmakuMask(
@@ -131,10 +124,17 @@ private fun renderWebMaskToBitmap(frame: DanmakuWebMaskFrame): Bitmap {
 
 private fun renderMobMaskToBitmap(frame: DanmakuMobMaskFrame): Bitmap {
     val bitmap = Bitmap.createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888)
-    frame.image.forEachIndexed { index, byte ->
-        val y = index / frame.width
-        val x = index % frame.width
-        bitmap.setPixel(x, y, if (byte.toInt() == 0) Color.BLACK else Color.TRANSPARENT)
+    val totalPixels = frame.width * frame.height
+
+    for (pixelIndex in 0 until totalPixels) {
+        val byteIndex = pixelIndex / 8
+        if (byteIndex >= frame.image.size) break
+
+        val bitOffset = 7 - (pixelIndex % 8)
+        val bit = (frame.image[byteIndex].toInt() ushr bitOffset) and 0x01
+        val x = pixelIndex % frame.width
+        val y = pixelIndex / frame.width
+        bitmap.setPixel(x, y, if (bit == 0) Color.BLACK else Color.TRANSPARENT)
     }
     return bitmap
 }
