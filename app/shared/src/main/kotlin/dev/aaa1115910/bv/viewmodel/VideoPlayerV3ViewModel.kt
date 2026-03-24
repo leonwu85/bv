@@ -41,6 +41,7 @@ import dev.aaa1115910.biliapi.websocket.LiveDataWebSocket
 import dev.aaa1115910.bilisubtitle.SubtitleParser
 import dev.aaa1115910.bilisubtitle.entity.SubtitleItem
 import dev.aaa1115910.bv.BVApp
+import dev.aaa1115910.bv.entity.LiveQualityPreference
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.player.renderer.OptimizedTextRenderer
 import dev.aaa1115910.bv.player.renderer.SimpleRenderer
@@ -196,7 +197,7 @@ class VideoPlayerV3ViewModel(
 
     // 直播画质管理
     var availableLiveQualities = mutableStateListOf<Pair<Int, String>>() // qn -> description
-    var currentLiveQn by mutableIntStateOf(0)
+    var currentLiveQn by mutableIntStateOf(Prefs.defaultLiveQn)
     var currentLiveQualityDescription by mutableStateOf("")
     private var liveQnDescMap: Map<Int, String> = emptyMap()
 
@@ -1046,9 +1047,9 @@ class VideoPlayerV3ViewModel(
     /**
      * 加载直播流（带画质信息）
      * @param roomId 直播间ID
-     * @param qn 请求的画质编号，默认30000（最高值，服务端会自动降级）
+     * @param qn 请求的画质编号，默认使用用户配置的直播清晰度
      */
-    fun loadLiveStreamWithQuality(roomId: Int, qn: Int = 30000) {
+    fun loadLiveStreamWithQuality(roomId: Int, qn: Int = Prefs.defaultLiveQn) {
         // 取消之前的重连任务
         liveRetryJob?.cancel()
         liveRetryJob = null
@@ -1067,7 +1068,7 @@ class VideoPlayerV3ViewModel(
                 ensureDanmakuPlayer(isLive = true)
             }
 
-            val playInfo = LiveStreamUrlFetcher.fetchLiveStreamUrl(roomId, qn, currentLiveCodec)
+            val playInfo = fetchResolvedLivePlayInfo(roomId, qn, currentLiveCodec)
             if (playInfo == null) {
                 withContext(Dispatchers.Main) {
                     loadState = RequestState.Failed
@@ -1136,7 +1137,6 @@ class VideoPlayerV3ViewModel(
     fun changeLiveCodec(codec: LiveCodec) {
         logger.fInfo { "Change live codec to: $codec" }
         currentLiveCodec = codec
-        Prefs.defaultLiveCodec = codec
         loadLiveStreamWithQuality(liveRoomId, currentLiveQn)
     }
 
@@ -1170,7 +1170,7 @@ class VideoPlayerV3ViewModel(
                 // 重连时先清除错误状态，让 UI 不再显示错误
                 errorMessage = ""
             }
-            val playInfo = LiveStreamUrlFetcher.fetchLiveStreamUrl(liveRoomId, currentLiveQn, currentLiveCodec)
+            val playInfo = fetchResolvedLivePlayInfo(liveRoomId, currentLiveQn, currentLiveCodec)
             if (playInfo == null) {
                 // fetchLiveStreamUrl 内部已判断 liveStatus != 1 并 Toast "主播未开播"
                 // 此时不再继续重试
@@ -1233,7 +1233,7 @@ class VideoPlayerV3ViewModel(
         logger.fInfo { "Refreshing live stream URL for room $liveRoomId" }
 
         try {
-            val playInfo = LiveStreamUrlFetcher.fetchLiveStreamUrl(
+            val playInfo = fetchResolvedLivePlayInfo(
                 liveRoomId,
                 currentLiveQn,
                 currentLiveCodec
@@ -1287,6 +1287,25 @@ class VideoPlayerV3ViewModel(
                 scheduleLiveUrlRefresh()
             }
         }
+    }
+
+    private suspend fun fetchResolvedLivePlayInfo(
+        roomId: Int,
+        preferredQn: Int,
+        codec: LiveCodec
+    ): dev.aaa1115910.bv.util.LivePlayInfo? {
+        val initialPlayInfo = LiveStreamUrlFetcher.fetchLiveStreamUrl(roomId, preferredQn, codec)
+            ?: return null
+        val resolvedQn = LiveQualityPreference.resolveRequestedQn(preferredQn, initialPlayInfo.acceptQn)
+
+        if (resolvedQn == initialPlayInfo.currentQn) {
+            return initialPlayInfo
+        }
+
+        logger.fInfo {
+            "Preferred live quality $preferredQn unavailable or downgraded, retry with resolved qn=$resolvedQn"
+        }
+        return LiveStreamUrlFetcher.fetchLiveStreamUrl(roomId, resolvedQn, codec) ?: initialPlayInfo
     }
 
     /**

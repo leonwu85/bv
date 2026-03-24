@@ -16,6 +16,7 @@ import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.http.util.generateBuvid
 import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.BuildConfig
+import dev.aaa1115910.bv.entity.LiveQualityPreference
 import dev.aaa1115910.bv.entity.PlayerType
 import dev.aaa1115910.bv.entity.ThemeType
 import dev.aaa1115910.bv.player.entity.Audio
@@ -414,6 +415,14 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowDanmakuRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowDanmakuKey, value) }
 
+    var defaultLiveQn: Int
+        get() = LiveQualityPreference.fromQn(
+            runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDefaultLiveQnRequest).first() }
+        ).qn
+        set(value) = runBlocking {
+            dsm.editPreference(PrefKeys.prefDefaultLiveQnKey, LiveQualityPreference.fromQn(value).qn)
+        }
+
     var defaultLiveCodec: LiveCodec
         get() = LiveCodec.fromCode(
             runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDefaultLiveCodecRequest).first() }
@@ -568,6 +577,7 @@ object PrefKeys {
     val prefShowUGCVideoInfoKey = booleanPreferencesKey("pref_show_ugc_video_info")
     val prefIsLoopKey = booleanPreferencesKey("player_is_loop")
     val prefShowDanmakuKey = booleanPreferencesKey("player_show_danmaku")
+    val prefDefaultLiveQnKey = intPreferencesKey("default_live_qn")
     val prefDefaultLiveCodecKey = intPreferencesKey("dlc")
     val prefPlayerLoadNextActionKey = intPreferencesKey("player_load_next_action")
     val prefPlayerDefaultStartPositionKey = intPreferencesKey("player_default_start_position")
@@ -660,6 +670,7 @@ object PrefKeys {
     val prefShowUGCVideoInfoRequest = PreferenceRequest(prefShowUGCVideoInfoKey, true)
     val prefIsLoopRequest = PreferenceRequest(prefIsLoopKey, false)
     val prefShowDanmakuRequest = PreferenceRequest(prefShowDanmakuKey, true)
+    val prefDefaultLiveQnRequest = PreferenceRequest(prefDefaultLiveQnKey, LiveQualityPreference.Origin.qn)
     val prefDefaultLiveCodecRequest = PreferenceRequest(prefDefaultLiveCodecKey, LiveCodec.HLS.ordinal)
     val prefPlayerLoadNextActionRequest = PreferenceRequest(prefPlayerLoadNextActionKey, PlayerLoadNextAction.DoNothing.value)
     val prefPlayerDefaultStartPositionRequest = PreferenceRequest(prefPlayerDefaultStartPositionKey, PlayerDefaultStartPosition.History.value)

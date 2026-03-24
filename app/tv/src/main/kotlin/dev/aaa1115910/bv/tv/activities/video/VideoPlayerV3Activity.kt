@@ -240,7 +240,7 @@ class VideoPlayerV3Activity : ComponentActivity() {
                 this.livePopularityText = if (watchedNum > 0) formatPopularity(watchedNum) else ""
                 
                 // 通过 ViewModel 加载直播流（带画质选择，加载成功后自动启动弹幕）
-                loadLiveStreamWithQuality(roomId)
+                loadLiveStreamWithQuality(roomId, Prefs.defaultLiveQn)
             }
             return
         }

@@ -21,6 +21,9 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.entity.LiveQualityPreference
+import dev.aaa1115910.bv.player.entity.LiveCodec
+import dev.aaa1115910.bv.tv.component.settings.SettingListItemWithDialog
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
 import dev.aaa1115910.bv.util.Prefs
@@ -30,6 +33,8 @@ fun LiveStreamingSetting(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var defaultLiveQuality by remember { mutableStateOf(LiveQualityPreference.fromQn(Prefs.defaultLiveQn)) }
+    var defaultLiveCodec by remember { mutableStateOf(Prefs.defaultLiveCodec) }
     var showLiveInSidebar by remember { mutableStateOf(Prefs.showLiveInSidebar) }
     var showLivePopularity by remember { mutableStateOf(Prefs.showLivePopularity) }
 
@@ -57,6 +62,32 @@ fun LiveStreamingSetting(
                         onCheckedChange = {
                             showLiveInSidebar = it
                             Prefs.showLiveInSidebar = it
+                        }
+                    )
+                }
+                item {
+                    SettingListItemWithDialog(
+                        title = stringResource(R.string.settings_live_default_quality),
+                        supportText = stringResource(R.string.settings_live_default_quality_desc),
+                        options = LiveQualityPreference.entries,
+                        getDisplayName = { item, ctx -> item.getDisplayName(ctx) },
+                        value = defaultLiveQuality,
+                        onValueChange = {
+                            defaultLiveQuality = it
+                            Prefs.defaultLiveQn = it.qn
+                        }
+                    )
+                }
+                item {
+                    SettingListItemWithDialog(
+                        title = stringResource(R.string.settings_live_default_codec),
+                        supportText = stringResource(R.string.settings_live_default_codec_desc),
+                        options = LiveCodec.entries,
+                        getDisplayName = { item, ctx -> item.getDisplayName(ctx) },
+                        value = defaultLiveCodec,
+                        onValueChange = {
+                            defaultLiveCodec = it
+                            Prefs.defaultLiveCodec = it
                         }
                     )
                 }

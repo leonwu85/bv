@@ -213,6 +213,10 @@
     <string name="settings_player_danmaku_filter_level_text">过滤等级低于设定值的弹幕（1-10，1为显示全部）</string>
     <string name="settings_live_danmaku_filter_level_title">直播弹幕过滤等级</string>
     <string name="settings_live_danmaku_filter_level_text">过滤用户等级低于设定值的弹幕（0-60，0为显示全部）</string>
+    <string name="settings_live_default_quality">默认直播清晰度</string>
+    <string name="settings_live_default_quality_desc">进入直播时优先使用的清晰度，会自动降级至直播间最高可用清晰度</string>
+    <string name="settings_live_default_codec">默认直播编码</string>
+    <string name="settings_live_default_codec_desc">进入直播时优先使用的编码格式</string>
     <string name="settings_item_network">网络设置</string>
     <string name="settings_item_other">更多设置</string>
     <string name="settings_item_player_type">播放器内核</string>
@@ -271,6 +275,15 @@
     <string name="settings_live_enable_desc">在侧边栏显示直播入口</string>
     <string name="settings_live_popularity">显示直播间人气</string>
     <string name="settings_live_popularity_desc">在直播播放页显示人气和高能观众</string>
+    <string name="live_quality_dolby">杜比</string>
+    <string name="live_quality_origin_4k">4K 原画</string>
+    <string name="live_quality_super_4k">4K</string>
+    <string name="live_quality_super_2k">2K</string>
+    <string name="live_quality_origin">原画</string>
+    <string name="live_quality_bluray">蓝光</string>
+    <string name="live_quality_super_hd">超清</string>
+    <string name="live_quality_smooth">高清</string>
+    <string name="live_quality_fluent">流畅</string>
     <string name="settings_version_check_update_button">爷要更新</string>
     <string name="settings_version_current_version">当前版本: %1$s</string>
     <string name="settings_version_latest_version">最新版本: %1$s</string>
