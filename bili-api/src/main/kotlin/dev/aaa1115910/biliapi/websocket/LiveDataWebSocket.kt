@@ -92,6 +92,7 @@ object LiveDataWebSocket {
     suspend fun connectLiveEvent(
         roomId: Int,
         uid: Long = 0,
+        parseEmoji: Boolean = true,
         onEvent: (event: LiveEvent) -> Unit
     ): Job {
         val danmuInfo =
@@ -105,6 +106,7 @@ object LiveDataWebSocket {
             token = danmuInfo.token,
             hostList = danmuInfo.hostList,
             uid = uid,
+            parseEmoji = parseEmoji,
             onEvent = onEvent
         )
     }
@@ -122,6 +124,7 @@ object LiveDataWebSocket {
         token: String,
         hostList: List<HostListItem>,
         uid: Long = 0,
+        parseEmoji: Boolean = true,
         onEvent: (event: LiveEvent) -> Unit
     ): Job {
         val data = buildJsonObject {
@@ -184,7 +187,7 @@ object LiveDataWebSocket {
                                 launch {
                                     try {
                                         for (eventData in messageChannel) {
-                                            handleLiveEventData(eventData).forEach { event ->
+                                            handleLiveEventData(eventData, parseEmoji).forEach { event ->
                                                 onEvent(event)
                                             }
                                         }
@@ -237,14 +240,17 @@ object LiveDataWebSocket {
         return job
     }
 
-    private suspend fun handleLiveEventData(data: ByteArray): List<LiveEvent> {
+    private suspend fun handleLiveEventData(
+        data: ByteArray,
+        parseEmoji: Boolean
+    ): List<LiveEvent> {
         val result = mutableListOf<LiveEvent>()
         withContext(Dispatchers.IO) {
             if (data.size <= 16) return@withContext
             val bytePack = ByteReadPacket(data)
             val head = bytePack.readFrameHeader()
             val body = bytePack.readByteArray((head.totalLength - head.headerLength))
-            result.addAll(handleLiveEventBody(head, body))
+            result.addAll(handleLiveEventBody(head, body, parseEmoji))
         }
         return result
     }
@@ -257,7 +263,11 @@ object LiveDataWebSocket {
         }
     }
 
-    private fun handleLiveEventBody(head: FrameHeader, data: ByteArray): List<LiveEvent> {
+    private fun handleLiveEventBody(
+        head: FrameHeader,
+        data: ByteArray,
+        parseEmoji: Boolean
+    ): List<LiveEvent> {
         val result = mutableListOf<LiveEvent>()
         val bytePack = ByteReadPacket(data)
         when (head.type) {
@@ -274,19 +284,19 @@ object LiveDataWebSocket {
                     //1 心跳及认证包正文不使用压缩
                     0, 1 -> {
                         val strData = bytePack.readByteArray().decodeToString()
-                        handleLiveCMDEventString(strData)?.let { result += it }
+                        handleLiveCMDEventString(strData, parseEmoji)?.let { result += it }
                     }
 
                     //普通包正文使用zlib压缩
                     2 -> {
                         val decompress = bytePack.readByteArray().zlibDecompress()
-                        result += handleLiveEventBodyDecompress(decompress)
+                        result += handleLiveEventBodyDecompress(decompress, parseEmoji)
                     }
 
                     //普通包正文使用brotli压缩,解压为一个带头部的协议0普通包
                     3 -> {
                         val decompress = bytePack.readByteArray().brotliDecompress()
-                        result += handleLiveEventBodyDecompress(decompress)
+                        result += handleLiveEventBodyDecompress(decompress, parseEmoji)
                     }
 
                     else -> {
@@ -308,21 +318,33 @@ object LiveDataWebSocket {
         }
         return if (bytePack.remaining > 16) result + handleLiveEventBody(
             bytePack.readFrameHeader(),
-            bytePack.readByteArray()
+            bytePack.readByteArray(),
+            parseEmoji
         )
         else result
     }
 
-    private fun handleLiveEventBodyDecompress(data: ByteArray): List<LiveEvent> {
+    private fun handleLiveEventBodyDecompress(
+        data: ByteArray,
+        parseEmoji: Boolean
+    ): List<LiveEvent> {
         val result = mutableListOf<LiveEvent>()
         val bytePack = ByteReadPacket(data)
         val header = bytePack.readFrameHeader()
         val body = bytePack.readByteArray(header.dataLength)
-        result += handleLiveCMDEvent(header, body)
-        return if (bytePack.remaining > 0) result + handleLiveEventBodyDecompress(bytePack.readByteArray()) else result
+        result += handleLiveCMDEvent(header, body, parseEmoji)
+        return if (bytePack.remaining > 0) {
+            result + handleLiveEventBodyDecompress(bytePack.readByteArray(), parseEmoji)
+        } else {
+            result
+        }
     }
 
-    private fun handleLiveCMDEvent(head: FrameHeader, data: ByteArray): List<LiveEvent> {
+    private fun handleLiveCMDEvent(
+        head: FrameHeader,
+        data: ByteArray,
+        parseEmoji: Boolean
+    ): List<LiveEvent> {
         val result = mutableListOf<LiveEvent>()
         val strData: String
         when (head.version.toInt()) {
@@ -339,7 +361,8 @@ object LiveDataWebSocket {
                 if (bytePack.remaining > 16) {
                     result += handleLiveEventBody(
                         bytePack.readFrameHeader(),
-                        bytePack.readByteArray()
+                        bytePack.readByteArray(),
+                        parseEmoji
                     )
                 }
                 strData = body.decodeToString()
@@ -350,11 +373,14 @@ object LiveDataWebSocket {
                 return result
             }
         }
-        handleLiveCMDEventString(strData)?.let { result += it }
+        handleLiveCMDEventString(strData, parseEmoji)?.let { result += it }
         return result
     }
 
-    private fun handleLiveCMDEventString(strData: String): LiveEvent? {
+    private fun handleLiveCMDEventString(
+        strData: String,
+        parseEmoji: Boolean
+    ): LiveEvent? {
         val dataJson = json.parseToJsonElement(strData).jsonObject
         val cmd = dataJson["cmd"]!!.jsonPrimitive.content
 
@@ -408,38 +434,40 @@ object LiveDataWebSocket {
                     }
 
                     var emojiMap: Map<String, String> = emptyMap()
-                    runCatching {
-                        var extraJson: JsonObject? = null
-                        if (attrArray.size > 15) {
-                            val extraObj = attrArray[15].jsonObject
-                            val extraStr = extraObj["extra"]?.jsonPrimitive?.contentOrNull
-                            if (!extraStr.isNullOrEmpty()) {
-                                extraJson = json.parseToJsonElement(extraStr).jsonObject
-                                val emots = extraJson["emots"] as? JsonObject
-                                if (emots != null) {
-                                    emojiMap = emots.mapValues { (_, value) ->
-                                        value.jsonObject["url"]?.jsonPrimitive?.contentOrNull ?: ""
-                                    }.filterValues { it.isNotEmpty() }
+                    if (parseEmoji) {
+                        runCatching {
+                            var extraJson: JsonObject? = null
+                            if (attrArray.size > 15) {
+                                val extraObj = attrArray[15].jsonObject
+                                val extraStr = extraObj["extra"]?.jsonPrimitive?.contentOrNull
+                                if (!extraStr.isNullOrEmpty()) {
+                                    extraJson = json.parseToJsonElement(extraStr).jsonObject
+                                    val emots = extraJson["emots"] as? JsonObject
+                                    if (emots != null) {
+                                        emojiMap = emots.mapValues { (_, value) ->
+                                            value.jsonObject["url"]?.jsonPrimitive?.contentOrNull ?: ""
+                                        }.filterValues { it.isNotEmpty() }
+                                    }
                                 }
                             }
-                        }
 
-                        if (emojiMap.isEmpty() && attrArray.size > 13) {
-                            val emoticonObj = attrArray[13].jsonObject
-                            emojiMap = buildDanmakuEmojiFallbackMap(
-                                danmakuContent = danmakuContent,
-                                emoticonObj = emoticonObj,
-                                extraJson = extraJson
-                            )
-                        } else if (emojiMap.isEmpty()) {
-                            emojiMap = buildDanmakuEmojiFallbackMap(
-                                danmakuContent = danmakuContent,
-                                emoticonObj = null,
-                                extraJson = extraJson
-                            )
+                            if (emojiMap.isEmpty() && attrArray.size > 13) {
+                                val emoticonObj = attrArray[13].jsonObject
+                                emojiMap = buildDanmakuEmojiFallbackMap(
+                                    danmakuContent = danmakuContent,
+                                    emoticonObj = emoticonObj,
+                                    extraJson = extraJson
+                                )
+                            } else if (emojiMap.isEmpty()) {
+                                emojiMap = buildDanmakuEmojiFallbackMap(
+                                    danmakuContent = danmakuContent,
+                                    emoticonObj = null,
+                                    extraJson = extraJson
+                                )
+                            }
+                        }.onFailure {
+                            logger.warn { "Parse DANMU_MSG emoji map failed: ${it.message}" }
                         }
-                    }.onFailure {
-                        logger.warn { "Parse DANMU_MSG emoji map failed: ${it.message}" }
                     }
 
                     return DanmakuEvent(

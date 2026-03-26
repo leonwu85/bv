@@ -273,6 +273,8 @@
     <string name="player_long_press_action_triple_like">一键三连</string>
     <string name="settings_live_enable">显示直播</string>
     <string name="settings_live_enable_desc">在侧边栏显示直播入口</string>
+    <string name="settings_live_danmaku_emoji">显示弹幕表情</string>
+    <string name="settings_live_danmaku_emoji_desc">开启后显示直播弹幕中的表情图片，首次仍以文本形式显示</string>
     <string name="settings_live_popularity">显示直播间人气</string>
     <string name="settings_live_popularity_desc">在直播播放页显示人气和高能观众</string>
     <string name="live_quality_dolby">杜比</string>

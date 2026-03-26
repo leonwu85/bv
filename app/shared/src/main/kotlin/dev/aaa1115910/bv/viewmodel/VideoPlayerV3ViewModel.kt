@@ -1390,6 +1390,7 @@ class VideoPlayerV3ViewModel(
                     token = danmuInfo.data!!.token,
                     hostList = danmuInfo.data!!.hostList,
                     uid = Prefs.uid,
+                    parseEmoji = Prefs.showLiveDanmakuEmoji,
                 ) { event ->
                     when (event) {
                         is DanmakuEvent -> channel.trySend(event)

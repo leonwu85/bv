@@ -36,6 +36,7 @@ fun LiveStreamingSetting(
     var defaultLiveQuality by remember { mutableStateOf(LiveQualityPreference.fromQn(Prefs.defaultLiveQn)) }
     var defaultLiveCodec by remember { mutableStateOf(Prefs.defaultLiveCodec) }
     var showLiveInSidebar by remember { mutableStateOf(Prefs.showLiveInSidebar) }
+    var showLiveDanmakuEmoji by remember { mutableStateOf(Prefs.showLiveDanmakuEmoji) }
     var showLivePopularity by remember { mutableStateOf(Prefs.showLivePopularity) }
 
     Box(modifier = modifier) {
@@ -99,6 +100,17 @@ fun LiveStreamingSetting(
                         onCheckedChange = {
                             showLivePopularity = it
                             Prefs.showLivePopularity = it
+                        }
+                    )
+                }
+                item {
+                    SettingSwitchListItem(
+                        title = stringResource(R.string.settings_live_danmaku_emoji),
+                        supportText = stringResource(R.string.settings_live_danmaku_emoji_desc),
+                        checked = showLiveDanmakuEmoji,
+                        onCheckedChange = {
+                            showLiveDanmakuEmoji = it
+                            Prefs.showLiveDanmakuEmoji = it
                         }
                     )
                 }

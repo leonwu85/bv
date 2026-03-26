@@ -215,6 +215,10 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowLiveInSidebarRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowLiveInSidebarKey, value) }
 
+        var showLiveDanmakuEmoji: Boolean
+            get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowLiveDanmakuEmojiRequest).first() }
+            set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowLiveDanmakuEmojiKey, value) }
+
     var showLivePopularity: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowLivePopularityRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowLivePopularityKey, value) }
@@ -583,6 +587,7 @@ object PrefKeys {
     val prefPlayerDefaultStartPositionKey = intPreferencesKey("player_default_start_position")
     val prefPlayerEnableStartPositionSwitchKey = booleanPreferencesKey("player_enable_start_position_switch")
     val prefShowLiveInSidebarKey = booleanPreferencesKey("show_live_in_sidebar")
+    val prefShowLiveDanmakuEmojiKey = booleanPreferencesKey("show_live_danmaku_emoji")
     val prefShowLivePopularityKey = booleanPreferencesKey("show_live_popularity")
     val prefHomeNavItemsOrderKey = stringPreferencesKey("home_nav_items_order")
     val prefSkipPgcIntroOutroKey = booleanPreferencesKey("skip_pgc_intro_outro")
@@ -676,6 +681,7 @@ object PrefKeys {
     val prefPlayerDefaultStartPositionRequest = PreferenceRequest(prefPlayerDefaultStartPositionKey, PlayerDefaultStartPosition.History.value)
     val prefPlayerEnableStartPositionSwitchRequest = PreferenceRequest(prefPlayerEnableStartPositionSwitchKey, false)
     val prefShowLiveInSidebarRequest = PreferenceRequest(prefShowLiveInSidebarKey, false)
+    val prefShowLiveDanmakuEmojiRequest = PreferenceRequest(prefShowLiveDanmakuEmojiKey, false)
     val prefShowLivePopularityRequest = PreferenceRequest(prefShowLivePopularityKey, true)
     val prefHomeNavItemsOrderRequest = PreferenceRequest(
         prefHomeNavItemsOrderKey,
