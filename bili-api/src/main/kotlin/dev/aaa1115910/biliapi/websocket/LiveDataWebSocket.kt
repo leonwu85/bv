@@ -31,10 +31,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.io.readByteArray
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -45,6 +48,7 @@ import kotlinx.serialization.json.put
 object LiveDataWebSocket {
     private lateinit var client: HttpClient
     private val logger = KotlinLogging.logger { }
+    private val aggregatedDanmakuSuppressUntil = ConcurrentHashMap<String, Long>()
 
     // 预配置的 Json 实例，复用以提高解析效率
     private val json = Json {
@@ -367,7 +371,11 @@ object LiveDataWebSocket {
                         return@runCatching
                     }
                     val danmakuContent = contentElement.jsonPrimitive.content
-                    
+                    if (shouldSuppressAggregatedDanmaku(danmakuContent)) {
+                        logger.debug { "Filtered aggregated danmaku: $danmakuContent" }
+                        return@runCatching
+                    }
+
                     // 弹幕属性 info[0]
                     val attrArray = infoArray[0].jsonArray
                     val mode = attrArray[1].jsonPrimitive.int          // 弹幕模式
@@ -399,6 +407,41 @@ object LiveDataWebSocket {
                         }
                     }
 
+                    var emojiMap: Map<String, String> = emptyMap()
+                    runCatching {
+                        var extraJson: JsonObject? = null
+                        if (attrArray.size > 15) {
+                            val extraObj = attrArray[15].jsonObject
+                            val extraStr = extraObj["extra"]?.jsonPrimitive?.contentOrNull
+                            if (!extraStr.isNullOrEmpty()) {
+                                extraJson = json.parseToJsonElement(extraStr).jsonObject
+                                val emots = extraJson["emots"] as? JsonObject
+                                if (emots != null) {
+                                    emojiMap = emots.mapValues { (_, value) ->
+                                        value.jsonObject["url"]?.jsonPrimitive?.contentOrNull ?: ""
+                                    }.filterValues { it.isNotEmpty() }
+                                }
+                            }
+                        }
+
+                        if (emojiMap.isEmpty() && attrArray.size > 13) {
+                            val emoticonObj = attrArray[13].jsonObject
+                            emojiMap = buildDanmakuEmojiFallbackMap(
+                                danmakuContent = danmakuContent,
+                                emoticonObj = emoticonObj,
+                                extraJson = extraJson
+                            )
+                        } else if (emojiMap.isEmpty()) {
+                            emojiMap = buildDanmakuEmojiFallbackMap(
+                                danmakuContent = danmakuContent,
+                                emoticonObj = null,
+                                extraJson = extraJson
+                            )
+                        }
+                    }.onFailure {
+                        logger.warn { "Parse DANMU_MSG emoji map failed: ${it.message}" }
+                    }
+
                     return DanmakuEvent(
                         content = danmakuContent,
                         mid = senderMid,
@@ -408,10 +451,22 @@ object LiveDataWebSocket {
                         mode = mode,
                         fontSize = fontSize,
                         color = color,
-                        userLevel = userLevel
+                        userLevel = userLevel,
+                        emojiMap = emojiMap
                     )
                 }.onFailure {
                     logger.warn { "Parse danmaku content failed: ${it.message}" }
+                }
+            }
+            "DANMU_AGGREGATION" -> {
+                runCatching {
+                    val data = dataJson["data"]!!.jsonObject
+                    val msg = data["msg"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+                    if (msg.isEmpty()) return@runCatching
+                    val showTimeSeconds = data["show_time"]?.jsonPrimitive?.int ?: 2
+                    rememberAggregatedDanmaku(msg, showTimeSeconds)
+                }.onFailure {
+                    logger.warn { "Parse DANMU_AGGREGATION failed: ${it.message}" }
                 }
             }
 
@@ -491,5 +546,60 @@ object LiveDataWebSocket {
             }
         }
         return null
+    }
+
+    private fun buildDanmakuEmojiFallbackMap(
+        danmakuContent: String,
+        emoticonObj: JsonObject?,
+        extraJson: JsonObject?
+    ): Map<String, String> {
+        val url = emoticonObj?.get("url")?.jsonPrimitive?.contentOrNull
+            ?: extraJson?.get("url")?.jsonPrimitive?.contentOrNull
+            ?: return emptyMap()
+
+        val displayText = listOf(
+            danmakuContent,
+            emoticonObj?.get("text")?.jsonPrimitive?.contentOrNull,
+            extraJson?.get("content")?.jsonPrimitive?.contentOrNull
+        ).firstOrNull { !it.isNullOrBlank() }
+
+        val emoticonUnique = listOf(
+            emoticonObj?.get("emoticon_unique")?.jsonPrimitive?.contentOrNull,
+            extraJson?.get("emoticon_unique")?.jsonPrimitive?.contentOrNull
+        ).firstOrNull { !it.isNullOrBlank() }
+
+        return buildMap {
+            if (!displayText.isNullOrBlank()) {
+                put(displayText, url)
+            }
+            if (!emoticonUnique.isNullOrBlank()) {
+                put(emoticonUnique, url)
+                if (displayText.isNullOrBlank() && emoticonUnique.startsWith("upower_[") && emoticonUnique.endsWith("]")) {
+                    put(emoticonUnique.removePrefix("upower_"), url)
+                }
+            }
+        }
+    }
+
+    private fun rememberAggregatedDanmaku(msg: String, showTimeSeconds: Int) {
+        cleanupExpiredAggregatedDanmaku()
+        val suppressUntil = System.currentTimeMillis() + showTimeSeconds.coerceAtLeast(1) * 1000L
+        aggregatedDanmakuSuppressUntil[msg] = suppressUntil
+        logger.debug { "Remember aggregated danmaku: msg=$msg, suppressUntil=$suppressUntil" }
+    }
+
+    private fun shouldSuppressAggregatedDanmaku(content: String): Boolean {
+        cleanupExpiredAggregatedDanmaku()
+        val suppressUntil = aggregatedDanmakuSuppressUntil[content] ?: return false
+        if (suppressUntil <= System.currentTimeMillis()) {
+            aggregatedDanmakuSuppressUntil.remove(content, suppressUntil)
+            return false
+        }
+        return true
+    }
+
+    private fun cleanupExpiredAggregatedDanmaku() {
+        val now = System.currentTimeMillis()
+        aggregatedDanmakuSuppressUntil.entries.removeIf { it.value <= now }
     }
 }

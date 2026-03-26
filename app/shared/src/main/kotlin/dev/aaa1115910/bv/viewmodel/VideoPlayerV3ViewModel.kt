@@ -1455,7 +1455,8 @@ class VideoPlayerV3ViewModel(
                 else -> DanmakuItemData.DANMAKU_MODE_ROLLING
             },
             textSize = event.fontSize,
-            textColor = Color(event.color).toArgb()
+            textColor = Color(event.color).toArgb(),
+            emojiMap = event.emojiMap
         )
 
         // 直播模式

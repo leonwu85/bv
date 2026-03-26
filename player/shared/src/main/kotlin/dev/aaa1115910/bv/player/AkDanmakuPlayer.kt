@@ -15,12 +15,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.kuaishou.akdanmaku.DanmakuConfig
+import com.kuaishou.akdanmaku.render.EmojiSupportRenderer
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import com.kuaishou.akdanmaku.ui.DanmakuSurfaceView
 import com.kuaishou.akdanmaku.ui.DanmakuView
 import com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer
-import dev.aaa1115910.bv.player.renderer.OptimizedTextRenderer
-import dev.aaa1115910.bv.player.renderer.SimpleRenderer
 
 /**
  * 普通弹幕播放器组件
@@ -92,7 +91,7 @@ fun AkDanmakuPlayer(
 
                     val player = LiveDanmakuPlayer(
                         surfaceView = this,
-                        renderer = OptimizedTextRenderer.createHighPerformance(),
+                        renderer = EmojiSupportRenderer(),
                         config = DanmakuConfig(liveMode = true)
                     )
                     liveDanmakuPlayer = player
