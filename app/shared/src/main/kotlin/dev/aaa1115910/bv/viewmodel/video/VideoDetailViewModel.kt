@@ -14,6 +14,7 @@ import dev.aaa1115910.bv.player.entity.VideoListPart
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisode
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisodeTitle
 import dev.aaa1115910.bv.repository.VideoInfoRepository
+import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.swapListWithMainContext
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -27,7 +28,8 @@ class VideoDetailViewModel(
     private val videoInfoRepository: VideoInfoRepository
 ) : ViewModel() {
     companion object {
-        val DETAIL_API_TYPE = ApiType.App
+        val DETAIL_API_TYPE: ApiType
+            get() = Prefs.apiType
     }
 
     private val logger = KotlinLogging.logger { }

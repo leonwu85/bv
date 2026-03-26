@@ -556,6 +556,18 @@ object BiliHttpApi {
         header("Cookie", "SESSDATA=$sessData;")
     }.body()
 
+    suspend fun searchHistory(
+        keyword: String,
+        pageNum: Int = 1,
+        business: String = "all",
+        sessData: String = ""
+    ): BiliResponse<HistoryData> = client.get("/x/web-interface/history/search") {
+        parameter("pn", pageNum)
+        parameter("keyword", keyword)
+        parameter("business", business)
+        header("Cookie", "SESSDATA=$sessData;")
+    }.body()
+
     /**
      * 获取稍后再看列表
      */

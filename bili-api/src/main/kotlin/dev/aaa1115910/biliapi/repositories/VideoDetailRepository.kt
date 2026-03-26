@@ -40,6 +40,40 @@ class VideoDetailRepository(
             ReplyGrpcKt.ReplyCoroutineStub(channelRepository.defaultChannel!!)
         }.getOrNull()
 
+    private suspend fun getWebVideoHistory(videoDetail: VideoDetail): VideoDetail.History {
+        videoDetail.history
+            .takeIf { it.progress > 0 || it.lastPlayedCid != 0L }
+            ?.let { return it }
+
+        val sessData = authRepository.sessionData.orEmpty()
+        if (sessData.isBlank()) {
+            return VideoDetail.History(0, 0)
+        }
+
+        val historyItem = runCatching {
+            BiliHttpApi.searchHistory(
+                keyword = videoDetail.title,
+                sessData = sessData
+            ).getResponseData().list.firstOrNull { item ->
+                item.history.business == "archive" && (
+                    item.history.oid == videoDetail.aid ||
+                        (videoDetail.bvid.isNotBlank() && item.history.bvid == videoDetail.bvid)
+                    )
+            }
+        }.onFailure {
+            println("Search video history failed: $it")
+        }.getOrNull()
+
+        if (historyItem != null) {
+            return VideoDetail.History(
+                progress = historyItem.progress.coerceAtLeast(0),
+                lastPlayedCid = historyItem.history.cid
+            )
+        }
+
+        return VideoDetail.History(0, 0)
+    }
+
     suspend fun getVideoDetail(
         aid: Long,
         preferApiType: ApiType = ApiType.Web,
@@ -108,24 +142,20 @@ class VideoDetailRepository(
                         }.getOrDefault(false)
                     }
 
-                    // 串行执行：获取历史和播放器图标
-                    val (history, playerIcon) = runCatching {
+                    val history = getWebVideoHistory(videoDetailWithoutUserActions)
+
+                    // 串行执行：获取播放器图标
+                    val playerIcon = runCatching {
                         val videoModeInfo = BiliHttpApi.getVideoMoreInfo(
                             avid = aid,
                             cid = videoDetailWithoutUserActions.cid,
                             sessData = authRepository.sessionData ?: "",
                             buvid3 = authRepository.buvid3 ?: ""
                         ).getResponseData()
-                        val history = VideoDetail.History(
-                            progress = videoModeInfo.lastPlayTime / 1000,
-                            lastPlayedCid = videoModeInfo.lastPlayCid
-                        )
-                        val playerIcon =
-                            VideoDetail.PlayerIcon.fromPlayerIcon(videoModeInfo.playerIcon)
-                        history to playerIcon
+                        VideoDetail.PlayerIcon.fromPlayerIcon(videoModeInfo.playerIcon)
                     }.onFailure {
-                        println("Get video history failed: $it")
-                    }.getOrDefault(VideoDetail.History(0, 0) to null)
+                        println("Get video player icon failed: $it")
+                    }.getOrDefault(null)
 
                     // 更新并返回结果
                     videoDetailWithoutUserActions.apply {

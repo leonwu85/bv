@@ -12,9 +12,9 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class HistoryData(
-    val cursor: Cursor,
-    val tab: List<TabItem>,
-    val list: List<HistoryItem>
+    val cursor: Cursor = Cursor(),
+    val tab: List<TabItem> = emptyList(),
+    val list: List<HistoryItem> = emptyList()
 ) {
     /**
      * 历史记录页面信息
@@ -26,11 +26,11 @@ data class HistoryData(
      */
     @Serializable
     data class Cursor(
-        val max: Long,
+        val max: Long = 0,
         @SerialName("view_at")
-        val viewAt: Long,
-        val business: String,
-        val ps: Int
+        val viewAt: Long = 0,
+        val business: String = "",
+        val ps: Int = 0
     )
 
     /**
@@ -41,8 +41,8 @@ data class HistoryData(
      */
     @Serializable
     data class TabItem(
-        val type: String,
-        val name: String
+        val type: String = "",
+        val name: String = ""
     )
 }
 
@@ -77,38 +77,38 @@ data class HistoryData(
 data class HistoryItem(
     val title: String,
     @SerialName("long_title")
-    val longTitle: String,
-    val cover: String,
+    val longTitle: String = "",
+    val cover: String = "",
     val covers: List<String>? = null,
-    val uri: String,
+    val uri: String = "",
     val history: HistoryInfo,
-    val videos: Int,
+    val videos: Int = 0,
     @SerialName("author_name")
-    val authorName: String,
+    val authorName: String = "",
     @SerialName("author_face")
-    val authorFace: String,
+    val authorFace: String = "",
     @SerialName("author_mid")
-    val authorMid: Long,
+    val authorMid: Long = 0,
     @SerialName("view_at")
-    val viewAt: Long,
-    val progress: Int,
-    val badge: String,
+    val viewAt: Long = 0,
+    val progress: Int = 0,
+    val badge: String = "",
     @SerialName("show_title")
-    val showTitle: String,
-    val duration: Int,
-    val current: String,
-    val total: Int,
+    val showTitle: String = "",
+    val duration: Int = 0,
+    val current: String = "",
+    val total: Int = 0,
     @SerialName("new_desc")
-    val newDesc: String,
+    val newDesc: String = "",
     @SerialName("is_finish")
-    val isFinish: Int,
+    val isFinish: Int = 0,
     @SerialName("is_fav")
-    val isFav: Int,
-    val kid: Long,
+    val isFav: Int = 0,
+    val kid: Long = 0,
     @SerialName("tag_name")
-    val tagName: String,
+    val tagName: String = "",
     @SerialName("live_status")
-    val liveStatus: Int
+    val liveStatus: Int = 0
 ) {
     /**
      * 历史记录详细信息
@@ -125,12 +125,12 @@ data class HistoryItem(
     @Serializable
     data class HistoryInfo(
         val oid: Long,
-        val epid: Int,
-        val bvid: String,
-        val page: Int,
-        val cid: Long,
-        val part: String,
-        val business: String,
-        val dt: Int
+        val epid: Int = 0,
+        val bvid: String = "",
+        val page: Int = 0,
+        val cid: Long = 0,
+        val part: String = "",
+        val business: String = "",
+        val dt: Int = 0
     )
 }
