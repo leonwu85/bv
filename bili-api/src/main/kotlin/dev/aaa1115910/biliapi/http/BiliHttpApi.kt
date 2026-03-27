@@ -539,18 +539,21 @@ object BiliHttpApi {
     /**
      * 获取截止至目标id[max]和目标时间[viewAt]历史记录
      *
-     * @param business 分类 貌似无效
+     * @param business 分类 旧字段，部分场景下无效
+     * @param type 历史类型，如直播历史使用 `live`
      * @param pageSize 页面大小
      */
     suspend fun getHistories(
         max: Long = 0,
         business: String = "",
+        type: String = "",
         viewAt: Long = 0,
         pageSize: Int = 20,
         sessData: String = ""
     ): BiliResponse<HistoryData> = client.get("/x/web-interface/history/cursor") {
         parameter("max", max)
         parameter("business", business)
+        parameter("type", type)
         parameter("view_at", viewAt)
         parameter("ps", pageSize)
         header("Cookie", "SESSDATA=$sessData;")

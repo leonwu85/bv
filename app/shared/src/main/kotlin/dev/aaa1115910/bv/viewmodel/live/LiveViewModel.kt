@@ -8,7 +8,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.aaa1115910.biliapi.entity.live.LiveAreaItem
 import dev.aaa1115910.biliapi.entity.live.LiveAreaGroup
+import dev.aaa1115910.biliapi.entity.live.LiveHistoryCursor
+import dev.aaa1115910.biliapi.entity.live.LiveHistoryItem
 import dev.aaa1115910.biliapi.entity.live.LiveRoomItem
+import dev.aaa1115910.biliapi.repositories.LiveHistoryRepository
 import dev.aaa1115910.biliapi.repositories.LiveRepository
 import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.util.toast
@@ -26,12 +29,14 @@ import org.koin.android.annotation.KoinViewModel
 enum class LiveTabType {
     Recommend,   // 推荐
     Following,   // 关注
+    History,     // 历史
     Area         // 分区
 }
 
 @KoinViewModel
 class LiveViewModel(
-    private val liveRepository: LiveRepository
+    private val liveRepository: LiveRepository,
+    private val liveHistoryRepository: LiveHistoryRepository
 ) : ViewModel() {
     private val logger = KotlinLogging.logger("LiveViewModel")
 
@@ -91,6 +96,24 @@ class LiveViewModel(
     var followingLiveCount by mutableStateOf(0)
         private set
 
+    // ==================== 历史相关 ====================
+
+    /**
+     * 直播观看历史列表
+     */
+    val historyList = mutableStateListOf<LiveHistoryItem>()
+
+    /**
+     * 历史列表分页游标
+     */
+    private var historyCursor by mutableStateOf(LiveHistoryCursor())
+
+    /**
+     * 历史列表是否还有更多
+     */
+    var historyHasMore by mutableStateOf(true)
+        private set
+
     // ==================== 分区相关（保持原有逻辑） ====================
 
     /**
@@ -129,6 +152,9 @@ class LiveViewModel(
     var followingLoading by mutableStateOf(false)
         private set
 
+    var historyLoading by mutableStateOf(false)
+        private set
+
     var areaLoading by mutableStateOf(false)
         private set
 
@@ -136,6 +162,7 @@ class LiveViewModel(
         get() = when (currentTabType) {
             LiveTabType.Recommend -> recommendLoading
             LiveTabType.Following -> followingLoading
+            LiveTabType.History -> historyLoading
             LiveTabType.Area -> areaLoading
         }
 
@@ -156,10 +183,12 @@ class LiveViewModel(
 
     private var recommendJob: Job? = null
     private var followingJob: Job? = null
+    private var historyJob: Job? = null
     private var areaJob: Job? = null
 
     private var recommendRequestVersion = 0
     private var followingRequestVersion = 0
+    private var historyRequestVersion = 0
     private var areaRequestVersion = 0
 
     private val areaRoomCache = mutableMapOf<String, AreaRoomCache>()
@@ -187,6 +216,11 @@ class LiveViewModel(
             LiveTabType.Following -> {
                 if (followingList.isEmpty()) {
                     loadFollowing(refresh = true)
+                }
+            }
+            LiveTabType.History -> {
+                if (historyList.isEmpty()) {
+                    loadHistory(refresh = true)
                 }
             }
             LiveTabType.Area -> {
@@ -323,6 +357,65 @@ class LiveViewModel(
                 withContext(Dispatchers.Main) {
                     if (requestVersion == followingRequestVersion) {
                         followingLoading = false
+                    }
+                }
+            }
+        }
+    }
+
+    // ==================== 历史加载 ====================
+
+    /**
+     * 加载直播观看历史
+     */
+    fun loadHistory(refresh: Boolean = false) {
+        if (historyLoading && !refresh) return
+        if (refresh) {
+            historyJob?.cancel()
+        }
+
+        val targetCursor = if (refresh) LiveHistoryCursor() else historyCursor
+        val requestVersion = ++historyRequestVersion
+        historyLoading = true
+
+        historyJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val response = liveHistoryRepository.getLiveHistories(
+                    max = targetCursor.max,
+                    viewAt = targetCursor.viewAt,
+                    business = targetCursor.business
+                )
+                withContext(Dispatchers.Main) {
+                    if (requestVersion != historyRequestVersion) return@withContext
+
+                    if (refresh) {
+                        historyList.clear()
+                        historyList.addAll(response.items)
+                    } else {
+                        val existingKeys = historyList
+                            .map { "${it.roomId}:${it.viewAt}" }
+                            .toHashSet()
+                        val uniqueNewItems = response.items.filter {
+                            "${it.roomId}:${it.viewAt}" !in existingKeys
+                        }
+                        historyList.addAll(uniqueNewItems)
+                    }
+
+                    historyCursor = response.cursor
+                    historyHasMore = response.hasMore
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to load live histories" }
+                withContext(Dispatchers.Main) {
+                    if (requestVersion != historyRequestVersion) return@withContext
+                    "加载直播历史失败: ${e.message}".toast(BVApp.context)
+                }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    if (requestVersion == historyRequestVersion) {
+                        historyLoading = false
                     }
                 }
             }
@@ -471,6 +564,7 @@ class LiveViewModel(
         return when (currentTabType) {
             LiveTabType.Recommend -> recommendList
             LiveTabType.Following -> followingList
+            LiveTabType.History -> emptyList()
             LiveTabType.Area -> roomList
         }
     }
@@ -482,6 +576,7 @@ class LiveViewModel(
         when (currentTabType) {
             LiveTabType.Recommend -> loadRecommend(refresh = true)
             LiveTabType.Following -> loadFollowing(refresh = true)
+            LiveTabType.History -> loadHistory(refresh = true)
             LiveTabType.Area -> loadRooms(refresh = true)
         }
     }
@@ -501,6 +596,11 @@ class LiveViewModel(
                     loadFollowing(refresh = false)
                 }
             }
+            LiveTabType.History -> {
+                if (historyHasMore && !historyLoading) {
+                    loadHistory(refresh = false)
+                }
+            }
             LiveTabType.Area -> {
                 if (hasMore && !areaLoading) {
                     loadRooms(refresh = false)
@@ -513,6 +613,7 @@ class LiveViewModel(
         return when (currentTabType) {
             LiveTabType.Recommend -> "recommend"
             LiveTabType.Following -> "following"
+            LiveTabType.History -> "history"
             LiveTabType.Area -> "area:${getCurrentAreaContextKey()}"
         }
     }
@@ -524,6 +625,7 @@ class LiveViewModel(
         return when (currentTabType) {
             LiveTabType.Recommend -> recommendHasMore
             LiveTabType.Following -> followingHasMore
+            LiveTabType.History -> historyHasMore
             LiveTabType.Area -> hasMore
         }
     }

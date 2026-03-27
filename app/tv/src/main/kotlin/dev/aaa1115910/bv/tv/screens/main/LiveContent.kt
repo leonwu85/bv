@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.aaa1115910.biliapi.entity.live.LiveAreaItem
 import dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity
+import dev.aaa1115910.bv.tv.component.live.LiveHistoryCard
 import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.tv.component.TopNav
 import dev.aaa1115910.bv.tv.component.TopNavItem
@@ -51,6 +52,9 @@ private sealed class LiveParentNavItem : TopNavItem {
     }
     data object Following : LiveParentNavItem() {
         override fun getDisplayName(context: Context): String = "关注"
+    }
+    data object History : LiveParentNavItem() {
+        override fun getDisplayName(context: Context): String = "历史"
     }
     data class Area(val group: LiveAreaGroup) : LiveParentNavItem() {
         override fun getDisplayName(context: Context): String = group.name
@@ -79,8 +83,17 @@ fun LiveContent(
     var subNavHasFocus by remember { mutableStateOf(false) }
 
     val currentRoomList = liveViewModel.getCurrentRoomList()
+    val currentHistoryList = liveViewModel.historyList
     val currentContentKey = liveViewModel.currentContentKey()
     var suppressLoadMore by remember { mutableStateOf(false) }
+    val currentListSize by remember {
+        derivedStateOf {
+            when (liveViewModel.currentTabType) {
+                LiveTabType.History -> currentHistoryList.size
+                else -> currentRoomList.size
+            }
+        }
+    }
 
     val currentListOnTop by remember {
         derivedStateOf {
@@ -98,14 +111,14 @@ fun LiveContent(
     LaunchedEffect(
         currentContentKey,
         gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index,
-        currentRoomList.size,
+        currentListSize,
         liveViewModel.loading
     ) {
-        if (suppressLoadMore || currentRoomList.isEmpty() || liveViewModel.loading || !liveViewModel.currentHasMore()) {
+        if (suppressLoadMore || currentListSize == 0 || liveViewModel.loading || !liveViewModel.currentHasMore()) {
             return@LaunchedEffect
         }
         val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-        val totalItems = currentRoomList.size
+        val totalItems = currentListSize
         if (lastVisibleIndex >= totalItems - 5) {
             logger.info { "Trigger load more, lastVisibleIndex: $lastVisibleIndex, totalItems: $totalItems" }
             liveViewModel.loadMore()
@@ -113,9 +126,9 @@ fun LiveContent(
     }
 
     // 恢复焦点到上次点击的直播间
-    LaunchedEffect(currentContentKey, currentRoomList.size) {
+    LaunchedEffect(currentContentKey, currentListSize) {
         if (liveViewModel.lastFocusedRoomIndex > 0 &&
-            liveViewModel.lastFocusedRoomIndex < currentRoomList.size) {
+            liveViewModel.lastFocusedRoomIndex < currentListSize) {
             gridState.scrollToItem(liveViewModel.lastFocusedRoomIndex)
         }
     }
@@ -147,6 +160,7 @@ fun LiveContent(
             buildList {
                 add(LiveParentNavItem.Recommend)
                 add(LiveParentNavItem.Following)
+                add(LiveParentNavItem.History)
                 addAll(liveViewModel.parentAreaGroups.map { LiveParentNavItem.Area(it) })
             }
         }
@@ -161,6 +175,7 @@ fun LiveContent(
                     val initialSelectedItem = when (liveViewModel.currentTabType) {
                         LiveTabType.Recommend -> LiveParentNavItem.Recommend
                         LiveTabType.Following -> LiveParentNavItem.Following
+                        LiveTabType.History -> LiveParentNavItem.History
                         LiveTabType.Area -> liveViewModel.currentParentGroup?.let { LiveParentNavItem.Area(it) }
                     } ?: LiveParentNavItem.Recommend
 
@@ -181,6 +196,10 @@ fun LiveContent(
                                 is LiveParentNavItem.Following -> {
                                     liveViewModel.switchTab(LiveTabType.Following)
                                 }
+                                is LiveParentNavItem.History -> {
+                                    liveViewModel.switchTab(LiveTabType.History)
+                                    liveViewModel.refresh()
+                                }
                                 is LiveParentNavItem.Area -> {
                                     liveViewModel.switchTab(LiveTabType.Area)
                                     liveViewModel.switchParentArea(nav.group)
@@ -199,6 +218,13 @@ fun LiveContent(
                                 }
                                 is LiveParentNavItem.Following -> {
                                     if (liveViewModel.currentTabType == LiveTabType.Following) {
+                                        liveViewModel.lastFocusedRoomIndex = 0
+                                        liveViewModel.refresh()
+                                        scope.launch { gridState.scrollToItem(0) }
+                                    }
+                                }
+                                is LiveParentNavItem.History -> {
+                                    if (liveViewModel.currentTabType == LiveTabType.History) {
                                         liveViewModel.lastFocusedRoomIndex = 0
                                         liveViewModel.refresh()
                                         scope.launch { gridState.scrollToItem(0) }
@@ -264,9 +290,9 @@ fun LiveContent(
                 .padding(innerPadding)
                 .onFocusChanged { focusOnContent = it.hasFocus }
         ) {
-            if (currentRoomList.isEmpty() && liveViewModel.loading) {
+            if (currentListSize == 0 && liveViewModel.loading) {
                 LoadingTip()
-            } else if (currentRoomList.isEmpty()) {
+            } else if (currentListSize == 0) {
                 // 空状态提示
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -275,6 +301,7 @@ fun LiveContent(
                     val emptyText = when (liveViewModel.currentTabType) {
                         LiveTabType.Recommend -> "暂无推荐直播"
                         LiveTabType.Following -> "关注的主播暂未开播"
+                        LiveTabType.History -> "暂无直播历史"
                         LiveTabType.Area -> "该分区暂无直播"
                     }
                     Text(text = emptyText)
@@ -288,26 +315,50 @@ fun LiveContent(
                     verticalArrangement = Arrangement.spacedBy(20.dp),
                     horizontalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    itemsIndexed(
-                        items = currentRoomList,
-                        key = { _, room -> room.roomId }
-                    ) { index, room ->
-                        LiveRoomCard(
-                            data = room,
-                            onClick = {
-                                liveViewModel.lastFocusedRoomIndex = index
-                                VideoPlayerV3Activity.actionStartLive(
-                                    context = context,
-                                    roomId = room.roomId,
-                                    title = room.title,
-                                    upName = room.uname,
-                                    watchedNum = room.watchedShow?.num ?: (room.online / 10)
-                                )
-                            },
-                            onFocus = {
-                                logger.debug { "Focus on room ${room.roomId}" }
-                            }
-                        )
+                    if (liveViewModel.currentTabType == LiveTabType.History) {
+                        itemsIndexed(
+                            items = currentHistoryList,
+                            key = { _, room -> "${room.roomId}:${room.viewAt}" }
+                        ) { index, room ->
+                            LiveHistoryCard(
+                                data = room,
+                                onClick = {
+                                    liveViewModel.lastFocusedRoomIndex = index
+                                    VideoPlayerV3Activity.actionStartLive(
+                                        context = context,
+                                        roomId = room.roomId,
+                                        title = room.title,
+                                        upName = room.uname,
+                                        watchedNum = 0
+                                    )
+                                },
+                                onFocus = {
+                                    logger.debug { "Focus on history room ${room.roomId}" }
+                                }
+                            )
+                        }
+                    } else {
+                        itemsIndexed(
+                            items = currentRoomList,
+                            key = { _, room -> room.roomId }
+                        ) { index, room ->
+                            LiveRoomCard(
+                                data = room,
+                                onClick = {
+                                    liveViewModel.lastFocusedRoomIndex = index
+                                    VideoPlayerV3Activity.actionStartLive(
+                                        context = context,
+                                        roomId = room.roomId,
+                                        title = room.title,
+                                        upName = room.uname,
+                                        watchedNum = room.watchedShow?.num ?: (room.online / 10)
+                                    )
+                                },
+                                onFocus = {
+                                    logger.debug { "Focus on room ${room.roomId}" }
+                                }
+                            )
+                        }
                     }
 
                     // 加载中提示
