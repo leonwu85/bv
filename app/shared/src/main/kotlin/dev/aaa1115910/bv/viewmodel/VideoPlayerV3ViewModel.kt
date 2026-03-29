@@ -300,6 +300,9 @@ class VideoPlayerV3ViewModel(
         seasonId: Int? = null,
         continuePlayNext: Boolean = false
     ) {
+        if (continuePlayNext) {
+            lastPlayed = 0
+        }
         currentAid = avid
         currentCid = cid
         currentEpid = epid ?: 0
