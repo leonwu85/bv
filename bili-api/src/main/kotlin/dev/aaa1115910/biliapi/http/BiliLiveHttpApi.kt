@@ -6,6 +6,7 @@ import dev.aaa1115910.biliapi.http.entity.live.DanmuInfoData
 import dev.aaa1115910.biliapi.http.entity.live.HistoryDanmaku
 import dev.aaa1115910.biliapi.http.entity.live.RoomPlayInfoData
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
+import dev.aaa1115910.biliapi.http.util.IPv4PreferredDns
 import dev.aaa1115910.biliapi.http.util.encWbi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
@@ -33,6 +34,11 @@ object BiliLiveHttpApi {
 
     private fun createClient() {
         client = HttpClient(OkHttp) {
+            engine {
+                config {
+                    dns(IPv4PreferredDns)
+                }
+            }
             BiliUserAgent()
             install(ContentNegotiation) {
                 json(Json {

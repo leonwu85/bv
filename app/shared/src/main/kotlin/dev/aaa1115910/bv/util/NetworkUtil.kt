@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.util
 
+import dev.aaa1115910.biliapi.http.util.IPv4PreferredDns
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -25,6 +26,11 @@ object NetworkUtil {
 
     private fun createClient() {
         client = HttpClient(OkHttp) {
+            engine {
+                config {
+                    dns(IPv4PreferredDns)
+                }
+            }
             install(HttpRequestRetry) {
                 retryOnException(maxRetries = 3)
             }

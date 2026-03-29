@@ -3,6 +3,7 @@ package dev.aaa1115910.biliapi.http
 import dev.aaa1115910.biliapi.BiliApiConstants
 import dev.aaa1115910.biliapi.http.entity.BiliResponse
 import dev.aaa1115910.biliapi.http.entity.search.SearchResultData
+import dev.aaa1115910.biliapi.http.util.IPv4PreferredDns
 import dev.aaa1115910.biliapi.http.entity.video.PlayUrlData
 import dev.aaa1115910.biliapi.http.entity.video.PlayUrlV2Data
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
@@ -33,6 +34,11 @@ object BiliHttpProxyApi {
 
     fun createClient(proxyServer: String) {
         client = HttpClient(OkHttp) {
+            engine {
+                config {
+                    dns(IPv4PreferredDns)
+                }
+            }
             BiliUserAgent()
             install(ContentNegotiation) {
                 json(json)

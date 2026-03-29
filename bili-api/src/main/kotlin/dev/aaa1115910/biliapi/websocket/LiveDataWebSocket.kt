@@ -9,6 +9,7 @@ import dev.aaa1115910.biliapi.http.entity.live.OnlineRankCountEvent
 import dev.aaa1115910.biliapi.http.entity.live.PopularityChangeEvent
 import dev.aaa1115910.biliapi.http.entity.live.readFrameHeader
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
+import dev.aaa1115910.biliapi.http.util.IPv4PreferredDns
 import dev.aaa1115910.biliapi.http.util.brotliDecompress
 import dev.aaa1115910.biliapi.http.util.zlibDecompress
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -80,6 +81,11 @@ object LiveDataWebSocket {
 
     private fun createClient() {
         client = HttpClient(OkHttp) {
+            engine {
+                config {
+                    dns(IPv4PreferredDns)
+                }
+            }
             BiliUserAgent()
             install(WebSockets)
         }

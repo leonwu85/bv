@@ -3,6 +3,7 @@ package dev.aaa1115910.bv.network
 import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.network.entity.Release
 import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.biliapi.http.util.IPv4PreferredDns
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
 import io.ktor.client.content.ProgressListener
@@ -51,6 +52,7 @@ object GithubApi {
 
     private fun createClient() {
         val okHttpClient = OkHttpClient.Builder()
+            .dns(IPv4PreferredDns)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
@@ -216,6 +218,7 @@ object GithubApi {
                 val tempClient = HttpClient(OkHttp) {
                     engine {
                         val okHttp = OkHttpClient.Builder()
+                            .dns(IPv4PreferredDns)
                             .connectTimeout(5, TimeUnit.SECONDS)
                             .readTimeout(10, TimeUnit.SECONDS)
                             .build()

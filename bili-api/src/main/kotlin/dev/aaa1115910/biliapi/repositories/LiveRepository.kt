@@ -6,6 +6,7 @@ import dev.aaa1115910.biliapi.entity.live.LiveFollowResponse
 import dev.aaa1115910.biliapi.entity.live.LiveRoomListResponse
 import dev.aaa1115910.biliapi.entity.live.LiveRoomPlayInfoResponse
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
+import dev.aaa1115910.biliapi.http.util.IPv4PreferredDns
 import dev.aaa1115910.biliapi.http.util.encAppGet
 import dev.aaa1115910.biliapi.http.util.encWebAppGet
 import io.ktor.client.HttpClient
@@ -26,6 +27,11 @@ class LiveRepository(
     private val authRepository: AuthRepository
 ) {
     private val client = HttpClient(OkHttp) {
+        engine {
+            config {
+                dns(IPv4PreferredDns)
+            }
+        }
         BiliUserAgent()
         install(ContentNegotiation) {
             json(Json {

@@ -4,6 +4,7 @@ import dev.aaa1115910.biliapi.BiliApiConstants
 import dev.aaa1115910.biliapi.http.entity.BiliResponse
 import dev.aaa1115910.biliapi.http.entity.biliplus.View
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
+import dev.aaa1115910.biliapi.http.util.IPv4PreferredDns
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpRequestRetry
@@ -38,6 +39,11 @@ object BiliPlusHttpApi {
 
     private fun createClient() {
         client = HttpClient(OkHttp) {
+            engine {
+                config {
+                    dns(IPv4PreferredDns)
+                }
+            }
             BiliUserAgent()
             install(ContentNegotiation) {
                 json(json)

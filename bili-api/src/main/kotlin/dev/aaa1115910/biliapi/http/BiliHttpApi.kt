@@ -5,6 +5,7 @@ import dev.aaa1115910.biliapi.entity.pgc.PgcType
 import dev.aaa1115910.biliapi.http.BiliHttpApi.getRegionDynamic
 import dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_WEB
 import dev.aaa1115910.biliapi.http.entity.BiliResponse
+import dev.aaa1115910.biliapi.http.util.IPv4PreferredDns
 import dev.aaa1115910.biliapi.http.entity.BiliResponseWithoutData
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuResponse
@@ -146,6 +147,11 @@ object BiliHttpApi {
 
     private fun createClient() {
         client = HttpClient(OkHttp) {
+            engine {
+                config {
+                    dns(IPv4PreferredDns)
+                }
+            }
             install(UserAgent) {
                 agent = USER_AGENT_WEB
             }

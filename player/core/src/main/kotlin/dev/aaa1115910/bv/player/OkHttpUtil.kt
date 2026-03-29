@@ -1,6 +1,7 @@
 package dev.aaa1115910.bv.player
 
 import android.content.Context
+import dev.aaa1115910.bv.player.util.IPv4PreferredDns
 import okhttp3.OkHttpClient
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
@@ -55,6 +56,7 @@ object OkHttpUtil {
         }
 
         return OkHttpClient.Builder()
+            .dns(IPv4PreferredDns)
             .sslSocketFactory(
                 sslContext.socketFactory,
                 trustManagerFactory.trustManagers[0] as X509TrustManager
@@ -112,6 +114,7 @@ object OkHttpUtil {
         }
 
         return OkHttpClient.Builder()
+            .dns(IPv4PreferredDns)
             .sslSocketFactory(
                 sslContext.socketFactory,
                 trustManagerFactory.trustManagers[0] as X509TrustManager
