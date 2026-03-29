@@ -326,7 +326,7 @@ class VideoPlayerV3ViewModel(
             updateSubtitle()
             loadPlayUrl(avid, cid, epid ?: 0, preferApi = Prefs.apiType, proxyArea = proxyArea)
             // addLogs("加载弹幕中")
-            loadDanmaku(cid)
+            loadDanmaku(cid, playData?.timeLength ?: 0)
             updateDanmakuMask()
 
             // 加载 SponsorBlock 片段
@@ -609,7 +609,7 @@ class VideoPlayerV3ViewModel(
         }
     }
 
-    suspend fun loadDanmaku(cid: Long) {
+    suspend fun loadDanmaku(cid: Long, durationMs: Long = 0) {
         runCatching {
             val batchSize = 600 // 分批大小，可根据设备性能调节
             withContext(Dispatchers.Main) {
@@ -619,7 +619,12 @@ class VideoPlayerV3ViewModel(
             // 使用新的 WBI 签名接口获取弹幕
             val allDanmakuData = mutableListOf<dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData>()
             var segmentIndex = 1
-            val maxSegments = 20 // 最多获取 20 段，覆盖约 120 分钟
+            // 根据视频时长计算分段数，每段 6 分钟
+            val maxSegments = if (durationMs > 0) {
+                kotlin.math.ceil(durationMs / (6.0 * 60 * 1000)).toInt().coerceAtLeast(1)
+            } else {
+                20 // 未知时长时默认获取 20 段（约 120 分钟）
+            }
 
             while (segmentIndex <= maxSegments) {
                 val segmentData = BiliHttpApi.getDanmakuSeg(
@@ -637,7 +642,13 @@ class VideoPlayerV3ViewModel(
             }
 
             val total = allDanmakuData.size
-            val filteredDanmaku = allDanmakuData.filter { it.level >= currentDanmakuFilterLevel }
+            val deduplicated = allDanmakuData.distinctBy { it.dmid }
+            val deduplicatedCount = total - deduplicated.size
+            if (deduplicatedCount > 0) {
+                addLogs("去重了 $deduplicatedCount 条重复弹幕")
+                logger.fInfo { "Deduplicated $deduplicatedCount danmaku" }
+            }
+            val filteredDanmaku = deduplicated.filter { it.level >= currentDanmakuFilterLevel }
             val filteredCount = total - filteredDanmaku.size
             if (filteredCount > 0) {
                 addLogs("过滤了 $filteredCount 条低等级弹幕（等级 < $currentDanmakuFilterLevel）")

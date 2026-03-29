@@ -16,6 +16,7 @@ data class PlayData(
     val codec: Map<Int, List<String>> = emptyMap(),
     val needPay: Boolean = false,
     val clipInfoList: List<ClipInfo> = emptyList(),
+    val timeLength: Long = 0,
 ) {
     companion object {
         fun fromPlayViewUniteReply(playViewUniteReply: PlayViewUniteReply): PlayData {
@@ -74,7 +75,8 @@ data class PlayData(
                 dolby = dolby,
                 flac = flac,
                 codec = codecs,
-                needPay = false
+                needPay = false,
+                timeLength = playViewUniteReply.vodInfo.timelength
             )
         }
 
@@ -124,7 +126,8 @@ data class PlayData(
                 dolby = dolby,
                 flac = null,
                 codec = codecs,
-                needPay = needPay
+                needPay = needPay,
+                timeLength = pgcPlayViewReply.videoInfo.timelength
             )
         }
 
@@ -187,7 +190,8 @@ data class PlayData(
                 flac = flac,
                 codec = codec,
                 needPay = needPay,
-                clipInfoList = playUrlData.clipInfoList
+                clipInfoList = playUrlData.clipInfoList,
+                timeLength = playUrlData.timeLength.toLong()
             )
         }
 
@@ -246,7 +250,8 @@ data class PlayData(
                 flac = flac,
                 codec = codec,
                 needPay = needPay,
-                clipInfoList = playUrlData.clipInfoList
+                clipInfoList = playUrlData.clipInfoList,
+                timeLength = playUrlData.timeLength.toLong()
             )
         }
 
@@ -305,7 +310,8 @@ data class PlayData(
                 flac = flac,
                 codec = codec,
                 needPay = needPay,
-                clipInfoList = playUrlData.clipInfoList
+                clipInfoList = playUrlData.clipInfoList,
+                timeLength = playUrlData.timeLength.toLong()
             )
         }
     }
@@ -326,7 +332,8 @@ data class PlayData(
                     .filter { it != "none" }
             }.toMap(),
             needPay = needPay || other.needPay,
-            clipInfoList = clipInfoList + other.clipInfoList
+            clipInfoList = clipInfoList + other.clipInfoList,
+            timeLength = maxOf(timeLength, other.timeLength)
         )
     }
 }
