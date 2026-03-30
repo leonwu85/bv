@@ -2,6 +2,7 @@ package dev.aaa1115910.biliapi.http
 
 import dev.aaa1115910.biliapi.BiliApiConstants
 import dev.aaa1115910.biliapi.http.entity.BiliResponse
+import dev.aaa1115910.biliapi.http.entity.BiliResponseWithoutData
 import dev.aaa1115910.biliapi.http.entity.live.DanmuInfoData
 import dev.aaa1115910.biliapi.http.entity.live.HistoryDanmaku
 import dev.aaa1115910.biliapi.http.entity.live.RoomPlayInfoData
@@ -18,7 +19,11 @@ import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.request.forms.FormDataContent
 import io.ktor.http.URLProtocol
+import io.ktor.http.Parameters
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
@@ -82,5 +87,47 @@ object BiliLiveHttpApi {
         client.get("/xlive/web-room/v1/dM/gethistory") {
             parameter("roomid", roomId)
         }.body()
+
+    /**
+     * 上报进入直播间行为，用于写入直播观看历史。
+     */
+    suspend fun reportRoomEntryAction(
+        roomId: Int,
+        csrf: String,
+        sessData: String,
+        buvid3: String? = null,
+        platform: String = "pc",
+        visitId: String = ""
+    ): BiliResponseWithoutData = client.post("/xlive/web-room/v1/index/roomEntryAction") {
+        parameter("csrf", csrf)
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("room_id", roomId.toString())
+                    append("platform", platform)
+                    append("csrf_token", csrf)
+                    append("csrf", csrf)
+                    append("visit_id", visitId)
+                }
+            )
+        )
+        header("Origin", "https://live.bilibili.com")
+        header("Referer", "https://live.bilibili.com/$roomId")
+        header(
+            "Cookie",
+            buildString {
+                buvid3?.takeIf { it.isNotBlank() }?.let {
+                    append("buvid3=")
+                    append(it)
+                    append("; ")
+                }
+                append("bili_jct=")
+                append(csrf)
+                append("; SESSDATA=")
+                append(sessData)
+                append(";")
+            }
+        )
+    }.body()
 
 }

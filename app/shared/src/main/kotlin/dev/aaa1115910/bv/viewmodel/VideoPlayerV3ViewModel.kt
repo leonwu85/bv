@@ -35,6 +35,7 @@ import dev.aaa1115910.biliapi.http.entity.live.OnlineRankCountEvent
 import dev.aaa1115910.biliapi.http.entity.live.PopularityChangeEvent
 import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment
 import dev.aaa1115910.biliapi.http.SponsorBlockHttpApi
+import dev.aaa1115910.biliapi.repositories.LiveRepository
 import dev.aaa1115910.biliapi.repositories.VideoPlayRepository
 import dev.aaa1115910.biliapi.util.AvBvConverter
 import dev.aaa1115910.biliapi.websocket.LiveDataWebSocket
@@ -88,6 +89,7 @@ import java.net.URI
 class VideoPlayerV3ViewModel(
     private val videoInfoRepository: VideoInfoRepository,
     private val videoPlayRepository: VideoPlayRepository,
+    private val liveRepository: LiveRepository,
 ) : ViewModel() {
     private val logger = KotlinLogging.logger { }
 
@@ -107,6 +109,9 @@ class VideoPlayerV3ViewModel(
         // 清理直播URL刷新任务
         liveUrlRefreshJob?.cancel()
         liveUrlRefreshJob = null
+
+        liveRoomEntryReportJob?.cancel()
+        liveRoomEntryReportJob = null
 
         // 清理直播弹幕资源
         stopLiveDanmaku()
@@ -209,6 +214,11 @@ class VideoPlayerV3ViewModel(
 
     // 直播自动重连
     private var liveRetryJob: Job? = null
+
+    // 直播历史单次上报
+    private var liveRoomEntryReportJob: Job? = null
+    private var reportedLiveRoomId: Int? = null
+    private var reportingLiveRoomId: Int? = null
 
     // 直播URL主动刷新
     private var liveUrlRefreshJob: Job? = null
@@ -865,6 +875,35 @@ class VideoPlayerV3ViewModel(
         }
     }
 
+    private fun ensureLiveRoomEntryReported(roomId: Int) {
+        if (!isLive || roomId <= 0) return
+        if (Prefs.liveIncognitoMode) {
+            logger.fInfo { "Skip live room entry report in live incognito mode: roomId=$roomId" }
+            return
+        }
+        if (!liveRepository.canReportRoomEntryAction()) {
+            logger.fInfo { "Skip live room entry report because auth is unavailable: roomId=$roomId" }
+            return
+        }
+        if (reportedLiveRoomId == roomId || reportingLiveRoomId == roomId) {
+            return
+        }
+
+        liveRoomEntryReportJob?.cancel()
+        reportingLiveRoomId = roomId
+        liveRoomEntryReportJob = viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                liveRepository.reportRoomEntryAction(roomId)
+            }.onSuccess {
+                reportedLiveRoomId = roomId
+                logger.fInfo { "Reported live room entry successfully: roomId=$roomId" }
+            }.onFailure {
+                logger.fWarn { "Report live room entry failed: roomId=$roomId, error=${it.message}" }
+            }
+            reportingLiveRoomId = null
+        }
+    }
+
     fun loadSubtitle(id: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             if (id == -1L) {
@@ -1119,6 +1158,7 @@ class VideoPlayerV3ViewModel(
                     loadState = RequestState.Success
                 }
                 logger.fInfo { "Live stream loaded successfully with quality ${playInfo.currentQn}" }
+                ensureLiveRoomEntryReported(roomId)
                 // 播放成功后自动启动直播弹幕（仅首次加载，画质切换时不重启弹幕）
                 if (liveWebSocket == null) {
                     startLiveDanmaku(roomId)

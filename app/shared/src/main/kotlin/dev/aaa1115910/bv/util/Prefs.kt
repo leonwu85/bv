@@ -223,6 +223,10 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowLivePopularityRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowLivePopularityKey, value) }
 
+    var liveIncognitoMode: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefLiveIncognitoModeRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefLiveIncognitoModeKey, value) }
+
     var buvid: String
         get() = runBlocking {
             val id = dsm.getPreferenceFlow(PrefKeys.prefBuvidRequest).first()
@@ -589,6 +593,7 @@ object PrefKeys {
     val prefShowLiveInSidebarKey = booleanPreferencesKey("show_live_in_sidebar")
     val prefShowLiveDanmakuEmojiKey = booleanPreferencesKey("show_live_danmaku_emoji")
     val prefShowLivePopularityKey = booleanPreferencesKey("show_live_popularity")
+    val prefLiveIncognitoModeKey = booleanPreferencesKey("live_incognito_mode")
     val prefHomeNavItemsOrderKey = stringPreferencesKey("home_nav_items_order")
     val prefSkipPgcIntroOutroKey = booleanPreferencesKey("skip_pgc_intro_outro")
     val prefPlayerLongPressActionKey = intPreferencesKey("player_long_press_action")
@@ -683,6 +688,7 @@ object PrefKeys {
     val prefShowLiveInSidebarRequest = PreferenceRequest(prefShowLiveInSidebarKey, false)
     val prefShowLiveDanmakuEmojiRequest = PreferenceRequest(prefShowLiveDanmakuEmojiKey, false)
     val prefShowLivePopularityRequest = PreferenceRequest(prefShowLivePopularityKey, true)
+    val prefLiveIncognitoModeRequest = PreferenceRequest(prefLiveIncognitoModeKey, true)
     val prefHomeNavItemsOrderRequest = PreferenceRequest(
         prefHomeNavItemsOrderKey,
         "0,1,2,3,4,5,6"  // 默认全部显示，按原始顺序

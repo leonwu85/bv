@@ -5,6 +5,7 @@ import dev.aaa1115910.biliapi.entity.live.LiveFeedResponse
 import dev.aaa1115910.biliapi.entity.live.LiveFollowResponse
 import dev.aaa1115910.biliapi.entity.live.LiveRoomListResponse
 import dev.aaa1115910.biliapi.entity.live.LiveRoomPlayInfoResponse
+import dev.aaa1115910.biliapi.http.BiliLiveHttpApi
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
 import dev.aaa1115910.biliapi.http.util.encAppGet
 import dev.aaa1115910.biliapi.http.util.encWebAppGet
@@ -144,4 +145,23 @@ class LiveRepository(
                 }
             }.body()
         }
+
+    fun canReportRoomEntryAction(): Boolean {
+        return !authRepository.sessionData.isNullOrBlank() && !authRepository.biliJct.isNullOrBlank()
+    }
+
+    suspend fun reportRoomEntryAction(roomId: Int, platform: String = "pc") {
+        val sessData = authRepository.sessionData
+            ?: throw IllegalStateException("sessionData is null")
+        val csrf = authRepository.biliJct
+            ?: throw IllegalStateException("biliJct is null")
+        val response = BiliLiveHttpApi.reportRoomEntryAction(
+            roomId = roomId,
+            csrf = csrf,
+            sessData = sessData,
+            buvid3 = authRepository.buvid3,
+            platform = platform
+        )
+        check(response.code == 0) { response.message }
+    }
 }

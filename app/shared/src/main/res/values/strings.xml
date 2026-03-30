@@ -275,6 +275,8 @@
     <string name="settings_live_enable_desc">在侧边栏显示直播入口</string>
     <string name="settings_live_danmaku_emoji">显示弹幕表情</string>
     <string name="settings_live_danmaku_emoji_desc">开启后显示直播弹幕中的表情图片，首次仍以文本形式显示</string>
+    <string name="settings_live_incognito_mode">直播无痕模式</string>
+    <string name="settings_live_incognito_mode_desc">开启后不记录直播观看历史，仅对直播生效</string>
     <string name="settings_live_popularity">显示直播间人气</string>
     <string name="settings_live_popularity_desc">在直播播放页显示人气和高能观众</string>
     <string name="live_quality_dolby">杜比</string>

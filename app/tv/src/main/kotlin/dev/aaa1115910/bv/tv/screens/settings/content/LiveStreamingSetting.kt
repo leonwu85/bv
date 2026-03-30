@@ -35,6 +35,7 @@ fun LiveStreamingSetting(
     val context = LocalContext.current
     var defaultLiveQuality by remember { mutableStateOf(LiveQualityPreference.fromQn(Prefs.defaultLiveQn)) }
     var defaultLiveCodec by remember { mutableStateOf(Prefs.defaultLiveCodec) }
+    var liveIncognitoMode by remember { mutableStateOf(Prefs.liveIncognitoMode) }
     var showLiveInSidebar by remember { mutableStateOf(Prefs.showLiveInSidebar) }
     var showLiveDanmakuEmoji by remember { mutableStateOf(Prefs.showLiveDanmakuEmoji) }
     var showLivePopularity by remember { mutableStateOf(Prefs.showLivePopularity) }
@@ -63,6 +64,17 @@ fun LiveStreamingSetting(
                         onCheckedChange = {
                             showLiveInSidebar = it
                             Prefs.showLiveInSidebar = it
+                        }
+                    )
+                }
+                item {
+                    SettingSwitchListItem(
+                        title = stringResource(R.string.settings_live_incognito_mode),
+                        supportText = stringResource(R.string.settings_live_incognito_mode_desc),
+                        checked = liveIncognitoMode,
+                        onCheckedChange = {
+                            liveIncognitoMode = it
+                            Prefs.liveIncognitoMode = it
                         }
                     )
                 }
