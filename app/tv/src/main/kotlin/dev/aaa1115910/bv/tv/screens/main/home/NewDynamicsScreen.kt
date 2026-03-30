@@ -98,6 +98,7 @@ import org.koin.androidx.compose.koinViewModel
 fun NewDynamicsScreen(
     modifier: Modifier = Modifier,
     lazyGridState: LazyGridState = rememberLazyGridState(),
+    tabRowFocusRequester: FocusRequester,
     initialSelectedTabIndex: Int = 0,
     onSelectedTabChanged: (Int) -> Unit = {},
     onLeftKeyEvent: () -> Unit = {},
@@ -107,7 +108,6 @@ fun NewDynamicsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val tabRowFocusRequester = remember { FocusRequester() }
     var selectedTabIndex by remember { mutableIntStateOf(initialSelectedTabIndex) }
     var currentFocusedIndex by remember { mutableIntStateOf(-1) }
     var contentHasFocus by remember { mutableStateOf(false) }
@@ -323,11 +323,6 @@ private fun DynamicTabRow(
     onRightKeyEvent: () -> Unit = {}
 ) {
     val context = LocalContext.current
-
-    LaunchedEffect(Unit) {
-        delay(100)
-        tabRowFocusRequester.requestFocus()
-    }
 
     TabRow(
         modifier = modifier

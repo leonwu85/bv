@@ -86,6 +86,7 @@ fun HomeContent(
     
     var focusOnContent by remember { mutableStateOf(false) }
     var topNavHasFocus by remember { mutableStateOf(false) }
+    val dynamicTabRowFocusRequester = remember { FocusRequester() }
 
     // 记住动态页子 Tab 的选中索引，默认值从设置中读取
     var dynamicSubTabIndex by remember { mutableIntStateOf(Prefs.dynamicDefaultTab.ordinal) }
@@ -113,6 +114,7 @@ fun HomeContent(
                 ?: HomeTopNavItem.entries.getOrElse(Prefs.defaultHomeTab) { HomeTopNavItem.Recommend }
         )
     }
+    var focusedTopNavItem by remember { mutableStateOf(selectedTab) }
 
     fun initData () {
         scope.launch {
@@ -197,6 +199,26 @@ fun HomeContent(
         initData()
     }
 
+    LaunchedEffect(selectedTab, focusedTopNavItem, topNavHasFocus, userViewModel.isLogin) {
+        val shouldFocusDynamicSubTab =
+            userViewModel.isLogin &&
+                    Prefs.dynamicPageStyle == DynamicPageStyle.New &&
+                    selectedTab == HomeTopNavItem.Dynamics &&
+                    focusedTopNavItem == HomeTopNavItem.Dynamics &&
+                    topNavHasFocus
+
+        if (!shouldFocusDynamicSubTab) return@LaunchedEffect
+
+        delay(100L)
+        if (
+            selectedTab == HomeTopNavItem.Dynamics &&
+            focusedTopNavItem == HomeTopNavItem.Dynamics &&
+            topNavHasFocus
+        ) {
+            dynamicTabRowFocusRequester.requestFocus()
+        }
+    }
+
     //监听登录变化
     LaunchedEffect(userViewModel.isLogin) {
         if (userViewModel.isLogin) {
@@ -227,6 +249,9 @@ fun HomeContent(
                 items = effectiveNavItems,
                 isLargePadding = !focusOnContent && currentListOnTop,
                 initialSelectedItem = selectedTab,
+                onFocusedChanged = { nav ->
+                    focusedTopNavItem = nav as HomeTopNavItem
+                },
                 onSelectedChanged = { nav ->
                     loadJob?.cancel()
                     selectedTab = nav as HomeTopNavItem
@@ -319,6 +344,7 @@ fun HomeContent(
                         if (userViewModel.isLogin) {
                             if (Prefs.dynamicPageStyle == DynamicPageStyle.New) {
                                 NewDynamicsScreen(
+                                    tabRowFocusRequester = dynamicTabRowFocusRequester,
                                     lazyGridState = dynamicState,
                                     initialSelectedTabIndex = dynamicSubTabIndex,
                                     onSelectedTabChanged = { dynamicSubTabIndex = it },

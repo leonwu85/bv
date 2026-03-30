@@ -47,6 +47,7 @@ fun TopNav(
     items: List<TopNavItem>,
     isLargePadding: Boolean,
     initialSelectedItem: TopNavItem? = null,
+    onFocusedChanged: (TopNavItem) -> Unit = {},
     onSelectedChanged: (TopNavItem) -> Unit = {},
     onClick: (TopNavItem) -> Unit = {},
     onLeftKeyEvent: () -> Unit = {}
@@ -122,7 +123,8 @@ fun TopNav(
                         val isSameTab = tab == selectedNav
                         selectedNav = tab
                         selectedTabIndex = index
-                            if (!isSameTab) {
+                        onFocusedChanged(tab)
+                        if (!isSameTab) {
                             tabMoved = false
                         }
                     },
