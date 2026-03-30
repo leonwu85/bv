@@ -57,6 +57,7 @@ import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoShotData
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
 import dev.aaa1115910.bv.player.entity.PlayerLoadNextAction
 import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
+import dev.aaa1115910.bv.player.entity.PlaybackMediaMode
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.player.entity.VideoListItemData
@@ -257,6 +258,7 @@ fun VideoPlayerV3Screen(
             currentVideoAspectRatio = playerViewModel.currentVideoAspectRatio,
             currentVideoRotation = playerViewModel.currentVideoRotation,
             currentVideoSpeed = playerViewModel.currentPlaySpeed,
+            currentPlaybackMediaMode = playerViewModel.currentPlaybackMediaMode,
             currentAudio = playerViewModel.currentAudio,
             currentDanmakuEnabled = playerViewModel.currentDanmakuEnabled,
             currentDanmakuEnabledList = playerViewModel.currentDanmakuTypes,
@@ -542,6 +544,13 @@ fun VideoPlayerV3Screen(
                     playerViewModel.currentAudio = audio
                     scope.launch(Dispatchers.Default) {
                         playerViewModel.playQuality(audio = audio)
+                        afterChange()
+                    }
+                },
+                onPlaybackMediaModeChange = { mediaMode, afterChange ->
+                    playerViewModel.currentPlaybackMediaMode = mediaMode
+                    scope.launch(Dispatchers.Default) {
+                        playerViewModel.playQuality(mediaMode = mediaMode)
                         afterChange()
                     }
                 },

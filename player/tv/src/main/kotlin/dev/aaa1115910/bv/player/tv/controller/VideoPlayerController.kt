@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -32,6 +33,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -45,6 +47,8 @@ import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerDebugInfoData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerSeekState
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
+import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoInfoData
+import dev.aaa1115910.bv.player.entity.PlaybackMediaMode
 import dev.aaa1115910.bv.player.entity.PlayMode
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoAspectRatio
@@ -102,6 +106,7 @@ fun VideoPlayerController(
     onRotationChange: (VideoRotation) -> Unit,
     onPlaySpeedChange: (Float) -> Unit,
     onAudioChange: (Audio) -> Unit,
+    onPlaybackMediaModeChange: (PlaybackMediaMode) -> Unit,
     onLiveQualityChange: (Int) -> Unit = {},
     onLiveCodecChange: (LiveCodec) -> Unit = {},
     onDanmakuSwitchChange: (List<DanmakuType>) -> Unit,
@@ -136,6 +141,7 @@ fun VideoPlayerController(
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
     val videoPlayerSeekState = LocalVideoPlayerSeekState.current
     val videoPlayerStateData = LocalVideoPlayerStateData.current
+    val videoPlayerVideoInfoData = LocalVideoPlayerVideoInfoData.current
     val videoPlayerDebugInfoData = LocalVideoPlayerDebugInfoData.current
     val logger = KotlinLogging.logger {}
     val scope = rememberCoroutineScope()
@@ -479,6 +485,12 @@ fun VideoPlayerController(
             }
     ) {
         content()
+        if (videoPlayerConfigData.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly && !showClickableControllers && !showSeekController) {
+            AudioOnlyModeTip(
+                title = videoPlayerVideoInfoData.title,
+                partTitle = videoPlayerVideoInfoData.partTitle
+            )
+        }
 //        if (BuildConfig.DEBUG) {
 //            Box(
 //                modifier = Modifier
@@ -518,6 +530,15 @@ fun VideoPlayerController(
             },
             onPause = onPause,
             onPlaySpeedChange = onPlaySpeedChange,
+            isAudioOnly = videoPlayerConfigData.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly,
+            onTogglePlaybackMediaMode = {
+                val nextMode = if (videoPlayerConfigData.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly) {
+                    PlaybackMediaMode.Normal
+                } else {
+                    PlaybackMediaMode.AudioOnly
+                }
+                onPlaybackMediaModeChange(nextMode)
+            },
             onOpenUpSpace = onOpenUpSpace,
             onRefreshVideo = {
                 if (videoPlayer.duration > 0 && videoPlayer.currentPosition >= videoPlayer.duration) {
@@ -636,5 +657,34 @@ fun VideoPlayerController(
             )
         }
         // 推荐视频组件（在连按两次下键时显示）, UI实现在VideoPlayerV3Screen.kt中
+    }
+}
+
+@Composable
+private fun BoxScope.AudioOnlyModeTip(
+    title: String,
+    partTitle: String
+) {
+    val displayTitle = if (title.contains(partTitle) || partTitle.isBlank()) title else "$partTitle | $title"
+    Column(
+        modifier = Modifier
+            .align(Alignment.Center)
+            .background(Color.Black.copy(alpha = 0.45f), MaterialTheme.shapes.medium)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = stringResource(R.string.video_player_audio_only_tip),
+            color = Color.White,
+            style = MaterialTheme.typography.titleMedium
+        )
+        if (displayTitle.isNotBlank()) {
+            Text(
+                modifier = Modifier.padding(top = 6.dp),
+                text = displayTitle,
+                color = Color.White.copy(alpha = 0.82f),
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
     }
 }

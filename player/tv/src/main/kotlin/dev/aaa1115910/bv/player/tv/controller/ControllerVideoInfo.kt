@@ -114,6 +114,8 @@ fun ControllerVideoInfo(
     onPlay: () -> Unit,
     onPause: () -> Unit,
     onPlaySpeedChange: (Float) -> Unit,
+    isAudioOnly: Boolean = false,
+    onTogglePlaybackMediaMode: () -> Unit = {},
     onOpenUpSpace: () -> Unit,
     onRefreshVideo: () -> Unit,
     onOpenDanmaku: () -> Unit,
@@ -210,6 +212,8 @@ fun ControllerVideoInfo(
                 onPlay = onPlay,
                 onPause = onPause,
                 onPlaySpeedChange = onPlaySpeedChange,
+                isAudioOnly = isAudioOnly,
+                onTogglePlaybackMediaMode = onTogglePlaybackMediaMode,
                 onOpenUpSpace = onOpenUpSpace,
                 onRefreshVideo = onRefreshVideo,
                 onOpenDanmaku = onOpenDanmaku,
@@ -261,6 +265,7 @@ data class ControlButton(
     val scale: Float = 1f,
     val painterId: Int? = null,
     val tint: Color = Color.White.copy(alpha = 0.8f),
+    val selected: Boolean = false,
     val width: Int? = null,
     val alwaysShowBorder: Boolean = false,
     val fontWeight: FontWeight? = null
@@ -292,6 +297,8 @@ fun ControllerVideoInfoBottom(
     onPlay: () -> Unit,
     onPause: () -> Unit,
     onPlaySpeedChange: (Float) -> Unit,
+    isAudioOnly: Boolean = false,
+    onTogglePlaybackMediaMode: () -> Unit = {},
     onOpenUpSpace: () -> Unit,
     onRefreshVideo: () -> Unit,
     onOpenDanmaku: () -> Unit,
@@ -327,10 +334,14 @@ fun ControllerVideoInfoBottom(
     var showRotationDialog by remember { mutableStateOf(false) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
     var speed by remember { mutableFloatStateOf(playSpeed) }
+    val audioOnlyButtonText = stringResource(
+        if (isAudioOnly) R.string.video_player_audio_only_button_active
+        else R.string.video_player_audio_only_button
+    )
     val danmakuIconId = if (showDanmaku) R.drawable.ic_danmaku_on else R.drawable.ic_danmaku_hide
     val subtitleIconId = if (currentSubtitleId > -1) R.drawable.ic_subtitle_on else R.drawable.ic_subtitle_off
     val upSpaceIconId = if (isFollowingUp) R.drawable.person_following else R.drawable.person
-    val buttons = remember(fromSeason, showDanmaku, isPlaying, isLoop, speed, rotation, currentSubtitleId, isFollowingUp, isLive) {
+    val buttons = remember(fromSeason, showDanmaku, isPlaying, isLoop, speed, rotation, currentSubtitleId, isFollowingUp, isLive, isAudioOnly, audioOnlyButtonText) {
         listOf(
             ControlButton(
                 id = "comment",
@@ -353,6 +364,15 @@ fun ControllerVideoInfoBottom(
                 onClick = { showSpeedDialog = true },
                 width = 46,
                 visible = !isLive
+            ),
+            ControlButton(
+                id = "audioOnly",
+                text = audioOnlyButtonText,
+                onClick = onTogglePlaybackMediaMode,
+                width = 58,
+                visible = !isLive,
+                tint = if (isAudioOnly) Color(0xFFFFD54F) else Color.White.copy(alpha = 0.8f),
+                selected = isAudioOnly
             ),
             ControlButton(
                 id = "upSpace",
@@ -606,14 +626,18 @@ fun ControllerVideoInfoBottom(
                     shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
                     contentPadding = PaddingValues(2.dp),
                     colors = ButtonDefaults.colors(
-                        containerColor = Color.Transparent,
+                        containerColor = if (button.selected) Color.White.copy(alpha = 0.12f) else Color.Transparent,
                         focusedContainerColor = Color.White.copy(alpha = 0.3f)
                     ),
                     border = ButtonDefaults.border(
                         border = Border(
                             border = BorderStroke(
                                 width = 1.dp,
-                                color = if (button.alwaysShowBorder) Color.White.copy(alpha = 0.45f) else Color.Transparent
+                                color = when {
+                                    button.selected -> button.tint.copy(alpha = 0.85f)
+                                    button.alwaysShowBorder -> Color.White.copy(alpha = 0.45f)
+                                    else -> Color.Transparent
+                                }
                             )
                         ),
                         focusedBorder = Border(

@@ -112,6 +112,7 @@ data class VideoPlayerConfigData(
     val currentVideoAspectRatio: VideoAspectRatio = VideoAspectRatio.Default,
     val currentVideoRotation: VideoRotation = VideoRotation.Original,
     val currentVideoSpeed: Float = 1f,
+    val currentPlaybackMediaMode: PlaybackMediaMode = PlaybackMediaMode.Normal,
     val currentAudio: Audio = Audio.A192K,
     val currentDanmakuEnabled: Boolean = true,
     val currentDanmakuEnabledList: List<DanmakuType> = listOf(),
