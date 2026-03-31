@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.tv.material3.Text
@@ -92,6 +93,7 @@ fun BvPlayer(
     playerSeekForwardStep: Int = 10,
     playerSeekBackwardStep: Int = 5,
     showBottomProgressBar: Boolean = false,
+    bottomProgressBarColor: Color = Color(0xFFBD26B8).copy(alpha = 0.5f),
     useTextureViewFixPortraitVideo: Boolean = false,
     onSendHeartbeat: suspend (Int) -> Unit,
     onClearBackToHistoryData: () -> Unit,
@@ -899,6 +901,7 @@ fun BvPlayer(
             playerSeekForwardStep = playerSeekForwardStep,
             playerSeekBackwardStep = playerSeekBackwardStep,
             showBottomProgressBar = showBottomProgressBar,
+            bottomProgressBarColor = bottomProgressBarColor,
             showRelatedVideos = videoPlayerConfigData.showRelatedVideos,
             onToggleRelatedVideos = onToggleRelatedVideos,
             registerShowInfoProvider = { provider -> showInfoProvider = provider },

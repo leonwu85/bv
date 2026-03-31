@@ -115,6 +115,7 @@ fun HomeContent(
         )
     }
     var focusedTopNavItem by remember { mutableStateOf(selectedTab) }
+    var pendingDynamicSubTabFocus by remember { mutableStateOf(false) }
 
     fun initData () {
         scope.launch {
@@ -199,13 +200,14 @@ fun HomeContent(
         initData()
     }
 
-    LaunchedEffect(selectedTab, focusedTopNavItem, topNavHasFocus, userViewModel.isLogin) {
+    LaunchedEffect(selectedTab, focusedTopNavItem, topNavHasFocus, userViewModel.isLogin, pendingDynamicSubTabFocus) {
         val shouldFocusDynamicSubTab =
             userViewModel.isLogin &&
                     Prefs.dynamicPageStyle == DynamicPageStyle.New &&
                     selectedTab == HomeTopNavItem.Dynamics &&
                     focusedTopNavItem == HomeTopNavItem.Dynamics &&
-                    topNavHasFocus
+                    topNavHasFocus &&
+                    pendingDynamicSubTabFocus
 
         if (!shouldFocusDynamicSubTab) return@LaunchedEffect
 
@@ -213,8 +215,10 @@ fun HomeContent(
         if (
             selectedTab == HomeTopNavItem.Dynamics &&
             focusedTopNavItem == HomeTopNavItem.Dynamics &&
-            topNavHasFocus
+            topNavHasFocus &&
+            pendingDynamicSubTabFocus
         ) {
+            pendingDynamicSubTabFocus = false
             dynamicTabRowFocusRequester.requestFocus()
         }
     }
@@ -250,11 +254,18 @@ fun HomeContent(
                 isLargePadding = !focusOnContent && currentListOnTop,
                 initialSelectedItem = selectedTab,
                 onFocusedChanged = { nav ->
-                    focusedTopNavItem = nav as HomeTopNavItem
+                    val homeNav = nav as HomeTopNavItem
+                    focusedTopNavItem = homeNav
+                    pendingDynamicSubTabFocus =
+                        homeNav == HomeTopNavItem.Dynamics &&
+                                selectedTab != HomeTopNavItem.Dynamics
                 },
                 onSelectedChanged = { nav ->
                     loadJob?.cancel()
                     selectedTab = nav as HomeTopNavItem
+                    if (selectedTab != HomeTopNavItem.Dynamics) {
+                        pendingDynamicSubTabFocus = false
+                    }
                 },
                 onClick = { nav ->
                     loadJob?.cancel()

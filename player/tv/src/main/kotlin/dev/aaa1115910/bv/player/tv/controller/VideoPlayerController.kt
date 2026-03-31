@@ -70,6 +70,7 @@ fun VideoPlayerController(
     playerSeekForwardStep: Int = 10,
     playerSeekBackwardStep: Int = 5,
     showBottomProgressBar: Boolean = false,
+    bottomProgressBarColor: Color = Color(0xFFBD26B8).copy(alpha = 0.5f),
 
     showRelatedVideos: Boolean = false,
     onToggleRelatedVideos: (Boolean) -> Unit,
@@ -629,7 +630,7 @@ fun VideoPlayerController(
                     .fillMaxWidth()
                     .height(3.dp),
                 progress = { throttledProgress },
-                color = Color(0xFFBD26B8).copy(alpha = 0.5f),
+                color = bottomProgressBarColor,
                 trackColor = Color.Black.copy(alpha = 0.2f),
                 gapSize = 0.dp,
                 drawStopIndicator = {}

@@ -317,6 +317,7 @@ fun VideoPlayerV3Screen(
                 playerSeekForwardStep = Prefs.playerSeekForwardStep,
                 playerSeekBackwardStep = Prefs.playerSeekBackwardStep,
                 showBottomProgressBar = Prefs.playerShowBottomProgressBar,
+                bottomProgressBarColor = Prefs.playerBottomProgressBarColor.toComposeColor(),
                 useTextureViewFixPortraitVideo = Prefs.portraitVideoFixMode == PortraitVideoFixMode.UseTextureView && playerViewModel.isVerticalVideo && playerViewModel.currentQuality >= Resolution.R4K,
                 onToggleRelatedVideos = { state ->
                     playerViewModel.showRelatedVideos = if (playerViewModel.relatedVideos.isNotEmpty()) state else false

@@ -23,6 +23,7 @@ import dev.aaa1115910.bv.entity.PlayerType
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.player.entity.Audio
+import dev.aaa1115910.bv.player.entity.PlayerBottomProgressBarColor
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
 import dev.aaa1115910.bv.player.entity.PlayerLoadNextAction
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
@@ -52,6 +53,7 @@ fun PlayerSetting(
     var enableFfmpegAudioRenderer by remember { mutableStateOf(Prefs.enableFfmpegAudioRenderer) }
     var showUGCVideoInfo by remember { mutableStateOf(Prefs.showUGCVideoInfo) }
     var playerShowBottomProgressBar by remember { mutableStateOf(Prefs.playerShowBottomProgressBar) }
+    var playerBottomProgressBarColor by remember { mutableStateOf(Prefs.playerBottomProgressBarColor) }
     var playerShowDebugInfo by remember { mutableStateOf(Prefs.playerShowDebugInfo) }
     var playerExitWhenAllIsPlayed by remember { mutableStateOf(Prefs.playerExitWhenAllIsPlayed) }
     var playerLoadNextAction by remember { mutableStateOf(Prefs.playerLoadNextAction) }
@@ -183,6 +185,21 @@ fun PlayerSetting(
                         Prefs.playerShowBottomProgressBar = it
                     }
                 )
+            }
+            if (playerShowBottomProgressBar) {
+                item {
+                    SettingListItemWithDialog(
+                        title = stringResource(R.string.settings_player_bottom_progress_bar_color_title),
+                        supportText = stringResource(R.string.settings_player_bottom_progress_bar_color_text),
+                        options = PlayerBottomProgressBarColor.entries,
+                        getDisplayName = { item, ctx -> item.displayName(ctx) },
+                        value = playerBottomProgressBarColor,
+                        onValueChange = {
+                            playerBottomProgressBarColor = it
+                            Prefs.playerBottomProgressBarColor = it
+                        }
+                    )
+                }
             }
             item {
                 SettingSwitchListItem(

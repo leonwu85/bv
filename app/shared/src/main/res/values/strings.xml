@@ -777,6 +777,15 @@
     <string name="settings_player_seek_backward_step_title">视频快退时间间隔（秒）</string>
     <string name="settings_player_show_bottom_progress_bar_text">在播放器底部常驻显示迷你进度条</string>
     <string name="settings_player_show_bottom_progress_bar_title">显示迷你进度条</string>
+    <string name="settings_player_bottom_progress_bar_color_text">设置迷你进度条的颜色</string>
+    <string name="settings_player_bottom_progress_bar_color_title">迷你进度条颜色</string>
+    <string name="settings_player_bottom_progress_bar_color_purple">紫色</string>
+    <string name="settings_player_bottom_progress_bar_color_black">黑色</string>
+    <string name="settings_player_bottom_progress_bar_color_white">白色</string>
+    <string name="settings_player_bottom_progress_bar_color_gold">金色</string>
+    <string name="settings_player_bottom_progress_bar_color_red">红色</string>
+    <string name="settings_player_bottom_progress_bar_color_blue">蓝色</string>
+    <string name="settings_player_bottom_progress_bar_color_green">绿色</string>
     <string name="settings_player_default_danmaku_area_text">设置弹幕在屏幕中显示的区域比例</string>
     <string name="settings_player_default_danmaku_area_title">弹幕显示区域</string>
     <string name="settings_player_load_next_action_title">下一个播放</string>
