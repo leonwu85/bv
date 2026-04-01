@@ -397,7 +397,8 @@ fun VideoPlayerV3Screen(
                                                     context = context,
                                                     aid = nextVideo.aid,
                                                     cid = nextVideo.cid,
-                                                    fromPlayer = true
+                                                    fromPlayer = true,
+                                                    audioOnlyMode = playerViewModel.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly
                                                 )
                                             } else {
                                                 playerViewModel.loadPlayUrl(
@@ -423,7 +424,8 @@ fun VideoPlayerV3Screen(
                                                 VideoInfoActivity.actionStart(
                                                     context = context,
                                                     aid = nextVideo.avid,
-                                                    fromPlayer = true
+                                                    fromPlayer = true,
+                                                    audioOnlyMode = playerViewModel.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly
                                                 )
                                             }
                                         }

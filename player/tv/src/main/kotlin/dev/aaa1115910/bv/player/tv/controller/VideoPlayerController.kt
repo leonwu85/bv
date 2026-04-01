@@ -5,6 +5,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -485,7 +486,7 @@ fun VideoPlayerController(
             }
     ) {
         content()
-        if (videoPlayerConfigData.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly && !showClickableControllers && !showSeekController) {
+        if (videoPlayerConfigData.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly) {
             AudioOnlyModeTip(
                 title = videoPlayerVideoInfoData.title,
                 partTitle = videoPlayerVideoInfoData.partTitle
@@ -666,25 +667,31 @@ private fun BoxScope.AudioOnlyModeTip(
     partTitle: String
 ) {
     val displayTitle = if (title.contains(partTitle) || partTitle.isBlank()) title else "$partTitle | $title"
-    Column(
+    Box(
         modifier = Modifier
-            .align(Alignment.Center)
-            .background(Color.Black.copy(alpha = 0.45f), MaterialTheme.shapes.medium)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .fillMaxSize()
+            .background(Color.Black)
     ) {
-        Text(
-            text = stringResource(R.string.video_player_audio_only_tip),
-            color = Color.White,
-            style = MaterialTheme.typography.titleMedium
-        )
-        if (displayTitle.isNotBlank()) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .background(Color.Black.copy(alpha = 0.55f), MaterialTheme.shapes.medium)
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Text(
-                modifier = Modifier.padding(top = 6.dp),
-                text = displayTitle,
-                color = Color.White.copy(alpha = 0.82f),
-                style = MaterialTheme.typography.bodyMedium
+                text = stringResource(R.string.video_player_audio_only_tip),
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium
             )
+            if (displayTitle.isNotBlank()) {
+                Text(
+                    modifier = Modifier.padding(top = 6.dp),
+                    text = displayTitle,
+                    color = Color.White.copy(alpha = 0.82f),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
         }
     }
 }
