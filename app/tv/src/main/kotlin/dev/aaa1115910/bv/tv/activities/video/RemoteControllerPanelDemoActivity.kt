@@ -40,7 +40,8 @@ class RemoteControllerPanelDemoActivity : ComponentActivity() {
             upName: String = "",
             upId: Long = 0L,
             upFace: String = "",
-            pubTime: String = ""
+            pubTime: String = "",
+            audioOnlyMode: Boolean = false
         ) {
             context.startActivity(
                 Intent(context, RemoteControllerPanelDemoActivity::class.java).apply {
@@ -66,6 +67,7 @@ class RemoteControllerPanelDemoActivity : ComponentActivity() {
                     putExtra("upId", upId)
                     putExtra("upFace", upFace)
                     putExtra("pubTime", pubTime)
+                    putExtra("audioOnlyMode", audioOnlyMode)
                 }
             )
         }
@@ -104,7 +106,8 @@ fun RemoteControllerPanelDemoScreen(
             isVerticalVideo = intent.getBooleanExtra("isVerticalVideo", false),
             proxyArea = ProxyArea.entries[intent.getIntExtra("proxy_area", 0)],
             playerIconIdle = intent.getStringExtra("playerIconIdle") ?: "",
-            playerIconMoving = intent.getStringExtra("playerIconMoving") ?: ""
+            playerIconMoving = intent.getStringExtra("playerIconMoving") ?: "",
+            audioOnlyMode = intent.getBooleanExtra("audioOnlyMode", false)
         )
         context.finish()
     }

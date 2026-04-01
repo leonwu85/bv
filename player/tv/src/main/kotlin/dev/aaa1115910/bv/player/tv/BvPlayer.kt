@@ -54,6 +54,7 @@ import dev.aaa1115910.bv.player.entity.LocalVideoPlayerLogsData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerSeekState
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoInfoData
+import dev.aaa1115910.bv.player.entity.PlaybackMediaMode
 import dev.aaa1115910.bv.player.entity.PlayMode
 import dev.aaa1115910.bv.player.entity.RequestState
 import dev.aaa1115910.bv.player.entity.Resolution
@@ -106,6 +107,7 @@ fun BvPlayer(
     onRotationChange: (VideoRotation) -> Unit,
     onPlaySpeedChange: (Float) -> Unit,
     onAudioChange: (Audio, afterChange: suspend () -> Unit) -> Unit,
+    onPlaybackMediaModeChange: (PlaybackMediaMode, afterChange: suspend () -> Unit) -> Unit,
     onLiveQualityChange: (Int) -> Unit = {},
     onLiveCodecChange: (LiveCodec) -> Unit = {},
     onDanmakuSwitchChange: (List<DanmakuType>) -> Unit,
@@ -1017,6 +1019,16 @@ fun BvPlayer(
                 videoPlayer.pause()
                 val current = videoPlayer.currentPosition
                 onAudioChange(audio) {
+                    withContext(Dispatchers.Main) {
+                        videoPlayer.seekTo(current)
+                        videoPlayer.start()
+                    }
+                }
+            },
+            onPlaybackMediaModeChange = { mediaMode ->
+                videoPlayer.pause()
+                val current = videoPlayer.currentPosition
+                onPlaybackMediaModeChange(mediaMode) {
                     withContext(Dispatchers.Main) {
                         videoPlayer.seekTo(current)
                         videoPlayer.start()

@@ -11,13 +11,20 @@ object AppConfiguration {
     private const val minor = 3
     private const val patch = 0
     private const val hotFix = 0
+    private val projectDir = File(System.getProperty("user.dir"))
+    private val gitCommitCount: Int by lazy {
+        runCommand("git", "rev-list", "--count", "HEAD")?.toIntOrNull() ?: 1
+    }
+    private val gitShortRevision: String by lazy {
+        runCommand("git", "rev-list", "HEAD", "--abbrev-commit", "--max-count=1") ?: "nogit"
+    }
 
     @Suppress("KotlinConstantConditions")
     val versionName: String by lazy {
         "$major.$minor.$patch${".$hotFix".takeIf { hotFix != 0 } ?: ""}" +
-                ".r${versionCode}.${"git rev-list HEAD --abbrev-commit --max-count=1".exec()}"
+                ".r${versionCode}.${gitShortRevision}"
     }
-    val versionCode: Int by lazy { "git rev-list --count HEAD".exec().toInt()}
+    val versionCode: Int by lazy { gitCommitCount }
     const val libVLCVersion = "3.6.5"
     var googleServicesAvailable = true
     const val blacklistUrl =
@@ -28,7 +35,6 @@ object AppConfiguration {
     }
 
     private fun initConfigurations() {
-        val projectDir = System.getProperty("user.dir")
         val googleServicesJsonPath = "$projectDir/app/google-services.json"
         val googleServicesJsonFile = File(googleServicesJsonPath)
         googleServicesAvailable =
@@ -39,4 +45,12 @@ object AppConfiguration {
     }
 }
 
-fun String.exec() = String(Runtime.getRuntime().exec(this).inputStream.readBytes()).trim()
+private fun runCommand(vararg command: String): String? = runCatching {
+    val process = ProcessBuilder(*command)
+        .directory(File(System.getProperty("user.dir")))
+        .redirectErrorStream(true)
+        .start()
+    val output = process.inputStream.bufferedReader().use { it.readText().trim() }
+    val exitCode = process.waitFor()
+    output.takeIf { exitCode == 0 && it.isNotEmpty() }
+}.getOrNull()

@@ -14,6 +14,7 @@ import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.PlayerType
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
+import dev.aaa1115910.bv.player.entity.PlaybackMediaMode
 import dev.aaa1115910.bv.player.VideoPlayerOptions
 import dev.aaa1115910.bv.player.impl.exo.ExoPlayerFactory
 import dev.aaa1115910.bv.player.impl.vlc.VlcPlayerFactory
@@ -97,7 +98,8 @@ class VideoPlayerV3Activity : ComponentActivity() {
             upName: String = "",
             upId: Long = 0L,
             upFace: String = "",
-            pubTime: String = ""
+            pubTime: String = "",
+            audioOnlyMode: Boolean = false
         ) {
             // 获取当前内存信息并打印到控制台
             val runtime = Runtime.getRuntime()
@@ -139,6 +141,7 @@ class VideoPlayerV3Activity : ComponentActivity() {
                     putExtra("upId", upId)
                     putExtra("upFace", upFace)
                     putExtra("pubTime", pubTime)
+                    putExtra("audioOnlyMode", audioOnlyMode)
                 }
             )
         }
@@ -276,10 +279,12 @@ class VideoPlayerV3Activity : ComponentActivity() {
             val upId = intent.getLongExtra("upId", 0)
             val upFace = intent.getStringExtra("upFace") ?: ""
             val pubTime = intent.getStringExtra("pubTime") ?: ""
+            val audioOnlyMode = intent.getBooleanExtra("audioOnlyMode", false)
             dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity.Companion.logger.fInfo { "Launch parameter: [aid=$aid, cid=$cid]" }
             playerViewModel.apply {
                 // lastPlayed 需要在 loadPlayUrl 之前设置，以便 prepare() 时能正确设置初始跳转位置
                 this.lastPlayed = played
+                this.currentPlaybackMediaMode = if (audioOnlyMode) PlaybackMediaMode.AudioOnly else PlaybackMediaMode.Normal
                 loadPlayUrl(
                     avid = aid,
                     cid = cid,

@@ -49,6 +49,7 @@ import dev.aaa1115910.bv.player.renderer.SimpleRenderer
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.DanmakuType
+import dev.aaa1115910.bv.player.entity.PlaybackMediaMode
 import dev.aaa1115910.bv.player.entity.PlayMode
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
@@ -162,6 +163,7 @@ class VideoPlayerV3ViewModel(
     var currentPlaySpeed by mutableFloatStateOf(Prefs.currentPlaySpeed)
     var currentVideoAspectRatio by mutableStateOf(VideoAspectRatio.Default)
     var currentVideoRotation by mutableStateOf(VideoRotation.Original)
+    var currentPlaybackMediaMode by mutableStateOf(PlaybackMediaMode.Normal)
     var currentAudio by mutableStateOf(Prefs.defaultAudio)
     var currentDanmakuScale by mutableFloatStateOf(Prefs.defaultDanmakuScale)
     var currentDanmakuOpacity by mutableFloatStateOf(Prefs.defaultDanmakuOpacity)
@@ -523,27 +525,31 @@ class VideoPlayerV3ViewModel(
     suspend fun playQuality(
         qn: Resolution = currentQuality,
         codec: VideoCodec = currentVideoCodec,
-        audio: Audio = currentAudio
+        audio: Audio = currentAudio,
+        mediaMode: PlaybackMediaMode = currentPlaybackMediaMode
     ) {
         if (qn != currentQuality) {
             // 更新清晰度后需要先设置清晰度再更新编码列表
             withContext(Dispatchers.Main) { currentQuality = qn }
             updateAvailableCodec()
-            playQuality(qn.code, currentVideoCodec, audio)
+            playQuality(qn.code, currentVideoCodec, audio, mediaMode)
         } else {
-            playQuality(qn.code, codec, audio)
+            playQuality(qn.code, codec, audio, mediaMode)
         }
     }
 
     private suspend fun playQuality(
         qn: Int = currentQuality.code,
         codec: VideoCodec = currentVideoCodec,
-        audio: Audio = currentAudio
+        audio: Audio = currentAudio,
+        mediaMode: PlaybackMediaMode = currentPlaybackMediaMode
     ) {
-        logger.fInfo { "Select resolution: $qn, codec: $codec, audio: $audio" }
+        logger.fInfo { "Select resolution: $qn, codec: $codec, audio: $audio, mediaMode: $mediaMode" }
         if(playData == null) {
             return
         }
+
+        val audioOnlyMode = mediaMode == PlaybackMediaMode.AudioOnly
 
         val videoItem = playData!!.dashVideos.find {
             when (Prefs.apiType) {
@@ -554,16 +560,18 @@ class VideoPlayerV3ViewModel(
                 }
             }
         }
-        var videoUrl = videoItem?.baseUrl ?: playData!!.dashVideos.firstOrNull()?.baseUrl
-        if (videoUrl == null) {
+        var videoUrl = if (audioOnlyMode) null else videoItem?.baseUrl ?: playData!!.dashVideos.firstOrNull()?.baseUrl
+        if (!audioOnlyMode && videoUrl == null) {
             logger.fError { "Failed to get video URL" }
             errorMessage = "获取视频地址失败"
             loadState = RequestState.Failed
             return
         }
         val videoUrls = mutableListOf<String?>()
-        videoUrls.add(videoItem?.baseUrl)
-        videoUrls.addAll(videoItem?.backUrl ?: emptyList())
+        if (!audioOnlyMode) {
+            videoUrls.add(videoItem?.baseUrl)
+            videoUrls.addAll(videoItem?.backUrl ?: emptyList())
+        }
 
         val audioItem = playData!!.dashAudios.find { it.codecId == audio.code }
             ?: playData!!.dolby.takeIf { it?.codecId == audio.code }
@@ -580,25 +588,35 @@ class VideoPlayerV3ViewModel(
         audioUrls.add(audioItem?.baseUrl)
         audioUrls.addAll(audioItem?.backUrl ?: emptyList())
 
-        logger.fInfo { "all video hosts: ${videoUrls.map { with(URI(it)) { "$scheme://$authority" } }}" }
+        if (videoUrls.isNotEmpty()) {
+            logger.fInfo { "all video hosts: ${videoUrls.filterNotNull().map { with(URI(it)) { "$scheme://$authority" } }}" }
+        }
         logger.fInfo { "all audio hosts: ${audioUrls.map { with(URI(it)) { "$scheme://$authority" } }}" }
 
         //replace cdn
         if (Prefs.enableProxy && proxyArea != ProxyArea.MainLand) {
-            videoUrl = videoUrl.replaceUrlDomainWithAliCdn()
+            if (videoUrl != null) {
+                videoUrl = videoUrl.replaceUrlDomainWithAliCdn()
+            }
             audioUrl = audioUrl.replaceUrlDomainWithAliCdn()
         } else {
             // 如果未通过网络代理获得播放地址，才判断是否应该替换为官方 cdn
-            videoUrl = selectOfficialCdnUrl(videoUrls.filterNotNull())
+            if (videoUrls.isNotEmpty()) {
+                videoUrl = selectOfficialCdnUrl(videoUrls.filterNotNull())
+            }
             audioUrl = selectOfficialCdnUrl(audioUrls.filterNotNull())
         }
 
         addLogs(
-            "播放清晰度：${availableQuality.firstOrNull { it.code == qn }}, " +
+            "播放模式：${if (audioOnlyMode) "音频模式" else "正常模式"}，播放清晰度：${availableQuality.firstOrNull { it.code == qn }}, " +
                     "视频编码：${codec.getDisplayName(BVApp.context)}, " +
                     "音频编码：${(Audio.fromCode(audioItem?.codecId ?: 0))?.getDisplayName(BVApp.context) ?: "未知"}"
         )
-        addLogs("video host: ${with(URI(videoUrl)) { "$scheme://$authority" }}")
+        if (videoUrl != null) {
+            addLogs("video host: ${with(URI(videoUrl)) { "$scheme://$authority" }}")
+        } else {
+            addLogs("video host: audio only")
+        }
         addLogs("audio host: ${with(URI(audioUrl)) { "$scheme://$authority" }}")
 
         logger.fInfo { "Select audio: $audioItem" }

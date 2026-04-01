@@ -206,6 +206,7 @@ fun VideoInfoScreen(
     val usePureBlackBackground = !showUGCVideoInfo
     var fromSeason by remember { mutableStateOf(false) }
     var fromPlayer by remember { mutableStateOf(false) }
+    var audioOnlyMode by remember { mutableStateOf(false) }
     var paused by remember { mutableStateOf(false) }
     var proxyArea by remember { mutableStateOf(ProxyArea.MainLand) }
     var intentAid by remember { mutableLongStateOf(0L) }
@@ -430,6 +431,7 @@ fun VideoInfoScreen(
             var cid = intent.getLongExtra("cid", 0)
             fromSeason = intent.getBooleanExtra("fromSeason", false)
             fromPlayer = intent.getBooleanExtra("fromPlayer", false)
+            audioOnlyMode = intent.getBooleanExtra("audioOnlyMode", false)
             proxyArea = ProxyArea.entries[intent.getIntExtra("proxy_area", 0)]
             //获取视频信息
             scope.launch(Dispatchers.IO) {
@@ -504,7 +506,8 @@ fun VideoInfoScreen(
                                 upName = videoDetailViewModel.videoDetail!!.author.name,
                                 upId = videoDetailViewModel.videoDetail!!.author.mid,
                                 upFace = videoDetailViewModel.videoDetail!!.author.face,
-                                pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString()
+                                pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString(),
+                                audioOnlyMode = audioOnlyMode
                             )
                         }
                         if (fromPlayer) {
@@ -788,7 +791,8 @@ fun VideoInfoScreen(
                                     upName = videoDetailViewModel.videoDetail!!.author.name,
                                     upId = videoDetailViewModel.videoDetail!!.author.mid,
                                     upFace = videoDetailViewModel.videoDetail!!.author.face,
-                                    pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString()
+                                    pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString(),
+                                    audioOnlyMode = audioOnlyMode
                                 )
                             },
                             onClickUp = {
@@ -921,7 +925,8 @@ fun VideoInfoScreen(
                                         upName = videoDetailViewModel.videoDetail!!.author.name,
                                         upId = videoDetailViewModel.videoDetail!!.author.mid,
                                         upFace = videoDetailViewModel.videoDetail!!.author.face,
-                                        pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString()
+                                        pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString(),
+                                        audioOnlyMode = audioOnlyMode
                                     )
                                 }
                             )
@@ -966,7 +971,8 @@ fun VideoInfoScreen(
                                         upName = videoDetailViewModel.videoDetail!!.author.name,
                                         upId = videoDetailViewModel.videoDetail!!.author.mid,
                                         upFace = videoDetailViewModel.videoDetail!!.author.face,
-                                        pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString()
+                                        pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString(),
+                                        audioOnlyMode = audioOnlyMode
                                     )
                                 },
                                 onClickEpPart = { episode, cid ->
@@ -996,7 +1002,8 @@ fun VideoInfoScreen(
                                         upName = videoDetailViewModel.videoDetail!!.author.name,
                                         upId = videoDetailViewModel.videoDetail!!.author.mid,
                                         upFace = videoDetailViewModel.videoDetail!!.author.face,
-                                        pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString()
+                                        pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString(),
+                                        audioOnlyMode = audioOnlyMode
                                     )
                                 }
                             )
