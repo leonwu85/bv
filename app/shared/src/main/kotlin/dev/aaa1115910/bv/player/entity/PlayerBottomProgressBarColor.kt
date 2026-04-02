@@ -25,12 +25,12 @@ enum class PlayerBottomProgressBarColor(val value: Int) {
 
     fun toComposeColor(): Color = when (this) {
         Purple -> Color(0xFFBD26B8).copy(alpha = 0.5f)
-        Black -> Color.Black.copy(alpha = 0.5f)
-        White -> Color.White.copy(alpha = 0.5f)
-        Gold -> Color(0xFFFFD700).copy(alpha = 0.5f)
-        Red -> Color.Red.copy(alpha = 0.5f)
-        Blue -> Color.Blue.copy(alpha = 0.5f)
-        Green -> Color.Green.copy(alpha = 0.5f)
+        Black -> Color.Black.copy(alpha = 0.9f)
+        White -> Color.White.copy(alpha = 0.9f)
+        Gold -> Color(0xFFFFD700).copy(alpha = 0.9f)
+        Red -> Color.Red.copy(alpha = 0.9f)
+        Blue -> Color.Blue.copy(alpha = 0.9f)
+        Green -> Color.Green.copy(alpha = 0.9f)
     }
 
     companion object {

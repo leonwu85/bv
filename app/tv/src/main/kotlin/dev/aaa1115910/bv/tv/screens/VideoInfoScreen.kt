@@ -511,7 +511,10 @@ fun VideoInfoScreen(
                             )
                         }
                         if (fromPlayer) {
-                            // 清除标记, 以便从播放器返回过来的可以进入详情页
+                            // 清除一次性透传状态
+                            audioOnlyMode = false
+                            intent.removeExtra("audioOnlyMode")
+                            // 清除标记
                             scope.launch {
                                 delay(1200)
                                 fromPlayer = false

@@ -1028,9 +1028,11 @@ fun BvPlayer(
             onPlaybackMediaModeChange = { mediaMode ->
                 videoPlayer.pause()
                 val current = videoPlayer.currentPosition
+                pendingDanmakuPosition = current
+                danmakuNeedsResume = true
+                videoPlayer.setInitialSeekPosition(current)
                 onPlaybackMediaModeChange(mediaMode) {
                     withContext(Dispatchers.Main) {
-                        videoPlayer.seekTo(current)
                         videoPlayer.start()
                     }
                 }
