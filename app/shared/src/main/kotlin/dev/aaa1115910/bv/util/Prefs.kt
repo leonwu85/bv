@@ -538,6 +538,10 @@ object Prefs {
         set(value) = runBlocking {
             dsm.editPreference(PrefKeys.prefSponsorBlockSkipModeKey, value.value)
         }
+
+    var sponsorBlockApiServer: String
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefSponsorBlockApiServerRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefSponsorBlockApiServerKey, value) }
 }
 
 object PrefKeys {
@@ -621,6 +625,7 @@ object PrefKeys {
     val prefDynamicDefaultTabKey = intPreferencesKey("dynamic_default_tab")
     val prefEnableSponsorBlockKey = booleanPreferencesKey("enable_sponsor_block")
     val prefSponsorBlockSkipModeKey = intPreferencesKey("sponsor_block_skip_mode")
+    val prefSponsorBlockApiServerKey = stringPreferencesKey("sponsor_block_api_server")
 
 
     val prefIsLoginRequest = PreferenceRequest(prefIsLoginKey, false)
@@ -720,4 +725,5 @@ object PrefKeys {
     val prefDynamicDefaultTabRequest = PreferenceRequest(prefDynamicDefaultTabKey, DynamicTabType.All.value)
     val prefEnableSponsorBlockRequest = PreferenceRequest(prefEnableSponsorBlockKey, false)
     val prefSponsorBlockSkipModeRequest = PreferenceRequest(prefSponsorBlockSkipModeKey, SponsorBlockSkipMode.Manual.value)
+    val prefSponsorBlockApiServerRequest = PreferenceRequest(prefSponsorBlockApiServerKey, "bsbsb.top")
 }

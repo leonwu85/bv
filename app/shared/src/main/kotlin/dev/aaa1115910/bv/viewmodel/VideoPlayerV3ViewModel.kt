@@ -723,6 +723,8 @@ class VideoPlayerV3ViewModel(
             return
         }
 
+        SponsorBlockHttpApi.updateBaseUrl(Prefs.sponsorBlockApiServer)
+
         viewModelScope.launch(Dispatchers.IO) {
             addLogs("加载 SponsorBlock 片段")
             logger.fInfo { "Loading SponsorBlock segments for $bvid/$cid" }

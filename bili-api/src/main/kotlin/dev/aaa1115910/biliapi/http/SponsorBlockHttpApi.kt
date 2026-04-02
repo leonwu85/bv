@@ -14,15 +14,18 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.URLProtocol
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 
 /**
  * BilibiliSponsorBlock API 客户端
  * 官方文档: https://github.com/hanydd/BilibiliSponsorBlock/wiki/API
  */
 object SponsorBlockHttpApi {
-    private const val BASE_URL = "bsbsb.top"
+    private const val DEFAULT_BASE_URL = "bsbsb.top"
     private const val API_PATH = "/api"
 
+    private var currentBaseUrl = DEFAULT_BASE_URL
     private lateinit var client: HttpClient
 
     private val json = Json {
@@ -33,6 +36,17 @@ object SponsorBlockHttpApi {
 
     init {
         createClient()
+    }
+
+    fun updateBaseUrl(baseUrl: String) {
+        val normalizedUrl = baseUrl
+            .replace("https://", "")
+            .replace("http://", "")
+            .trimEnd('/')
+        if (normalizedUrl != currentBaseUrl) {
+            currentBaseUrl = normalizedUrl
+            createClient()
+        }
     }
 
     private fun createClient() {
@@ -49,7 +63,7 @@ object SponsorBlockHttpApi {
             }
             defaultRequest {
                 url {
-                    host = BASE_URL
+                    host = currentBaseUrl
                     protocol = URLProtocol.HTTPS
                 }
             }
@@ -84,4 +98,35 @@ object SponsorBlockHttpApi {
             json.decodeFromString<List<SponsorSegment>>(responseText)
         }
     }
+
+    /**
+     * 检测服务器连通状态
+     * @return 状态信息，成功返回响应内容摘要，失败返回错误信息
+     */
+    suspend fun checkServerStatus(): ServerStatus = runCatching {
+        val response = client.get(API_PATH)
+        when (response.status) {
+            HttpStatusCode.OK -> {
+                val body = response.bodyAsText().take(200)
+                ServerStatus.Connected(body)
+            }
+            HttpStatusCode.NotFound -> {
+                val body = response.bodyAsText().take(200)
+                ServerStatus.Connected(body)
+            }
+            else -> ServerStatus.Error("HTTP ${response.status.value}")
+        }
+    }.getOrElse { error ->
+        when (error) {
+            is UnknownHostException -> ServerStatus.Error("无法解析主机名")
+            is SocketTimeoutException -> ServerStatus.Error("连接超时")
+            else -> ServerStatus.Error(error.message ?: "未知错误")
+        }
+    }
+}
+
+sealed class ServerStatus {
+    data class Connected(val info: String) : ServerStatus()
+    data class Error(val message: String) : ServerStatus()
+    data object Checking : ServerStatus()
 }

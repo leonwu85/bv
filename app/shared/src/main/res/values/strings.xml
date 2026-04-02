@@ -229,6 +229,13 @@
     <string name="settings_sponsor_block_skip_mode_text">选择如何跳过广告片段</string>
     <string name="settings_sponsor_block_skip_mode_manual">手动</string>
     <string name="settings_sponsor_block_skip_mode_auto">自动</string>
+    <string name="settings_sponsor_block_api_server_title">API 服务器地址</string>
+    <string name="settings_sponsor_block_api_server_text">当前服务器: %1$s</string>
+    <string name="settings_sponsor_block_api_server_hint">留空则使用默认服务器 bsbsb.top，填写域名即可（如 example.com）</string>
+    <string name="settings_sponsor_block_server_status_title">服务器状态</string>
+    <string name="settings_sponsor_block_server_status_connected">连接正常</string>
+    <string name="settings_sponsor_block_server_status_error">连接失败: %1$s</string>
+    <string name="settings_sponsor_block_server_status_checking">检测中…</string>
     <string name="settings_network_enable_proxy_text">使用自定义代理服务器获取部分视频播放地址</string>
     <string name="settings_network_enable_proxy_title">启用代理</string>
     <string name="settings_network_prefer_official_cdn_text">优先使用获取到的官方 CDN</string>
