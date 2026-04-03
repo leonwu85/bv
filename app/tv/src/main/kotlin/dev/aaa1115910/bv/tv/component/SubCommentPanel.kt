@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.tv.component
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
@@ -91,6 +92,10 @@ fun SubCommentPanel(
     var hasNext by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
+    BackHandler(enabled = show) {
+        onHide()
+    }
+
     // 加载子评论
     val loadReplies: (Boolean) -> Unit = { reset ->
         scope.launch {
@@ -136,6 +141,8 @@ fun SubCommentPanel(
     LaunchedEffect(show) {
         if (show) {
             delay(300)
+            focusRequester.requestFocus(scope)
+            delay(80)
             focusRequester.requestFocus(scope)
         }
     }

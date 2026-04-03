@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.tv.component
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
@@ -40,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -109,6 +111,7 @@ fun CommentPanel(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
+    val loadingFocusRequester = remember { FocusRequester() }
     val sidebarFocusRequester = remember { FocusRequester() }
     val density = LocalDensity.current
 
@@ -129,6 +132,7 @@ fun CommentPanel(
     // 选集相关状态
     var currentEpisode by remember { mutableStateOf<Episode?>(null) }
     var focusOnSidebar by remember { mutableStateOf(false) }
+    var focusOnLoadingSentinel by remember { mutableStateOf(false) }
     var scrollToCurrentEpisode by remember { mutableStateOf(false) }
     var pendingFocusToComments by remember { mutableStateOf(false) }
 
@@ -164,6 +168,43 @@ fun CommentPanel(
         derivedStateOf { allEpisodeItems.size > 1 }
     }
 
+    val shouldUseLoadingFocusSentinel by remember(show, showSubCommentPanel, loading, comments.size, focusOnLoadingSentinel) {
+        derivedStateOf {
+            show && !showSubCommentPanel && (focusOnLoadingSentinel || (loading && comments.isEmpty()))
+        }
+    }
+
+    val requestCommentContentFocus = {
+        focusRequester.requestFocus(scope)
+        scope.launch {
+            delay(80)
+            focusRequester.requestFocus(scope)
+        }
+    }
+
+    val requestLoadingSentinelFocus = {
+        loadingFocusRequester.requestFocus(scope)
+        scope.launch {
+            delay(80)
+            loadingFocusRequester.requestFocus(scope)
+        }
+    }
+
+    val handleBack = {
+        if (focusOnSidebar && showSidebar) {
+            onHide()
+        } else if (showSidebar) {
+            focusOnSidebar = true
+            scrollToCurrentEpisode = true
+        } else {
+            onHide()
+        }
+    }
+
+    BackHandler(enabled = show && !showSubCommentPanel) {
+        handleBack()
+    }
+
     // 初始化当前选中的剧集
     LaunchedEffect(allEpisodeItems, initialEpisodeId) {
         if (currentEpisode == null && allEpisodeItems.isNotEmpty()) {
@@ -188,12 +229,11 @@ fun CommentPanel(
     }
 
     // 加载评论
-    val loadComments: (reset: Boolean) -> Unit = { reset ->
+    val loadComments: (reset: Boolean) -> Unit = loadComments@ { reset ->
+        if (loading) return@loadComments
+        loading = true
+        error = null
         scope.launch {
-            if (loading) return@launch
-            loading = true
-            error = null
-
             try {
                 val page = if (reset) CommentPage() else currentPage
                 val data = commentRepository.getComments(
@@ -229,6 +269,7 @@ fun CommentPanel(
         if (!show) {
             hasRequestedFocus = false
             wasSubCommentPanelShown = false
+            focusOnLoadingSentinel = false
             // 重置边栏焦点状态，确保下次打开时焦点在评论列表
             focusOnSidebar = false
             scrollToCurrentEpisode = false
@@ -237,27 +278,68 @@ fun CommentPanel(
     }
 
     // 显示后请求焦点（初次显示时或子评论浮窗关闭后）
-    LaunchedEffect(show, showSubCommentPanel) {
+    LaunchedEffect(
+        show,
+        showSubCommentPanel,
+        loading,
+        comments.size,
+        error,
+        pendingFocusToComments,
+        wasSubCommentPanelShown,
+        hasRequestedFocus,
+        shouldUseLoadingFocusSentinel,
+        focusOnSidebar,
+        selectedCommentIndex
+    ) {
         if (show && !showSubCommentPanel) {
+            val hasStableCommentTarget = comments.isNotEmpty() || error != null || !loading
+
             // 子评论浮窗刚关闭，需要恢复焦点到之前点击的评论
-            if (wasSubCommentPanelShown) {
+            if (wasSubCommentPanelShown && hasStableCommentTarget) {
                 delay(300) // 等待动画完成
-                listState.scrollToItem(selectedCommentIndex)
+                if (comments.isNotEmpty()) {
+                    listState.scrollToItem(selectedCommentIndex)
+                }
                 delay(100)
-                focusRequester.requestFocus(scope)
+                requestCommentContentFocus()
+                focusOnLoadingSentinel = false
+                hasRequestedFocus = true
                 wasSubCommentPanelShown = false
             }
-            // 切换剧集后评论加载完成，请求焦点到评论列表
+            // 切换剧集后优先由哨兵接管焦点，列表可用后再回到评论区
             else if (pendingFocusToComments) {
-                delay(100) // 等待渲染完成
-                focusRequester.requestFocus(scope)
-                pendingFocusToComments = false
+                if (loading && comments.isEmpty() && !focusOnSidebar && !focusOnLoadingSentinel) {
+                    delay(80)
+                    requestLoadingSentinelFocus()
+                    focusOnLoadingSentinel = true
+                    hasRequestedFocus = true
+                } else if (hasStableCommentTarget) {
+                    delay(100)
+                    requestCommentContentFocus()
+                    focusOnLoadingSentinel = false
+                    hasRequestedFocus = true
+                    pendingFocusToComments = false
+                }
             }
-            // 初次显示父评论浮窗，请求焦点
+            // 初次显示父评论浮窗，加载中先把焦点留在透明哨兵上
             else if (!hasRequestedFocus) {
-                delay(300) // 等待动画和渲染完成
-                focusRequester.requestFocus(scope)
-                hasRequestedFocus = true
+                if (loading && comments.isEmpty() && !focusOnSidebar) {
+                    delay(120)
+                    requestLoadingSentinelFocus()
+                    focusOnLoadingSentinel = true
+                    hasRequestedFocus = true
+                } else if (hasStableCommentTarget) {
+                    delay(300) // 等待动画和渲染完成
+                    requestCommentContentFocus()
+                    focusOnLoadingSentinel = false
+                    hasRequestedFocus = true
+                }
+            }
+            // 加载完成后，把焦点从哨兵移交给评论区真实内容
+            else if (focusOnLoadingSentinel && !focusOnSidebar && hasStableCommentTarget) {
+                delay(100)
+                requestCommentContentFocus()
+                focusOnLoadingSentinel = false
             }
         }
         // 记录子评论浮窗显示状态
@@ -294,20 +376,7 @@ fun CommentPanel(
                     )
                     .fillMaxWidth(if (showSidebar) 0.5f else 0.3f)
                     .clickable(enabled = true, onClick = {}) // 阻止点击穿透
-                    .onBackPressed {
-                        if (focusOnSidebar && showSidebar) {
-                            // 在边栏时按返回键关闭评论面板
-                            onHide()
-                        } else if (showSidebar) {
-                            // 在评论列表时按返回键切换到边栏
-                            focusOnSidebar = true
-                            scrollToCurrentEpisode = true
-                            // 焦点请求由 EpisodeSidebar 内部的 LaunchedEffect 处理
-                        } else {
-                            // 没有边栏时直接关闭
-                            onHide()
-                        }
-                    },
+                    .onBackPressed { handleBack() },
                 colors = SurfaceDefaults.colors(
                     containerColor = Color.Black.copy(alpha = 0.95f)
                 ),
@@ -395,6 +464,43 @@ fun CommentPanel(
                                 color = Color.White.copy(alpha = 0.7f)
                             )
                         }
+                        // 透明哨兵，用于加载时先接管焦点
+                        Box(
+                            modifier = Modifier
+                                .size(1.dp)
+                                .alpha(0f)
+                                .then(
+                                    if (shouldUseLoadingFocusSentinel) {
+                                        Modifier
+                                            .focusRequester(loadingFocusRequester)
+                                            .focusable()
+                                            .onPreviewKeyEvent { event ->
+                                                when {
+                                                    event.isKeyDown() && event.isDpadLeft() && showSidebar -> {
+                                                        focusOnSidebar = true
+                                                        scrollToCurrentEpisode = true
+                                                        true
+                                                    }
+
+                                                    event.isKeyDown() && event.isDpadLeft() -> true
+
+                                                    event.isKeyDown() && event.isDpadDown() -> {
+                                                        if (comments.isNotEmpty() || error != null || !loading) {
+                                                            requestCommentContentFocus()
+                                                        }
+                                                        true
+                                                    }
+
+                                                    event.isKeyDown() && event.key == Key.DirectionUp -> true
+                                                    event.isKeyDown() && event.key == Key.DirectionRight -> true
+                                                    else -> false
+                                                }
+                                            }
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        )
 
                         // 评论列表
                         if (error != null) {
