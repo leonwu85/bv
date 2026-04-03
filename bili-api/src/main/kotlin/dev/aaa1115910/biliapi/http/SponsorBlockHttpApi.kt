@@ -26,6 +26,7 @@ object SponsorBlockHttpApi {
     private const val API_PATH = "/api"
 
     private var currentBaseUrl = DEFAULT_BASE_URL
+    private var currentProtocol = URLProtocol.HTTPS
     private lateinit var client: HttpClient
 
     private val json = Json {
@@ -39,12 +40,15 @@ object SponsorBlockHttpApi {
     }
 
     fun updateBaseUrl(baseUrl: String) {
+        val useHttp = baseUrl.startsWith("http://")
         val normalizedUrl = baseUrl
             .replace("https://", "")
             .replace("http://", "")
             .trimEnd('/')
-        if (normalizedUrl != currentBaseUrl) {
+        val protocol = if (useHttp) URLProtocol.HTTP else URLProtocol.HTTPS
+        if (normalizedUrl != currentBaseUrl || protocol != currentProtocol) {
             currentBaseUrl = normalizedUrl
+            currentProtocol = protocol
             createClient()
         }
     }
@@ -64,7 +68,7 @@ object SponsorBlockHttpApi {
             defaultRequest {
                 url {
                     host = currentBaseUrl
-                    protocol = URLProtocol.HTTPS
+                    protocol = currentProtocol
                 }
             }
         }

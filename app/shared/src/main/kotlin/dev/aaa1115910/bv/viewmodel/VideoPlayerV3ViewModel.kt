@@ -526,15 +526,16 @@ class VideoPlayerV3ViewModel(
         qn: Resolution = currentQuality,
         codec: VideoCodec = currentVideoCodec,
         audio: Audio = currentAudio,
-        mediaMode: PlaybackMediaMode = currentPlaybackMediaMode
+        mediaMode: PlaybackMediaMode = currentPlaybackMediaMode,
+        initialSeekPositionMs: Long? = null
     ) {
         if (qn != currentQuality) {
             // 更新清晰度后需要先设置清晰度再更新编码列表
             withContext(Dispatchers.Main) { currentQuality = qn }
             updateAvailableCodec()
-            playQuality(qn.code, currentVideoCodec, audio, mediaMode)
+            playQuality(qn.code, currentVideoCodec, audio, mediaMode, initialSeekPositionMs)
         } else {
-            playQuality(qn.code, codec, audio, mediaMode)
+            playQuality(qn.code, codec, audio, mediaMode, initialSeekPositionMs)
         }
     }
 
@@ -542,9 +543,12 @@ class VideoPlayerV3ViewModel(
         qn: Int = currentQuality.code,
         codec: VideoCodec = currentVideoCodec,
         audio: Audio = currentAudio,
-        mediaMode: PlaybackMediaMode = currentPlaybackMediaMode
+        mediaMode: PlaybackMediaMode = currentPlaybackMediaMode,
+        initialSeekPositionMs: Long? = null
     ) {
-        logger.fInfo { "Select resolution: $qn, codec: $codec, audio: $audio, mediaMode: $mediaMode" }
+        logger.fInfo {
+            "Select resolution: $qn, codec: $codec, audio: $audio, mediaMode: $mediaMode, initialSeekPositionMs: $initialSeekPositionMs"
+        }
         if(playData == null) {
             return
         }
@@ -628,7 +632,10 @@ class VideoPlayerV3ViewModel(
             logger.info { "Audio url: $audioUrl" }
             videoPlayer!!.playUrl(videoUrl, audioUrl)
             // 根据 DefaultStartPosition 设置初始跳转位置，避免在 onReady 中 seekTo 导致的状态抖动
-            if (lastPlayed > 0 && Prefs.playerDefaultStartPosition == PlayerDefaultStartPosition.History) {
+            if (initialSeekPositionMs != null && initialSeekPositionMs > 0L) {
+                logger.info { "Set initial seek position to current: ${initialSeekPositionMs}ms" }
+                videoPlayer!!.setInitialSeekPosition(initialSeekPositionMs)
+            } else if (lastPlayed > 0 && Prefs.playerDefaultStartPosition == PlayerDefaultStartPosition.History) {
                 logger.info { "Set initial seek position to history: ${lastPlayed}ms" }
                 videoPlayer!!.setInitialSeekPosition(lastPlayed.toLong())
             }

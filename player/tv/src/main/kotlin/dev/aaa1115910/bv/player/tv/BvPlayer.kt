@@ -107,7 +107,7 @@ fun BvPlayer(
     onRotationChange: (VideoRotation) -> Unit,
     onPlaySpeedChange: (Float) -> Unit,
     onAudioChange: (Audio, afterChange: suspend () -> Unit) -> Unit,
-    onPlaybackMediaModeChange: (PlaybackMediaMode, afterChange: suspend () -> Unit) -> Unit,
+    onPlaybackMediaModeChange: (PlaybackMediaMode, Long, afterChange: suspend () -> Unit) -> Unit,
     onLiveQualityChange: (Int) -> Unit = {},
     onLiveCodecChange: (LiveCodec) -> Unit = {},
     onDanmakuSwitchChange: (List<DanmakuType>) -> Unit,
@@ -1027,12 +1027,15 @@ fun BvPlayer(
             },
             onPlaybackMediaModeChange = { mediaMode ->
                 videoPlayer.pause()
-                val current = videoPlayer.currentPosition
+                val current = seekState.position.takeIf { it > 0L } ?: videoPlayer.currentPosition
                 pendingDanmakuPosition = current
                 danmakuNeedsResume = true
                 videoPlayer.setInitialSeekPosition(current)
-                onPlaybackMediaModeChange(mediaMode) {
+                onPlaybackMediaModeChange(mediaMode, current) {
                     withContext(Dispatchers.Main) {
+                        if (current > 0L) {
+                            videoPlayer.seekTo(current)
+                        }
                         videoPlayer.start()
                     }
                 }

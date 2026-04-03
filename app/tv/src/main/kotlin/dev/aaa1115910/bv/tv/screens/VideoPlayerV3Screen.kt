@@ -550,10 +550,13 @@ fun VideoPlayerV3Screen(
                         afterChange()
                     }
                 },
-                onPlaybackMediaModeChange = { mediaMode, afterChange ->
+                onPlaybackMediaModeChange = { mediaMode, currentPosition, afterChange ->
                     playerViewModel.currentPlaybackMediaMode = mediaMode
                     scope.launch(Dispatchers.Default) {
-                        playerViewModel.playQuality(mediaMode = mediaMode)
+                        playerViewModel.playQuality(
+                            mediaMode = mediaMode,
+                            initialSeekPositionMs = currentPosition
+                        )
                         afterChange()
                     }
                 },

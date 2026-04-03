@@ -240,9 +240,9 @@ private fun ApiServerEditDialog(
                 Button(onClick = {
                     onApiServerChange(
                         serverString
+                            .trim()
                             .replace("\n", "")
-                            .replace("https://", "")
-                            .replace("http://", "")
+                            .trimEnd('/')
                             .ifBlank { "bsbsb.top" }
                     )
                     onHideDialog()

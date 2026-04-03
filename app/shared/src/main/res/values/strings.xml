@@ -231,7 +231,7 @@
     <string name="settings_sponsor_block_skip_mode_auto">自动</string>
     <string name="settings_sponsor_block_api_server_title">API 服务器地址</string>
     <string name="settings_sponsor_block_api_server_text">当前服务器: %1$s</string>
-    <string name="settings_sponsor_block_api_server_hint">留空则使用默认服务器 bsbsb.top，填写域名即可（如 example.com）</string>
+    <string name="settings_sponsor_block_api_server_hint">留空则使用默认服务器 bsbsb.top。填写域名默认使用 HTTPS，如需 HTTP 请加前缀（如 http://192.168.1.1）</string>
     <string name="settings_sponsor_block_server_status_title">服务器状态</string>
     <string name="settings_sponsor_block_server_status_connected">连接正常</string>
     <string name="settings_sponsor_block_server_status_error">连接失败: %1$s</string>
