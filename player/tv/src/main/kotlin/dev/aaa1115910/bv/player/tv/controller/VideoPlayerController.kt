@@ -123,6 +123,7 @@ fun VideoPlayerController(
     onSubtitleBottomPadding: (Dp) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit,
     onLoadNextVideo: (Boolean) -> Unit,
+    openPlayListRequestToken: Long = 0L,
 
     onRequestFocus: () -> Unit,
     onShowComment: () -> Unit = {},
@@ -225,6 +226,14 @@ fun VideoPlayerController(
 
     // 对外暴露 showInfo
     LaunchedEffect(Unit) { registerShowInfoProvider { showInfo } }
+    LaunchedEffect(openPlayListRequestToken) {
+        if (openPlayListRequestToken != 0L) {
+            showInfo = false
+            showMenuController = false
+            showSeekController = false
+            showListController = true
+        }
+    }
 
     Box(
         modifier = modifier

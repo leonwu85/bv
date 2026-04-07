@@ -68,6 +68,10 @@ fun VideoListController(
                 val currentIndex = videoPlayerConfigData.availableVideoList
                     .indexOfFirst {
                         when (it) {
+                            is VideoListInteractiveNode -> it.isCurrent
+                                || (videoPlayerConfigData.currentVideoCid == it.cid && !videoPlayerConfigData.availableVideoList.any { listItem ->
+                                    listItem is VideoListInteractiveNode && listItem.isCurrent
+                                })
                             is VideoListItemData -> it.cid == videoPlayerConfigData.currentVideoCid
                             else -> false
                         }
@@ -138,7 +142,10 @@ fun VideoListController(
 
                                 is VideoListInteractiveNode -> {
                                     val isSelected =
-                                        video.cid == videoPlayerConfigData.currentVideoCid
+                                        video.isCurrent || (
+                                            video.cid == videoPlayerConfigData.currentVideoCid &&
+                                                !videoPlayerConfigData.availableVideoList.any { it is VideoListInteractiveNode && it.isCurrent }
+                                            )
                                     val itemModifier = if (isSelected) {
                                         Modifier
                                             .fillMaxWidth()

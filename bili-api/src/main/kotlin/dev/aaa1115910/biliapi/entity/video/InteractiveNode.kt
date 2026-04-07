@@ -23,5 +23,13 @@ data class InteractiveNode(
             cursor = node.cursor,
             isCurrent = node.isCurrent == 1,
         )
+
+        fun fromChoice(choice: InteractiveEdgeInfo.Choice, fallbackTitle: String) = InteractiveNode(
+            nodeId = choice.id,
+            edgeId = choice.id,
+            cid = choice.cid,
+            title = choice.option.ifBlank { fallbackTitle },
+            isCurrent = choice.isCurrent == 1,
+        )
     }
 }

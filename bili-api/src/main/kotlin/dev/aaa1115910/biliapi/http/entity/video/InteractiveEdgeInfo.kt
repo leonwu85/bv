@@ -10,6 +10,7 @@ data class InteractiveEdgeInfo(
     val edgeId: Long? = null,
     @SerialName("story_list")
     val storyList: List<StoryNode> = emptyList(),
+    val edges: Edges? = null,
     @SerialName("is_leaf")
     val isLeaf: Int? = null,
 ) {
@@ -27,5 +28,24 @@ data class InteractiveEdgeInfo(
         @SerialName("is_current")
         val isCurrent: Int? = null,
         val cursor: Int? = null,
+    )
+
+    @Serializable
+    data class Edges(
+        val questions: List<Question> = emptyList(),
+    )
+
+    @Serializable
+    data class Question(
+        val choices: List<Choice> = emptyList(),
+    )
+
+    @Serializable
+    data class Choice(
+        val id: Long,
+        val cid: Long,
+        val option: String = "",
+        @SerialName("is_current")
+        val isCurrent: Int? = null,
     )
 }

@@ -100,7 +100,25 @@ class VideoDetailViewModel(
         logger.fInfo { "Update ${relateVideoCardDataList.size} relate videos" }
     }
 
+    private fun syncInteractivePlaybackContext() {
+        val detail = videoDetail
+        if (
+            detail != null &&
+            detail.isInteractive &&
+            detail.bvid.isNotBlank() &&
+            detail.interactiveGraphVersion != null
+        ) {
+            videoInfoRepository.updateInteractivePlaybackContext(
+                bvid = detail.bvid,
+                graphVersion = detail.interactiveGraphVersion,
+            )
+        } else {
+            videoInfoRepository.clearInteractivePlaybackContext()
+        }
+    }
+
     private fun updateVideoList(aid: Long) {
+        syncInteractivePlaybackContext()
         if (videoDetail?.interactiveNodes?.isNotEmpty() == true) {
             val interactiveVideoList = videoDetail!!.interactiveNodes.mapIndexed { index, node ->
                 VideoListInteractiveNode(
@@ -111,6 +129,8 @@ class VideoDetailViewModel(
                     index = index,
                     nodeId = node.nodeId,
                     edgeId = node.edgeId,
+                    startPos = node.startPos,
+                    isCurrent = node.isCurrent,
                 )
             }
             videoInfoRepository.videoList.clear()

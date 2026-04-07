@@ -376,8 +376,13 @@ fun VideoPlayerScreen(
                                     cid = cid,
                                     epid = epid,
                                     seasonId = seasonId,
-                                    continuePlayNext = true
+                                    continuePlayNext = true,
+                                    initialSeekPositionMs = (videoListItem as? dev.aaa1115910.bv.player.entity.VideoListInteractiveNode)?.startPos?.times(1000L)
                                 )
+                                (videoListItem as? dev.aaa1115910.bv.player.entity.VideoListInteractiveNode)?.let {
+                                    playerViewModel.selectInteractiveNode(it.nodeId)
+                                    playerViewModel.refreshInteractiveBranches(it.edgeId)
+                                }
                             },
                             danmakuOpacity = playerViewModel.currentDanmakuOpacity,
                             isLive = playerViewModel.isLive,
@@ -462,11 +467,14 @@ fun VideoPlayerScreen(
                                                     pgcSections = seasonVideModel.seasonData?.sections
                                                         ?: emptyList(),
                                                     onClickInteractiveNode = { node ->
+                                                        playerViewModel.selectInteractiveNode(node.nodeId)
                                                         playerViewModel.loadPlayUrl(
                                                             avid = videoDetailViewModel.videoDetail!!.aid,
                                                             cid = node.cid,
-                                                            continuePlayNext = true
+                                                            continuePlayNext = true,
+                                                            initialSeekPositionMs = node.startPos?.times(1000L)
                                                         )
+                                                        playerViewModel.refreshInteractiveBranches(node.edgeId)
                                                     },
                                                     onClickPage = { videoPage ->
                                                         playerViewModel.loadPlayUrl(
@@ -577,11 +585,14 @@ fun VideoPlayerScreen(
                                 ugcSeason = videoDetailViewModel.videoDetail?.ugcSeason,
                                 pgcSections = seasonVideModel.seasonData?.sections ?: emptyList(),
                                 onClickInteractiveNode = { node ->
+                                    playerViewModel.selectInteractiveNode(node.nodeId)
                                     playerViewModel.loadPlayUrl(
                                         avid = videoDetailViewModel.videoDetail!!.aid,
                                         cid = node.cid,
-                                        continuePlayNext = true
+                                        continuePlayNext = true,
+                                        initialSeekPositionMs = node.startPos?.times(1000L)
                                     )
+                                    playerViewModel.refreshInteractiveBranches(node.edgeId)
                                 },
                                 onClickPage = { videoPage ->
                                     playerViewModel.loadPlayUrl(
