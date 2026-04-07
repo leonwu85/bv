@@ -15,8 +15,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +50,9 @@ import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.resizedImageUrl
+
+private val InteractiveBadgeColor = Color(0xFFFFD54F)
+private val ChargingBadgeColor = Color(0xFF00FFFF)
 
 @Composable
 fun SmallVideoCard(
@@ -96,7 +102,7 @@ fun SmallVideoCard(
                 play = data.playString,
                 danmaku = data.danmakuString,
                 time = data.timeString,
-                badge = "${if(data.isChargingArc) "⚡" else ""}${if(data.badgeText.isEmpty() && data.isChargingArc) "充电专属" else data.badgeText}"
+                badges = data.coverBadges
             )
             Spacer(modifier = Modifier.height(8.dp))
             CardInfo(
@@ -162,7 +168,7 @@ fun CardCover(
     play: String,
     danmaku: String,
     time: String,
-    badge: String = ""
+    badges: List<String> = emptyList()
 ) {
     BoxWithConstraints(
         modifier = modifier,
@@ -186,19 +192,44 @@ fun CardCover(
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // 充电专属徽章
-            if (badge.isNotEmpty()) {
-                Text(
-                    modifier = Modifier
-                        .background(
-                            color = Color.Black.copy(0.5f),
-                            shape = MaterialTheme.shapes.extraSmall
+            badges.forEach { badge ->
+                if (badge == "互动视频") {
+                    Row(
+                        modifier = Modifier
+                            .background(
+                                color = Color.Black.copy(0.5f),
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .padding(vertical = 1.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.PlayCircle,
+                            contentDescription = null,
+                            tint = InteractiveBadgeColor
                         )
-                        .padding(vertical = 1.dp, horizontal = 2.dp),
-                    text = badge,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White
-                )
+                        Text(
+                            text = badge,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = InteractiveBadgeColor,
+                            maxLines = 1
+                        )
+                    }
+                } else {
+                    Text(
+                        modifier = Modifier
+                            .background(
+                                color = Color.Black.copy(0.5f),
+                                shape = MaterialTheme.shapes.extraSmall
+                            )
+                            .padding(vertical = 1.dp, horizontal = 2.dp),
+                        text = badge,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ChargingBadgeColor,
+                        maxLines = 1
+                    )
+                }
             }
             // 时长显示
             if (time.isNotEmpty()) {

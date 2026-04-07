@@ -39,6 +39,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Done
+import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.ViewModule
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Scaffold
@@ -108,6 +109,7 @@ import coil.transform.BlurTransformation
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
 import dev.aaa1115910.biliapi.entity.video.Dimension
+import dev.aaa1115910.biliapi.entity.video.InteractiveNode
 import dev.aaa1115910.biliapi.entity.video.Tag
 import dev.aaa1115910.biliapi.entity.video.VideoDetail
 import dev.aaa1115910.biliapi.entity.video.VideoPage
@@ -160,6 +162,9 @@ import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.getKoin
 import kotlin.math.ceil
+
+private val InteractiveBadgeColor = Color(0xFFFFD54F)
+private val ChargingBadgeColor = Color(0xFF00FFFF)
 
 @Composable
 fun VideoInfoScreen(
@@ -897,6 +902,64 @@ fun VideoInfoScreen(
                             commentButtonFocusRequester = commentButtonFocusRequester
                         )
                     }
+                    if (videoDetailViewModel.videoDetail?.interactiveNodes?.isNotEmpty() == true) {
+                        item {
+                            val interactivePages = remember(
+                                videoDetailViewModel.videoDetail?.interactiveNodes,
+                                videoDetailViewModel.videoDetail?.pages
+                            ) {
+                                val fallbackDimension = videoDetailViewModel.videoDetail?.pages?.firstOrNull()?.dimension
+                                    ?: Dimension(0, 0)
+                                videoDetailViewModel.videoDetail?.interactiveNodes
+                                    ?.mapIndexed { index, node ->
+                                        VideoPage(
+                                            cid = node.cid,
+                                            index = index + 1,
+                                            title = node.title.ifBlank { "未命名分支" },
+                                            duration = 0,
+                                            dimension = fallbackDimension
+                                        )
+                                    }
+                                    ?: emptyList()
+                            }
+                            VideoPartRow(
+                                pages = interactivePages,
+                                lastPlayedCid = lastPlayedCid,
+                                lastPlayedTime = lastPlayedTime,
+                                enablePartListDialog = interactivePages.size > 5,
+                                titleText = "互动分支",
+                                dialogTitle = "互动分支列表",
+                                onClick = { cid ->
+                                    logger.fInfo { "Click interactive branch: [av:${videoDetailViewModel.videoDetail?.aid}, bv:${videoDetailViewModel.videoDetail?.bvid}, cid:$cid]" }
+                                    launchPlayerActivity(
+                                        context = context,
+                                        avid = videoDetailViewModel.videoDetail!!.aid,
+                                        cid = cid,
+                                        title = videoDetailViewModel.videoDetail!!.title,
+                                        partTitle = interactivePages.find { it.cid == cid }!!.title,
+                                        played = if (cid == lastPlayedCid) lastPlayedTime * 1000 else 0,
+                                        fromSeason = false,
+                                        isVerticalVideo = videoDetailViewModel.videoDetail!!.pages.firstOrNull { it.cid == cid }?.dimension?.isVertical
+                                            ?: videoDetailViewModel.videoDetail!!.pages.first().dimension.isVertical,
+                                        playerIconIdle = videoDetailViewModel.videoDetail!!.playerIcon?.idle
+                                            ?: "",
+                                        playerIconMoving = videoDetailViewModel.videoDetail!!.playerIcon?.moving
+                                            ?: "",
+                                        play = videoDetailViewModel.videoDetail!!.stat.view,
+                                        danmaku = videoDetailViewModel.videoDetail!!.stat.danmaku,
+                                        like = videoDetailViewModel.videoDetail!!.stat.like,
+                                        coin = videoDetailViewModel.videoDetail!!.stat.coin,
+                                        favorite = videoDetailViewModel.videoDetail!!.stat.favorite,
+                                        upName = videoDetailViewModel.videoDetail!!.author.name,
+                                        upId = videoDetailViewModel.videoDetail!!.author.mid,
+                                        upFace = videoDetailViewModel.videoDetail!!.author.face,
+                                        pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString(),
+                                        audioOnlyMode = audioOnlyMode
+                                    )
+                                }
+                            )
+                        }
+                    }
                     if (videoDetailViewModel.videoDetail?.ugcSeason == null) {
                         item {
                             VideoPartRow(
@@ -1220,20 +1283,55 @@ fun VideoInfoData(
                 contentDescription = null,
                 contentScale = ContentScale.Crop
             )
-            if (videoDetail.isChargingArc) {
-                Text(
+            if (videoDetail.isInteractive || videoDetail.isChargingArc) {
+                Column(
                     modifier = Modifier
                         .padding(6.dp)
-                        .align(Alignment.TopEnd)
-                        .background(
-                            color = Color.Black.copy(0.3f),
-                            shape = MaterialTheme.shapes.extraSmall
+                        .align(Alignment.TopEnd),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (videoDetail.isInteractive) {
+                        Row(
+                            modifier = Modifier
+                                .background(
+                                    color = Color.Black.copy(0.3f),
+                                    shape = MaterialTheme.shapes.extraSmall
+                                )
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.PlayCircle,
+                                contentDescription = null,
+                                tint = InteractiveBadgeColor
+                            )
+                            Text(
+                                text = "互动视频",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = InteractiveBadgeColor
+                            )
+                        }
+                    }
+                    if (videoDetail.isChargingArc) {
+                        Text(
+                            modifier = Modifier
+                                .background(
+                                    color = Color.Black.copy(0.3f),
+                                    shape = MaterialTheme.shapes.extraSmall
+                                )
+                                .padding(all = 2.dp),
+                            text = if (videoDetail.chargingArcBadge.isNotBlank()) {
+                                "⚡${videoDetail.chargingArcBadge}"
+                            } else {
+                                "⚡充电专属"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = ChargingBadgeColor
                         )
-                        .padding(all = 2.dp),
-                    text = "⚡${videoDetail.chargingArcBadge}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White
-                )
+                    }
+                }
             }
             Box(
                 modifier = Modifier
@@ -1734,6 +1832,8 @@ fun VideoPartRow(
     enablePartListDialog: Boolean = false,
     nested: Boolean = false,
     subtitle: String = "",
+    titleText: String? = null,
+    dialogTitle: String = "分 P 列表",
     onClick: (cid: Long) -> Unit
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -1770,7 +1870,7 @@ fun VideoPartRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = stringResource(R.string.video_info_part_row_title)
+                text = (titleText ?: stringResource(R.string.video_info_part_row_title))
                         + (" - $subtitle".takeIf { subtitle.isNotBlank() } ?: ""),
                 fontSize = titleFontSize.sp,
                 maxLines = 1,
@@ -1812,7 +1912,7 @@ fun VideoPartRow(
         pages = pages,
         lastPlayedCid = lastPlayedCid,
         lastPlayedTime = lastPlayedTime,
-        title = "分 P 列表",
+        title = dialogTitle,
         onClick = onClick
     )
 }

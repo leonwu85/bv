@@ -67,7 +67,8 @@ fun PopularPage(
                         play = video.play,
                         danmaku = video.danmaku,
                         upName = video.author,
-                        time = video.duration * 1000L
+                        time = video.duration * 1000L,
+                        isInteractive = video.isInteractive
                     ),
                     onClick = { onClickVideo(video.aid) }
                 )

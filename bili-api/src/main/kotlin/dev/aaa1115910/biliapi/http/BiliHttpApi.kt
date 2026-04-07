@@ -57,6 +57,7 @@ import dev.aaa1115910.biliapi.http.entity.video.AddCoin
 import dev.aaa1115910.biliapi.http.entity.video.ArchiveRelation
 import dev.aaa1115910.biliapi.http.entity.video.CheckSentCoin
 import dev.aaa1115910.biliapi.http.entity.video.CheckVideoFavoured
+import dev.aaa1115910.biliapi.http.entity.video.InteractiveEdgeInfo
 import dev.aaa1115910.biliapi.http.entity.video.PlayUrlData
 import dev.aaa1115910.biliapi.http.entity.video.PlayUrlV2Data
 import dev.aaa1115910.biliapi.http.entity.video.PopularVideoData
@@ -70,6 +71,7 @@ import dev.aaa1115910.biliapi.http.entity.video.TimelineAppData
 import dev.aaa1115910.biliapi.http.entity.video.VideoDetail
 import dev.aaa1115910.biliapi.http.entity.video.VideoInfo
 import dev.aaa1115910.biliapi.http.entity.video.VideoMoreInfo
+import dev.aaa1115910.biliapi.http.entity.video.VideoPlayerInfo
 import dev.aaa1115910.biliapi.http.entity.video.VideoOnlineTotal
 import dev.aaa1115910.biliapi.http.entity.video.VideoShot
 import dev.aaa1115910.biliapi.http.entity.web.NavResponseData
@@ -241,6 +243,31 @@ object BiliHttpApi {
         parameter("type", type)
         parameter("platform", platform)
         sessData?.let { header("Cookie", "SESSDATA=$sessData;DedeUserID=$dedeUserID") }
+    }.body()
+
+    suspend fun getVideoPlayerInfo(
+        av: Long? = null,
+        bv: String? = null,
+        cid: Long,
+        sessData: String? = null,
+    ): BiliResponse<VideoPlayerInfo> = client.get("/x/player/v2") {
+        parameter("aid", av)
+        parameter("bvid", bv)
+        parameter("cid", cid)
+        sessData?.let { header("Cookie", "SESSDATA=$sessData;") }
+    }.body()
+
+    suspend fun getInteractiveEdgeInfo(
+        bvid: String,
+        graphVersion: Int,
+        edgeId: Long? = null,
+        sessData: String? = null,
+    ): BiliResponse<InteractiveEdgeInfo> = client.get("/x/stein/edgeinfo_v2") {
+        parameter("bvid", bvid)
+        parameter("graph_version", graphVersion)
+        parameter("edge_id", edgeId)
+        sessData?.let { header("Cookie", "SESSDATA=$sessData;") }
+        header("referer", "https://www.bilibili.com")
     }.body()
 
     /**

@@ -76,6 +76,28 @@ fun UgcListItem(
                     contentDescription = null,
                     contentScale = ContentScale.FillBounds
                 )
+                if (data.coverBadges.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp),
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        data.coverBadges.forEach { badge ->
+                            Text(
+                                modifier = Modifier
+                                    .clip(MaterialTheme.shapes.extraSmall)
+                                    .background(Color.Black.copy(alpha = 0.65f))
+                                    .padding(horizontal = 4.dp, vertical = 1.dp),
+                                text = badge,
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
                 Text(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -163,5 +185,6 @@ private val previewData = VideoCardData(
     play = 2333,
     danmaku = 66666,
     time = 2333 * 1000,
-    pubTime = "3小时前"
+    pubTime = "3小时前",
+    isInteractive = true
 )

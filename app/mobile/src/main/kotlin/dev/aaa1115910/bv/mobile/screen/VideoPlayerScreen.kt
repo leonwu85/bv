@@ -100,6 +100,7 @@ import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoShotData
 import dev.aaa1115910.bv.player.entity.VideoListPart
 import dev.aaa1115910.bv.player.entity.VideoListPgcEpisode
+import dev.aaa1115910.bv.player.entity.VideoListItemData
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisode
 import dev.aaa1115910.bv.player.entity.VideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.VideoPlayerDanmakuMasksData
@@ -362,23 +363,10 @@ fun VideoPlayerScreen(
                                 var seasonId: Int? = null
 
                                 when (videoListItem) {
-                                    is VideoListPart -> {
+                                    is VideoListItemData -> {
+                                        val targetCid = videoListItem.cid ?: return@BvPlayer
                                         aid = videoListItem.aid
-                                        cid = videoListItem.cid
-                                        epid = videoListItem.epid
-                                        seasonId = videoListItem.seasonId
-                                    }
-
-                                    is VideoListUgcEpisode -> {
-                                        aid = videoListItem.aid
-                                        cid = videoListItem.cid
-                                        epid = videoListItem.epid
-                                        seasonId = videoListItem.seasonId
-                                    }
-
-                                    is VideoListPgcEpisode -> {
-                                        aid = videoListItem.aid
-                                        cid = videoListItem.cid
+                                        cid = targetCid
                                         epid = videoListItem.epid
                                         seasonId = videoListItem.seasonId
                                     }
@@ -466,11 +454,20 @@ fun VideoPlayerScreen(
                                             item {
                                                 VideoPlayerPages(
                                                     currentCid = playerViewModel.currentCid,
+                                                    interactiveNodes = videoDetailViewModel.videoDetail?.interactiveNodes
+                                                        ?: emptyList(),
                                                     pages = videoDetailViewModel.videoDetail?.pages
                                                         ?: emptyList(),
                                                     ugcSeason = videoDetailViewModel.videoDetail?.ugcSeason,
                                                     pgcSections = seasonVideModel.seasonData?.sections
                                                         ?: emptyList(),
+                                                    onClickInteractiveNode = { node ->
+                                                        playerViewModel.loadPlayUrl(
+                                                            avid = videoDetailViewModel.videoDetail!!.aid,
+                                                            cid = node.cid,
+                                                            continuePlayNext = true
+                                                        )
+                                                    },
                                                     onClickPage = { videoPage ->
                                                         playerViewModel.loadPlayUrl(
                                                             avid = videoDetailViewModel.videoDetail!!.aid,
@@ -574,9 +571,18 @@ fun VideoPlayerScreen(
                                     .padding(vertical = 12.dp)
                                     .clip(MaterialTheme.shapes.medium),
                                 currentCid = playerViewModel.currentCid,
+                                interactiveNodes = videoDetailViewModel.videoDetail?.interactiveNodes
+                                    ?: emptyList(),
                                 pages = videoDetailViewModel.videoDetail?.pages ?: emptyList(),
                                 ugcSeason = videoDetailViewModel.videoDetail?.ugcSeason,
                                 pgcSections = seasonVideModel.seasonData?.sections ?: emptyList(),
+                                onClickInteractiveNode = { node ->
+                                    playerViewModel.loadPlayUrl(
+                                        avid = videoDetailViewModel.videoDetail!!.aid,
+                                        cid = node.cid,
+                                        continuePlayNext = true
+                                    )
+                                },
                                 onClickPage = { videoPage ->
                                     playerViewModel.loadPlayUrl(
                                         avid = videoDetailViewModel.videoDetail!!.aid,

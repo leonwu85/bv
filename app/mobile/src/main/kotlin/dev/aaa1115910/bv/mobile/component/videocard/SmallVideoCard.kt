@@ -65,6 +65,28 @@ fun SmallVideoCard(
                     contentDescription = null,
                     contentScale = ContentScale.FillBounds
                 )
+                if (data.coverBadges.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp),
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        data.coverBadges.forEach { badge ->
+                            Text(
+                                modifier = Modifier
+                                    .clip(MaterialTheme.shapes.extraSmall)
+                                    .background(Color.Black.copy(alpha = 0.65f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                                text = badge,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -169,7 +191,8 @@ fun SmallVideoCardPreview() {
         upName = "bishi",
         play = 2333,
         danmaku = 666,
-        time = 2333 * 1000
+        time = 2333 * 1000,
+        isInteractive = true
     )
     BVMobileTheme {
         Surface {
@@ -190,7 +213,8 @@ fun SmallVideoCardsPreview() {
         upName = "bishi",
         play = 2333,
         danmaku = 666,
-        time = 2333 * 1000
+        time = 2333 * 1000,
+        isInteractive = true
     )
     BVMobileTheme {
         Surface {

@@ -21,6 +21,7 @@ data class UgcItem(
     val duration: Int,
     val idx: Int = -1,
     val pubTime: String? = null,
+    val isInteractive: Boolean = false,
 ) {
     companion object {
         fun fromRcmdItem(rcmdItem: RcmdIndexData.RcmdItem) =
@@ -80,7 +81,8 @@ data class UgcItem(
                 cover = videoInfo.pic,
                 play = videoInfo.stat.view,
                 danmaku = videoInfo.stat.danmaku,
-                pubTime = videoInfo.pubdate.smartDate
+                pubTime = videoInfo.pubdate.smartDate,
+                isInteractive = videoInfo.isStory || videoInfo.rights.isSteinGate == 1
             )
 
         fun fromSmallCoverV5(card: bilibili.app.card.v1.SmallCoverV5) =

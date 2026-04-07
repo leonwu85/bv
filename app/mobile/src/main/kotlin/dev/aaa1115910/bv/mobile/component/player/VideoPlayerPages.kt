@@ -77,6 +77,7 @@ import com.airbnb.lottie.compose.rememberLottieComposition
 import com.airbnb.lottie.compose.rememberLottieDynamicProperties
 import com.airbnb.lottie.compose.rememberLottieDynamicProperty
 import dev.aaa1115910.biliapi.entity.video.Dimension
+import dev.aaa1115910.biliapi.entity.video.InteractiveNode
 import dev.aaa1115910.biliapi.entity.video.VideoPage
 import dev.aaa1115910.biliapi.entity.video.season.Episode
 import dev.aaa1115910.biliapi.entity.video.season.Section
@@ -90,9 +91,11 @@ import dev.aaa1115910.bv.util.formatHourMinSec
 fun VideoPlayerPages(
     modifier: Modifier = Modifier,
     currentCid: Long,
+    interactiveNodes: List<InteractiveNode>,
     pages: List<VideoPage>,
     ugcSeason: UgcSeason?,
     pgcSections: List<Section>,
+    onClickInteractiveNode: (InteractiveNode) -> Unit,
     onClickPage: (VideoPage) -> Unit,
     onClickEpisode: (sectionIndex: Int, episode: Episode) -> Unit
 ) {
@@ -128,6 +131,13 @@ fun VideoPlayerPages(
     ) {
         if (pgcSections.isNotEmpty()) {
             // TODO pgc
+        } else if (interactiveNodes.isNotEmpty()) {
+            VideoPlayerInteractiveNodesRow(
+                nodes = interactiveNodes,
+                onClickMore = { openBottomSheet = !openBottomSheet },
+                onClickNode = onClickInteractiveNode,
+                currentCid = currentCid
+            )
         } else if (ugcSeason != null) {
             // TODO ugc
             if (currentSection != null) {
@@ -168,15 +178,57 @@ fun VideoPlayerPages(
         ) {
             VideoPlayerPartSheetContent(
                 currentCid = currentCid,
+                interactiveNodes = interactiveNodes,
                 pages = pages,
                 ugcSeason = ugcSeason,
                 pgcSections = pgcSections,
+                onClickInteractiveNode = onClickInteractiveNode,
                 onClickPage = onClickPage,
                 onClickEpisode = { episode ->
                     onClickEpisode(
                         ugcSeason!!.sections.indexOf(currentSection), episode
                     )
                 }
+            )
+        }
+    }
+}
+
+@Composable
+fun VideoPlayerInteractiveNodesRow(
+    modifier: Modifier = Modifier,
+    nodes: List<InteractiveNode>,
+    currentCid: Long,
+    onClickMore: () -> Unit = {},
+    onClickNode: (InteractiveNode) -> Unit = {}
+) {
+    Column(
+        modifier = modifier.background(MaterialTheme.colorScheme.surface)
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            LazyRow(
+                contentPadding = PaddingValues(
+                    start = 8.dp,
+                    end = 68.dp,
+                    top = 8.dp,
+                    bottom = 8.dp
+                ),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(nodes, key = { _, node -> node.cid }) { index, node ->
+                    VideoPlayerPageItem(
+                        modifier = modifier,
+                        text = "分支${index + 1} ${node.title.ifBlank { "未命名分支" }}",
+                        onClick = { onClickNode(node) },
+                        isPlaying = node.cid == currentCid
+                    )
+                }
+            }
+            MoreButton(
+                modifier = Modifier.align(Alignment.CenterEnd),
+                onClick = onClickMore
             )
         }
     }
@@ -404,9 +456,11 @@ private fun VideoPlayerPageItem(
 private fun VideoPlayerPartSheetContent(
     modifier: Modifier = Modifier,
     currentCid: Long,
+    interactiveNodes: List<InteractiveNode>,
     pages: List<VideoPage>,
     ugcSeason: UgcSeason?,
     pgcSections: List<Section>,
+    onClickInteractiveNode: (InteractiveNode) -> Unit,
     onClickPage: (VideoPage) -> Unit,
     onClickEpisode: (Episode) -> Unit
 ) {
@@ -440,6 +494,8 @@ private fun VideoPlayerPartSheetContent(
                     Text(
                         text = if (pgcSections.isNotEmpty()) {
                             "视频选集"
+                        } else if (interactiveNodes.isNotEmpty()) {
+                            "互动分支"
                         } else if (ugcSeason != null) {
                             "视频选集"
                         } else {
@@ -457,6 +513,20 @@ private fun VideoPlayerPartSheetContent(
         if (pgcSections.isNotEmpty()) {
             // TODO pgc
             Text("pgc")
+        } else if (interactiveNodes.isNotEmpty()) {
+            HorizontalDivider()
+            LazyColumn {
+                itemsIndexed(interactiveNodes, key = { _, node -> node.cid }) { index, node ->
+                    PageListItem(
+                        modifier = modifier,
+                        text = "分支${index + 1} ${node.title.ifBlank { "未命名分支" }}",
+                        duration = null,
+                        isPlaying = node.cid == currentCid,
+                        onClick = { onClickInteractiveNode(node) }
+                    )
+                }
+                item { Spacer(modifier = Modifier.navigationBarsPadding()) }
+            }
         } else if (ugcSeason != null) {
             // TODO ugc
             if (currentSection != null) {
@@ -712,9 +782,11 @@ private fun VideoPlayerPartSheetContentPagesPreview() {
     BVMobileTheme {
         VideoPlayerPartSheetContent(
             currentCid = 1,
+            interactiveNodes = emptyList(),
             pages = pages,
             ugcSeason = null,
             pgcSections = emptyList(),
+            onClickInteractiveNode = {},
             onClickPage = {},
             onClickEpisode = {}
         )
@@ -766,9 +838,11 @@ private fun VideoPlayerPartSheetContentUgcSeasonPreview() {
     BVMobileTheme {
         VideoPlayerPartSheetContent(
             currentCid = 102,
+            interactiveNodes = emptyList(),
             pages = emptyList(),
             ugcSeason = ugcSeason,
             pgcSections = emptyList(),
+            onClickInteractiveNode = {},
             onClickPage = {},
             onClickEpisode = {}
         )
@@ -790,9 +864,11 @@ private fun VideoPlayerPartSheetContentPgcSectionsPreview() {
     BVMobileTheme {
         VideoPlayerPartSheetContent(
             currentCid = 1,
+            interactiveNodes = emptyList(),
             pages = pages,
             ugcSeason = null,
             pgcSections = emptyList(),
+            onClickInteractiveNode = {},
             onClickPage = {},
             onClickEpisode = {}
         )

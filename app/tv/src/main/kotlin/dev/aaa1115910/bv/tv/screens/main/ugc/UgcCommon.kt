@@ -133,7 +133,8 @@ fun UgcRegionScaffold(
                             danmaku = item.danmaku,
                             upName = item.author,
                             time = item.duration * 1000L,
-                            pubTime = item.pubTime
+                            pubTime = item.pubTime,
+                            isInteractive = item.isInteractive
                         )
                     },
                     onClick = { VideoInfoActivity.actionStart(context, item.aid) },

@@ -96,7 +96,8 @@ fun RecommendScreen(
                             danmaku = with(item.danmaku) { if (this == -1) null else this },
                             upName = item.author,
                             time = item.duration * 1000L,
-                            pubTime = item.pubTime
+                            pubTime = item.pubTime,
+                            isInteractive = item.isInteractive
                         )
                     },
                     onClick = { onClickVideo(item) },

@@ -66,7 +66,8 @@ class TagViewModel : ViewModel() {
                         play = tagVideoItem.stat.view,
                         danmaku = tagVideoItem.stat.danmaku,
                         time = tagVideoItem.duration * 1000L,
-                        pubTime = tagVideoItem.pubdate.toLong().toSmartDate()
+                        pubTime = tagVideoItem.pubdate.toLong().toSmartDate(),
+                        isInteractive = tagVideoItem.isStory || tagVideoItem.rights.isSteinGate == 1
                     )
                 )
             }
