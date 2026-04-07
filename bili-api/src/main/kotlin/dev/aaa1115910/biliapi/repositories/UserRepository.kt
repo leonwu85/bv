@@ -197,7 +197,8 @@ class UserRepository(
                     order = order.value,
                     pageNumber = page.nextWebPageNumber,
                     pageSize = page.nextWebPageSize,
-                    sessData = authRepository.sessionData ?: ""
+                    sessData = authRepository.sessionData ?: "",
+                    dedeUserID = authRepository.mid
                 ).getResponseData()
                 SpaceVideoData.fromWebSpaceVideoData(webSpaceVideoData)
             }

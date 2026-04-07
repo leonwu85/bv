@@ -1168,7 +1168,8 @@ object BiliHttpApi {
         keyword: String? = null,
         pageNumber: Int = 1,
         pageSize: Int = 30,
-        sessData: String
+        sessData: String,
+        dedeUserID: Long? = null
     ): BiliResponse<WebSpaceVideoData> = client.get("/x/space/wbi/arc/search") {
         parameter("mid", mid)
         parameter("order", order)
@@ -1181,7 +1182,7 @@ object BiliHttpApi {
         parameter("dm_img_str", "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ")
         parameter("dm_cover_img_str", "QU5HTEUgKEFNRCwgQU1EIFJhZGVvbiA3ODBNIEdyYXBoaWNzICgweDAwMDAxNUJGKSBEaXJlY3QzRDExIHZzXzVfMCBwc181XzAsIEQzRDExKUdvb2dsZSBJbmMuIChBTU")
         parameter("dm_img_inter", "{\"ds\":[],\"wh\":[4769,2793,43],\"of\":[285,570,285]}")
-        header("Cookie", "SESSDATA=$sessData;")
+        header("Cookie", "SESSDATA=$sessData;DedeUserID=$dedeUserID")
         header("referer", "https://space.bilibili.com")
     }.body()
 
