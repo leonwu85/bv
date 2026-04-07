@@ -46,6 +46,7 @@ fun DanmakuMenuList(
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
     onDanmakuMaskChange: (Boolean) -> Unit,
+    onDanmakuMergeChange: (Boolean) -> Unit,
     onDanmakuFilterLevelChange: (Int) -> Unit,
     isLive: Boolean = false,
     onFocusStateChange: (MenuFocusState) -> Unit
@@ -56,6 +57,11 @@ fun DanmakuMenuList(
     val parentMenuFocusRequester = remember { FocusRequester() }
     val parentMenuPositionFocusRequester = remember { FocusRequester() }
     var selectedDanmakuMenuItem by remember { mutableStateOf(VideoPlayerDanmakuMenuItem.Switch) }
+    val displayedDanmakuMenuItems = if (isLive) {
+        VideoPlayerDanmakuMenuItem.entries.filterNot { it == VideoPlayerDanmakuMenuItem.Merge }
+    } else {
+        VideoPlayerDanmakuMenuItem.entries
+    }
 
     Row(
         modifier = modifier.fillMaxHeight(),
@@ -158,6 +164,17 @@ fun DanmakuMenuList(
                     }
                 )
 
+                VideoPlayerDanmakuMenuItem.Merge -> RadioMenuList(
+                    modifier = menuItemsModifier,
+                    items = listOf("关闭", "开启"),
+                    selected = if (videoPlayerConfigData.currentDanmakuMergeEnabled) 1 else 0,
+                    onSelectedChanged = { onDanmakuMergeChange(it == 1) },
+                    onFocusBackToParent = {
+                        onFocusStateChange(MenuFocusState.Menu)
+                        parentMenuFocusRequester.requestFocus()
+                    }
+                )
+
                 VideoPlayerDanmakuMenuItem.FilterLevel -> {
                     val (minValue, maxValue) = if (isLive) 0 to 60 else 1 to 10
                     val currentValue = if (isLive)
@@ -203,7 +220,7 @@ fun DanmakuMenuList(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(8.dp)
         ) {
-            itemsIndexed(VideoPlayerDanmakuMenuItem.entries) { index, item ->
+            itemsIndexed(displayedDanmakuMenuItems) { index, item ->
                 MenuListItem(
                     modifier = Modifier
                         .ifElse(

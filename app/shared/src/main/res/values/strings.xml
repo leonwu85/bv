@@ -211,6 +211,8 @@
     <string name="settings_item_danmaku_filter">弹幕过滤</string>
     <string name="settings_player_danmaku_filter_level_title">视频弹幕过滤等级</string>
     <string name="settings_player_danmaku_filter_level_text">过滤等级低于设定值的弹幕（1-10，1为显示全部）</string>
+    <string name="settings_player_danmaku_merge_title">智能弹幕过滤</string>
+    <string name="settings_player_danmaku_merge_text">开启后智能过滤弹幕，同时会合并重复弹幕，仅对点播视频生效</string>
     <string name="settings_live_danmaku_filter_level_title">直播弹幕过滤等级</string>
     <string name="settings_live_danmaku_filter_level_text">过滤用户等级低于设定值的弹幕（0-60，0为显示全部）</string>
     <string name="settings_live_default_quality">默认直播清晰度</string>

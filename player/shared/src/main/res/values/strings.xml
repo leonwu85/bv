@@ -52,6 +52,7 @@
 
     <string name="video_player_menu_danmaku_area">显示区域</string>
     <string name="video_player_menu_danmaku_mask">防遮挡</string>
+    <string name="video_player_menu_danmaku_merge">智能过滤</string>
     <string name="video_player_menu_danmaku_opacity">不透明度</string>
     <string name="video_player_menu_danmaku_size">字体缩放</string>
     <string name="video_player_menu_danmaku_switch">弹幕类型</string>

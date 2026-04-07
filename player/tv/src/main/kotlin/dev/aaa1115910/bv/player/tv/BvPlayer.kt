@@ -115,6 +115,7 @@ fun BvPlayer(
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
     onDanmakuMaskChange: (Boolean) -> Unit,
+    onDanmakuMergeChange: (Boolean) -> Unit = {},
     onDanmakuFilterLevelChange: (Int) -> Unit = {},
     onSubtitleChange: (Subtitle) -> Unit,
     onSubtitleSizeChange: (TextUnit) -> Unit,
@@ -1069,6 +1070,10 @@ fun BvPlayer(
             onDanmakuMaskChange = { mask ->
                 logger.info { "On danmaku mask change: $mask" }
                 onDanmakuMaskChange(mask)
+            },
+            onDanmakuMergeChange = { enabled ->
+                logger.info { "On danmaku merge change: $enabled" }
+                onDanmakuMergeChange(enabled)
             },
             onDanmakuFilterLevelChange = { filterLevel ->
                 logger.info { "On danmaku filter level change: $filterLevel" }

@@ -507,6 +507,10 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDefaultDanmakuFilterLevelRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDefaultDanmakuFilterLevelKey, value) }
 
+    var defaultDanmakuMergeEnabled: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDefaultDanmakuMergeEnabledRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDefaultDanmakuMergeEnabledKey, value) }
+
     var defaultLiveDanmakuFilterLevel: Int
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDefaultLiveDanmakuFilterLevelRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDefaultLiveDanmakuFilterLevelKey, value) }
@@ -620,6 +624,7 @@ object PrefKeys {
     val prefEnableAudioPlaybackParams = booleanPreferencesKey("enable_audio_playback_params")
     val prefVlcLibsVersionKey = stringPreferencesKey("vlc_libs_version")
     val prefDefaultDanmakuFilterLevelKey = intPreferencesKey("default_danmaku_filter_level")
+    val prefDefaultDanmakuMergeEnabledKey = booleanPreferencesKey("default_danmaku_merge_enabled")
     val prefDefaultLiveDanmakuFilterLevelKey = intPreferencesKey("default_live_danmaku_filter_level")
     val prefDynamicPageStyleKey = intPreferencesKey("dynamic_page_style")
     val prefDynamicDefaultTabKey = intPreferencesKey("dynamic_default_tab")
@@ -720,6 +725,7 @@ object PrefKeys {
     val prefEnableAudioPlaybackParamsRequest = PreferenceRequest(prefEnableAudioPlaybackParams, true)
     val prefVlcLibsVersionRequest = PreferenceRequest(prefVlcLibsVersionKey, "")
     val prefDefaultDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultDanmakuFilterLevelKey, 1)
+    val prefDefaultDanmakuMergeEnabledRequest = PreferenceRequest(prefDefaultDanmakuMergeEnabledKey, false)
     val prefDefaultLiveDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultLiveDanmakuFilterLevelKey, 0)
     val prefDynamicPageStyleRequest = PreferenceRequest(prefDynamicPageStyleKey, DynamicPageStyle.New.value)
     val prefDynamicDefaultTabRequest = PreferenceRequest(prefDynamicDefaultTabKey, DynamicTabType.All.value)
