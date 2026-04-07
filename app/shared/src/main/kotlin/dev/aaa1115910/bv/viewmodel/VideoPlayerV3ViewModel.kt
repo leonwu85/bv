@@ -79,6 +79,8 @@ import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -235,6 +237,9 @@ class VideoPlayerV3ViewModel(
         private const val REFRESH_RETRY_INTERVAL_MS = 10_000L
         // 最大连续刷新失败次数
         private const val MAX_REFRESH_FAILURES = 3
+        private const val DANMAKU_SEGMENT_DURATION_MS = 6 * 60 * 1000L
+        private const val INITIAL_DANMAKU_SEGMENT_PREFETCH = 2
+        private const val DANMAKU_BATCH_SIZE = 600
     }
 
     // 直播人气值与高能观众
@@ -282,7 +287,12 @@ class VideoPlayerV3ViewModel(
     var showSponsorBlockTip by mutableStateOf(false)
     var currentSponsorSegment by mutableStateOf<SponsorSegment?>(null)
 
+    private var danmakuLoadJob: Job? = null
+    private var danmakuLoadToken by mutableLongStateOf(0L)
+    private val loadedDanmakuIds = LinkedHashSet<Long>()
+
     private suspend fun ensureDanmakuPlayer(isLive: Boolean = false) = withContext(Dispatchers.Main) {
+        danmakuLoadJob?.cancel()
         danmakuPlayer?.release()
         danmakuPlayer = if (isLive) {
             // 直播模式：LiveDanmakuPlayer 需要在 Compose 中创建（需要 DanmakuSurfaceView）
@@ -645,74 +655,66 @@ class VideoPlayerV3ViewModel(
     }
 
     suspend fun loadDanmaku(cid: Long, durationMs: Long = 0) {
+        danmakuLoadJob?.cancel()
+        val loadToken = ++danmakuLoadToken
         runCatching {
-            val batchSize = 600 // 分批大小，可根据设备性能调节
             withContext(Dispatchers.Main) {
                 danmakuData.clear()
             }
+            loadedDanmakuIds.clear()
 
-            // 使用新的 WBI 签名接口获取弹幕
-            val allDanmakuData = mutableListOf<dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData>()
-            var segmentIndex = 1
-            // 根据视频时长计算分段数，每段 6 分钟
-            val maxSegments = if (durationMs > 0) {
-                kotlin.math.ceil(durationMs / (6.0 * 60 * 1000)).toInt().coerceAtLeast(1)
-            } else {
-                20 // 未知时长时默认获取 20 段（约 120 分钟）
+            val maxSegments = calculateDanmakuMaxSegments(durationMs)
+            val startSegment = calculateInitialDanmakuSegment()
+            val segmentOrder = buildDanmakuSegmentOrder(startSegment, maxSegments)
+            if (segmentOrder.isEmpty()) {
+                addLogs("未找到可加载的弹幕分段")
+                return@runCatching
             }
 
-            while (segmentIndex <= maxSegments) {
-                val segmentData = BiliHttpApi.getDanmakuSeg(
+            var loadedSegments = 0
+            var totalLoadedDanmaku = 0
+            val initialSegments = segmentOrder.take(INITIAL_DANMAKU_SEGMENT_PREFETCH)
+
+            initialSegments.forEach { segmentIndex ->
+                ensureDanmakuLoadActive(loadToken)
+                val appendedCount = appendDanmakuSegment(
                     cid = cid,
-                    avid = currentAid,
                     segmentIndex = segmentIndex,
-                    sessData = Prefs.sessData
+                    loadToken = loadToken
                 )
-                if (segmentData.isEmpty()) {
-                    // 当前分段没有弹幕
-                    break
+                if (appendedCount > 0) {
+                    loadedSegments++
+                    totalLoadedDanmaku += appendedCount
                 }
-                allDanmakuData.addAll(segmentData)
-                segmentIndex++
             }
 
-            val total = allDanmakuData.size
-            val deduplicated = allDanmakuData.distinctBy { it.dmid }
-            val deduplicatedCount = total - deduplicated.size
-            if (deduplicatedCount > 0) {
-                addLogs("去重了 $deduplicatedCount 条重复弹幕")
-                logger.fInfo { "Deduplicated $deduplicatedCount danmaku" }
-            }
-            val filteredDanmaku = deduplicated.filter { it.level >= currentDanmakuFilterLevel }
-            val filteredCount = total - filteredDanmaku.size
-            if (filteredCount > 0) {
-                addLogs("过滤了 $filteredCount 条低等级弹幕（等级 < $currentDanmakuFilterLevel）")
-                logger.fInfo { "Filtered $filteredCount danmaku with level < $currentDanmakuFilterLevel" }
-            }
-            filteredDanmaku.asSequence()
-                .chunked(batchSize) // 按批次切分原始数据
-                .forEachIndexed { index, rawBatch ->
-                    val convertedBatch = rawBatch.map {
-                        DanmakuItemData(
-                            danmakuId = it.dmid,
-                            position = (it.time * 1000).toLong(),
-                            content = it.text,
-                            mode = when (it.type) {
-                                4 -> DanmakuItemData.DANMAKU_MODE_CENTER_TOP
-                                5 -> DanmakuItemData.DANMAKU_MODE_CENTER_BOTTOM
-                                else -> DanmakuItemData.DANMAKU_MODE_ROLLING
-                            },
-                            textSize = it.size,
-                            textColor = Color(it.color).toArgb()
-                        )
+            addLogs("已优先加载 $loadedSegments 个弹幕分段，当前 ${danmakuData.size} 条")
+
+            val remainingSegments = segmentOrder.drop(initialSegments.size)
+            if (remainingSegments.isNotEmpty()) {
+                danmakuLoadJob = viewModelScope.launch(Dispatchers.Default) {
+                    runCatching {
+                        remainingSegments.forEach { segmentIndex ->
+                            ensureDanmakuLoadActive(loadToken)
+                            val appendedCount = appendDanmakuSegment(
+                                cid = cid,
+                                segmentIndex = segmentIndex,
+                                loadToken = loadToken
+                            )
+                            if (appendedCount > 0) {
+                                loadedSegments++
+                                totalLoadedDanmaku += appendedCount
+                                addLogs("后台已加载第 $segmentIndex 段弹幕，累计 ${danmakuData.size} 条")
+                            }
+                        }
+                    }.onFailure {
+                        if (it !is kotlinx.coroutines.CancellationException) {
+                            addLogs("后台补齐弹幕失败：${it.localizedMessage}")
+                            logger.fWarn { "Background danmaku loading failed: ${it.stackTraceToString()}" }
+                        }
                     }
-                    danmakuData.addAll(convertedBatch)
-                    // 让出调度，避免长时间占用 IO/CPU
-                    withContext(Dispatchers.IO) { kotlinx.coroutines.delay(16) }
                 }
-            danmakuPlayer?.updateData(danmakuData.sortedBy { it.position })
-            // 不在这里启动弹幕，等待视频播放时由 onPlay() 统一管理
-            // danmakuPlayer?.start()
+            }
         }.onFailure {
             addLogs("加载弹幕失败：${it.localizedMessage}")
             logger.fWarn { "Load danmaku filed: ${it.stackTraceToString()}" }
@@ -721,6 +723,127 @@ class VideoPlayerV3ViewModel(
             logger.fInfo { "Load danmaku success, size=${danmakuData.size}" }
         }
     }
+
+    private fun calculateDanmakuMaxSegments(durationMs: Long): Int {
+        return if (durationMs > 0) {
+            kotlin.math.ceil(durationMs / DANMAKU_SEGMENT_DURATION_MS.toDouble()).toInt().coerceAtLeast(1)
+        } else {
+            20
+        }
+    }
+
+    private fun calculateInitialDanmakuSegment(): Int {
+        val initialPositionMs = if (
+            lastPlayed > 0 &&
+            Prefs.playerDefaultStartPosition == PlayerDefaultStartPosition.History
+        ) {
+            lastPlayed.toLong()
+        } else {
+            0L
+        }
+        return (initialPositionMs / DANMAKU_SEGMENT_DURATION_MS).toInt() + 1
+    }
+
+    private fun buildDanmakuSegmentOrder(startSegment: Int, maxSegments: Int): List<Int> {
+        if (maxSegments <= 0) return emptyList()
+        val normalizedStart = startSegment.coerceIn(1, maxSegments)
+        val ordered = LinkedHashSet<Int>()
+        ordered.add(normalizedStart)
+        if (normalizedStart + 1 <= maxSegments) {
+            ordered.add(normalizedStart + 1)
+        }
+        if (normalizedStart - 1 >= 1) {
+            ordered.add(normalizedStart - 1)
+        }
+        for (segment in (normalizedStart + 2)..maxSegments) {
+            ordered.add(segment)
+        }
+        for (segment in 1 until (normalizedStart - 1).coerceAtLeast(1)) {
+            ordered.add(segment)
+        }
+        return ordered.toList()
+    }
+
+    private suspend fun appendDanmakuSegment(
+        cid: Long,
+        segmentIndex: Int,
+        loadToken: Long
+    ): Int {
+        ensureDanmakuLoadActive(loadToken)
+        val segmentData = BiliHttpApi.getDanmakuSeg(
+            cid = cid,
+            avid = currentAid,
+            segmentIndex = segmentIndex,
+            sessData = Prefs.sessData
+        )
+        if (segmentData.isEmpty()) {
+            return 0
+        }
+
+        var deduplicatedCount = 0
+        var filteredCount = 0
+        val newDanmaku = ArrayList<dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData>(segmentData.size)
+        segmentData.forEach { danmaku ->
+            if (!loadedDanmakuIds.add(danmaku.dmid)) {
+                deduplicatedCount++
+                return@forEach
+            }
+            if (danmaku.level < currentDanmakuFilterLevel) {
+                filteredCount++
+                return@forEach
+            }
+            newDanmaku.add(danmaku)
+        }
+
+        if (deduplicatedCount > 0) {
+            logger.fInfo { "Deduplicated $deduplicatedCount danmaku in segment $segmentIndex" }
+        }
+        if (filteredCount > 0) {
+            logger.fInfo { "Filtered $filteredCount danmaku in segment $segmentIndex with level < $currentDanmakuFilterLevel" }
+        }
+        if (newDanmaku.isEmpty()) {
+            return 0
+        }
+
+        ensureDanmakuLoadActive(loadToken)
+        val convertedItems = convertDanmakuItems(newDanmaku)
+        convertedItems.chunked(DANMAKU_BATCH_SIZE).forEach { chunk ->
+            ensureDanmakuLoadActive(loadToken)
+            danmakuData.addAll(chunk)
+            danmakuPlayer?.updateData(chunk)
+            delay(8)
+        }
+        return convertedItems.size
+    }
+
+    private fun convertDanmakuItems(
+        rawDanmaku: List<dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData>
+    ): List<DanmakuItemData> {
+        return rawDanmaku
+            .sortedBy { it.time }
+            .map {
+                DanmakuItemData(
+                    danmakuId = it.dmid,
+                    position = (it.time * 1000).toLong(),
+                    content = it.text,
+                    mode = when (it.type) {
+                        4 -> DanmakuItemData.DANMAKU_MODE_CENTER_TOP
+                        5 -> DanmakuItemData.DANMAKU_MODE_CENTER_BOTTOM
+                        else -> DanmakuItemData.DANMAKU_MODE_ROLLING
+                    },
+                    textSize = it.size,
+                    textColor = Color(it.color).toArgb()
+                )
+            }
+    }
+
+    private suspend fun ensureDanmakuLoadActive(loadToken: Long) {
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        if (loadToken != danmakuLoadToken) {
+            throw kotlinx.coroutines.CancellationException("Danmaku load token expired")
+        }
+    }
+
     /**
      * 加载 SponsorBlock 片段数据
      */
