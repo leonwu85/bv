@@ -5,6 +5,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,12 +46,8 @@ import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import coil.compose.rememberAsyncImagePainter
 import com.origeek.imageViewer.previewer.ImagePreviewerState
-import com.origeek.imageViewer.previewer.TransformImageView
-import com.origeek.imageViewer.previewer.TransformItemState
 import com.origeek.imageViewer.previewer.rememberPreviewerState
-import com.origeek.imageViewer.previewer.rememberTransformItemState
 import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.EmoteSize
@@ -68,8 +65,23 @@ fun CommentItem(
     onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit,
     onShowReply: (rpid: Long) -> Unit = {}
 ) {
+    val scope = rememberCoroutineScope()
+    val openCommentPreviewer = {
+        if (comment.pictures.isNotEmpty()) {
+            onShowPreviewer(comment.pictures) {
+                scope.launch {
+                    previewerState.open(index = 0)
+                }
+            }
+        }
+    }
+
     Surface(
-        modifier = modifier,
+        modifier = modifier.combinedClickable(
+            enabled = comment.pictures.isNotEmpty(),
+            onClick = {},
+            onLongClick = openCommentPreviewer
+        ),
         color = containerColor
     ) {
         Column(
@@ -232,24 +244,22 @@ private fun CommentPictures(
     val scope = rememberCoroutineScope()
     val imageBaseShape = MaterialTheme.shapes.medium
 
-    val onClickPicture: (index: Int, itemState: TransformItemState) -> Unit = { index, itemState ->
+    val onClickPicture: (index: Int) -> Unit = { index ->
         onShowPreviewer(pictures) {
             scope.launch {
-                previewerState.openTransform(
-                    index = index,
-                    itemState = itemState,
-                )
+                previewerState.open(index = index)
             }
         }
     }
 
     Box(
-        modifier = modifier
+        modifier = modifier.fillMaxWidth()
     ) {
         when {
             pictures.size == 1 -> {
-                Row {
-                    val itemState = rememberTransformItemState()
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Surface(
                         modifier = Modifier
                             .weight(1f)
@@ -257,12 +267,14 @@ private fun CommentPictures(
                         color = Color.Gray,
                         shape = imageBaseShape
                     ) {
-                        TransformImageView(
-                            modifier = Modifier.clickable { onClickPicture(0, itemState) },
-                            painter = rememberAsyncImagePainter(pictures.first().url),
-                            key = pictures.first().key,
-                            itemState = itemState,
-                            previewerState = previewerState,
+                        AsyncImage(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(2f)
+                                .clickable { onClickPicture(0) },
+                            model = pictures.first().url,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop
                         )
                     }
                 }
@@ -270,10 +282,10 @@ private fun CommentPictures(
 
             pictures.size == 2 -> {
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     pictures.forEachIndexed { index, picture ->
-                        val itemState = rememberTransformItemState()
                         Surface(
                             modifier = Modifier
                                 .weight(1f)
@@ -291,12 +303,14 @@ private fun CommentPictures(
                                 else -> RoundedCornerShape(0.dp)
                             }
                         ) {
-                            TransformImageView(
-                                modifier = Modifier.clickable { onClickPicture(index, itemState) },
-                                painter = rememberAsyncImagePainter(picture.url),
-                                key = picture.key,
-                                itemState = itemState,
-                                previewerState = previewerState,
+                            AsyncImage(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1f)
+                                    .clickable { onClickPicture(index) },
+                                model = picture.url,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop
                             )
                         }
                     }
@@ -305,10 +319,10 @@ private fun CommentPictures(
 
             pictures.size >= 3 -> {
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     pictures.take(3).forEachIndexed { index, picture ->
-                        val itemState = rememberTransformItemState()
                         Surface(
                             modifier = Modifier
                                 .weight(1f)
@@ -326,12 +340,14 @@ private fun CommentPictures(
                                 else -> RoundedCornerShape(0.dp)
                             }
                         ) {
-                            TransformImageView(
-                                modifier = Modifier.clickable { onClickPicture(index, itemState) },
-                                painter = rememberAsyncImagePainter(picture.url),
-                                key = picture.key,
-                                itemState = itemState,
-                                previewerState = previewerState,
+                            AsyncImage(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1f)
+                                    .clickable { onClickPicture(index) },
+                                model = picture.url,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop
                             )
                         }
                     }

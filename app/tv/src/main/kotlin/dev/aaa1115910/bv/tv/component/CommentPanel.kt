@@ -65,6 +65,7 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import dev.aaa1115910.biliapi.entity.ApiType
+import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentPage
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
@@ -128,6 +129,9 @@ fun CommentPanel(
     var wasSubCommentPanelShown by remember { mutableStateOf(false) }
     var selectedCommentIndex by remember { mutableStateOf(0) }
     var focusedCommentIndex by remember { mutableStateOf(0) }
+    var previewPictures by remember { mutableStateOf<List<Picture>>(emptyList()) }
+    var previewPictureIndex by remember { mutableIntStateOf(0) }
+    var showImagePreview by remember { mutableStateOf(false) }
 
     // 选集相关状态
     var currentEpisode by remember { mutableStateOf<Episode?>(null) }
@@ -201,7 +205,15 @@ fun CommentPanel(
         }
     }
 
-    BackHandler(enabled = show && !showSubCommentPanel) {
+    val showCommentImagePreview: (List<Picture>, Int) -> Unit = { pictures, index ->
+        if (pictures.isNotEmpty()) {
+            previewPictures = pictures
+            previewPictureIndex = index.coerceIn(0, pictures.lastIndex)
+            showImagePreview = true
+        }
+    }
+
+    BackHandler(enabled = show && !showSubCommentPanel && !showImagePreview) {
         handleBack()
     }
 
@@ -615,6 +627,9 @@ fun CommentPanel(
                                             selectedRootComment = comment
                                             showSubCommentPanel = true
                                         }
+                                    },
+                                    onLongClick = {
+                                        showCommentImagePreview(comment.pictures, 0)
                                     }
                                 )
                             }
@@ -670,6 +685,13 @@ fun CommentPanel(
             }
         )
     }
+
+    CommentImagePreviewDialog(
+        show = showImagePreview,
+        pictures = previewPictures,
+        initialIndex = previewPictureIndex,
+        onDismissRequest = { showImagePreview = false }
+    )
 }
 
 /**

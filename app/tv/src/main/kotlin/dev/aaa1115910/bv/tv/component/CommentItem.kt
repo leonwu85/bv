@@ -1,13 +1,17 @@
 package dev.aaa1115910.bv.tv.component
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CornerSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.shape.CircleShape
@@ -17,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.Placeholder
@@ -30,8 +35,10 @@ import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
+import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
+import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.EmoteSize
 import dev.aaa1115910.bv.ui.theme.BVTheme
@@ -48,13 +55,15 @@ import dev.aaa1115910.bv.util.focusedBorder
 fun CommentItem(
     comment: Comment,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit = {}
+    onClick: () -> Unit = {},
+    onLongClick: (() -> Unit)? = null
 ) {
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .focusedBorder(MaterialTheme.shapes.small),
         onClick = onClick,
+        onLongClick = onLongClick,
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -127,6 +136,13 @@ private fun CommentMainContent(
                 emotes = comment.emotes,
                 modifier = Modifier.padding(top = 4.dp)
             )
+
+            if (comment.pictures.isNotEmpty()) {
+                CommentPictures(
+                    pictures = comment.pictures,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
 
             // 底部信息：时间和点赞数
             Row(
@@ -216,6 +232,133 @@ fun CommentContent(
         maxLines = maxLines,
         overflow = overflow
     )
+}
+
+@Composable
+fun CommentPictures(
+    pictures: List<Picture>,
+    modifier: Modifier = Modifier
+) {
+    val imageBaseShape = MaterialTheme.shapes.small
+
+    Box(modifier = modifier.fillMaxWidth()) {
+        when {
+            pictures.size == 1 -> {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(2f),
+                        shape = imageBaseShape,
+                        colors = SurfaceDefaults.colors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        AsyncImage(
+                            modifier = Modifier.fillMaxSize(),
+                            model = pictures.first().url,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+            }
+
+            pictures.size == 2 -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    pictures.forEachIndexed { index, picture ->
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(1f),
+                            shape = when (index) {
+                                0 -> imageBaseShape.copy(
+                                    topEnd = CornerSize(0.dp),
+                                    bottomEnd = CornerSize(0.dp)
+                                )
+
+                                1 -> imageBaseShape.copy(
+                                    topStart = CornerSize(0.dp),
+                                    bottomStart = CornerSize(0.dp)
+                                )
+
+                                else -> RoundedCornerShape(0.dp)
+                            },
+                            colors = SurfaceDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            AsyncImage(
+                                modifier = Modifier.fillMaxSize(),
+                                model = picture.url,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                }
+            }
+
+            pictures.size >= 3 -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    pictures.take(3).forEachIndexed { index, picture ->
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(1f),
+                            shape = when (index) {
+                                0 -> imageBaseShape.copy(
+                                    topEnd = CornerSize(0.dp),
+                                    bottomEnd = CornerSize(0.dp)
+                                )
+
+                                2 -> imageBaseShape.copy(
+                                    topStart = CornerSize(0.dp),
+                                    bottomStart = CornerSize(0.dp)
+                                )
+
+                                else -> RoundedCornerShape(0.dp)
+                            },
+                            colors = SurfaceDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            AsyncImage(
+                                modifier = Modifier.fillMaxSize(),
+                                model = picture.url,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                }
+
+                if (pictures.size > 3) {
+                    Text(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .clip(
+                                MaterialTheme.shapes.small.copy(
+                                    topEnd = CornerSize(0.dp),
+                                    bottomStart = CornerSize(0.dp)
+                                )
+                            )
+                            .background(Color.Black.copy(alpha = 0.5f))
+                            .padding(horizontal = 8.dp),
+                        text = "+${pictures.size - 3}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+    }
 }
 
 /**

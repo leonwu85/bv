@@ -17,9 +17,16 @@ data class Picture(
     val key: String
 ) {
     companion object {
+        private fun normalizeUrl(url: String): String {
+            return when {
+                url.startsWith("http://") -> url.replaceFirst("http://", "https://")
+                else -> url
+            }
+        }
+
         fun fromPicture(picture: dev.aaa1115910.biliapi.http.entity.reply.CommentData.Reply.Content.Picture): Picture {
             return Picture(
-                url = picture.imgSrc,
+                url = normalizeUrl(picture.imgSrc),
                 width = picture.imgWidth,
                 height = picture.imgHeight,
                 key = UUID.randomUUID().toString()
@@ -28,7 +35,7 @@ data class Picture(
 
         fun fromPicture(picture: dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Dynamic.Major.Opus.Pic): Picture {
             return Picture(
-                url = picture.url,
+                url = normalizeUrl(picture.url),
                 width = picture.width,
                 height = picture.height,
                 key = UUID.randomUUID().toString()
@@ -37,7 +44,7 @@ data class Picture(
 
         fun fromPicture(picture: bilibili.main.community.reply.v1.Picture): Picture {
             return Picture(
-                url = picture.imgSrc,
+                url = normalizeUrl(picture.imgSrc),
                 width = picture.imgWidth.toInt(),
                 height = picture.imgHeight.toInt(),
                 key = UUID.randomUUID().toString()
@@ -46,7 +53,7 @@ data class Picture(
 
         fun fromPicture(picture: dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Dynamic.Major.Draw.Pic): Picture {
             return Picture(
-                url = picture.src,
+                url = normalizeUrl(picture.src),
                 width = picture.width,
                 height = picture.height,
                 key = UUID.randomUUID().toString()
@@ -55,7 +62,7 @@ data class Picture(
 
         fun fromPicture(picture: bilibili.app.dynamic.v2.MdlDynDrawItem): Picture {
             return Picture(
-                url = picture.src,
+                url = normalizeUrl(picture.src),
                 width = picture.width.toInt(),
                 height = picture.height.toInt(),
                 key = UUID.randomUUID().toString()

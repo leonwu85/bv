@@ -52,7 +52,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun SubCommentItem(
     comment: Comment,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null
 ) {
     // 子评论有焦点边框，但不响应点击
     Surface(
@@ -60,6 +61,7 @@ fun SubCommentItem(
             .fillMaxWidth()
             .focusedBorder(MaterialTheme.shapes.small),
         onClick = { /* 空回调，不执行任何操作 */ },
+        onLongClick = onLongClick,
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -103,6 +105,10 @@ fun SubCommentItem(
                     emotes = comment.emotes
                 )
 
+                if (comment.pictures.isNotEmpty()) {
+                    CommentPictures(pictures = comment.pictures)
+                }
+
                 // 底部信息
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -130,7 +136,8 @@ fun SubCommentItem(
  */
 @Composable
 fun SubCommentRootItem(
-    comment: Comment
+    comment: Comment,
+    onLongClick: (() -> Unit)? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
@@ -140,6 +147,7 @@ fun SubCommentRootItem(
 
     Surface(
         onClick = { /* 右键展开/收起 */ },
+        onLongClick = onLongClick,
         modifier = Modifier
             .focusRequester(focusRequester)
             .onPreviewKeyEvent { event ->
@@ -215,6 +223,10 @@ fun SubCommentRootItem(
                         maxLines = if (expanded) Int.MAX_VALUE else 3,
                         overflow = TextOverflow.Ellipsis
                     )
+
+                    if (comment.pictures.isNotEmpty()) {
+                        CommentPictures(pictures = comment.pictures)
+                    }
 
                     // 展开/收起提示
                     Text(

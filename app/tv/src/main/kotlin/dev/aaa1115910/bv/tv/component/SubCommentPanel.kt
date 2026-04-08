@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +50,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import dev.aaa1115910.biliapi.entity.ApiType
+import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentReplyPage
 import dev.aaa1115910.biliapi.repositories.CommentRepository
@@ -91,8 +93,19 @@ fun SubCommentPanel(
     var currentPage by remember { mutableStateOf(CommentReplyPage()) }
     var hasNext by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var previewPictures by remember { mutableStateOf<List<Picture>>(emptyList()) }
+    var previewPictureIndex by remember { mutableIntStateOf(0) }
+    var showImagePreview by remember { mutableStateOf(false) }
 
-    BackHandler(enabled = show) {
+    val showCommentImagePreview: (List<Picture>, Int) -> Unit = { pictures, index ->
+        if (pictures.isNotEmpty()) {
+            previewPictures = pictures
+            previewPictureIndex = index.coerceIn(0, pictures.lastIndex)
+            showImagePreview = true
+        }
+    }
+
+    BackHandler(enabled = show && !showImagePreview) {
         onHide()
     }
 
@@ -190,7 +203,12 @@ fun SubCommentPanel(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // 根评论（只读显示，右键展开/收起）
-                    SubCommentRootItem(comment = rootComment)
+                    SubCommentRootItem(
+                        comment = rootComment,
+                        onLongClick = {
+                            showCommentImagePreview(rootComment.pictures, 0)
+                        }
+                    )
 
                     // 分隔线
                     Divider(
@@ -302,7 +320,10 @@ fun SubCommentPanel(
                                             if (focusState.hasFocus) {
                                                 focusedCommentIndex = index
                                             }
-                                        }
+                                        },
+                                    onLongClick = {
+                                        showCommentImagePreview(reply.pictures, 0)
+                                    }
                                 )
                             }
 
@@ -336,4 +357,11 @@ fun SubCommentPanel(
             }
         }
     }
+
+    CommentImagePreviewDialog(
+        show = showImagePreview,
+        pictures = previewPictures,
+        initialIndex = previewPictureIndex,
+        onDismissRequest = { showImagePreview = false }
+    )
 }

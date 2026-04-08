@@ -86,8 +86,7 @@ data class Comment(
                 emotes = reply.content.emoteMap.values.map { Emote.fromEmote(it) },
                 pictures = reply.content.picturesList.map { Picture.fromPicture(it) },
                 replies = reply.repliesList.map { fromReplyInfo(it) },
-                repliesCount = runCatching { reply.replyControl.subReplyEntryText.split(" ")[1].toInt() }
-                    .getOrDefault(0),
+                repliesCount = reply.count.toInt(),
                 like = reply.like
             )
         }
