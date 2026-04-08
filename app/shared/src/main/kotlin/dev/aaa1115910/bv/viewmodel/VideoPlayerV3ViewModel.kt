@@ -111,6 +111,8 @@ class VideoPlayerV3ViewModel(
         super.onCleared()
         logger.fInfo { "VideoPlayerV3ViewModel onCleared" }
 
+        cancelVodPlayUrlAutoRefresh()
+
         // 清理直播重连任务
         liveRetryJob?.cancel()
         liveRetryJob = null
@@ -241,6 +243,11 @@ class VideoPlayerV3ViewModel(
     private var liveUrlRefreshJob: Job? = null
     private var consecutiveRefreshFailures = 0
 
+    // 点播播放地址主动刷新
+    private var vodPlayUrlRefreshJob: Job? = null
+    private var vodPlayUrlRefreshToken by mutableLongStateOf(0L)
+    private var vodPlaybackSessionToken by mutableLongStateOf(0L)
+
     companion object {
         // 提前刷新的时间（毫秒），默认60秒
         private const val REFRESH_BEFORE_EXPIRY_MS = 60_000L
@@ -339,6 +346,7 @@ class VideoPlayerV3ViewModel(
         continuePlayNext: Boolean = false,
         initialSeekPositionMs: Long? = null,
     ) {
+        val playbackSessionToken = beginVodPlaybackSession()
         showInteractiveOptionDialog = false
         if (continuePlayNext) {
             lastPlayed = 0
@@ -376,7 +384,8 @@ class VideoPlayerV3ViewModel(
                 epid ?: 0,
                 preferApi = Prefs.apiType,
                 proxyArea = proxyArea,
-                initialSeekPositionMs = initialSeekPositionMs
+                initialSeekPositionMs = initialSeekPositionMs,
+                playbackSessionToken = playbackSessionToken
             )
             if (isInteractivePlayback && (!interactiveOptionsFromQuestions || interactiveOptions.isEmpty())) {
                 refreshInteractiveBranches(currentInteractiveEdgeId.takeIf { it > 0L })
@@ -404,12 +413,21 @@ class VideoPlayerV3ViewModel(
         preferApi: ApiType = Prefs.apiType,
         proxyArea: ProxyArea = ProxyArea.MainLand,
         initialSeekPositionMs: Long? = null,
-    ) {
+        targetQuality: Resolution? = null,
+        targetVideoCodec: VideoCodec? = null,
+        targetAudio: Audio? = null,
+        targetMediaMode: PlaybackMediaMode = currentPlaybackMediaMode,
+        playbackSessionToken: Long = vodPlaybackSessionToken,
+    ): Boolean {
         logger.fInfo { "Load play url: [av=$avid, cid=$cid, preferApi=$preferApi, proxyArea=$proxyArea]" }
-        withContext(Dispatchers.Main) { loadState = RequestState.Ready }
+        withContext(Dispatchers.Main) {
+            if (isVodPlaybackSessionActive(playbackSessionToken)) {
+                loadState = RequestState.Ready
+            }
+        }
         logger.fInfo { "Set request state: ready" }
         logger.fInfo { "fromSeason: $fromSeason" }
-        runCatching {
+        return try {
             val playData = if (fromSeason) {
                 videoPlayRepository.getPgcPlayData(
                     aid = avid,
@@ -432,12 +450,21 @@ class VideoPlayerV3ViewModel(
                 )
             }
 
-            //检查是否需要购买，如果未购买，则正片返回的dash为null，非正片例如可以免费观看的预告片等则会返回数据，此时不做提示
-            withContext(Dispatchers.Main) { needPay = playData.needPay }
-            if (needPay) return@runCatching
+            ensureVodPlaybackSessionActive(playbackSessionToken)
 
-            withContext(Dispatchers.Main) { this@VideoPlayerV3ViewModel.playData = playData }
-            withContext(Dispatchers.Main) { this@VideoPlayerV3ViewModel.clipInfoList = playData.clipInfoList }
+            //检查是否需要购买，如果未购买，则正片返回的dash为null，非正片例如可以免费观看的预告片等则会返回数据，此时不做提示
+            withContext(Dispatchers.Main) {
+                if (isVodPlaybackSessionActive(playbackSessionToken)) {
+                    needPay = playData.needPay
+                }
+            }
+            if (playData.needPay) return false
+
+            withContext(Dispatchers.Main) {
+                if (!isVodPlaybackSessionActive(playbackSessionToken)) return@withContext
+                this@VideoPlayerV3ViewModel.playData = playData
+                this@VideoPlayerV3ViewModel.clipInfoList = playData.clipInfoList
+            }
             logger.fInfo { "Load play data response success" }
             //logger.info { "Play data: $playData" }
 
@@ -451,6 +478,8 @@ class VideoPlayerV3ViewModel(
 
             logger.fInfo { "Video available resolution: $resolutionList" }
             availableQuality.swapListWithMainContext(resolutionList)
+
+            ensureVodPlaybackSessionActive(playbackSessionToken)
 
             //读取音频
             val audioList = mutableListOf<Audio>()
@@ -473,6 +502,8 @@ class VideoPlayerV3ViewModel(
             logger.fInfo { "Video available audio: $audioList" }
             availableAudio.swapListWithMainContext(audioList)
 
+            ensureVodPlaybackSessionActive(playbackSessionToken)
+
             // 确定使用哪个默认分辨率
             val defaultQualityToUse = if (
                 isVerticalVideo &&
@@ -486,56 +517,71 @@ class VideoPlayerV3ViewModel(
                 Prefs.defaultQuality
             }
 
-            //先确认最终所选清晰度
-            val existDefaultResolution =
-                availableQuality.find { it == defaultQualityToUse } != null
-
-            if (!existDefaultResolution) {
-                val tempList = resolutionList.sortedByDescending { it.code }
-                val currentQuality = tempList.firstOrNull { it.code < defaultQualityToUse.code }
-                    ?: tempList.last()
-                withContext(Dispatchers.Main) {
-                    this@VideoPlayerV3ViewModel.currentQuality = currentQuality
+            val preferredQuality = targetQuality ?: defaultQualityToUse
+            val selectedQuality = resolutionList.find { it == preferredQuality }
+                ?: resolutionList.sortedByDescending { it.code }
+                    .firstOrNull { it.code < preferredQuality.code }
+                ?: resolutionList.last()
+            withContext(Dispatchers.Main) {
+                if (isVodPlaybackSessionActive(playbackSessionToken)) {
+                    currentQuality = selectedQuality
                 }
-            } else {
-                // 如果默认清晰度可用，直接使用
-                withContext(Dispatchers.Main) { currentQuality = defaultQualityToUse }
             }
 
-            //确认最终所选音质
-            val existDefaultAudio = availableAudio.contains(Prefs.defaultAudio)
-            if (!existDefaultAudio) {
-                val currentAudio = when {
-                    Prefs.defaultAudio == Audio.ADolbyAtoms && availableAudio.contains(Audio.AHiRes) -> Audio.AHiRes
-                    Prefs.defaultAudio == Audio.AHiRes && availableAudio.contains(Audio.ADolbyAtoms) -> Audio.ADolbyAtoms
-                    availableAudio.contains(Audio.A192K) -> Audio.A192K
-                    availableAudio.contains(Audio.A132K) -> Audio.A132K
-                    availableAudio.contains(Audio.A64K) -> Audio.A64K
-                    else -> availableAudio.first()
-                }
-                withContext(Dispatchers.Main) {
-                    this@VideoPlayerV3ViewModel.currentAudio = currentAudio
+            val preferredAudio = targetAudio ?: Prefs.defaultAudio
+            val selectedAudio = when {
+                availableAudio.contains(preferredAudio) -> preferredAudio
+                preferredAudio == Audio.ADolbyAtoms && availableAudio.contains(Audio.AHiRes) -> Audio.AHiRes
+                preferredAudio == Audio.AHiRes && availableAudio.contains(Audio.ADolbyAtoms) -> Audio.ADolbyAtoms
+                availableAudio.contains(Audio.A192K) -> Audio.A192K
+                availableAudio.contains(Audio.A132K) -> Audio.A132K
+                availableAudio.contains(Audio.A64K) -> Audio.A64K
+                else -> availableAudio.first()
+            }
+            withContext(Dispatchers.Main) {
+                if (isVodPlaybackSessionActive(playbackSessionToken)) {
+                    currentAudio = selectedAudio
                 }
             }
 
             //再确认最终所选视频编码
-            updateAvailableCodec()
+            updateAvailableCodec(targetVideoCodec)
 
-            playQuality(qn = currentQuality.code, codec = currentVideoCodec)
-
-        }.onFailure {
-            addLogs("加载视频地址失败：${it.localizedMessage}")
-            errorMessage = it.localizedMessage ?: "Unknown error"
-            loadState = RequestState.Failed
-            logger.fException(it) { "Load video failed" }
-        }.onSuccess {
             addLogs("加载视频地址成功")
-            loadState = RequestState.Success
+            ensureVodPlaybackSessionActive(playbackSessionToken)
+            playQuality(
+                qn = currentQuality.code,
+                codec = currentVideoCodec,
+                audio = currentAudio,
+                mediaMode = targetMediaMode,
+                initialSeekPositionMs = initialSeekPositionMs,
+                playbackSessionToken = playbackSessionToken
+            )
+
+            withContext(Dispatchers.Main) {
+                if (isVodPlaybackSessionActive(playbackSessionToken)) {
+                    loadState = RequestState.Success
+                }
+            }
             logger.fInfo { "Load play url success" }
+            true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            logger.fDebug { "Skip stale vod play url load: ${e.message}" }
+            false
+        } catch (e: Exception) {
+            addLogs("加载视频地址失败：${e.localizedMessage}")
+            withContext(Dispatchers.Main) {
+                if (isVodPlaybackSessionActive(playbackSessionToken)) {
+                    errorMessage = e.localizedMessage ?: "Unknown error"
+                    loadState = RequestState.Failed
+                }
+            }
+            logger.fException(e) { "Load video failed" }
+            false
         }
     }
 
-    private suspend fun updateAvailableCodec() {
+    private suspend fun updateAvailableCodec(preferredCodec: VideoCodec? = null) {
         if (Prefs.apiType == ApiType.App && playData!!.codec.isEmpty()) {
             // 纠正当前实际播放的编码
             val videoItem = playData!!.dashVideos
@@ -555,8 +601,11 @@ class VideoPlayerV3ViewModel(
         availableVideoCodec.swapListWithMainContext(codecList)
         logger.fInfo { "Video available codec: ${availableVideoCodec.toList()}" }
 
-        logger.fInfo { "Default codec: $currentVideoCodec" }
-        val currentVideoCodec = if (codecList.contains(Prefs.defaultVideoCodec)) {
+        val requestedCodec = preferredCodec ?: currentVideoCodec
+        logger.fInfo { "Default codec: $requestedCodec" }
+        val currentVideoCodec = if (codecList.contains(requestedCodec)) {
+            requestedCodec
+        } else if (codecList.contains(Prefs.defaultVideoCodec)) {
             Prefs.defaultVideoCodec
         } else {
             codecList.minByOrNull { it.ordinal }!!
@@ -572,15 +621,16 @@ class VideoPlayerV3ViewModel(
         codec: VideoCodec = currentVideoCodec,
         audio: Audio = currentAudio,
         mediaMode: PlaybackMediaMode = currentPlaybackMediaMode,
-        initialSeekPositionMs: Long? = null
+        initialSeekPositionMs: Long? = null,
+        playbackSessionToken: Long = vodPlaybackSessionToken
     ) {
         if (qn != currentQuality) {
             // 更新清晰度后需要先设置清晰度再更新编码列表
             withContext(Dispatchers.Main) { currentQuality = qn }
             updateAvailableCodec()
-            playQuality(qn.code, currentVideoCodec, audio, mediaMode, initialSeekPositionMs)
+            playQuality(qn.code, currentVideoCodec, audio, mediaMode, initialSeekPositionMs, playbackSessionToken)
         } else {
-            playQuality(qn.code, codec, audio, mediaMode, initialSeekPositionMs)
+            playQuality(qn.code, codec, audio, mediaMode, initialSeekPositionMs, playbackSessionToken)
         }
     }
 
@@ -589,7 +639,8 @@ class VideoPlayerV3ViewModel(
         codec: VideoCodec = currentVideoCodec,
         audio: Audio = currentAudio,
         mediaMode: PlaybackMediaMode = currentPlaybackMediaMode,
-        initialSeekPositionMs: Long? = null
+        initialSeekPositionMs: Long? = null,
+        playbackSessionToken: Long = vodPlaybackSessionToken
     ) {
         logger.fInfo {
             "Select resolution: $qn, codec: $codec, audio: $audio, mediaMode: $mediaMode, initialSeekPositionMs: $initialSeekPositionMs"
@@ -670,7 +721,10 @@ class VideoPlayerV3ViewModel(
 
         logger.fInfo { "Select audio: $audioItem" }
 
+        val playUrlExpiresAt = pickEarliestUrlExpiryEpochMs(videoUrl, audioUrl)
+
         withContext(Dispatchers.Main) {
+            if (!isVodPlaybackSessionActive(playbackSessionToken)) return@withContext
             currentVideoHeight = videoItem?.height ?: 0
             currentVideoWidth = videoItem?.width ?: 0
             logger.info { "Video url: $videoUrl" }
@@ -686,6 +740,13 @@ class VideoPlayerV3ViewModel(
             }
             videoPlayer!!.prepare()
             showBuffering = true
+        }
+
+        if (playUrlExpiresAt > 0L) {
+            scheduleVodPlayUrlAutoRefresh(playUrlExpiresAt, playbackSessionToken)
+        } else {
+            cancelVodPlayUrlAutoRefresh()
+            logger.fWarn { "Skip vod URL auto refresh because no deadline/expires was parsed" }
         }
     }
 
@@ -1393,6 +1454,134 @@ class VideoPlayerV3ViewModel(
         }
     }
 
+    private fun beginVodPlaybackSession(): Long {
+        vodPlaybackSessionToken += 1
+        cancelVodPlayUrlAutoRefresh()
+        return vodPlaybackSessionToken
+    }
+
+    private fun isVodPlaybackSessionActive(token: Long): Boolean {
+        return token == vodPlaybackSessionToken
+    }
+
+    private fun ensureVodPlaybackSessionActive(token: Long) {
+        if (!isVodPlaybackSessionActive(token)) {
+            throw kotlinx.coroutines.CancellationException("Stale vod playback session")
+        }
+    }
+
+    private fun cancelVodPlayUrlAutoRefresh() {
+        vodPlayUrlRefreshJob?.cancel()
+        vodPlayUrlRefreshJob = null
+        vodPlayUrlRefreshToken += 1
+    }
+
+    private fun scheduleVodPlayUrlAutoRefresh(
+        expiresAtMs: Long,
+        playbackSessionToken: Long = vodPlaybackSessionToken,
+    ) {
+        vodPlayUrlRefreshJob?.cancel()
+
+        if (isLive || expiresAtMs <= 0L || !isVodPlaybackSessionActive(playbackSessionToken)) {
+            logger.fDebug {
+                "Skip vod URL refresh scheduling: isLive=$isLive, expiresAtMs=$expiresAtMs, sessionActive=${isVodPlaybackSessionActive(playbackSessionToken)}"
+            }
+            return
+        }
+
+        val refreshDelay = (expiresAtMs - System.currentTimeMillis() - REFRESH_BEFORE_EXPIRY_MS)
+            .coerceAtLeast(MIN_REFRESH_INTERVAL_MS)
+        val refreshToken = ++vodPlayUrlRefreshToken
+
+        logger.fInfo { "Scheduling vod URL refresh in ${refreshDelay}ms (expires at $expiresAtMs)" }
+
+        vodPlayUrlRefreshJob = viewModelScope.launch(Dispatchers.IO) {
+            delay(refreshDelay)
+            if (refreshToken != vodPlayUrlRefreshToken || !isVodPlaybackSessionActive(playbackSessionToken)) {
+                return@launch
+            }
+            reloadVodPlayUrl(playbackSessionToken)
+        }
+    }
+
+    private fun scheduleVodPlayUrlRefreshRetry(
+        playbackSessionToken: Long = vodPlaybackSessionToken,
+    ) {
+        vodPlayUrlRefreshJob?.cancel()
+        if (isLive || !isVodPlaybackSessionActive(playbackSessionToken)) {
+            return
+        }
+
+        val refreshToken = ++vodPlayUrlRefreshToken
+        logger.fWarn { "Scheduling vod URL refresh retry in ${REFRESH_RETRY_INTERVAL_MS}ms" }
+        vodPlayUrlRefreshJob = viewModelScope.launch(Dispatchers.IO) {
+            delay(REFRESH_RETRY_INTERVAL_MS)
+            if (refreshToken != vodPlayUrlRefreshToken || !isVodPlaybackSessionActive(playbackSessionToken)) {
+                return@launch
+            }
+            reloadVodPlayUrl(playbackSessionToken)
+        }
+    }
+
+    private suspend fun reloadVodPlayUrl(
+        playbackSessionToken: Long = vodPlaybackSessionToken,
+    ) {
+        if (isLive || currentAid <= 0L || currentCid <= 0L || !isVodPlaybackSessionActive(playbackSessionToken)) {
+            return
+        }
+
+        val resumePositionMs = withContext(Dispatchers.Main) {
+            videoPlayer?.currentPosition?.takeIf { it > 0L }
+        }
+
+        logger.fInfo {
+            "Refreshing vod play url: aid=$currentAid, cid=$currentCid, epid=$currentEpid, resumePositionMs=$resumePositionMs"
+        }
+        addLogs("播放地址即将过期，正在刷新")
+
+        val refreshed = loadPlayUrl(
+            avid = currentAid,
+            cid = currentCid,
+            epid = currentEpid,
+            preferApi = Prefs.apiType,
+            proxyArea = proxyArea,
+            initialSeekPositionMs = resumePositionMs,
+            targetQuality = currentQuality,
+            targetVideoCodec = currentVideoCodec,
+            targetAudio = currentAudio,
+            targetMediaMode = currentPlaybackMediaMode,
+            playbackSessionToken = playbackSessionToken
+        )
+
+        if (refreshed) {
+            addLogs("播放地址刷新成功")
+        } else if (isVodPlaybackSessionActive(playbackSessionToken)) {
+            addLogs("播放地址刷新失败，稍后重试")
+            scheduleVodPlayUrlRefreshRetry(playbackSessionToken)
+        }
+    }
+
+    private fun pickEarliestUrlExpiryEpochMs(vararg urls: String?): Long {
+        return urls.mapNotNull { url ->
+            url?.takeIf { it.isNotBlank() }?.let(::parseUrlExpiryEpochMs)
+                ?.takeIf { it > 0L }
+        }.minOrNull() ?: 0L
+    }
+
+    private fun parseUrlExpiryEpochMs(url: String): Long {
+        val rawValue = runCatching {
+            val parsedUri = Uri.parse(url)
+            parsedUri.getQueryParameter("deadline")
+                ?: parsedUri.getQueryParameter("expires")
+        }.getOrNull() ?: Regex("""[?&](?:deadline|expires)=(\\d+)""")
+            .find(url)
+            ?.groupValues
+            ?.getOrNull(1)
+
+        val epochValue = rawValue?.toLongOrNull() ?: return 0L
+        return if (epochValue >= 10_000_000_000L) epochValue else epochValue * 1000L
+    }
+
     private suspend fun updateDanmakuMask() {
         // 直播模式不获取蒙版数据
         if (isLive) return
@@ -1501,6 +1690,7 @@ class VideoPlayerV3ViewModel(
      * @param qn 请求的画质编号，默认使用用户配置的直播清晰度
      */
     fun loadLiveStreamWithQuality(roomId: Int, qn: Int = Prefs.defaultLiveQn) {
+        cancelVodPlayUrlAutoRefresh()
         // 取消之前的重连任务
         liveRetryJob?.cancel()
         liveRetryJob = null
@@ -1764,6 +1954,7 @@ class VideoPlayerV3ViewModel(
      * 加载直播流
      */
     fun loadLiveStream(streamUrl: String) {
+        cancelVodPlayUrlAutoRefresh()
         viewModelScope.launch(Dispatchers.IO) {
             logger.fInfo { "Load live stream: $streamUrl" }
             withContext(Dispatchers.Main) { loadState = RequestState.Doing }
