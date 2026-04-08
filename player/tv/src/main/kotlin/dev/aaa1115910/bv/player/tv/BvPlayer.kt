@@ -927,6 +927,18 @@ fun BvPlayer(
                 scheduleDanmakuSeekSync(it, isPlaying)
                 videoPlayer.seekTo(it)
             },
+            onSeekToVideoEnd = {
+                mDanmakuPlayer?.pause()
+                scope.launch(Dispatchers.Main) {
+                    isPlaying = false
+                    if (!videoPlayerConfigData.incognitoMode) sendHeartbeat()
+                    if (autoOpenPlayListOnVideoEnd) {
+                        openPlayListRequestToken = System.currentTimeMillis()
+                    } else {
+                        onLoadNextVideo(true)
+                    }
+                }
+            },
             onBackToHistory = {
                 val time = if (videoPlayerConfigData.defaultStartPosition == DefaultStartPosition.History) {
                     0L

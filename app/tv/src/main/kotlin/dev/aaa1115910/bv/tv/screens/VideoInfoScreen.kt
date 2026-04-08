@@ -902,64 +902,6 @@ fun VideoInfoScreen(
                             commentButtonFocusRequester = commentButtonFocusRequester
                         )
                     }
-                    if (videoDetailViewModel.videoDetail?.interactiveNodes?.isNotEmpty() == true) {
-                        item {
-                            val interactivePages = remember(
-                                videoDetailViewModel.videoDetail?.interactiveNodes,
-                                videoDetailViewModel.videoDetail?.pages
-                            ) {
-                                val fallbackDimension = videoDetailViewModel.videoDetail?.pages?.firstOrNull()?.dimension
-                                    ?: Dimension(0, 0)
-                                videoDetailViewModel.videoDetail?.interactiveNodes
-                                    ?.mapIndexed { index, node ->
-                                        VideoPage(
-                                            cid = node.cid,
-                                            index = index + 1,
-                                            title = node.title.ifBlank { "未命名分支" },
-                                            duration = 0,
-                                            dimension = fallbackDimension
-                                        )
-                                    }
-                                    ?: emptyList()
-                            }
-                            VideoPartRow(
-                                pages = interactivePages,
-                                lastPlayedCid = lastPlayedCid,
-                                lastPlayedTime = lastPlayedTime,
-                                enablePartListDialog = interactivePages.size > 5,
-                                titleText = "互动分支",
-                                dialogTitle = "互动分支列表",
-                                onClick = { cid ->
-                                    logger.fInfo { "Click interactive branch: [av:${videoDetailViewModel.videoDetail?.aid}, bv:${videoDetailViewModel.videoDetail?.bvid}, cid:$cid]" }
-                                    launchPlayerActivity(
-                                        context = context,
-                                        avid = videoDetailViewModel.videoDetail!!.aid,
-                                        cid = cid,
-                                        title = videoDetailViewModel.videoDetail!!.title,
-                                        partTitle = interactivePages.find { it.cid == cid }!!.title,
-                                        played = if (cid == lastPlayedCid) lastPlayedTime * 1000 else 0,
-                                        fromSeason = false,
-                                        isVerticalVideo = videoDetailViewModel.videoDetail!!.pages.firstOrNull { it.cid == cid }?.dimension?.isVertical
-                                            ?: videoDetailViewModel.videoDetail!!.pages.first().dimension.isVertical,
-                                        playerIconIdle = videoDetailViewModel.videoDetail!!.playerIcon?.idle
-                                            ?: "",
-                                        playerIconMoving = videoDetailViewModel.videoDetail!!.playerIcon?.moving
-                                            ?: "",
-                                        play = videoDetailViewModel.videoDetail!!.stat.view,
-                                        danmaku = videoDetailViewModel.videoDetail!!.stat.danmaku,
-                                        like = videoDetailViewModel.videoDetail!!.stat.like,
-                                        coin = videoDetailViewModel.videoDetail!!.stat.coin,
-                                        favorite = videoDetailViewModel.videoDetail!!.stat.favorite,
-                                        upName = videoDetailViewModel.videoDetail!!.author.name,
-                                        upId = videoDetailViewModel.videoDetail!!.author.mid,
-                                        upFace = videoDetailViewModel.videoDetail!!.author.face,
-                                        pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString(),
-                                        audioOnlyMode = audioOnlyMode
-                                    )
-                                }
-                            )
-                        }
-                    }
                     if (videoDetailViewModel.videoDetail?.ugcSeason == null) {
                         item {
                             VideoPartRow(
