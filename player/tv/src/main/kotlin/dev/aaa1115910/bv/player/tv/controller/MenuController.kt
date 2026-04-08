@@ -78,6 +78,7 @@ fun MenuController(
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
     onDanmakuMaskChange: (Boolean) -> Unit = {},
+    onDanmakuMergeChange: (Boolean) -> Unit = {},
     onDanmakuFilterLevelChange: (Int) -> Unit = {},
     isLive: Boolean = false,
     onSubtitleChange: (Subtitle) -> Unit,
@@ -118,6 +119,7 @@ fun MenuController(
                 onDanmakuOpacityChange = onDanmakuOpacityChange,
                 onDanmakuAreaChange = onDanmakuAreaChange,
                 onDanmakuMaskChange = onDanmakuMaskChange,
+                onDanmakuMergeChange = onDanmakuMergeChange,
                 onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
                 isLive = isLive,
                 onSubtitleChange = onSubtitleChange,
@@ -148,6 +150,7 @@ fun MenuController(
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
     onDanmakuMaskChange: (Boolean) -> Unit = {},
+    onDanmakuMergeChange: (Boolean) -> Unit = {},
     onDanmakuFilterLevelChange: (Int) -> Unit = {},
     isLive: Boolean = false,
     onSubtitleChange: (Subtitle) -> Unit,
@@ -191,6 +194,7 @@ fun MenuController(
                     onDanmakuOpacityChange = onDanmakuOpacityChange,
                     onDanmakuAreaChange = onDanmakuAreaChange,
                     onDanmakuMaskChange = onDanmakuMaskChange,
+                    onDanmakuMergeChange = onDanmakuMergeChange,
                     onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
                     isLive = isLive,
                     onFocusStateChange = { focusState = it },
@@ -248,6 +252,7 @@ private fun MenuList(
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
     onDanmakuMaskChange: (Boolean) -> Unit = {},
+    onDanmakuMergeChange: (Boolean) -> Unit = {},
     onDanmakuFilterLevelChange: (Int) -> Unit = {},
     isLive: Boolean = false,
     onSubtitleChange: (Subtitle) -> Unit,
@@ -285,6 +290,7 @@ private fun MenuList(
                     onDanmakuAreaChange = onDanmakuAreaChange,
                     onFocusStateChange = onFocusStateChange,
                     onDanmakuMaskChange = onDanmakuMaskChange,
+                    onDanmakuMergeChange = onDanmakuMergeChange,
                     onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
                     isLive = isLive
                 )
@@ -332,6 +338,7 @@ fun MenuControllerPreview() {
     var currentDanmakuOpacity by remember { mutableFloatStateOf(1f) }
     var currentDanmakuArea by remember { mutableFloatStateOf(1f) }
     var currentDanmakuMask by remember { mutableStateOf(false) }
+    var currentDanmakuMergeEnabled by remember { mutableStateOf(false) }
 
     var currentSubtitleId by remember { mutableLongStateOf(-1L) }
     val currentSubtitleList = remember { mutableStateListOf<Subtitle>() }
@@ -411,6 +418,7 @@ fun MenuControllerPreview() {
                         currentDanmakuOpacity = currentDanmakuOpacity,
                         currentDanmakuArea = currentDanmakuArea,
                         currentDanmakuMask = currentDanmakuMask,
+                        currentDanmakuMergeEnabled = currentDanmakuMergeEnabled,
 
                         currentSubtitleId = currentSubtitleId,
                         availableSubtitleTracks = currentSubtitleList,
@@ -443,6 +451,7 @@ fun MenuControllerPreview() {
                         onDanmakuOpacityChange = { currentDanmakuOpacity = it },
                         onDanmakuAreaChange = { currentDanmakuArea = it },
                         onDanmakuMaskChange = { currentDanmakuMask = it },
+                        onDanmakuMergeChange = { currentDanmakuMergeEnabled = it },
                         onSubtitleChange = { currentSubtitleId = it.id },
                         onSubtitleSizeChange = { currentSubtitleFontSize = it },
                         onSubtitleBackgroundOpacityChange = {

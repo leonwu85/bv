@@ -123,6 +123,7 @@ data class VideoPlayerConfigData(
     val currentDanmakuArea: Float = 1f,
     val currentDanmakuMask: Boolean = false,
     val currentDanmakuFilterLevel: Int = 1,      // 视频弹幕过滤等级 (1-10)
+    val currentDanmakuMergeEnabled: Boolean = false,
     val currentLiveDanmakuFilterLevel: Int = 0,  // 直播弹幕过滤等级 (0-60)
     val currentSubtitleId: Long = 0,
     val currentSubtitleData: List<SubtitleItem> = emptyList(),

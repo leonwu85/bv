@@ -62,7 +62,11 @@ import dev.aaa1115910.bv.player.entity.VideoListItemData
 import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.repository.VideoInfoRepository
+import dev.aaa1115910.bv.util.DanmakuSegmentMergeResult
+import dev.aaa1115910.bv.util.MergedDanmakuEntry
 import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.bv.util.VodDanmakuMergeState
+import dev.aaa1115910.bv.util.VodDanmakuMerger
 import dev.aaa1115910.bv.util.fError
 import dev.aaa1115910.bv.util.fException
 import dev.aaa1115910.bv.util.fInfo
@@ -176,6 +180,7 @@ class VideoPlayerV3ViewModel(
     var currentDanmakuArea by mutableFloatStateOf(Prefs.defaultDanmakuArea)
     var currentDanmakuMask by mutableStateOf(Prefs.defaultDanmakuMask)
     var currentDanmakuFilterLevel by mutableIntStateOf(Prefs.defaultDanmakuFilterLevel)
+    var currentDanmakuMergeEnabled by mutableStateOf(Prefs.defaultDanmakuMergeEnabled)
     var currentLiveDanmakuFilterLevel by mutableIntStateOf(Prefs.defaultLiveDanmakuFilterLevel)
     var currentSubtitleId by mutableLongStateOf(-1L)
     var currentSubtitleData = mutableStateListOf<SubtitleItem>()
@@ -290,6 +295,7 @@ class VideoPlayerV3ViewModel(
     private var danmakuLoadJob: Job? = null
     private var danmakuLoadToken by mutableLongStateOf(0L)
     private val loadedDanmakuIds = LinkedHashSet<Long>()
+    private val vodDanmakuMergeState = VodDanmakuMergeState()
 
     private suspend fun ensureDanmakuPlayer(isLive: Boolean = false) = withContext(Dispatchers.Main) {
         danmakuLoadJob?.cancel()
@@ -328,6 +334,7 @@ class VideoPlayerV3ViewModel(
         currentAid = avid
         currentCid = cid
         currentEpid = epid ?: 0
+            clearVodDanmakuMergeState()
         epid?.let { this.epid = it }
         seasonId?.let { this.seasonId = it }
         viewModelScope.launch(Dispatchers.Default) {
@@ -662,6 +669,7 @@ class VideoPlayerV3ViewModel(
                 danmakuData.clear()
             }
             loadedDanmakuIds.clear()
+            clearVodDanmakuMergeState()
 
             val maxSegments = calculateDanmakuMaxSegments(durationMs)
             val startSegment = calculateInitialDanmakuSegment()
@@ -707,6 +715,7 @@ class VideoPlayerV3ViewModel(
                                 addLogs("后台已加载第 $segmentIndex 段弹幕，累计 ${danmakuData.size} 条")
                             }
                         }
+                        totalLoadedDanmaku += flushPendingMergedDanmaku(loadToken)
                     }.onFailure {
                         if (it !is kotlinx.coroutines.CancellationException) {
                             addLogs("后台补齐弹幕失败：${it.localizedMessage}")
@@ -714,6 +723,8 @@ class VideoPlayerV3ViewModel(
                         }
                     }
                 }
+            } else {
+                totalLoadedDanmaku += flushPendingMergedDanmaku(loadToken)
             }
         }.onFailure {
             addLogs("加载弹幕失败：${it.localizedMessage}")
@@ -806,14 +817,36 @@ class VideoPlayerV3ViewModel(
         }
 
         ensureDanmakuLoadActive(loadToken)
-        val convertedItems = convertDanmakuItems(newDanmaku)
-        convertedItems.chunked(DANMAKU_BATCH_SIZE).forEach { chunk ->
-            ensureDanmakuLoadActive(loadToken)
-            danmakuData.addAll(chunk)
-            danmakuPlayer?.updateData(chunk)
-            delay(8)
+        val convertedItems = if (currentDanmakuMergeEnabled) {
+            val mergeResult = VodDanmakuMerger.processSegment(
+                segmentDanmaku = newDanmaku,
+                segmentIndex = segmentIndex,
+                segmentDurationMs = DANMAKU_SEGMENT_DURATION_MS,
+                state = vodDanmakuMergeState
+            )
+            logDanmakuMergeResult(segmentIndex, mergeResult)
+            convertMergedDanmakuItems(mergeResult.emittedDanmaku)
+        } else {
+            convertDanmakuItems(newDanmaku)
         }
+
+        emitDanmakuItems(convertedItems, loadToken)
         return convertedItems.size
+    }
+
+    fun updateDanmakuMergeEnabled(enabled: Boolean) {
+        if (currentDanmakuMergeEnabled == enabled) return
+
+        val wasEnabled = currentDanmakuMergeEnabled
+        currentDanmakuMergeEnabled = enabled
+
+        if (wasEnabled) {
+            viewModelScope.launch(Dispatchers.Default) {
+                flushPendingMergedDanmaku()
+            }
+        } else {
+            clearVodDanmakuMergeState()
+        }
     }
 
     private fun convertDanmakuItems(
@@ -821,20 +854,77 @@ class VideoPlayerV3ViewModel(
     ): List<DanmakuItemData> {
         return rawDanmaku
             .sortedBy { it.time }
-            .map {
-                DanmakuItemData(
-                    danmakuId = it.dmid,
-                    position = (it.time * 1000).toLong(),
-                    content = it.text,
-                    mode = when (it.type) {
-                        4 -> DanmakuItemData.DANMAKU_MODE_CENTER_TOP
-                        5 -> DanmakuItemData.DANMAKU_MODE_CENTER_BOTTOM
-                        else -> DanmakuItemData.DANMAKU_MODE_ROLLING
-                    },
-                    textSize = it.size,
-                    textColor = Color(it.color).toArgb()
-                )
-            }
+            .map { it.toDanmakuItemData(it.text) }
+    }
+
+    private fun convertMergedDanmakuItems(
+        mergedDanmaku: List<MergedDanmakuEntry>
+    ): List<DanmakuItemData> {
+        return mergedDanmaku
+            .sortedBy { it.source.time }
+            .map { it.source.toDanmakuItemData(it.content) }
+    }
+
+    private fun dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData.toDanmakuItemData(
+        content: String
+    ): DanmakuItemData {
+        return DanmakuItemData(
+            danmakuId = dmid,
+            position = (time * 1000).toLong(),
+            content = content,
+            mode = when (type) {
+                4 -> DanmakuItemData.DANMAKU_MODE_CENTER_TOP
+                5 -> DanmakuItemData.DANMAKU_MODE_CENTER_BOTTOM
+                else -> DanmakuItemData.DANMAKU_MODE_ROLLING
+            },
+            textSize = size,
+            textColor = Color(color).toArgb()
+        )
+    }
+
+    private suspend fun emitDanmakuItems(
+        items: List<DanmakuItemData>,
+        loadToken: Long? = null
+    ) {
+        if (items.isEmpty()) return
+
+        items.chunked(DANMAKU_BATCH_SIZE).forEach { chunk ->
+            loadToken?.let { ensureDanmakuLoadActive(it) }
+            danmakuData.addAll(chunk)
+            danmakuPlayer?.updateData(chunk)
+            delay(8)
+        }
+    }
+
+    private suspend fun flushPendingMergedDanmaku(loadToken: Long? = null): Int {
+        if (!currentDanmakuMergeEnabled) {
+            clearVodDanmakuMergeState()
+            return 0
+        }
+
+        val pendingDanmaku = VodDanmakuMerger.flushPending(vodDanmakuMergeState)
+        if (pendingDanmaku.isEmpty()) {
+            return 0
+        }
+
+        val convertedItems = convertMergedDanmakuItems(pendingDanmaku)
+        emitDanmakuItems(convertedItems, loadToken)
+        logger.fInfo { "Flushed ${convertedItems.size} pending merged danmaku" }
+        return convertedItems.size
+    }
+
+    private fun clearVodDanmakuMergeState() {
+        vodDanmakuMergeState.clear()
+    }
+
+    private fun logDanmakuMergeResult(
+        segmentIndex: Int,
+        mergeResult: DanmakuSegmentMergeResult
+    ) {
+        if (mergeResult.mergedDuplicateCount <= 0) return
+        logger.fInfo {
+            "Merged ${mergeResult.mergedDuplicateCount} duplicate danmaku in segment $segmentIndex, emitted=${mergeResult.emittedDanmaku.size}"
+        }
     }
 
     private suspend fun ensureDanmakuLoadActive(loadToken: Long) {
