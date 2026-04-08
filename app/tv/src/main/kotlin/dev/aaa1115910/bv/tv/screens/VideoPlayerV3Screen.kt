@@ -341,6 +341,7 @@ fun VideoPlayerV3Screen(
                 autoOpenPlayListOnVideoEnd = false,
                 onSendHeartbeat = playerViewModel::uploadHistory,
                 onClearBackToHistoryData = { playerViewModel.lastPlayed = 0 },
+                onReloadDanmakuAfterSeek = playerViewModel::reloadDanmakuAfterSeek,
                 onLoadNextVideo = { immediate ->
                     if (playerViewModel.showRelatedVideos) {
                         logger.info { "Related videos is shown, skip auto action" }

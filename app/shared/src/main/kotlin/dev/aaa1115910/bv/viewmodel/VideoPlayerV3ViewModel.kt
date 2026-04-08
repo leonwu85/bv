@@ -147,6 +147,7 @@ class VideoPlayerV3ViewModel(
 
         // 清除可能未被GC回收的资源
         currentSubtitleData.clear()
+        clearDanmakuSliceState()
     }
 
     var loadState by mutableStateOf(RequestState.Ready)
@@ -260,6 +261,8 @@ class VideoPlayerV3ViewModel(
         private const val DANMAKU_SEGMENT_DURATION_MS = 6 * 60 * 1000L
         private const val INITIAL_DANMAKU_SEGMENT_PREFETCH = 2
         private const val DANMAKU_BATCH_SIZE = 600
+        private const val DANMAKU_SLICE_SIZE = 2000
+        private const val DANMAKU_SLICE_EMIT_DELAY_MS = 12L
     }
 
     // 直播人气值与高能观众
@@ -312,7 +315,17 @@ class VideoPlayerV3ViewModel(
     private var danmakuLoadJob: Job? = null
     private var danmakuLoadToken by mutableLongStateOf(0L)
     private val loadedDanmakuIds = LinkedHashSet<Long>()
+    private val danmakuSlicesBySegment = LinkedHashMap<Int, List<DanmakuSlice>>()
+    private val nextDanmakuSliceIndexBySegment = LinkedHashMap<Int, Int>()
     private val vodDanmakuMergeState = VodDanmakuMergeState()
+
+    private data class DanmakuSlice(
+        val segmentIndex: Int,
+        val sliceIndex: Int,
+        val startPositionMs: Long,
+        val endPositionMs: Long,
+        val items: List<DanmakuItemData>
+    )
 
     private suspend fun ensureDanmakuPlayer(isLive: Boolean = false) = withContext(Dispatchers.Main) {
         danmakuLoadJob?.cancel()
@@ -876,7 +889,11 @@ class VideoPlayerV3ViewModel(
         currentInteractiveEdgeId = currentInteractiveOption.edgeId ?: currentInteractiveEdgeId
     }
 
-    suspend fun loadDanmaku(cid: Long, durationMs: Long = 0) {
+    suspend fun loadDanmaku(
+        cid: Long,
+        durationMs: Long = 0,
+        initialPositionMsOverride: Long? = null
+    ) {
         danmakuLoadJob?.cancel()
         val loadToken = ++danmakuLoadToken
         runCatching {
@@ -884,53 +901,95 @@ class VideoPlayerV3ViewModel(
                 danmakuData.clear()
             }
             loadedDanmakuIds.clear()
+            clearDanmakuSliceState()
             clearVodDanmakuMergeState()
 
+            val initialPositionMs = initialPositionMsOverride ?: withContext(Dispatchers.Main) {
+                videoPlayer?.currentPosition?.takeIf { it > 0L }
+            } ?: calculateInitialDanmakuPositionMs()
+
             val maxSegments = calculateDanmakuMaxSegments(durationMs)
-            val startSegment = calculateInitialDanmakuSegment()
+            val startSegment = calculateInitialDanmakuSegment(initialPositionMs)
             val segmentOrder = buildDanmakuSegmentOrder(startSegment, maxSegments)
             if (segmentOrder.isEmpty()) {
                 addLogs("未找到可加载的弹幕分段")
                 return@runCatching
             }
 
-            var loadedSegments = 0
-            var totalLoadedDanmaku = 0
+            var cachedSegments = 0
+            var initialEmittedDanmaku = 0
             val initialSegments = segmentOrder.take(INITIAL_DANMAKU_SEGMENT_PREFETCH)
 
             initialSegments.forEach { segmentIndex ->
                 ensureDanmakuLoadActive(loadToken)
-                val appendedCount = appendDanmakuSegment(
+                val slices = loadDanmakuSegmentSlices(
                     cid = cid,
                     segmentIndex = segmentIndex,
                     loadToken = loadToken
                 )
-                if (appendedCount > 0) {
-                    loadedSegments++
-                    totalLoadedDanmaku += appendedCount
+                if (slices.isNotEmpty()) {
+                    cachedSegments++
                 }
             }
 
-            addLogs("已优先加载 $loadedSegments 个弹幕分段，当前 ${danmakuData.size} 条")
+            val startSegmentSlices = danmakuSlicesBySegment[startSegment].orEmpty()
+            if (startSegmentSlices.isNotEmpty()) {
+                val initialSliceIndex = findDanmakuSliceIndexForPosition(
+                    slices = startSegmentSlices,
+                    positionMs = initialPositionMs
+                )
+                initialEmittedDanmaku += emitDanmakuSlices(
+                    segmentIndex = startSegment,
+                    slices = startSegmentSlices,
+                    startSliceIndex = initialSliceIndex,
+                    endExclusive = (initialSliceIndex + 1).coerceAtMost(startSegmentSlices.size),
+                    loadToken = loadToken
+                )
+            }
 
-            val remainingSegments = segmentOrder.drop(initialSegments.size)
-            if (remainingSegments.isNotEmpty()) {
+            if (initialEmittedDanmaku == 0) {
+                val fallbackSegmentIndex = initialSegments.firstOrNull {
+                    danmakuSlicesBySegment[it]?.isNotEmpty() == true
+                }
+                if (fallbackSegmentIndex != null) {
+                    initialEmittedDanmaku += emitDanmakuSlices(
+                        segmentIndex = fallbackSegmentIndex,
+                        slices = danmakuSlicesBySegment.getValue(fallbackSegmentIndex),
+                        startSliceIndex = 0,
+                        endExclusive = 1,
+                        loadToken = loadToken
+                    )
+                }
+            }
+
+            addLogs("已缓存 $cachedSegments 个弹幕分段，优先投喂 ${initialEmittedDanmaku} 条")
+
+            if (segmentOrder.isNotEmpty()) {
                 danmakuLoadJob = viewModelScope.launch(Dispatchers.Default) {
                     runCatching {
-                        remainingSegments.forEach { segmentIndex ->
+                        var backgroundEmittedDanmaku = 0
+                        segmentOrder.forEach { segmentIndex ->
                             ensureDanmakuLoadActive(loadToken)
-                            val appendedCount = appendDanmakuSegment(
+                            val slices = loadDanmakuSegmentSlices(
                                 cid = cid,
                                 segmentIndex = segmentIndex,
                                 loadToken = loadToken
                             )
-                            if (appendedCount > 0) {
-                                loadedSegments++
-                                totalLoadedDanmaku += appendedCount
-                                addLogs("后台已加载第 $segmentIndex 段弹幕，累计 ${danmakuData.size} 条")
+                            if (slices.isEmpty()) {
+                                return@forEach
+                            }
+                            val emittedCount = emitDanmakuSlices(
+                                segmentIndex = segmentIndex,
+                                slices = slices,
+                                startSliceIndex = nextDanmakuSliceIndexBySegment[segmentIndex] ?: 0,
+                                loadToken = loadToken
+                            )
+                            if (emittedCount > 0) {
+                                backgroundEmittedDanmaku += emittedCount
+                                addLogs("后台已发射第 $segmentIndex 段切片，累计 ${danmakuData.size} 条")
                             }
                         }
-                        totalLoadedDanmaku += flushPendingMergedDanmaku(loadToken)
+                        backgroundEmittedDanmaku += flushPendingMergedDanmaku(loadToken)
                     }.onFailure {
                         if (it !is kotlinx.coroutines.CancellationException) {
                             addLogs("后台补齐弹幕失败：${it.localizedMessage}")
@@ -938,15 +997,47 @@ class VideoPlayerV3ViewModel(
                         }
                     }
                 }
-            } else {
-                totalLoadedDanmaku += flushPendingMergedDanmaku(loadToken)
             }
         }.onFailure {
             addLogs("加载弹幕失败：${it.localizedMessage}")
             logger.fWarn { "Load danmaku filed: ${it.stackTraceToString()}" }
         }.onSuccess {
-            addLogs("已加载 ${danmakuData.size} 条弹幕")
-            logger.fInfo { "Load danmaku success, size=${danmakuData.size}" }
+            addLogs("已启动弹幕切片加载，当前 ${danmakuData.size} 条")
+            logger.fInfo { "Load danmaku slices started, size=${danmakuData.size}" }
+        }
+    }
+
+    fun reloadDanmakuAfterSeek(positionMs: Long, shouldPlay: Boolean) {
+        if (isLive || currentCid <= 0L) return
+
+        val durationMs = playData?.timeLength
+            ?.takeIf { it > 0L }
+            ?: videoPlayer?.duration
+            ?: 0L
+
+        viewModelScope.launch(Dispatchers.Default) {
+            runCatching {
+                addLogs("跳转后重载弹幕")
+                ensureDanmakuPlayer()
+                loadDanmaku(
+                    cid = currentCid,
+                    durationMs = durationMs,
+                    initialPositionMsOverride = positionMs
+                )
+                withContext(Dispatchers.Main) {
+                    danmakuPlayer?.seekTo(positionMs)
+                    if (shouldPlay) {
+                        danmakuPlayer?.start()
+                    } else {
+                        danmakuPlayer?.pause()
+                    }
+                }
+            }.onFailure {
+                if (it !is kotlinx.coroutines.CancellationException) {
+                    logger.fWarn { "Reload danmaku after seek failed: ${it.stackTraceToString()}" }
+                    addLogs("跳转后重载弹幕失败：${it.localizedMessage}")
+                }
+            }
         }
     }
 
@@ -958,8 +1049,8 @@ class VideoPlayerV3ViewModel(
         }
     }
 
-    private fun calculateInitialDanmakuSegment(): Int {
-        val initialPositionMs = if (
+    private fun calculateInitialDanmakuPositionMs(): Long {
+        return if (
             lastPlayed > 0 &&
             Prefs.playerDefaultStartPosition == PlayerDefaultStartPosition.History
         ) {
@@ -967,6 +1058,9 @@ class VideoPlayerV3ViewModel(
         } else {
             0L
         }
+    }
+
+    private fun calculateInitialDanmakuSegment(initialPositionMs: Long): Int {
         return (initialPositionMs / DANMAKU_SEGMENT_DURATION_MS).toInt() + 1
     }
 
@@ -990,11 +1084,13 @@ class VideoPlayerV3ViewModel(
         return ordered.toList()
     }
 
-    private suspend fun appendDanmakuSegment(
+    private suspend fun loadDanmakuSegmentSlices(
         cid: Long,
         segmentIndex: Int,
         loadToken: Long
-    ): Int {
+    ): List<DanmakuSlice> {
+        danmakuSlicesBySegment[segmentIndex]?.let { return it }
+
         ensureDanmakuLoadActive(loadToken)
         val segmentData = BiliHttpApi.getDanmakuSeg(
             cid = cid,
@@ -1003,7 +1099,9 @@ class VideoPlayerV3ViewModel(
             sessData = Prefs.sessData
         )
         if (segmentData.isEmpty()) {
-            return 0
+            danmakuSlicesBySegment[segmentIndex] = emptyList()
+            nextDanmakuSliceIndexBySegment[segmentIndex] = 0
+            return emptyList()
         }
 
         var deduplicatedCount = 0
@@ -1028,7 +1126,9 @@ class VideoPlayerV3ViewModel(
             logger.fInfo { "Filtered $filteredCount danmaku in segment $segmentIndex with level < $currentDanmakuFilterLevel" }
         }
         if (newDanmaku.isEmpty()) {
-            return 0
+            danmakuSlicesBySegment[segmentIndex] = emptyList()
+            nextDanmakuSliceIndexBySegment[segmentIndex] = 0
+            return emptyList()
         }
 
         ensureDanmakuLoadActive(loadToken)
@@ -1045,8 +1145,15 @@ class VideoPlayerV3ViewModel(
             convertDanmakuItems(newDanmaku)
         }
 
-        emitDanmakuItems(convertedItems, loadToken)
-        return convertedItems.size
+        val slices = buildDanmakuSlices(segmentIndex, convertedItems)
+        danmakuSlicesBySegment[segmentIndex] = slices
+        nextDanmakuSliceIndexBySegment.putIfAbsent(segmentIndex, 0)
+        if (slices.isNotEmpty()) {
+            logger.fInfo {
+                "Prepared ${slices.size} danmaku slices for segment $segmentIndex, total=${convertedItems.size}, first=${slices.first().startPositionMs}, last=${slices.last().endPositionMs}"
+            }
+        }
+        return slices
     }
 
     fun updateDanmakuMergeEnabled(enabled: Boolean) {
@@ -1097,6 +1204,71 @@ class VideoPlayerV3ViewModel(
         )
     }
 
+    private fun buildDanmakuSlices(
+        segmentIndex: Int,
+        items: List<DanmakuItemData>
+    ): List<DanmakuSlice> {
+        if (items.isEmpty()) return emptyList()
+
+        return items.chunked(DANMAKU_SLICE_SIZE).mapIndexed { sliceIndex, sliceItems ->
+            DanmakuSlice(
+                segmentIndex = segmentIndex,
+                sliceIndex = sliceIndex,
+                startPositionMs = sliceItems.first().position,
+                endPositionMs = sliceItems.last().position,
+                items = sliceItems
+            )
+        }
+    }
+
+    private fun findDanmakuSliceIndexForPosition(
+        slices: List<DanmakuSlice>,
+        positionMs: Long
+    ): Int {
+        if (slices.isEmpty() || positionMs <= 0L) return 0
+
+        val directHit = slices.indexOfFirst {
+            positionMs >= it.startPositionMs && positionMs <= it.endPositionMs
+        }
+        if (directHit >= 0) return directHit
+
+        val nearestPrevious = slices.indexOfLast { it.startPositionMs <= positionMs }
+        return nearestPrevious.coerceAtLeast(0)
+    }
+
+    private suspend fun emitDanmakuSlices(
+        segmentIndex: Int,
+        slices: List<DanmakuSlice>,
+        startSliceIndex: Int = nextDanmakuSliceIndexBySegment[segmentIndex] ?: 0,
+        endExclusive: Int = slices.size,
+        loadToken: Long? = null
+    ): Int {
+        if (slices.isEmpty()) {
+            nextDanmakuSliceIndexBySegment[segmentIndex] = 0
+            return 0
+        }
+
+        val normalizedStart = startSliceIndex.coerceIn(0, slices.size)
+        val normalizedEnd = endExclusive.coerceIn(normalizedStart, slices.size)
+        var emittedCount = 0
+
+        for (sliceIndex in normalizedStart until normalizedEnd) {
+            loadToken?.let { ensureDanmakuLoadActive(it) }
+            val slice = slices[sliceIndex]
+            emitDanmakuItems(slice.items, loadToken)
+            nextDanmakuSliceIndexBySegment[segmentIndex] = sliceIndex + 1
+            emittedCount += slice.items.size
+            logger.fDebug {
+                "Emitted danmaku slice segment=${slice.segmentIndex}, slice=${slice.sliceIndex}, size=${slice.items.size}, range=${slice.startPositionMs}-${slice.endPositionMs}"
+            }
+            if (sliceIndex + 1 < normalizedEnd) {
+                delay(DANMAKU_SLICE_EMIT_DELAY_MS)
+            }
+        }
+
+        return emittedCount
+    }
+
     private suspend fun emitDanmakuItems(
         items: List<DanmakuItemData>,
         loadToken: Long? = null
@@ -1123,9 +1295,21 @@ class VideoPlayerV3ViewModel(
         }
 
         val convertedItems = convertMergedDanmakuItems(pendingDanmaku)
-        emitDanmakuItems(convertedItems, loadToken)
+        val pendingSegmentIndex = Int.MAX_VALUE
+        val slices = buildDanmakuSlices(pendingSegmentIndex, convertedItems)
+        emitDanmakuSlices(
+            segmentIndex = pendingSegmentIndex,
+            slices = slices,
+            startSliceIndex = 0,
+            loadToken = loadToken
+        )
         logger.fInfo { "Flushed ${convertedItems.size} pending merged danmaku" }
         return convertedItems.size
+    }
+
+    private fun clearDanmakuSliceState() {
+        danmakuSlicesBySegment.clear()
+        nextDanmakuSliceIndexBySegment.clear()
     }
 
     private fun clearVodDanmakuMergeState() {

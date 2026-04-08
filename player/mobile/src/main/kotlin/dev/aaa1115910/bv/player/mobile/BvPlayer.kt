@@ -63,6 +63,7 @@ fun BvPlayer(
     onExitFullScreen: () -> Unit,
     onBack: () -> Unit,
     onClearBackToHistoryData: () -> Unit,
+    onReloadDanmakuAfterSeek: (Long, Boolean) -> Unit = { _, _ -> },
     onChangeResolution: (Resolution, afterChange: suspend () -> Unit) -> Unit,
     onChangeVideoCodec: (VideoCodec, afterChange: suspend () -> Unit) -> Unit,
     onChangeAudio: (Audio, afterChange: suspend () -> Unit) -> Unit,
@@ -260,11 +261,11 @@ fun BvPlayer(
         }
 
         override fun onSeekBack(seekBackIncrementMs: Long) {
-            mDanmakuPlayer?.seekTo(currentPosition)
+            onReloadDanmakuAfterSeek(currentPosition, isPlaying)
         }
 
         override fun onSeekForward(seekForwardIncrementMs: Long) {
-            mDanmakuPlayer?.seekTo(currentPosition)
+            onReloadDanmakuAfterSeek(currentPosition, isPlaying)
         }
 
     }
@@ -335,8 +336,7 @@ fun BvPlayer(
             onPlay = { videoPlayer.start() },
             onPause = { videoPlayer.pause() },
             onSeekToPosition = { position ->
-                mDanmakuPlayer?.seekTo(position)
-                mDanmakuPlayer?.pause()
+                onReloadDanmakuAfterSeek(position, isPlaying)
                 videoPlayer.seekTo(position)
             },
             onChangeResolution = {

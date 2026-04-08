@@ -98,6 +98,7 @@ fun BvPlayer(
     useTextureViewFixPortraitVideo: Boolean = false,
     onSendHeartbeat: suspend (Int) -> Unit,
     onClearBackToHistoryData: () -> Unit,
+    onReloadDanmakuAfterSeek: (Long, Boolean) -> Unit = { _, _ -> },
     onLoadNextVideo: (Boolean) -> Unit,
     onExit: () -> Unit,
     onLoadNewVideo: (VideoListItem) -> Unit,
@@ -680,12 +681,7 @@ fun BvPlayer(
             pendingSeekDanmakuPosition = -1L
             pendingSeekDanmakuShouldPlay = false
 
-            mDanmakuPlayer?.seekTo(syncPosition)
-            if (shouldPlayAfterSeek) {
-                mDanmakuPlayer?.start()
-            } else {
-                mDanmakuPlayer?.pause()
-            }
+            onReloadDanmakuAfterSeek(syncPosition, shouldPlayAfterSeek)
             lastDanmakuSeekTime = System.currentTimeMillis()
             lastHeartbeatPosition = syncPosition
         }
