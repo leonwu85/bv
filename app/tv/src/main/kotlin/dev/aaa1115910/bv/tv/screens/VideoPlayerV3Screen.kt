@@ -60,6 +60,7 @@ import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
 import dev.aaa1115910.bv.player.entity.PlaybackMediaMode
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
+import dev.aaa1115910.bv.player.entity.VideoListInteractiveNode
 import dev.aaa1115910.bv.player.entity.VideoListItemData
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.player.entity.VideoPlayerConfigData
@@ -77,6 +78,7 @@ import dev.aaa1115910.bv.player.tv.controller.OnlineViewerCountTip
 import dev.aaa1115910.bv.player.tv.controller.SkipTip
 import dev.aaa1115910.bv.player.tv.controller.TripleLikeTip
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
+import dev.aaa1115910.bv.tv.component.InteractiveOptionDialog
 import dev.aaa1115910.bv.tv.component.buttons.CoinButton
 import dev.aaa1115910.bv.tv.component.CommentPanel
 import dev.aaa1115910.bv.tv.component.buttons.FavoriteButton
@@ -205,9 +207,20 @@ fun VideoPlayerV3Screen(
         }
     }
 
+    val exitPlayer = {
+        playerViewModel.dismissInteractiveOptionDialog()
+        Prefs.currentPlaySpeed = Prefs.defaultPlaySpeed
+        PlayedAidsCache.clear()
+        (context as Activity).finish()
+    }
+
     // 处理back键，当推荐视频有焦点时隐藏推荐视频并将焦点返回到播放器
     BackHandler(enabled = playerViewModel.showRelatedVideos) {
         playerViewModel.showRelatedVideos = false
+    }
+
+    BackHandler(enabled = playerViewModel.showInteractiveOptionDialog) {
+        exitPlayer()
     }
 
     CompositionLocalProvider(
@@ -325,11 +338,17 @@ fun VideoPlayerV3Screen(
                 onToggleRelatedVideos = { state ->
                     playerViewModel.showRelatedVideos = if (playerViewModel.relatedVideos.isNotEmpty()) state else false
                 },
+                autoOpenPlayListOnVideoEnd = false,
                 onSendHeartbeat = playerViewModel::uploadHistory,
                 onClearBackToHistoryData = { playerViewModel.lastPlayed = 0 },
                 onLoadNextVideo = { immediate ->
                     if (playerViewModel.showRelatedVideos) {
                         logger.info { "Related videos is shown, skip auto action" }
+                        return@BvPlayer
+                    }
+
+                    if (playerViewModel.isInteractivePlayback) {
+                        playerViewModel.requestInteractiveOptionDialog()
                         return@BvPlayer
                     }
 
@@ -472,9 +491,11 @@ fun VideoPlayerV3Screen(
                         is VideoListItemData -> {
                             // 手动选择新视频时也标记播放
                             PlayedAidsCache.markPlayed(videoListItem.aid)
-                            playerViewModel.title = videoListItem.title
-                            playerViewModel.partTitle = videoListItem.partTitle
-                            if (videoListItem.seasonId == null && playerViewModel.currentAid != videoListItem.aid) {
+                            if (videoListItem is VideoListInteractiveNode) {
+                                playerViewModel.playInteractiveOption(videoListItem)
+                            } else if (videoListItem.seasonId == null && playerViewModel.currentAid != videoListItem.aid) {
+                                playerViewModel.title = videoListItem.title
+                                playerViewModel.partTitle = videoListItem.partTitle
                                 VideoInfoActivity.actionStart(
                                     context = context,
                                     aid = videoListItem.aid,
@@ -482,6 +503,8 @@ fun VideoPlayerV3Screen(
                                     fromPlayer = true
                                 )
                             } else {
+                                playerViewModel.title = videoListItem.title
+                                playerViewModel.partTitle = videoListItem.partTitle
                                 playerViewModel.loadPlayUrl(
                                     avid = videoListItem.aid,
                                     cid = videoListItem.cid!!,
@@ -830,6 +853,17 @@ fun VideoPlayerV3Screen(
                     align = Alignment.BottomEnd
                 )
             }
+
+            InteractiveOptionDialog(
+                show = playerViewModel.showInteractiveOptionDialog,
+                options = playerViewModel.interactiveOptions,
+                onSelectOption = { option ->
+                    PlayedAidsCache.markPlayed(option.aid)
+                    playerViewModel.playInteractiveOption(option)
+                },
+                onExit = exitPlayer
+            )
+
             // 推荐视频
             AnimatedVisibility(
                 modifier = Modifier

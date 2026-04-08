@@ -25,9 +25,20 @@ data class VideoCardData(
     val historyBusiness: String? = null,
     val historyKid: Long? = null,
     // var pubTimeString: String = "",
+    val isInteractive: Boolean = false,
     val isChargingArc: Boolean = false,
     val badgeText: String = ""
 ) {
+    val coverBadges: List<String>
+        get() = listOfNotNull(
+            "互动视频".takeIf { isInteractive },
+            when {
+                isChargingArc && badgeText.isNotBlank() -> "⚡$badgeText"
+                isChargingArc -> "⚡充电专属"
+                else -> null
+            }
+        )
+
     init {
         play?.let {
             playString = if (it < 0) "" else if (it >= 10000) "${it / 10000}万" else "$it"

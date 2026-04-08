@@ -33,6 +33,7 @@ import androidx.tv.material3.Text
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.VideoListItem
 import dev.aaa1115910.bv.player.entity.VideoListItemData
+import dev.aaa1115910.bv.player.entity.VideoListInteractiveNode
 import dev.aaa1115910.bv.player.entity.VideoListPart
 import dev.aaa1115910.bv.player.entity.VideoListPgcEpisode
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisode
@@ -67,6 +68,10 @@ fun VideoListController(
                 val currentIndex = videoPlayerConfigData.availableVideoList
                     .indexOfFirst {
                         when (it) {
+                            is VideoListInteractiveNode -> it.isCurrent
+                                || (videoPlayerConfigData.currentVideoCid == it.cid && !videoPlayerConfigData.availableVideoList.any { listItem ->
+                                    listItem is VideoListInteractiveNode && listItem.isCurrent
+                                })
                             is VideoListItemData -> it.cid == videoPlayerConfigData.currentVideoCid
                             else -> false
                         }
@@ -130,6 +135,31 @@ fun VideoListController(
                                     ListItem(
                                         modifier = itemModifier,
                                         headlineContent = { Text(text = "EP${video.index + 1} ${if (video.partTitle.isNotEmpty()) video.partTitle else video.title}") },
+                                        onClick = { if (!isSelected) onPlayNewVideo(video) },
+                                        selected = isSelected
+                                    )
+                                }
+
+                                is VideoListInteractiveNode -> {
+                                    val isSelected =
+                                        video.isCurrent || (
+                                            video.cid == videoPlayerConfigData.currentVideoCid &&
+                                                !videoPlayerConfigData.availableVideoList.any { it is VideoListInteractiveNode && it.isCurrent }
+                                            )
+                                    val itemModifier = if (isSelected) {
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(focusRequester)
+                                    } else {
+                                        Modifier.fillMaxWidth()
+                                    }
+                                    ListItem(
+                                        modifier = itemModifier,
+                                        headlineContent = {
+                                            Text(
+                                                text = "分支${video.index + 1} ${if (video.partTitle.isNotEmpty()) video.partTitle else video.title}"
+                                            )
+                                        },
                                         onClick = { if (!isSelected) onPlayNewVideo(video) },
                                         selected = isSelected
                                     )

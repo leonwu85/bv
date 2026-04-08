@@ -37,6 +37,20 @@ data class VideoListUgcEpisodeTitle(
     val title: String
 ) : VideoListItem
 
+data class VideoListInteractiveNode(
+    override val aid: Long,
+    override val cid: Long,
+    override val epid: Int? = null,
+    override val seasonId: Int? = null,
+    override val title: String,
+    override val partTitle: String = "",
+    override val index: Int,
+    val nodeId: Long,
+    val edgeId: Long? = null,
+    val startPos: Int? = null,
+    val isCurrent: Boolean = false,
+) : VideoListItemData(aid, cid, epid, seasonId, title, partTitle, index)
+
 data class VideoListPgcEpisode(
     override val aid: Long,
     override val cid: Long,

@@ -95,7 +95,8 @@ fun PopularScreen(
                             danmaku = item.danmaku,
                             upName = item.author,
                             time = item.duration * 1000L,
-                            pubTime = item.pubTime
+                            pubTime = item.pubTime,
+                            isInteractive = item.isInteractive
                         )
                     },
                     onClick = { onClickVideo(item) },

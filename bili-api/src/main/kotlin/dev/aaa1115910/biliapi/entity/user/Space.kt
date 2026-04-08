@@ -44,6 +44,7 @@ data class SpaceVideo(
     val play: Long,
     val danmaku: Int,
     val publishDate: Date,
+    val isInteractive: Boolean = false,
     val isChargingArc: Boolean = false,
     val chargingArcBadge: String = ""
 ) {
@@ -60,6 +61,7 @@ data class SpaceVideo(
                 play = spaceVideoItem.play,
                 danmaku = spaceVideoItem.videoReview,
                 publishDate = Date(spaceVideoItem.created * 1000L),
+                isInteractive = spaceVideoItem.isSteinsGate == 1,
                 isChargingArc = spaceVideoItem.isChargingArc,
                 chargingArcBadge = spaceVideoItem.elecArcBadge
             )
@@ -74,7 +76,8 @@ data class SpaceVideo(
                 duration = spaceVideoItem.duration,
                 play = spaceVideoItem.play,
                 danmaku = spaceVideoItem.danmaku,
-                publishDate = Date(spaceVideoItem.ctime * 1000L)
+                publishDate = Date(spaceVideoItem.ctime * 1000L),
+                isInteractive = spaceVideoItem.isSteins
             )
     }
 }

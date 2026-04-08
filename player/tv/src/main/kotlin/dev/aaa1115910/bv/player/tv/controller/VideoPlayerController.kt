@@ -86,6 +86,7 @@ fun VideoPlayerController(
     onPause: () -> Unit,
     onExit: () -> Unit,
     onGoTime: (time: Long) -> Unit,
+    onSeekToVideoEnd: () -> Unit,
     onBackToHistory: () -> Unit,
     onPlayNewVideo: (VideoListItem) -> Unit,
 
@@ -124,6 +125,7 @@ fun VideoPlayerController(
     onSubtitleBottomPadding: (Dp) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit,
     onLoadNextVideo: (Boolean) -> Unit,
+    openPlayListRequestToken: Long = 0L,
 
     onRequestFocus: () -> Unit,
     onShowComment: () -> Unit = {},
@@ -170,6 +172,10 @@ fun VideoPlayerController(
     var hideVideoInfoJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var autoSeekConfirmJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var doublePressDownJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val isSeekToVideoEnd = {
+        val duration = videoPlayerSeekState.duration
+        duration > 0L && goTime >= (duration - 1000L).coerceAtLeast(0L)
+    }
 
     val openSeekController = {
         if (!showSeekController) goTime = videoPlayerSeekState.position
@@ -183,8 +189,12 @@ fun VideoPlayerController(
             autoSeekConfirmJob = scope.launch {
                 delay(1000)
                 if (showSeekController) {
-                    onGoTime(goTime)
-                    if (!videoPlayer.isPlaying) onPlay()
+                    if (isSeekToVideoEnd()) {
+                        onSeekToVideoEnd()
+                    } else {
+                        onGoTime(goTime)
+                        if (!videoPlayer.isPlaying) onPlay()
+                    }
                     withContext(Dispatchers.Main) {
                         moveState = SeekMoveState.Idle
                         showSeekController = false
@@ -226,6 +236,14 @@ fun VideoPlayerController(
 
     // 对外暴露 showInfo
     LaunchedEffect(Unit) { registerShowInfoProvider { showInfo } }
+    LaunchedEffect(openPlayListRequestToken) {
+        if (openPlayListRequestToken != 0L) {
+            showInfo = false
+            showMenuController = false
+            showSeekController = false
+            showListController = true
+        }
+    }
 
     Box(
         modifier = modifier
@@ -293,8 +311,12 @@ fun VideoPlayerController(
 
                         if (showSeekController) {
                             if (it.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
-                            onGoTime(goTime)
-                            if (!videoPlayer.isPlaying) onPlay()
+                            if (isSeekToVideoEnd()) {
+                                onSeekToVideoEnd()
+                            } else {
+                                onGoTime(goTime)
+                                if (!videoPlayer.isPlaying) onPlay()
+                            }
                             scope.launch(Dispatchers.Main) {
                                 moveState = SeekMoveState.Idle
                                 showSeekController = false

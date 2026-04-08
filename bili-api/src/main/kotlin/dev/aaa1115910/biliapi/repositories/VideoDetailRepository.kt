@@ -14,6 +14,7 @@ import dev.aaa1115910.biliapi.entity.reply.CommentReplyPage
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
 import dev.aaa1115910.biliapi.entity.reply.CommentsData
 import dev.aaa1115910.biliapi.entity.video.VideoDetail
+import dev.aaa1115910.biliapi.entity.video.InteractiveNode
 import dev.aaa1115910.biliapi.entity.video.season.SeasonDetail
 import dev.aaa1115910.biliapi.grpc.utils.handleGrpcException
 import dev.aaa1115910.biliapi.http.BiliHttpApi
@@ -72,6 +73,59 @@ class VideoDetailRepository(
         }
 
         return VideoDetail.History(0, 0)
+    }
+
+    private suspend fun fillInteractiveInfo(
+        videoDetail: VideoDetail,
+        knownInteractive: Boolean? = null
+    ) {
+        val sessData = authRepository.sessionData.orEmpty()
+        val isInteractive = knownInteractive ?: runCatching {
+            BiliHttpApi.getVideoInfo(
+                bv = videoDetail.bvid,
+                sessData = sessData.ifBlank { null }
+            ).getResponseData().let {
+                it.isStory || it.rights.isSteinGate == 1
+            }
+        }.onFailure {
+            println("Get interactive flag failed: $it")
+        }.getOrDefault(false)
+
+        videoDetail.isInteractive = isInteractive
+        if (!isInteractive) {
+            videoDetail.interactiveGraphVersion = null
+            videoDetail.interactiveNodes = emptyList()
+            return
+        }
+
+        val graphVersion = runCatching {
+            BiliHttpApi.getVideoPlayerInfo(
+                av = videoDetail.aid,
+                bv = videoDetail.bvid,
+                cid = videoDetail.cid,
+                sessData = sessData.ifBlank { null }
+            ).getResponseData().interaction?.graphVersion
+        }.onFailure {
+            println("Get interactive graph version failed: $it")
+        }.getOrNull()
+
+        videoDetail.interactiveGraphVersion = graphVersion
+        if (graphVersion == null) {
+            videoDetail.interactiveNodes = emptyList()
+            return
+        }
+
+        val interactiveNodes = runCatching {
+            BiliHttpApi.getInteractiveEdgeInfo(
+                bvid = videoDetail.bvid,
+                graphVersion = graphVersion,
+                sessData = sessData.ifBlank { null }
+            ).getResponseData().storyList.map(InteractiveNode::fromStoryNode)
+        }.onFailure {
+            println("Get interactive edge info failed: $it")
+        }.getOrDefault(emptyList())
+
+        videoDetail.interactiveNodes = interactiveNodes
     }
 
     suspend fun getVideoDetail(
@@ -164,6 +218,7 @@ class VideoDetailRepository(
                         userActions.favorite = isFavoured
                         this.history = history
                         this.playerIcon = playerIcon
+                        fillInteractiveInfo(this, knownInteractive = this.isInteractive)
                     }
                 }
             }
@@ -175,6 +230,7 @@ class VideoDetailRepository(
                     }) ?: throw IllegalStateException("Player stub is not initialized")
                 }.onFailure { handleGrpcException(it) }.getOrThrow()
                 VideoDetail.fromViewReply(viewReply).apply {
+                    fillInteractiveInfo(this)
                     if (playerIcon?.idle?.isBlank() != false && authRepository.sessionData != null) {
                         println("player icon not found in view reply, try to get it from garb api")
                         runCatching {

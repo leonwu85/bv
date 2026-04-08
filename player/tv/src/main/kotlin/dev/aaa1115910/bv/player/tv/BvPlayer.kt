@@ -123,6 +123,7 @@ fun BvPlayer(
     onSubtitleBottomPadding: (Dp) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit,
     onToggleRelatedVideos: (Boolean) -> Unit = {},
+    autoOpenPlayListOnVideoEnd: Boolean = false,
     onOpenUpSpace: () -> Unit = {},
     onShowDanmakuChange: (Boolean) -> Unit = {},
     onLoopPlayModeChange: (Boolean) -> Unit = {},
@@ -199,6 +200,7 @@ fun BvPlayer(
     var currentPlaySpeed by remember { mutableFloatStateOf(videoPlayerConfigData.currentVideoSpeed) }
     var aspectRatioValue by remember { mutableFloatStateOf(16f / 9f) }
     var lastPlayed by remember { mutableLongStateOf(0L) }
+    var openPlayListRequestToken by remember { mutableLongStateOf(0L) }
     
     var pendingDanmakuPosition by remember { mutableLongStateOf(-1L) }
     
@@ -644,7 +646,11 @@ fun BvPlayer(
                 if (!videoPlayerConfigData.incognitoMode) sendHeartbeat()
                 // 当控制信息面板显示时不自动播放下一集
                 if (!showInfoProvider()) {
-                    onLoadNextVideo(false)
+                    if (autoOpenPlayListOnVideoEnd) {
+                        openPlayListRequestToken = System.currentTimeMillis()
+                    } else {
+                        onLoadNextVideo(false)
+                    }
                 } else {
                     logger.info { "Skip auto next because info panel visible" }
                 }
@@ -922,6 +928,18 @@ fun BvPlayer(
                 scheduleDanmakuSeekSync(it, isPlaying)
                 videoPlayer.seekTo(it)
             },
+            onSeekToVideoEnd = {
+                mDanmakuPlayer?.pause()
+                scope.launch(Dispatchers.Main) {
+                    isPlaying = false
+                    if (!videoPlayerConfigData.incognitoMode) sendHeartbeat()
+                    if (autoOpenPlayListOnVideoEnd) {
+                        openPlayListRequestToken = System.currentTimeMillis()
+                    } else {
+                        onLoadNextVideo(true)
+                    }
+                }
+            },
             onBackToHistory = {
                 val time = if (videoPlayerConfigData.defaultStartPosition == DefaultStartPosition.History) {
                     0L
@@ -1127,6 +1145,7 @@ fun BvPlayer(
             },
             userActionContent = userActionContent,
             onLoadNextVideo = onLoadNextVideo,
+            openPlayListRequestToken = openPlayListRequestToken,
             onShowComment = onShowComment,
             onTripleLike = onTripleLike,
             useTripleLikeOnLongPress = useTripleLikeOnLongPress,
