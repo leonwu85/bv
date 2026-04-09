@@ -3,6 +3,12 @@ package dev.aaa1115910.biliapi.entity.pgc
 import dev.aaa1115910.biliapi.http.SeasonIndexType
 import dev.aaa1115910.biliapi.http.entity.web.Hover
 
+data class PgcBadge(
+    val text: String,
+    val bgColor: String = "",
+    val bgColorNight: String = ""
+)
+
 data class PgcItem(
     var cover: String,
     var title: String,
@@ -11,7 +17,9 @@ data class PgcItem(
     var episodeId: Int,
     var seasonType: SeasonIndexType,
     var rating: String,
-    var hover: Hover? = null
+    var hover: Hover? = null,
+    var badge: PgcBadge? = null,
+    var indexShow: String? = null
 ) {
     companion object {
         fun fromFeedSubItem(feedSubItem: dev.aaa1115910.biliapi.http.entity.pgc.PgcFeedData.FeedSubItem): PgcItem {
@@ -49,7 +57,13 @@ data class PgcItem(
                 episodeId = indexResultItem.firstEp.epId,
                 seasonType = SeasonIndexType.fromId(indexResultItem.seasonType),
                 rating = indexResultItem.score,
-                hover = null
+                hover = null,
+                badge = PgcBadge(
+                    text = indexResultItem.badgeInfo.text.ifBlank { indexResultItem.badge },
+                    bgColor = indexResultItem.badgeInfo.bgColor,
+                    bgColorNight = indexResultItem.badgeInfo.bgColorNight
+                ).takeIf { it.text.isNotBlank() },
+                indexShow = indexResultItem.indexShow.takeIf { it.isNotBlank() }
             )
         }
     }

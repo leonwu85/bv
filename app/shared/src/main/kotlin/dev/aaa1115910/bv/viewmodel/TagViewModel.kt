@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.aaa1115910.biliapi.entity.ugc.toSmartDate
 import dev.aaa1115910.biliapi.http.BiliHttpApi
+import dev.aaa1115910.biliapi.http.entity.video.isInteractiveVideo
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.util.addWithMainContext
 import dev.aaa1115910.bv.util.fInfo
@@ -67,7 +68,7 @@ class TagViewModel : ViewModel() {
                         danmaku = tagVideoItem.stat.danmaku,
                         time = tagVideoItem.duration * 1000L,
                         pubTime = tagVideoItem.pubdate.toLong().toSmartDate(),
-                        isInteractive = tagVideoItem.isStory || tagVideoItem.rights.isSteinGate == 1
+                        isInteractive = tagVideoItem.isInteractiveVideo
                     )
                 )
             }

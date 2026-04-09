@@ -183,14 +183,7 @@ fun PgcFeedVideoRow(
                 SeasonCard(
                     modifier = cardModifier,
                     coverHeight = 180.dp,
-                    data = SeasonCardData(
-                        seasonId = feedItem.seasonId,
-                        title = feedItem.title,
-                        subTitle = feedItem.subTitle,
-                        cover = feedItem.cover.resizedImageUrl(ImageSize.SeasonCoverThumbnail),
-                        rating = feedItem.rating,
-                        hover = feedItem.hover
-                    ),
+                    data = SeasonCardData.fromPgcItem(feedItem),
                     onClick = {
                         SeasonInfoActivity.actionStart(
                             context = context,
@@ -300,14 +293,7 @@ fun PgcFeedRankRow(
                         SeasonCard(
                             modifier = cardModifier,
                             coverHeight = 180.dp,
-                            data = SeasonCardData(
-                                seasonId = feedItem.seasonId,
-                                title = feedItem.title,
-                                subTitle = feedItem.subTitle,
-                                cover = feedItem.cover.resizedImageUrl(ImageSize.SeasonCoverThumbnail),
-                                rating = feedItem.rating,
-                                hover = feedItem.hover
-                            ),
+                            data = SeasonCardData.fromPgcItem(feedItem),
                             onClick = {
                                 SeasonInfoActivity.actionStart(
                                     context = context,

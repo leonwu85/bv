@@ -85,6 +85,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
 
+private const val DANMAKU_MASK_BITMAP_CACHE_MAX_BYTES = 64 * 1024 * 1024
+
+private fun Bitmap.safeCacheSize(): Int = if (isRecycled) 0 else byteCount
+
+private fun Bitmap.safeRecycle() {
+    if (!isRecycled) {
+        recycle()
+    }
+}
+
 @Composable
 fun BvPlayer(
     modifier: Modifier = Modifier,
@@ -210,6 +220,20 @@ fun BvPlayer(
     var pendingSeekDanmakuPosition by remember { mutableLongStateOf(-1L) }
 
     var pendingSeekDanmakuShouldPlay by remember { mutableStateOf(false) }
+    var pendingReloadDanmakuPosition by remember { mutableLongStateOf(-1L) }
+    var pendingReloadDanmakuShouldPlay by remember { mutableStateOf(false) }
+    var hasStartedPlaybackOnce by remember(videoPlayerConfigData.currentVideoCid) { mutableStateOf(false) }
+    val initialHistoryPositionSnapshot = remember(videoPlayerConfigData.currentVideoCid) {
+        videoPlayerHistoryData.lastPlayed.toLong().coerceAtLeast(0L)
+    }
+    var pendingInitialHistoryDanmakuReload by remember(videoPlayerConfigData.currentVideoCid) {
+        mutableStateOf(
+            videoPlayerConfigData.enableStartPositionSwitch && initialHistoryPositionSnapshot > 0L
+        )
+    }
+    var initialHistoryDanmakuPosition by remember(videoPlayerConfigData.currentVideoCid) {
+        mutableLongStateOf(initialHistoryPositionSnapshot)
+    }
     
     var lastDanmakuSeekTime by remember { mutableLongStateOf(0L) }
     var defaultAspectRatio by remember { mutableFloatStateOf(16 / 9f) }
@@ -224,10 +248,16 @@ fun BvPlayer(
 
     var currentDanmakuMaskFrame: DanmakuMaskFrame? by remember { mutableStateOf(null) }
     var currentDanmakuMaskBitmap: Bitmap? by remember { mutableStateOf(null) }
+    var danmakuMaskGeneration by remember { mutableLongStateOf(0L) }
+    var isDanmakuMaskDisposed by remember { mutableStateOf(false) }
 
     // 预渲染的蒙版 Bitmap 缓存
     val danmakuMaskBitmapCache = remember {
-        object : LruCache<DanmakuMaskFrame, Bitmap>(100) {
+        object : LruCache<DanmakuMaskFrame, Bitmap>(DANMAKU_MASK_BITMAP_CACHE_MAX_BYTES) {
+            override fun sizeOf(key: DanmakuMaskFrame, value: Bitmap): Int {
+                return value.safeCacheSize()
+            }
+
             override fun entryRemoved(
                 evicted: Boolean,
                 key: DanmakuMaskFrame,
@@ -235,8 +265,8 @@ fun BvPlayer(
                 newValue: Bitmap?
             ) {
                 // 当缓存条目被移除时，释放 Bitmap
-                if (evicted && !oldValue.isRecycled) {
-                    oldValue.recycle()
+                if (evicted) {
+                    oldValue.safeRecycle()
                 }
             }
         }
@@ -261,6 +291,24 @@ fun BvPlayer(
     val currentSponsorSegment by rememberUpdatedState(currentSponsorSegment)
     val currentOnShowSponsorBlockTip by rememberUpdatedState(onShowSponsorBlockTip)
     val currentOnSkipSponsorSegment by rememberUpdatedState(onSkipSponsorSegment)
+    val currentDanmakuMasks by rememberUpdatedState(videoPlayerDanmakuMaskData.danmakuMasks)
+    val currentIsPlaying by rememberUpdatedState(isPlaying)
+    val currentDanmakuMaskEnabled by rememberUpdatedState(videoPlayerConfigData.currentDanmakuMask)
+    val currentIsLive by rememberUpdatedState(videoPlayerConfigData.isLive)
+    val currentVideoCid by rememberUpdatedState(videoPlayerConfigData.currentVideoCid)
+
+    // 独立弹幕层句柄（Stable），父级重组频率降低
+    val danmakuLayerHandle = remember { DanmakuLayerHandle(initialIsLiveMode = isLive) }
+
+    val clearDanmakuMaskState: (Boolean) -> Unit = { clearCache ->
+        danmakuMaskGeneration++
+        currentDanmakuMaskFrame = null
+        currentDanmakuMaskBitmap = null
+        danmakuLayerHandle.update(mask = null, bitmap = null)
+        if (clearCache) {
+            danmakuMaskBitmapCache.evictAll()
+        }
+    }
 
     // 当 clipInfoList 变化时，重置已处理的 clip 索引
     // 这确保了切换到新视频时，跳过片头/片尾功能能够正常工作
@@ -282,6 +330,12 @@ fun BvPlayer(
         pendingSeekDanmakuShouldPlay = shouldPlayAfterSeek
         mDanmakuPlayer?.pause()
         syncProcessedSponsorSegmentsForPosition(targetPosition)
+    }
+
+    val scheduleDanmakuReload: (Long, Boolean) -> Unit = { targetPosition, shouldPlayAfterSeek ->
+        pendingReloadDanmakuPosition = targetPosition
+        pendingReloadDanmakuShouldPlay = shouldPlayAfterSeek
+        onReloadDanmakuAfterSeek(targetPosition, shouldPlayAfterSeek)
     }
 
     // 跳过片头片尾检测任务
@@ -331,34 +385,66 @@ fun BvPlayer(
         }
     }
 
-    val updateDanmakuMaskForPosition: suspend (Long) -> Unit = { position ->
-        val maskFrame = DanmakuMaskFinder.findMaskFrame(
-            videoPlayerDanmakuMaskData.danmakuMasks,
-            position
-        )
+    val updateDanmakuMaskForPosition: suspend (Long) -> Unit = update@{ position ->
+        if (isDanmakuMaskDisposed) return@update
+
+        val expectedGeneration = danmakuMaskGeneration
+        val expectedVideoCid = currentVideoCid
+        val maskFrame = DanmakuMaskFinder.findMaskFrame(currentDanmakuMasks, position)
 
         // 只有找到新帧时才更新，null 时保持当前蒙版（避免帧空隙导致蒙版闪烁）
         if (maskFrame != null && currentDanmakuMaskFrame != maskFrame) {
+            val cachedBitmap = danmakuMaskBitmapCache.get(maskFrame)?.also { bitmap ->
+                if (bitmap.isRecycled) {
+                    danmakuMaskBitmapCache.remove(maskFrame)
+                }
+            }?.takeUnless { it.isRecycled }
+
             // 优先使用缓存中的 Bitmap，避免实时渲染
-            val bitmap = danmakuMaskBitmapCache.get(maskFrame) ?: run {
+            val bitmap = cachedBitmap ?: run {
                 // 缓存未命中，实时渲染并缓存
                 val renderedBitmap = withContext(Dispatchers.Default) {
                     renderMaskFrameToBitmap(maskFrame)
                 }
+
+                if (
+                    isDanmakuMaskDisposed ||
+                    expectedGeneration != danmakuMaskGeneration ||
+                    expectedVideoCid != currentVideoCid ||
+                    renderedBitmap.isRecycled
+                ) {
+                    renderedBitmap.safeRecycle()
+                    return@update
+                }
+
                 danmakuMaskBitmapCache.put(maskFrame, renderedBitmap)
                 renderedBitmap
             }
+
+            if (
+                isDanmakuMaskDisposed ||
+                expectedGeneration != danmakuMaskGeneration ||
+                expectedVideoCid != currentVideoCid ||
+                bitmap.isRecycled
+            ) {
+                return@update
+            }
+
             withContext(Dispatchers.Main) {
+                if (
+                    isDanmakuMaskDisposed ||
+                    expectedGeneration != danmakuMaskGeneration ||
+                    expectedVideoCid != currentVideoCid ||
+                    bitmap.isRecycled
+                ) {
+                    return@withContext
+                }
                 currentDanmakuMaskFrame = maskFrame
                 currentDanmakuMaskBitmap = bitmap
             }
         }
         // 如果 maskFrame 为 null（帧空隙），不做任何操作，保持当前蒙版
     }
-
-
-    // 独立弹幕层句柄（Stable），父级重组频率降低
-    val danmakuLayerHandle = remember { DanmakuLayerHandle(initialIsLiveMode = isLive) }
 
     // 设置直播弹幕回调，保存引用并同步配置
     LaunchedEffect(onLiveDanmakuPlayerReady) {
@@ -486,6 +572,14 @@ fun BvPlayer(
         lastPlayed = videoPlayerHistoryData.lastPlayed.toLong()
     }
 
+    LaunchedEffect(videoPlayerConfigData.currentVideoCid, videoPlayerHistoryData.lastPlayed) {
+        val historyPosition = videoPlayerHistoryData.lastPlayed.toLong().coerceAtLeast(0L)
+        if (historyPosition > 0L && initialHistoryDanmakuPosition <= 0L) {
+            initialHistoryDanmakuPosition = historyPosition
+            pendingInitialHistoryDanmakuReload = videoPlayerConfigData.enableStartPositionSwitch
+        }
+    }
+
     LaunchedEffect(videoPlayerVideoInfoData.width, videoPlayerVideoInfoData.height) {
         val newAspectRatio =
             videoPlayerVideoInfoData.width / videoPlayerVideoInfoData.height.toFloat()
@@ -560,6 +654,7 @@ fun BvPlayer(
         override fun onPlay() {
             logger.info { "onPlay" }
             scope.launch(Dispatchers.Main) {
+                hasStartedPlaybackOnce = true
                 val wasPlaying = isPlaying
                 isPlaying = true
                 isBuffering = false
@@ -569,6 +664,14 @@ fun BvPlayer(
                     logger.info {
                         "onPlay: defer danmaku sync until onSeeked, pending=${pendingSeekDanmakuPosition.formatHourMinSec()}"
                     }
+                    return@launch
+                }
+
+                if (pendingInitialHistoryDanmakuReload && initialHistoryDanmakuPosition > 0L) {
+                    logger.info {
+                        "onPlay: defer initial history danmaku rebuild until progress reaches ${initialHistoryDanmakuPosition.formatHourMinSec()}"
+                    }
+                    updateBackToHistory()
                     return@launch
                 }
 
@@ -681,7 +784,34 @@ fun BvPlayer(
             pendingSeekDanmakuPosition = -1L
             pendingSeekDanmakuShouldPlay = false
 
-            onReloadDanmakuAfterSeek(syncPosition, shouldPlayAfterSeek)
+            val isInitialHistorySeek =
+                pendingInitialHistoryDanmakuReload &&
+                    initialHistoryDanmakuPosition > 0L &&
+                    kotlin.math.abs(syncPosition - initialHistoryDanmakuPosition) <= 1_500L
+            val isStartupSeekBeforePlay =
+                !hasStartedPlaybackOnce &&
+                    syncPosition > 0L &&
+                    pendingSeekDanmakuPosition < 0L
+            if (isStartupSeekBeforePlay) {
+                initialHistoryDanmakuPosition = syncPosition
+                pendingInitialHistoryDanmakuReload = true
+                logger.info {
+                    "onSeeked: treat startup seek as initial history seek, defer danmaku rebuild until playback progresses to ${syncPosition.formatHourMinSec()}"
+                }
+                lastDanmakuSeekTime = System.currentTimeMillis()
+                lastHeartbeatPosition = syncPosition
+                return
+            }
+            if (isInitialHistorySeek) {
+                logger.info {
+                    "onSeeked: detected initial history seek, defer danmaku rebuild until playback progresses to ${initialHistoryDanmakuPosition.formatHourMinSec()}"
+                }
+                lastDanmakuSeekTime = System.currentTimeMillis()
+                lastHeartbeatPosition = syncPosition
+                return
+            }
+
+            scheduleDanmakuReload(syncPosition, shouldPlayAfterSeek)
             lastDanmakuSeekTime = System.currentTimeMillis()
             lastHeartbeatPosition = syncPosition
         }
@@ -707,6 +837,18 @@ fun BvPlayer(
                 if (seekState.position != pos) seekState.position = pos
                 if (seekState.duration != dur) seekState.duration = dur
                 if (seekState.bufferedPercentage != buf) seekState.bufferedPercentage = buf
+
+                if (pendingInitialHistoryDanmakuReload && isPlaying && initialHistoryDanmakuPosition > 0L) {
+                    val triggerPosition = (initialHistoryDanmakuPosition - 1_500L).coerceAtLeast(0L)
+                    if (pos >= triggerPosition) {
+                        pendingInitialHistoryDanmakuReload = false
+                        logger.info {
+                            "onProgress: rebuild danmaku after initial history seek, current=${pos.formatHourMinSec()}, target=${initialHistoryDanmakuPosition.formatHourMinSec()}"
+                        }
+                        scheduleDanmakuReload(initialHistoryDanmakuPosition, true)
+                        return@launch
+                    }
+                }
 
                 if (currentSkipPgcIntroOutro && currentClipInfoList.isNotEmpty() && isPlaying) {
                     checkSkipTask(pos)
@@ -749,18 +891,17 @@ fun BvPlayer(
         focusRequester.requestFocus(scope)
     }
 
-    // 使用 rememberUpdatedState 确保获取最新的蒙版数据
-    val currentDanmakuMasks by rememberUpdatedState(videoPlayerDanmakuMaskData.danmakuMasks)
-    val currentIsPlaying by rememberUpdatedState(isPlaying)
-    val currentDanmakuMaskEnabled by rememberUpdatedState(videoPlayerConfigData.currentDanmakuMask)
-    val currentIsLive by rememberUpdatedState(videoPlayerConfigData.isLive)
-
     // 独立定时器：高频更新蒙版（每 33ms，约 30fps）
     // 直播模式下不启用蒙版
     LaunchedEffect(Unit) {
         while (true) {
+            if (isDanmakuMaskDisposed) break
+
             if (!currentIsLive && currentDanmakuMasks.isNotEmpty() && currentIsPlaying && currentDanmakuMaskEnabled) {
-                val position = videoPlayer.currentPosition
+                val position = runCatching { videoPlayer.currentPosition }.getOrElse {
+                    logger.warn(it) { "Read currentPosition for danmaku mask failed" }
+                    -1L
+                }
                 if (position >= 0) {
                     updateDanmakuMaskForPosition(position)
                 }
@@ -770,8 +911,10 @@ fun BvPlayer(
     }
 
     // 当蒙版数据变化时，清除旧缓存
-    LaunchedEffect(videoPlayerDanmakuMaskData.danmakuMasks.size) {
-        danmakuMaskBitmapCache.evictAll()
+    LaunchedEffect(videoPlayerConfigData.currentVideoCid, videoPlayerDanmakuMaskData.danmakuMasks.size) {
+        if (!isDanmakuMaskDisposed) {
+            clearDanmakuMaskState(true)
+        }
     }
 
     LaunchedEffect(videoPlayerConfigData.isLoop, videoPlayerConfigData.showDanmaku) {
@@ -787,6 +930,22 @@ fun BvPlayer(
             true,
             false
         )
+        val reloadPosition = pendingReloadDanmakuPosition.takeIf { it >= 0L }
+        if (reloadPosition != null) {
+            mDanmakuPlayer?.seekTo(reloadPosition)
+            if (pendingReloadDanmakuShouldPlay) {
+                mDanmakuPlayer?.start()
+            } else {
+                mDanmakuPlayer?.pause()
+            }
+            lastDanmakuSeekTime = System.currentTimeMillis()
+            lastHeartbeatPosition = reloadPosition
+            logger.info {
+                "Resume rebuilt danmaku player at ${reloadPosition.formatHourMinSec()}, shouldPlay=$pendingReloadDanmakuShouldPlay"
+            }
+            pendingReloadDanmakuPosition = -1L
+            pendingReloadDanmakuShouldPlay = false
+        }
     }
 
     // Sync currentDanmakuArea -> danmakuConfig.screenPart
@@ -822,6 +981,8 @@ fun BvPlayer(
 
     DisposableEffect(Unit) {
         onDispose {
+            isDanmakuMaskDisposed = true
+
             // 在释放播放器前发送心跳，确保退出时进度被正确记录
             if (!videoPlayerConfigData.incognitoMode && !videoPlayerConfigData.isLive) {
                 // 获取当前时间并直接调用上传方法
@@ -841,6 +1002,8 @@ fun BvPlayer(
                 }
             }
 
+            clearDanmakuMaskState(true)
+
             // 先暂停播放，防止渲染线程继续工作
             videoPlayer.pause()
 
@@ -851,11 +1014,6 @@ fun BvPlayer(
             }
 
             videoPlayer.release()
-
-            // 清理蒙版 Bitmap 缓存，释放内存
-            danmakuMaskBitmapCache.evictAll()
-            currentDanmakuMaskBitmap = null
-            currentDanmakuMaskFrame = null
         }
     }
 

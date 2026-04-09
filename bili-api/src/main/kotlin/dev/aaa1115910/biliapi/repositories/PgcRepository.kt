@@ -29,7 +29,7 @@ class PgcRepository {
     }
 
     suspend fun getFeed(pgcType: PgcType, cursor: Int): PgcFeedData {
-        val data = when (pgcType) {
+        return when (pgcType) {
             PgcType.Anime, PgcType.GuoChuang -> PgcFeedData.fromPgcFeedData(
                 BiliHttpApi.getPgcFeedV3(
                     name = pgcType.name.lowercase(),
@@ -37,14 +37,38 @@ class PgcRepository {
                 ).getResponseData()
             )
 
-            PgcType.Movie, PgcType.Tv, PgcType.Documentary, PgcType.Variety -> PgcFeedData.fromPgcFeedData(
-                BiliHttpApi.getPgcFeed(
-                    name = pgcType.name.lowercase(),
-                    cursor = cursor
-                ).getResponseData()
+            PgcType.Movie, PgcType.Tv, PgcType.Documentary, PgcType.Variety -> getIndexFeed(
+                pgcType = pgcType,
+                cursor = cursor
             )
         }
-        return data
+    }
+
+    private suspend fun getIndexFeed(pgcType: PgcType, cursor: Int): PgcFeedData {
+        val page = cursor.takeIf { it > 0 } ?: 1
+        val indexData = getPgcIndex(
+            pgcType = pgcType,
+            indexOrder = IndexOrder.getList(pgcType).first(),
+            indexOrderType = IndexOrderType.Desc,
+            seasonVersion = SeasonVersion.All,
+            spokenLanguage = SpokenLanguage.All,
+            area = Area.All,
+            isFinish = IsFinish.All,
+            copyright = Copyright.All,
+            seasonStatus = SeasonStatus.All,
+            seasonMonth = SeasonMonth.All,
+            producer = Producer.All,
+            year = Year.All,
+            releaseDate = ReleaseDate.All,
+            style = Style.All,
+            page = PgcIndexData.PgcIndexPage(nextPage = page)
+        )
+        return PgcFeedData(
+            hasNext = indexData.nextPage.hasNext,
+            cursor = indexData.nextPage.nextPage,
+            items = indexData.list,
+            ranks = emptyList()
+        )
     }
 
     suspend fun getPgcIndex(

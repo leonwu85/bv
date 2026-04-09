@@ -5,6 +5,7 @@ import bilibili.app.view.v1.ViewReply
 import bilibili.app.view.v1.ugcSeasonOrNull
 import dev.aaa1115910.biliapi.entity.user.Author
 import dev.aaa1115910.biliapi.entity.video.season.UgcSeason
+import dev.aaa1115910.biliapi.http.entity.video.isInteractiveVideo
 import dev.aaa1115910.biliapi.http.entity.video.VideoStat
 import java.util.Date
 
@@ -116,7 +117,7 @@ data class VideoDetail(
                 epid = videoDetail.view.redirectUrl?.split("ep", "?")?.get(1)?.toInt(),
                 argueTip = videoDetail.view.stat.argueMsg.takeIf { it.isNotEmpty() },
                 tags = videoDetail.tags.map { Tag.fromTag(it) },
-                isInteractive = videoDetail.view.isStory || videoDetail.view.rights.isSteinGate == 1,
+                isInteractive = videoDetail.view.isInteractiveVideo,
                 userActions = UserActions(),
                 history = History(0, 0),
                 playerIcon = null,

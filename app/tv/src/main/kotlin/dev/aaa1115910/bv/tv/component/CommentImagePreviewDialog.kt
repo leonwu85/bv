@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,7 +48,6 @@ import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import coil.size.Size
 import dev.aaa1115910.biliapi.entity.Picture
 import kotlinx.coroutines.delay
 import kotlin.math.max
@@ -71,10 +71,12 @@ fun CommentImagePreviewDialog(
     var offsetY by remember(show, pictures, initialIndex) { mutableFloatStateOf(0f) }
     var previewAreaSize by remember { mutableStateOf(IntSize.Zero) }
     val imageFocusRequester = remember { FocusRequester() }
-    val previewImageRequest = remember(context, pictures, currentIndex) {
+    val requestWidth = previewAreaSize.width.takeIf { it > 0 } ?: 1920
+    val requestHeight = previewAreaSize.height.takeIf { it > 0 } ?: 1080
+    val previewImageRequest = remember(context, pictures, currentIndex, requestWidth, requestHeight) {
         ImageRequest.Builder(context)
             .data(pictures[currentIndex].url)
-            .size(Size.ORIGINAL)
+            .size(requestWidth, requestHeight)
             .allowHardware(false)
             .build()
     }
@@ -128,23 +130,30 @@ fun CommentImagePreviewDialog(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = "图片预览 ${currentIndex + 1}/${pictures.size}",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White
-                )
-                Text(
-                    text = if (pictures.size > 1) {
-                        "图片区左右键切换，下键进入工具栏，返回键关闭"
-                    } else {
-                        "下键进入工具栏，返回键关闭"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.7f)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "图片预览 ${currentIndex + 1}/${pictures.size}",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White
+                    )
+                    Text(
+                        text = if (pictures.size > 1) {
+                            "左右键切换，下键进工具栏，返回键关闭"
+                        } else {
+                            "下键进工具栏，返回键关闭"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = 0.7f)
+                    )
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()

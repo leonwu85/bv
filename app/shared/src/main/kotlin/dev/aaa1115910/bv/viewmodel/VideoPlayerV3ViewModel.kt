@@ -189,7 +189,25 @@ class VideoPlayerV3ViewModel(
         addAll(Prefs.defaultDanmakuTypes)
     }
     var currentDanmakuArea by mutableFloatStateOf(Prefs.defaultDanmakuArea)
-    var currentDanmakuMask by mutableStateOf(Prefs.defaultDanmakuMask)
+    private var currentDanmakuMaskState by mutableStateOf(Prefs.defaultDanmakuMask)
+    var currentDanmakuMask: Boolean
+        get() = currentDanmakuMaskState
+        set(value) {
+            if (currentDanmakuMaskState == value) return
+
+            currentDanmakuMaskState = value
+
+            if (isLive) return
+
+            if (!value) return
+
+            if (currentAid <= 0 || currentCid <= 0) return
+            if (hasResolvedCurrentDanmakuMask()) return
+
+            viewModelScope.launch(Dispatchers.Default) {
+                updateDanmakuMask()
+            }
+        }
     var currentDanmakuFilterLevel by mutableIntStateOf(Prefs.defaultDanmakuFilterLevel)
     var currentDanmakuMergeEnabled by mutableStateOf(Prefs.defaultDanmakuMergeEnabled)
     var currentLiveDanmakuFilterLevel by mutableIntStateOf(Prefs.defaultLiveDanmakuFilterLevel)
@@ -304,6 +322,9 @@ class VideoPlayerV3ViewModel(
     var currentInteractiveNodeId by mutableLongStateOf(0L)
     var currentInteractiveEdgeId by mutableLongStateOf(0L)
     private var currentEpid = 0
+    private var resolvedDanmakuMaskAid = 0L
+    private var resolvedDanmakuMaskCid by mutableLongStateOf(0L)
+    private var hasResolvedDanmakuMask by mutableStateOf(false)
 
     // SponsorBlock 相关状态
     var enableSponsorBlock by mutableStateOf(Prefs.enableSponsorBlock)
@@ -326,6 +347,24 @@ class VideoPlayerV3ViewModel(
         val endPositionMs: Long,
         val items: List<DanmakuItemData>
     )
+
+    private fun hasResolvedCurrentDanmakuMask(): Boolean {
+        return hasResolvedDanmakuMask &&
+                resolvedDanmakuMaskAid == currentAid &&
+                resolvedDanmakuMaskCid == currentCid
+    }
+
+    private fun resetResolvedDanmakuMask(clearMasks: Boolean) {
+        hasResolvedDanmakuMask = false
+        resolvedDanmakuMaskAid = 0L
+        resolvedDanmakuMaskCid = 0L
+
+        if (clearMasks) {
+            viewModelScope.launch(Dispatchers.Main.immediate) {
+                danmakuMasks.clear()
+            }
+        }
+    }
 
     private suspend fun ensureDanmakuPlayer(isLive: Boolean = false) = withContext(Dispatchers.Main) {
         danmakuLoadJob?.cancel()
@@ -360,9 +399,13 @@ class VideoPlayerV3ViewModel(
         initialSeekPositionMs: Long? = null,
     ) {
         val playbackSessionToken = beginVodPlaybackSession()
+        val videoChanged = currentAid != avid || currentCid != cid
         showInteractiveOptionDialog = false
         if (continuePlayNext) {
             lastPlayed = 0
+        }
+        if (videoChanged) {
+            resetResolvedDanmakuMask(clearMasks = true)
         }
         currentAid = avid
         currentCid = cid
@@ -1770,15 +1813,34 @@ class VideoPlayerV3ViewModel(
         // 直播模式不获取蒙版数据
         if (isLive) return
 
+        if (!currentDanmakuMask) return
+        if (hasResolvedCurrentDanmakuMask()) return
+
+        val targetAid = currentAid
+        val targetCid = currentCid
+
         runCatching {
             val masks = videoPlayRepository.getDanmakuMask(
-                aid = currentAid,
-                cid = currentCid,
+                aid = targetAid,
+                cid = targetCid,
                 preferApiType = Prefs.apiType
             )
+
+            if (targetAid != currentAid || targetCid != currentCid) {
+                return@runCatching
+            }
+
             danmakuMasks.swapListWithMainContext(masks)
+            resolvedDanmakuMaskAid = targetAid
+            resolvedDanmakuMaskCid = targetCid
+            hasResolvedDanmakuMask = true
             logger.fInfo { "Load danmaku mask size: ${danmakuMasks.size}" }
         }.onFailure {
+            if (targetAid == currentAid && targetCid == currentCid) {
+                hasResolvedDanmakuMask = false
+                resolvedDanmakuMaskAid = 0L
+                resolvedDanmakuMaskCid = 0L
+            }
             logger.fWarn { "Load danmaku mask failed: ${it.stackTraceToString()}" }
         }
     }

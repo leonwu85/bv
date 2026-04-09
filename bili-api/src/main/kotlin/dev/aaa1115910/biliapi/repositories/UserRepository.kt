@@ -228,7 +228,9 @@ class UserRepository(
                     type = "video",
                     page = page,
                     offset = offset,
-                    sessData = authRepository.sessionData ?: ""
+                    sessData = authRepository.sessionData,
+                    dedeUserID = authRepository.mid,
+                    buvid3 = authRepository.buvid3
                 ).getResponseData()
                 DynamicVideoData.fromDynamicData(responseData)
             }
@@ -270,33 +272,35 @@ class UserRepository(
         preferApiType: ApiType = ApiType.Web
     ): DynamicData {
         return when (preferApiType) {
-            ApiType.Web -> {
+            ApiType.Web, ApiType.App -> {
                 val responseData = BiliHttpApi.getDynamicList(
                     type = type,
                     page = page,
                     offset = offset,
-                    sessData = authRepository.sessionData ?: ""
+                    sessData = authRepository.sessionData,
+                    dedeUserID = authRepository.mid,
+                    buvid3 = authRepository.buvid3
                 ).getResponseData()
                 DynamicData.fromDynamicData(responseData)
             }
 
-            ApiType.App -> {
-                var result: DynamicData? = null
-                runCatching {
-                    val dynAllReply = dynamicStub?.dynAll(dynAllReq {
-                        this.page = page
-                        this.offset = offset
-                        this.updateBaseline = updateBaseline
-                        localTime = 8
-                        refreshType =
-                            if (offset == "") Refresh.refresh_new else Refresh.refresh_history
-                    })
-                    result = DynamicData.fromDynamicData(dynAllReply!!)
-                }.onFailure {
-                    handleGrpcException(it)
-                }
-                result!!
-            }
+//            ApiType.App -> {
+//                var result: DynamicData? = null
+//                runCatching {
+//                    val dynAllReply = dynamicStub?.dynAll(dynAllReq {
+//                        this.page = page
+//                        this.offset = offset
+//                        this.updateBaseline = updateBaseline
+//                        localTime = 8
+//                        refreshType =
+//                            if (offset == "") Refresh.refresh_new else Refresh.refresh_history
+//                    })
+//                    result = DynamicData.fromDynamicData(dynAllReply!!)
+//                }.onFailure {
+//                    handleGrpcException(it)
+//                }
+//                result!!
+//            }
         }
     }
 

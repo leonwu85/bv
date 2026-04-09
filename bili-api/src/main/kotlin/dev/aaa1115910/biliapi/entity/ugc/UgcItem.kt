@@ -2,6 +2,7 @@ package dev.aaa1115910.biliapi.entity.ugc
 
 import dev.aaa1115910.biliapi.http.entity.home.RcmdIndexData
 import dev.aaa1115910.biliapi.http.entity.home.RcmdTopData
+import dev.aaa1115910.biliapi.http.entity.video.isInteractiveVideo
 import dev.aaa1115910.biliapi.util.convertStringTimeToSeconds
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -82,7 +83,7 @@ data class UgcItem(
                 play = videoInfo.stat.view,
                 danmaku = videoInfo.stat.danmaku,
                 pubTime = videoInfo.pubdate.smartDate,
-                isInteractive = videoInfo.isStory || videoInfo.rights.isSteinGate == 1
+                isInteractive = videoInfo.isInteractiveVideo
             )
 
         fun fromSmallCoverV5(card: bilibili.app.card.v1.SmallCoverV5) =

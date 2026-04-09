@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.tv.component.videocard
 
+import android.graphics.Color as AndroidColor
 import android.content.res.Configuration
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.runtime.Composable
@@ -25,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -95,6 +98,28 @@ fun SeasonCard(
             Box(
                 contentAlignment = Alignment.BottomCenter
             ) {
+                val badge = data.badge
+                val fallbackTopRightText = data.hover?.text?.let { textList ->
+                    val lastText = textList.lastOrNull()
+                    if (lastText != null && lastText.matches(Regex("^\\d+(\\.\\d+)?分$"))) {
+                        textList.getOrNull(textList.size - 2)
+                    } else {
+                        lastText
+                    }
+                }
+                val topRightText = badge?.text?.takeIf { it.isNotBlank() } ?: fallbackTopRightText
+                val topRightBackground = if (badge != null) {
+                    parseBadgeColor(
+                        color = if (isSystemInDarkTheme()) badge.bgColorNight else badge.bgColor,
+                        fallback = Color.Black.copy(alpha = 0.5f)
+                    )
+                } else {
+                    Color.Black.copy(alpha = 0.5f)
+                }
+                val coverLabel = data.coverLabel?.takeIf {
+                    it.isNotBlank() && shouldShowCoverLabel(it)
+                }
+
                 AsyncImage(
                     modifier = coverModifier
                         .aspectRatio(0.765f)
@@ -106,32 +131,47 @@ fun SeasonCard(
                     contentScale = ContentScale.FillBounds
                 )
 
-                // 右上角显示hover.text的最后一个字符串
-                // 如果最后一个是评分格式（如"9.5分"），则显示倒数第二个
-                data.hover?.text?.let { textList ->
-                    val lastText = textList.lastOrNull()
-                    val displayText = if (lastText != null && lastText.matches(Regex("^\\d+(\\.\\d+)?分$"))) {
-                        textList.getOrNull(textList.size - 2)
-                    } else {
-                        lastText
-                    }
-                    displayText?.let {
-                        Text(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(5.dp)
-                                .fillMaxWidth(0.5f)
-                                .background(
-                                    color = Color.Black.copy(0.5f),
-                                    shape = MaterialTheme.shapes.extraSmall
-                                )
-                                .padding(vertical = 2.dp, horizontal = 4.dp),
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                if (topRightText != null || coverLabel != null) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        topRightText?.let {
+                            Text(
+                                modifier = Modifier
+                                    .widthIn(max = coverRealWidth * 0.85f)
+                                    .background(
+                                        color = topRightBackground,
+                                        shape = MaterialTheme.shapes.extraSmall
+                                    )
+                                    .padding(vertical = 3.dp, horizontal = 6.dp),
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        coverLabel?.let {
+                            Text(
+                                modifier = Modifier
+                                    .padding(top = if (topRightText != null) 4.dp else 0.dp)
+                                    .widthIn(max = coverRealWidth * 0.85f)
+                                    .background(
+                                        color = Color.Black.copy(alpha = 0.6f),
+                                        shape = MaterialTheme.shapes.extraSmall
+                                    )
+                                    .padding(vertical = 3.dp, horizontal = 4.dp),
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White,
+                                textAlign = TextAlign.End,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
 
@@ -188,6 +228,17 @@ fun SeasonCard(
     }
 }
 
+private fun parseBadgeColor(color: String, fallback: Color): Color {
+    return runCatching {
+        Color(AndroidColor.parseColor(color))
+    }.getOrDefault(fallback)
+}
+
+private fun shouldShowCoverLabel(text: String): Boolean {
+    val containsReleaseDate = Regex("\\d{4}年\\d{1,2}月\\d{1,2}日").containsMatchIn(text)
+    return !(text.contains("上映") && containsReleaseDate)
+}
+
 @Preview(device = "id:tv_1080p")
 @Preview(device = "id:tv_1080p", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
@@ -203,6 +254,7 @@ private fun SeasonCardPreview() {
                             cover = "http://i0.hdslb.com/bfs/bangumi/image/8d211c396aad084d6fa413015200dda6ed260768.png",
                             rating = "8.6",
                             hover = Hover(text = listOf("更新到 12集"), img = ""),
+                            coverLabel = "全 25 集"
                         )
                     )
                 }

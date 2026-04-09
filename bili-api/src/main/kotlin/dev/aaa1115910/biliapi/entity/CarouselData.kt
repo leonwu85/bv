@@ -36,8 +36,8 @@ data class CarouselData(
                     CarouselItem(
                         cover = cover,
                         title = it.title,
-                        seasonId = it.seasonId ?: ssidFromUrl ?: -1,
-                        episodeId = it.episodeId ?: epidFromUrl ?: -1
+                        seasonId = it.seasonId ?: ssidFromUrl,
+                        episodeId = it.episodeId ?: epidFromUrl
                     )
                 )
             }

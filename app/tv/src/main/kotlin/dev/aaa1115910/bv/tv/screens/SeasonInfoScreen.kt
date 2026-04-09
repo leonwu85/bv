@@ -4,13 +4,11 @@ import android.app.Activity
 import android.content.res.Configuration
 import android.os.Build
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +20,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -38,9 +35,8 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.ViewModule
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -66,6 +62,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
@@ -91,8 +88,6 @@ import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import coil.transform.BlurTransformation
 import dev.aaa1115910.biliapi.entity.video.season.Episode
 import dev.aaa1115910.biliapi.entity.video.season.PgcSeason
 import dev.aaa1115910.biliapi.entity.video.season.Section
@@ -108,9 +103,7 @@ import dev.aaa1115910.bv.tv.component.buttons.SeasonInfoButtons
 import dev.aaa1115910.bv.tv.util.launchPlayerActivity
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.ImageSize
-import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
-import dev.aaa1115910.bv.util.focusedBorder
 import dev.aaa1115910.bv.util.focusedScale
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.onBackPressed
@@ -154,7 +147,6 @@ private fun generateEpisodeTitle(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SeasonInfoScreen(
     modifier: Modifier = Modifier,
@@ -170,7 +162,7 @@ fun SeasonInfoScreen(
     var paused by remember { mutableStateOf(false) }
     var showSeasonSelector by remember { mutableStateOf(false) }
     var showCommentPanel by remember { mutableStateOf(false) }
-    val usePureBlackBackground = !Prefs.showUGCVideoInfo
+    var showDescriptionDialog by remember { mutableStateOf(false) }
     val playButtonFocusRequester = remember { FocusRequester() }
     val commentButtonFocusRequester = remember { FocusRequester() }
 
@@ -233,9 +225,9 @@ fun SeasonInfoScreen(
 
     LaunchedEffect(Unit) {
         videoInfoRepository.relatedVideos.clear()
-        
-        val epId = intent.getIntExtra("epid", 0)
-        val seasonId = intent.getIntExtra("seasonid", 0)
+
+        val epId = intent.getIntExtra("epid", 0).takeIf { it > 0 }
+        val seasonId = intent.getIntExtra("seasonid", 0).takeIf { it > 0 }
         val proxyAreaIndex = intent.getIntExtra("proxy_area", 0)
         val proxyArea = ProxyArea.entries[proxyAreaIndex]
         logger.fInfo { "Read extras from content: [epId=$epId, seasonId=$seasonId, proxyArea=$proxyArea]" }
@@ -288,9 +280,8 @@ fun SeasonInfoScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(if (usePureBlackBackground) Color.Black else MaterialTheme.colorScheme.surface),
+                .background(Color.Black),
             contentAlignment = Alignment.Center
-
         ) {
             if (seasonViewModel.tip == "Loading") {
                 LoadingTip()
@@ -303,73 +294,100 @@ fun SeasonInfoScreen(
     } else {
         val seasonData = seasonViewModel.seasonData!!
 
-        // 计算模糊背景图片：优先使用历史记录那一集的 cover，否则使用正片的最后一集的 cover
-        val blurBackgroundCover = remember(seasonData, seasonViewModel.lastPlayProgress) {
-            val lastEpId = seasonViewModel.lastPlayProgress?.lastEpId
-            if (lastEpId != null) {
-                // 有历史记录，先从正片中查找
-                seasonData.episodes.find { it.id == lastEpId }?.cover
-                    // 如果正片中没有，再从其他章节中查找
-                    ?: seasonData.sections.flatMap { it.episodes }.find { it.id == lastEpId }?.cover
-            } else {
-                null
-            }
-            // 如果没有历史记录或找不到对应剧集，使用正片的最后一集的 cover
+        val heroBackgroundCover = remember(seasonData, seasonViewModel.lastPlayProgress) {
+            seasonData.seasons.find { it.seasonId == seasonData.seasonId }?.horizontalCover
+                ?: run {
+                    val lastEpId = seasonViewModel.lastPlayProgress?.lastEpId
+                    if (lastEpId != null) {
+                        seasonData.episodes.find { it.id == lastEpId }?.cover
+                            ?: seasonData.sections.flatMap { it.episodes }.find { it.id == lastEpId }?.cover
+                    } else null
+                }
                 ?: seasonData.episodes.lastOrNull()?.cover
-                // 如果正片也没有，使用番剧封面
                 ?: seasonData.cover
         }
 
-        Scaffold(
-            modifier = modifier,
-            containerColor = if (usePureBlackBackground) Color.Black else MaterialTheme.colorScheme.surface
-        ) { innerPadding ->
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(if (usePureBlackBackground) Color.Black else Color.Transparent)
-                    .padding(innerPadding)
-            ) {
-                if (!usePureBlackBackground) {
-                    // 图片加载成功后，动画 alpha，从 0 -> 0.6f
-                    val bgLoaded = remember { mutableStateOf(false) }
-                    val animatedAlpha by animateFloatAsState(
-                        targetValue = if (bgLoaded.value) 0.6f else 0f,
-                        animationSpec = tween(durationMillis = 500)
-                    )
-                    AsyncImage(
-                        modifier = Modifier.fillMaxSize(),
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(blurBackgroundCover)
-                            .transformations(BlurTransformation(LocalContext.current, 20f, 5f))
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        alpha = animatedAlpha,
-                        onSuccess = { bgLoaded.value = true },
-                        onError = { bgLoaded.value = false }
-                    )
-                }
+        // 背景图加载动画
+        val bgLoaded = remember { mutableStateOf(false) }
+        val bgAnimatedAlpha by animateFloatAsState(
+            targetValue = if (bgLoaded.value) 1f else 0f,
+            animationSpec = tween(durationMillis = 600),
+            label = "hero bg alpha"
+        )
 
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item {
-                        SeasonInfoPart(
-                            playButtonFocusRequester = playButtonFocusRequester,
-                            title = seasonData.title,
-                            cover = seasonData.cover,
-                            newEpDesc = seasonData.newEpDesc,
-                            description = seasonData.description,
-                            lastPlayedIndex = seasonViewModel.lastPlayProgress?.lastEpId ?: -1,
-                            lastPlayedTitle = generateEpisodeTitle(seasonData.episodes.find { it.id == seasonViewModel.lastPlayProgress?.lastEpId }, seasonData.title),
-                            following = seasonViewModel.isFollowing,
-                            isPublished = seasonData.publish.isPublished,
-                            publishDate = seasonData.publish.publishDate,
-                            seasonCount = seasonData.seasons.size,
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            AsyncImage(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(LocalConfiguration.current.screenHeightDp.dp * 0.6f),
+                model = heroBackgroundCover,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alpha = bgAnimatedAlpha,
+                onSuccess = { bgLoaded.value = true },
+                onError = { bgLoaded.value = false }
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(LocalConfiguration.current.screenHeightDp.dp * 0.6f)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.9f),
+                                Color.Black.copy(alpha = 0.7f),
+                                Color.Transparent
+                            ),
+                            startX = 0f,
+                            endX = Float.MAX_VALUE * 0.5f
+                        )
+                    )
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(LocalConfiguration.current.screenHeightDp.dp * 0.6f * 0.4f)
+                    .align(Alignment.TopStart)
+                    .padding(top = LocalConfiguration.current.screenHeightDp.dp * 0.6f * 0.6f)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.8f),
+                                Color.Black
+                            )
+                        )
+                    )
+            )
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                item {
+                    SeasonHeroSection(
+                        playButtonFocusRequester = playButtonFocusRequester,
+                        commentButtonFocusRequester = commentButtonFocusRequester,
+                        backgroundCover = heroBackgroundCover,
+                        title = seasonData.title,
+                        styles = seasonData.styles,
+                        newEpDesc = seasonData.newEpDesc,
+                        description = seasonData.description,
+                        lastPlayedIndex = seasonViewModel.lastPlayProgress?.lastEpId ?: -1,
+                        lastPlayedTitle = generateEpisodeTitle(
+                            seasonData.episodes.find { it.id == seasonViewModel.lastPlayProgress?.lastEpId },
+                            seasonData.title
+                        ),
+                        following = seasonViewModel.isFollowing,
+                        isPublished = seasonData.publish.isPublished,
+                        publishDate = seasonData.publish.publishDate,
+                        hasMultipleSeasons = seasonData.seasons.size > 1,
+                        seasonCount = seasonData.seasons.size,
                         onPlay = {
                             logger.fInfo { "Click play button" }
                             var playAid = -1L
@@ -378,7 +396,6 @@ fun SeasonInfoScreen(
                             var episodeList: List<Episode> = emptyList()
                             if (seasonViewModel.lastPlayProgress == null) {
                                 logger.fInfo { "Didn't find any play record" }
-                                //未登录或无播放记录，此时lastPlayProgress==null，默认播放第一集正片
                                 playAid = seasonViewModel.seasonData?.episodes?.first()?.aid ?: -1
                                 playCid = seasonViewModel.seasonData?.episodes?.first()?.cid ?: -1
                                 playEpid = seasonViewModel.seasonData?.episodes?.first()?.id ?: -1
@@ -389,10 +406,7 @@ fun SeasonInfoScreen(
                                         seasonViewModel.seasonData?.episodes ?: emptyList()
                                 }
                             } else {
-                                //已登录且有播放记录
                                 logger.fInfo { "Find play record: ${seasonViewModel.lastPlayProgress}" }
-
-                                //懒得去改播放器那边来支持epid，就直接在这边查找cid了
                                 playEpid = seasonViewModel.lastPlayProgress!!.lastEpId
                                 seasonViewModel.seasonData?.episodes?.forEach {
                                     if (it.id == playEpid) {
@@ -421,7 +435,8 @@ fun SeasonInfoScreen(
 
                             logger.fInfo { "Play aid: $playAid, cid: $playCid" }
                             val lastEpId = seasonViewModel.lastPlayProgress?.lastEpId
-                            val ep = seasonViewModel.seasonData?.episodes?.find { it.id == lastEpId } ?: seasonViewModel.seasonData?.episodes?.find { it.cid == playCid }
+                            val ep = seasonViewModel.seasonData?.episodes?.find { it.id == lastEpId }
+                                ?: seasonViewModel.seasonData?.episodes?.find { it.cid == playCid }
                             if (playCid != -1L) {
                                 onClickVideo(
                                     playAid,
@@ -449,9 +464,9 @@ fun SeasonInfoScreen(
                             }
                         },
                         onClickFollow = onClickFollow,
-                        onClickCover = onClickCover,
+                        onClickSeasonSelector = onClickCover,
                         onShowComment = onShowComment,
-                        commentButtonFocusRequester = commentButtonFocusRequester
+                        onShowDescription = { showDescriptionDialog = true }
                     )
                 }
                 if (seasonViewModel.seasonData?.episodes?.isNotEmpty() == true) {
@@ -516,7 +531,6 @@ fun SeasonInfoScreen(
                     Spacer(modifier = Modifier.height(64.dp))
                 }
             }
-            }
         }
     }
 
@@ -554,74 +568,44 @@ fun SeasonInfoScreen(
             logger.debug { "User viewed comments for episode: ${episode.id} (${episode.title})" }
         }
     )
-}
 
-@Composable
-fun SeasonCover(
-    modifier: Modifier = Modifier,
-    cover: String,
-    seasonCount: Int,
-    onClick: () -> Unit
-) {
-    val isPreview = LocalInspectionMode.current
-    var hasFocus by remember { mutableStateOf(false) }
-    val coverBottomTipHeight by animateDpAsState(
-        targetValue = if (hasFocus && seasonCount != 0) 28.dp else 0.dp,
-        label = "Cover bottom tip height"
-    )
-
-    Card(
-        modifier = modifier.onFocusChanged { hasFocus = it.hasFocus },
-        onClick = onClick,
-        shape = CardDefaults.shape(shape = MaterialTheme.shapes.medium),
-        glow = CardDefaults.glow(
-            focusedGlow = Glow(
-                elevationColor = MaterialTheme.colorScheme.inverseSurface,
-                elevation = 16.dp
-            )
-        ),
-        border = if (Build.VERSION.SDK_INT < 31) {
-            CardDefaults.border()
-        } else {
-            CardDefaults.border(
-                focusedBorder = Border(BorderStroke(0.dp, Color.Transparent))
-            )
-        }
-    ) {
-        Box {
-            AsyncImage(
-                modifier = Modifier
-                    .height(260.dp)
-                    .aspectRatio(0.75f)
-                    .background(if (isPreview) Color.White else Color.Transparent),
-                model = cover,
-                contentDescription = null,
-                contentScale = ContentScale.FillHeight
-            )
-
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .width(195.dp)
-                    .height(coverBottomTipHeight)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    modifier = Modifier,
-                    text = stringResource(R.string.season_count_tip, seasonCount),
-                )
+    // 简介弹窗
+    if (showDescriptionDialog) {
+        TvAlertDialog(
+            title = { Text(text = seasonViewModel.seasonData?.title ?: "") },
+            onDismissRequest = { showDescriptionDialog = false },
+            confirmButton = {},
+            text = {
+                val scrollState = rememberLazyListState()
+                LazyColumn(
+                    modifier = Modifier
+                        .size(600.dp, 400.dp),
+                    state = scrollState
+                ) {
+                    item {
+                        Text(
+                            text = seasonViewModel.seasonData?.description ?: "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.9f)
+                        )
+                    }
+                }
             }
-        }
+        )
     }
 }
 
+/**
+ * Hero 风格
+ */
 @Composable
-fun SeasonBaseInfo(
+fun SeasonHeroSection(
     modifier: Modifier = Modifier,
     playButtonFocusRequester: FocusRequester,
+    commentButtonFocusRequester: FocusRequester = remember { FocusRequester() },
+    backgroundCover: String,
     title: String,
+    styles: List<String> = emptyList(),
     newEpDesc: String,
     description: String,
     lastPlayedIndex: Int,
@@ -629,107 +613,87 @@ fun SeasonBaseInfo(
     following: Boolean,
     isPublished: Boolean,
     publishDate: String,
+    hasMultipleSeasons: Boolean = false,
+    seasonCount: Int = 0,
     onPlay: () -> Unit,
     onClickFollow: (follow: Boolean) -> Unit,
+    onClickSeasonSelector: () -> Unit = {},
     onShowComment: () -> Unit = {},
-    commentButtonFocusRequester: FocusRequester = remember { FocusRequester() }
+    onShowDescription: () -> Unit = {}
 ) {
-    Column(
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+
+    val metaLine = remember(styles, newEpDesc) {
+        buildString {
+            if (styles.isNotEmpty()) {
+                append(styles.joinToString(" / "))
+            }
+            if (newEpDesc.isNotEmpty()) {
+                if (isNotEmpty()) append("  ·  ")
+                append(newEpDesc)
+            }
+        }
+    }
+
+    Box(
         modifier = modifier
-            .heightIn(min = 260.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+            .fillMaxWidth()
+            .height(screenHeight * 0.6f)
     ) {
         Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 48.dp, end = 48.dp, bottom = 24.dp)
+                .fillMaxWidth(0.55f),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // 标题
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 1,
+                style = MaterialTheme.typography.headlineLarge,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface
+                color = Color.White
             )
-            Text(text = newEpDesc)
-            Text(text = description)
 
-            // 评论按钮
-            Row(
-                modifier = Modifier
-                    .focusRequester(commentButtonFocusRequester)
-                    .clip(MaterialTheme.shapes.small)
-                    .background(Color.White.copy(alpha = 0.2f))
-                    .focusedBorder(MaterialTheme.shapes.small)
-                    .padding(horizontal = 4.dp)
-                    .clickable { onShowComment() }
-                    .height(30.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            if (metaLine.isNotEmpty()) {
                 Text(
-                    text = "评论>>",
-                    color = Color.White
+                    text = metaLine,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = Color.White.copy(alpha = 0.7f)
                 )
             }
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        SeasonInfoButtons(
-            focusRequester = playButtonFocusRequester,
-            lastPlayedIndex = lastPlayedIndex,
-            lastPlayedTitle = lastPlayedTitle,
-            following = following,
-            isPublished = isPublished,
-            publishDate = publishDate,
-            onPlay = onPlay,
-            onClickFollow = onClickFollow
-        )
-    }
-}
 
-@Composable
-fun SeasonInfoPart(
-    modifier: Modifier = Modifier,
-    playButtonFocusRequester: FocusRequester,
-    title: String,
-    cover: String,
-    newEpDesc: String,
-    description: String,
-    lastPlayedIndex: Int,
-    lastPlayedTitle: String = "",
-    following: Boolean,
-    isPublished: Boolean,
-    publishDate: String,
-    seasonCount: Int,
-    onPlay: () -> Unit,
-    onClickFollow: (follow: Boolean) -> Unit,
-    onClickCover: () -> Unit,
-    onShowComment: () -> Unit = {},
-    commentButtonFocusRequester: FocusRequester = remember { FocusRequester() }
-) {
-    Row(
-        modifier = modifier
-            .padding(horizontal = 32.dp, vertical = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        SeasonCover(
-            cover = cover,
-            seasonCount = seasonCount,
-            onClick = onClickCover
-        )
-        SeasonBaseInfo(
-            playButtonFocusRequester = playButtonFocusRequester,
-            title = title,
-            newEpDesc = newEpDesc,
-            description = description,
-            lastPlayedIndex = lastPlayedIndex,
-            lastPlayedTitle = lastPlayedTitle,
-            following = following,
-            isPublished = isPublished,
-            publishDate = publishDate,
-            onPlay = onPlay,
-            onClickFollow = onClickFollow,
-            onShowComment = onShowComment,
-            commentButtonFocusRequester = commentButtonFocusRequester
-        )
+            if (description.isNotEmpty()) {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = Color.White.copy(alpha = 0.6f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            SeasonInfoButtons(
+                focusRequester = playButtonFocusRequester,
+                lastPlayedIndex = lastPlayedIndex,
+                lastPlayedTitle = lastPlayedTitle,
+                following = following,
+                isPublished = isPublished,
+                publishDate = publishDate,
+                onPlay = onPlay,
+                onClickFollow = onClickFollow,
+                onShowComment = onShowComment,
+                commentButtonFocusRequester = commentButtonFocusRequester,
+                seasonCount = seasonCount,
+                onClickSeasonSelector = onClickSeasonSelector,
+                onShowDescription = onShowDescription
+            )
+        }
     }
 }
 
@@ -749,85 +713,134 @@ fun SeasonEpisodeButton(
     val lastPlayedColor = Color(0xFFE39B17)
     val focusedColor = Color(0xFFF1CD8B)
 
+    // 格式化时长显示
+    val durationText = remember(duration) {
+        if (duration <= 0) ""
+        else {
+            val totalSec = duration / 1000
+            val min = totalSec / 60
+            val sec = totalSec % 60
+            "%d:%02d".format(min, sec)
+        }
+    }
+
+    // 播放进度比例
+    val progressFraction = remember(played, duration) {
+        if (duration == 0) 0f
+        else if (played < 0) 1f
+        else (played * 1000f / duration).coerceIn(0f, 1f)
+    }
+
     Surface(
-        modifier = modifier,
+        modifier = modifier.width(220.dp),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-            pressedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = Color.Transparent,
+            focusedContainerColor = Color.Transparent,
+            pressedContainerColor = Color.Transparent
         ),
         scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1.05f),
         shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
         border = ClickableSurfaceDefaults.border(
-            border = if (isLastPlayed) {
-                Border(
-                    border = BorderStroke(2.dp, lastPlayedColor),
-                    shape = MaterialTheme.shapes.medium
-                )
-            } else Border.None,
+            border = Border.None,
             focusedBorder = Border(
                 border = BorderStroke(2.dp, if (isLastPlayed) lastPlayedColor else focusedColor),
                 shape = MaterialTheme.shapes.medium
             ),
-            pressedBorder = if (isLastPlayed) {
-                Border(
-                    border = BorderStroke(2.dp, lastPlayedColor),
-                    shape = MaterialTheme.shapes.medium
-                )
-            } else Border.None
+            pressedBorder = Border.None
         ),
         onClick = onClick
     ) {
-        Row {
-            val coverBackground by remember { mutableStateOf(if (played != 0) Color.Black.copy(alpha = 0.2f) else Color.Transparent) }
-            Box(
-                modifier = Modifier.background(coverBackground)
-            ) {
-                AsyncImage(
-                    modifier = Modifier
-                        .height(80.dp)
-                        .aspectRatio(1.6f)
-                        .clip(MaterialTheme.shapes.medium)
-                        .background(if (isPreview) Color.White else Color.Transparent),
-                    model = cover.resizedImageUrl(ImageSize.Cover),
-                    contentDescription = null,
-                    contentScale = ContentScale.FillBounds
-                )
-            }
-
+        Column {
             Box(
                 modifier = Modifier
-                    .size(140.dp, 80.dp)
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                    .background(if (isPreview) Color.Gray else Color.Black)
             ) {
-                Box(
-                    modifier = Modifier
-                        .background(Color.Black.copy(alpha = 0.2f))
-                        .fillMaxHeight()
-                        .fillMaxWidth(if (duration == 0) 0f else if (played < 0) 1f else ((played * 1000f) / duration))
-                ) {}
-                Column(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .padding(horizontal = 8.dp),
-                    verticalArrangement = Arrangement.SpaceAround
-                ) {
+                AsyncImage(
+                    modifier = Modifier.fillMaxSize(),
+                    model = cover.resizedImageUrl(ImageSize.Cover),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop
+                )
+
+                if (isLastPlayed) {
                     Box(
-                        modifier = Modifier.weight(1f),
-                        contentAlignment = Alignment.CenterStart
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.3f)),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(text = partTitle)
-                    }
-                    Box(
-                        modifier = Modifier.weight(2f),
-                        contentAlignment = Alignment.TopStart
-                    ) {
-                        Text(
-                            text = title,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
+                        Icon(
+                            modifier = Modifier.size(36.dp),
+                            imageVector = Icons.Rounded.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.9f)
                         )
                     }
                 }
+
+                if (durationText.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(4.dp)
+                            .background(
+                                Color.Black.copy(alpha = 0.7f),
+                                RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = durationText,
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                // 底部进度条
+                if (progressFraction > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(Color.White.copy(alpha = 0.2f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progressFraction)
+                                .background(lastPlayedColor)
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = partTitle,
+                    fontSize = 11.sp,
+                    color = if (isLastPlayed) lastPlayedColor else Color.White.copy(alpha = 0.5f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = title,
+                    fontSize = 13.sp,
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -879,7 +892,7 @@ fun SeasonEpisodesDialog(
             text = {
                 Column(
                     modifier = Modifier
-                        .size(600.dp, 330.dp),
+                        .size(700.dp, 400.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // TabRow 只有一项 Tab 时会导致崩溃，但如果只有一项 Tab 的时候也没必要显示
@@ -927,9 +940,10 @@ fun SeasonEpisodesDialog(
                                 if (tabCount > 1) tabRowFocusRequester.requestFocus() else onHideDialog()
                             },
                         state = listState,
-                        columns = GridCells.Fixed(2),
+                        columns = GridCells.Fixed(3),
                         contentPadding = PaddingValues(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         itemsIndexed(
                             items = selectedEpisodes,
@@ -1005,11 +1019,12 @@ fun SeasonEpisodeRow(
 
     Column(
         modifier = modifier
+            .padding(bottom = 24.dp)
             .onFocusChanged { hasFocus = it.hasFocus },
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
-            modifier = Modifier.padding(start = 50.dp),
+            modifier = Modifier.padding(start = 48.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -1048,8 +1063,8 @@ fun SeasonEpisodeRow(
                 .padding(top = 15.dp)
                 .focusRestorer(focusRequester),
             state = rowState,
-            contentPadding = PaddingValues(horizontal = 32.dp),
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            contentPadding = PaddingValues(horizontal = 48.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             itemsIndexed(items = episodes) { index, episode ->
                 val episodeTitle by remember { mutableStateOf(if (episode.longTitle != "") episode.longTitle else episode.title) }
@@ -1216,6 +1231,13 @@ private fun SeasonSelectorContent(
                     contentScale = ContentScale.FillHeight,
                     alpha = 1f
                 )
+                Text(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 48.dp, top = 36.dp),
+                    text = "选择系列",
+                    style = MaterialTheme.typography.headlineMedium
+                )
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -1291,25 +1313,28 @@ private fun SeasonSelectorContent(
 @Preview(device = "id:tv_1080p")
 @Preview(device = "id:tv_1080p", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
-fun SeasonInfoPartPreview() {
+fun SeasonHeroSectionPreview() {
     BVTheme {
-        SeasonInfoPart(
-            modifier = Modifier.fillMaxWidth(),
-            playButtonFocusRequester = remember { FocusRequester() },
-            title = "人生一串",
-            cover = "http://i0.hdslb.com/bfs/bangumi/7a790c64ff70f12c11888be0532b6981a923afd5.jpg",
-            newEpDesc = "已完结, 全8集",
-            description = "由bilibili和旗帜传媒联合出品的《人生一串》是国内首档汇聚民间烧烤美食，呈现国人烧烤情结的深夜美食纪录片，本片将镜头伸向街头巷尾，讲述平民美食和市井传奇，以最独特的视角真实展现烧烤美食背后的独特情感。作为一档接地气的美食节目，《串》旨在展现每一串烧烤的魅力往事，和最真实的美味体验。",
-            lastPlayedIndex = 3,
-            lastPlayedTitle = "拯救灵依计划",
-            following = false,
-            isPublished = true,
-            publishDate = "2021-04-30",
-            seasonCount = 0,
-            onPlay = {},
-            onClickFollow = {},
-            onClickCover = {}
-        )
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            SeasonHeroSection(
+                playButtonFocusRequester = remember { FocusRequester() },
+                backgroundCover = "http://i0.hdslb.com/bfs/bangumi/e3993240914c3d881d97e4527a52efa2a9dcdeaf.jpg",
+                title = "人生一串",
+                styles = listOf("纪录片", "美食", "人文"),
+                newEpDesc = "已完结, 全8集",
+                description = "由bilibili和旗帜传媒联合出品的《人生一串》是国内首档汇聚民间烧烤美食，呈现国人烧烤情结的深夜美食纪录片，本片将镜头伸向街头巷尾，讲述平民美食和市井传奇，以最独特的视角真实展现烧烤美食背后的独特情感。",
+                lastPlayedIndex = 3,
+                lastPlayedTitle = "拯救灵依计划",
+                following = false,
+                isPublished = true,
+                publishDate = "2021-04-30",
+                hasMultipleSeasons = true,
+                onPlay = {},
+                onClickFollow = {},
+                onClickSeasonSelector = {},
+                onShowComment = {}
+            )
+        }
     }
 }
 

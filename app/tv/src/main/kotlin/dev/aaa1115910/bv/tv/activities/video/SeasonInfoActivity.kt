@@ -19,8 +19,8 @@ class SeasonInfoActivity : ComponentActivity() {
         ) {
             context.startActivity(
                 Intent(context, SeasonInfoActivity::class.java).apply {
-                    epId?.let { putExtra("epid", epId) }
-                    seasonId?.let { putExtra("seasonid", seasonId) }
+                    epId?.takeIf { it > 0 }?.let { putExtra("epid", it) }
+                    seasonId?.takeIf { it > 0 }?.let { putExtra("seasonid", it) }
                     putExtra("proxy_area", proxyArea.ordinal)
                 }
             )

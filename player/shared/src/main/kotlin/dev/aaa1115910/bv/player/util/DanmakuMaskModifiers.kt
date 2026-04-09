@@ -23,6 +23,11 @@ fun Modifier.bitmapMask(
     videoAspectRatio: Float = 0f
 ): Modifier = composed {
     drawWithContent {
+        if (bitmap.isRecycled) {
+            drawContent()
+            return@drawWithContent
+        }
+
         drawIntoCanvas { canvas ->
             canvas.saveLayer(Rect(Offset.Zero, size), Paint())
             drawContent()
@@ -48,12 +53,14 @@ fun Modifier.bitmapMask(
                 androidx.compose.ui.unit.IntOffset.Zero to size.toIntSize()
             }
 
-            drawImage(
-                image = bitmap.asImageBitmap(),
-                dstOffset = dstOffset,
-                dstSize = dstSize,
-                blendMode = BlendMode.DstIn
-            )
+            if (!bitmap.isRecycled) {
+                drawImage(
+                    image = bitmap.asImageBitmap(),
+                    dstOffset = dstOffset,
+                    dstSize = dstSize,
+                    blendMode = BlendMode.DstIn
+                )
+            }
             canvas.restore()
         }
     }
@@ -146,6 +153,6 @@ fun Modifier.danmakuMaskBitmap(
     bitmap: Bitmap?,
     videoAspectRatio: Float = 0f
 ): Modifier = composed {
-    if (bitmap == null) return@composed this
+    if (bitmap == null || bitmap.isRecycled) return@composed this
     bitmapMask(bitmap, videoAspectRatio)
 }

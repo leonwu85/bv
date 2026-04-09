@@ -570,12 +570,13 @@ fun CommentPanel(
                                                 // 检查是否已到达列表底部
                                                 val layoutInfo = listState.layoutInfo
                                                 val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
-                                                val totalItems = layoutInfo.totalItemsCount
-                                                val isScrolledToEnd = lastVisibleItem != null &&
-                                                    lastVisibleItem.index == totalItems - 1
+                                                val lastCommentIndex = comments.lastIndex
+                                                val isLastCommentVisible = lastVisibleItem != null &&
+                                                    lastVisibleItem.index >= lastCommentIndex
+                                                val isFocusedOnLastComment = focusedCommentIndex == lastCommentIndex
 
-                                                // 到达底部时拦截事件
-                                                if (isScrolledToEnd && comments.isNotEmpty()) {
+                                                // 只有最后一条评论已经获得焦点时，才阻止焦点继续移出列表
+                                                if (comments.isNotEmpty() && isLastCommentVisible && isFocusedOnLastComment) {
                                                     true
                                                 } else {
                                                     val currentItemInfo = layoutInfo.visibleItemsInfo

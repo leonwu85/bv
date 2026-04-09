@@ -271,12 +271,13 @@ fun SubCommentPanel(
                                             // 检查是否已到达列表底部
                                             val layoutInfo = listState.layoutInfo
                                             val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
-                                            val totalItems = layoutInfo.totalItemsCount
-                                            val isScrolledToEnd = lastVisibleItem != null &&
-                                                lastVisibleItem.index == totalItems - 1
+                                            val lastReplyIndex = replies.lastIndex
+                                            val isLastReplyVisible = lastVisibleItem != null &&
+                                                lastVisibleItem.index >= lastReplyIndex
+                                            val isFocusedOnLastReply = focusedCommentIndex == lastReplyIndex
 
-                                            // 到达底部时拦截事件
-                                            if (isScrolledToEnd && replies.isNotEmpty()) {
+                                            // 只有最后一条回复已经获得焦点时，才阻止焦点继续移出列表
+                                            if (replies.isNotEmpty() && isLastReplyVisible && isFocusedOnLastReply) {
                                                 true
                                             } else {
                                                 val currentItemInfo = layoutInfo.visibleItemsInfo

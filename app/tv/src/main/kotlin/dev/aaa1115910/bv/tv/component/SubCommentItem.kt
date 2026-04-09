@@ -224,7 +224,7 @@ fun SubCommentRootItem(
                         overflow = TextOverflow.Ellipsis
                     )
 
-                    if (comment.pictures.isNotEmpty()) {
+                    if (expanded && comment.pictures.isNotEmpty()) {
                         CommentPictures(pictures = comment.pictures)
                     }
 

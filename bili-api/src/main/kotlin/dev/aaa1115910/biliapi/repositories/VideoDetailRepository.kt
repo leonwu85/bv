@@ -16,6 +16,7 @@ import dev.aaa1115910.biliapi.entity.reply.CommentsData
 import dev.aaa1115910.biliapi.entity.video.VideoDetail
 import dev.aaa1115910.biliapi.entity.video.InteractiveNode
 import dev.aaa1115910.biliapi.entity.video.season.SeasonDetail
+import dev.aaa1115910.biliapi.http.entity.video.isInteractiveVideo
 import dev.aaa1115910.biliapi.grpc.utils.handleGrpcException
 import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.http.entity.user.garb.EquipPart
@@ -84,9 +85,7 @@ class VideoDetailRepository(
             BiliHttpApi.getVideoInfo(
                 bv = videoDetail.bvid,
                 sessData = sessData.ifBlank { null }
-            ).getResponseData().let {
-                it.isStory || it.rights.isSteinGate == 1
-            }
+            ).getResponseData().isInteractiveVideo
         }.onFailure {
             println("Get interactive flag failed: $it")
         }.getOrDefault(false)
@@ -258,17 +257,23 @@ class VideoDetailRepository(
         seasonId: Int? = null,
         preferApiType: ApiType = ApiType.Web
     ): SeasonDetail {
+        val normalizedEpid = epid?.takeIf { it > 0 }
+        val normalizedSeasonId = seasonId?.takeIf { it > 0 }
+
         when (preferApiType) {
             ApiType.Web -> {
                 val webSeasonData = BiliHttpApi.getWebSeasonInfo(
-                    epId = epid,
-                    seasonId = seasonId,
+                    epId = normalizedEpid,
+                    seasonId = normalizedSeasonId,
                     sessData = authRepository.sessionData ?: ""
                 ).getResponseData()
-                webSeasonData.userStatus = BiliHttpApi.getSeasonUserStatus(
-                    seasonId = seasonId!!,
-                    sessData = authRepository.sessionData ?: ""
-                ).getResponseData()
+                val userStatusSeasonId = normalizedSeasonId ?: webSeasonData.seasonId.takeIf { it > 0 }
+                if (userStatusSeasonId != null) {
+                    webSeasonData.userStatus = BiliHttpApi.getSeasonUserStatus(
+                        seasonId = userStatusSeasonId,
+                        sessData = authRepository.sessionData ?: ""
+                    ).getResponseData()
+                }
                 val seasonDetail = SeasonDetail.fromSeasonData(webSeasonData)
                 val firstEp = webSeasonData.episodes.firstOrNull() ?: return seasonDetail
 
@@ -290,8 +295,8 @@ class VideoDetailRepository(
 
             ApiType.App -> {
                 val appSeasonData = BiliHttpApi.getAppSeasonInfo(
-                    epId = epid,
-                    seasonId = seasonId,
+                    epId = normalizedEpid,
+                    seasonId = normalizedSeasonId,
                     mobiApp = "android_hd",
                     accessKey = authRepository.accessToken ?: ""
                 ).getResponseData()

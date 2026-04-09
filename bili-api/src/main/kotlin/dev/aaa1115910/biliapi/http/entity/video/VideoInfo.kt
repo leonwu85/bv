@@ -147,6 +147,9 @@ data class VideoInfo(
     )
 }
 
+val VideoInfo.isInteractiveVideo: Boolean
+    get() = rights.isSteinGate == 1
+
 /**
  * 视频属性标志
  *

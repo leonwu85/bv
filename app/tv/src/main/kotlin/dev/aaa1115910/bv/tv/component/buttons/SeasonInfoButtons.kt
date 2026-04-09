@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -36,6 +39,11 @@ fun SeasonInfoButtons(
     publishDate: String,
     onPlay: () -> Unit,
     onClickFollow: (follow: Boolean) -> Unit,
+    onShowComment: () -> Unit = {},
+    commentButtonFocusRequester: FocusRequester = remember { FocusRequester() },
+    seasonCount: Int = 0,
+    onClickSeasonSelector: () -> Unit = {},
+    onShowDescription: () -> Unit = {},
 ) {
     Row(
         modifier = modifier
@@ -57,7 +65,6 @@ fun SeasonInfoButtons(
                     )
                     Text(text = if (lastPlayedIndex == -1) "开始播放" else lastPlayedTitle)
                 }
-
             }
         } else {
             Button(onClick = {}) {
@@ -68,6 +75,48 @@ fun SeasonInfoButtons(
             following = following,
             onClick = onClickFollow
         )
+        IconButton(
+            modifier = Modifier.focusRequester(commentButtonFocusRequester),
+            onClick = onShowComment,
+            colors = OutlinedButtonDefaults.colors(),
+            border = OutlinedButtonDefaults.border()
+        ) {
+            Icon(
+                modifier = Modifier.size(20.dp),
+                imageVector = Icons.Rounded.ChatBubbleOutline,
+                contentDescription = null
+            )
+        }
+        IconButton(
+            onClick = onShowDescription,
+            colors = OutlinedButtonDefaults.colors(),
+            border = OutlinedButtonDefaults.border()
+        ) {
+            Icon(
+                modifier = Modifier.size(20.dp),
+                imageVector = Icons.Rounded.Info,
+                contentDescription = null
+            )
+        }
+        if (seasonCount > 1) {
+            Button(
+                onClick = onClickSeasonSelector,
+                colors = OutlinedButtonDefaults.colors(),
+                border = OutlinedButtonDefaults.border()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        modifier = Modifier.size(20.dp),
+                        imageVector = Icons.Rounded.SwapHoriz,
+                        contentDescription = null
+                    )
+                    Text(text = "系列共 $seasonCount 部")
+                }
+            }
+        }
     }
 }
 
@@ -113,7 +162,11 @@ fun SeasonInfoButtonsPreview() {
             isPublished = true,
             publishDate = "2021-10-01",
             onPlay = {},
-            onClickFollow = {}
+            onClickFollow = {},
+            onShowComment = {},
+            seasonCount = 3,
+            onClickSeasonSelector = {},
+            onShowDescription = {}
         )
     }
 }
