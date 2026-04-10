@@ -780,11 +780,19 @@
 
     <string name="video_controller_menu_danmaku_area_tip">按 “上键” 或 “下键” 进行调节</string>
     <string name="video_info_argue_tip_vertical_screen">温馨提示：该稿件包含竖屏视频内容</string>
+    <string name="video_info_argue_tip_interactive">温馨提示：该稿件包含互动视频内容</string>
+    <string name="video_info_argue_tip_charging_arc">温馨提示：该稿件为%1$s视频</string>
     <string name="video_info_description_title">视频简介</string>
     <string name="video_info_follow">关注</string>
     <string name="video_info_followed">已关注</string>
     <string name="video_info_part_row_title">视频分 P</string>
     <string name="video_info_related_video_title">视频推荐</string>
+    <string name="video_info_related_empty">暂无推荐视频</string>
+    <string name="video_info_play">播放</string>
+    <string name="video_info_continue_play">继续播放 %1$s</string>
+    <string name="video_info_description_button">简介</string>
+    <string name="video_info_comment_button">评论</string>
+    <string name="video_info_related_button">推荐</string>
     <string name="video_info_tags">标签</string>
     <string name="video_info_time">投稿时间: %1$s</string>
     <string name="video_player_referer">https://www.bilibili.com</string>

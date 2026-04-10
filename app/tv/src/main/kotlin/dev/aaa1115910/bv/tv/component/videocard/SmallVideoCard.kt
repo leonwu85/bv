@@ -179,7 +179,7 @@ fun CardCover(
         AsyncImage(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(1.6f),
+                .aspectRatio(16f / 9f),
             model = cover.resizedImageUrl(ImageSize.SmallVideoCardCover),
             contentDescription = null,
             contentScale = ContentScale.Crop

@@ -57,11 +57,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
@@ -74,17 +77,18 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.times
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -92,20 +96,17 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
-import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
+import androidx.tv.material3.IconButton
 import androidx.tv.material3.LocalContentColor
-import androidx.tv.material3.LocalTextStyle
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.SuggestionChip
+import androidx.tv.material3.OutlinedButtonDefaults
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import coil.transform.BlurTransformation
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
 import dev.aaa1115910.biliapi.entity.video.Dimension
@@ -129,11 +130,10 @@ import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.component.CommentPanel
 import dev.aaa1115910.bv.tv.component.LoadingTip
+import dev.aaa1115910.bv.tv.component.RelatedVideosPanel
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.component.UpIcon
-import dev.aaa1115910.bv.tv.component.buttons.LikeButton
-import dev.aaa1115910.bv.tv.component.buttons.CoinButton
-import dev.aaa1115910.bv.tv.component.buttons.FavoriteButton
+import dev.aaa1115910.bv.tv.component.buttons.VideoInfoButtons
 import dev.aaa1115910.bv.tv.manager.VideoUserActionManager
 import dev.aaa1115910.bv.tv.manager.VideoUserActionManager.getStateFlow
 import dev.aaa1115910.bv.tv.component.videocard.VideosRow
@@ -144,11 +144,14 @@ import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.fWarn
 import dev.aaa1115910.bv.util.focusedBorder
+import dev.aaa1115910.bv.util.focusedScale
 import dev.aaa1115910.bv.util.formatHourMinSec
 import dev.aaa1115910.bv.util.formatPubTimeString
 import dev.aaa1115910.bv.util.ifElse
+import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.onBackPressed
 import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.resizedImageUrl
 import dev.aaa1115910.bv.util.swapList
 import dev.aaa1115910.bv.util.swapListWithMainContext
 import dev.aaa1115910.bv.util.toast
@@ -162,9 +165,11 @@ import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.getKoin
 import kotlin.math.ceil
+import kotlin.math.max
 
 private val InteractiveBadgeColor = Color(0xFFFFD54F)
 private val ChargingBadgeColor = Color(0xFF00FFFF)
+private const val ChargingBadgeDefaultText = "充电专属"
 
 @Composable
 fun VideoInfoScreen(
@@ -178,7 +183,7 @@ fun VideoInfoScreen(
     val scope = rememberCoroutineScope()
     val intent = (context as Activity).intent
     val logger = KotlinLogging.logger { }
-    val defaultFocusRequester = remember { FocusRequester() }
+    val playButtonFocusRequester = remember { FocusRequester() }
     val lazyListState = rememberLazyListState()
 
     var showFollowButton by remember { mutableStateOf(false) }
@@ -202,6 +207,9 @@ fun VideoInfoScreen(
     // 添加用于管理评论浮层的状态
     var showCommentPanel by remember { mutableStateOf(false) }
     val commentButtonFocusRequester = remember { FocusRequester() }
+
+    var showRelatedPanel by remember { mutableStateOf(false) }
+    val relatedButtonFocusRequester = remember { FocusRequester() }
 
     var lastPlayedCid by remember { mutableLongStateOf(0) }
     var lastPlayedTime by remember { mutableIntStateOf(0) }
@@ -600,7 +608,7 @@ fun VideoInfoScreen(
                 }
             } else {
                 logger.fInfo { "No redirection required" }
-                defaultFocusRequester.requestFocus(scope)
+                playButtonFocusRequester.requestFocus(scope)
             }
         }
     }
@@ -615,7 +623,7 @@ fun VideoInfoScreen(
         ) {
             // 延迟一小段时间确保UI完全渲染
             delay(300)
-            defaultFocusRequester.requestFocus(scope)
+            playButtonFocusRequester.requestFocus(scope)
         }
     }
 
@@ -653,39 +661,92 @@ fun VideoInfoScreen(
             }
         }
     } else {
-        Scaffold(
-            modifier = modifier,
-            containerColor = if (usePureBlackBackground) Color.Black else MaterialTheme.colorScheme.surface
-        ) { innerPadding ->
+        val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+        val heroHeight = screenHeight * 0.6f
+        val topArgueTips = buildList {
+            if (currentDetailTargetIsVertical) {
+                add(context.getString(R.string.video_info_argue_tip_vertical_screen))
+            }
+            if (videoDetailViewModel.videoDetail?.isChargingArc == true) {
+                add(
+                    context.getString(
+                        R.string.video_info_argue_tip_charging_arc,
+                        videoDetailViewModel.videoDetail?.chargingArcBadge
+                            .takeUnless { it.isNullOrBlank() }
+                            ?: ChargingBadgeDefaultText
+                    )
+                )
+            }
+            if (videoDetailViewModel.videoDetail?.isInteractive == true) {
+                add(context.getString(R.string.video_info_argue_tip_interactive))
+            }
+            videoDetailViewModel.videoDetail?.argueTip?.let { add(it) }
+        }
+        val topArgueTipsPadding = if (topArgueTips.isEmpty()) {
+            0.dp
+        } else {
+            12.dp + (44.dp * topArgueTips.size) + (8.dp * (topArgueTips.size - 1))
+        }
+
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            // Hero 背景层 1: 封面图
+            val bgLoaded = remember { mutableStateOf(false) }
+            val bgAnimatedAlpha by animateFloatAsState(
+                targetValue = if (bgLoaded.value) 1f else 0f,
+                animationSpec = tween(durationMillis = 600),
+                label = "hero bg alpha"
+            )
+            AsyncImage(
+                modifier = Modifier
+                    .fillMaxSize(),
+                model = videoDetailViewModel.videoDetail?.cover,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alpha = bgAnimatedAlpha,
+                onSuccess = { bgLoaded.value = true },
+                onError = { bgLoaded.value = false }
+            )
+
+            // Hero 背景层 2: 水平渐变遮罩
             Box(
-                Modifier
+                modifier = Modifier
                     .fillMaxSize()
-                    .background(if (usePureBlackBackground) Color.Black else Color.Transparent)
-                    .padding(innerPadding)
-            ) {
-                if (!usePureBlackBackground) {
-                    // 图片加载成功后，动画 alpha，从 0 -> 0.6f
-                    val bgLoaded = remember { mutableStateOf(false) }
-                    val animatedAlpha by animateFloatAsState(
-                        targetValue = if (bgLoaded.value) 0.6f else 0f,
-                        animationSpec = tween(durationMillis = 500)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.9f),
+                                Color.Black.copy(alpha = 0.7f),
+                                Color.Transparent
+                            ),
+                            startX = 0f,
+                            endX = Float.MAX_VALUE * 0.5f
+                        )
                     )
-                    AsyncImage(
-                        modifier = Modifier.fillMaxSize(),
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(videoDetailViewModel.videoDetail?.cover)
-                            .transformations(BlurTransformation(LocalContext.current, 20f, 5f))
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        alpha = animatedAlpha,
-                        onSuccess = { bgLoaded.value = true },
-                        onError = { bgLoaded.value = false }
+            )
+
+            // Hero 背景层 3: 底部垂直渐变
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0f to Color.Transparent,
+                                0.6f to Color.Transparent,
+                                0.82f to Color.Black.copy(alpha = 0.8f),
+                                1f to Color.Black
+                            )
+                        )
                     )
-                }
+            )
 
                 LazyColumn(
                     modifier = Modifier
+                        .fillMaxSize()
                         .onKeyEvent { event ->
                             if (event.type == KeyEventType.KeyDown) {
                                 when (event.key) {
@@ -704,203 +765,342 @@ fun VideoInfoScreen(
                             return@onKeyEvent false
                         },
                     state = lazyListState,
-                    contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp),
+                    contentPadding = PaddingValues(top = topArgueTipsPadding, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // Hero 信息区
                     item {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        val videoDetail = videoDetailViewModel.videoDetail!!
+                        var coverAspectRatio by remember(videoDetail.cover) {
+                            mutableStateOf(16f / 9f)
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(heroHeight)
                         ) {
-                            if (currentDetailTargetIsVertical) {
-                                ArgueTip(text = stringResource(R.string.video_info_argue_tip_vertical_screen))
-                            }
-                            if (videoDetailViewModel.videoDetail?.argueTip != null) {
-                                ArgueTip(text = videoDetailViewModel.videoDetail!!.argueTip!!)
+                            Row(
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(start = 48.dp, end = 48.dp, bottom = 8.dp)
+                                    .fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                                verticalAlignment = Alignment.Bottom
+                            ) {
+                                // 左侧：信息区
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // UP 主信息行（头像 + 名称 + 关注）
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Surface(
+                                            onClick = {
+                                                UpInfoActivity.actionStart(
+                                                    context,
+                                                    mid = videoDetail.author.mid,
+                                                    name = videoDetail.author.name,
+                                                    face = videoDetail.author.face
+                                                )
+                                            },
+                                            shape = ClickableSurfaceDefaults.shape(
+                                                shape = RoundedCornerShape(20.dp)
+                                            ),
+                                            colors = ClickableSurfaceDefaults.colors(
+                                                containerColor = Color.Transparent,
+                                                focusedContainerColor = Color.White.copy(alpha = 0.15f)
+                                            ),
+                                            border = ClickableSurfaceDefaults.border(
+                                                focusedBorder = Border(
+                                                    border = BorderStroke(2.dp, Color.White),
+                                                    shape = RoundedCornerShape(20.dp)
+                                                )
+                                            )
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(
+                                                    start = 4.dp,
+                                                    end = 12.dp,
+                                                    top = 4.dp,
+                                                    bottom = 4.dp
+                                                ),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                AsyncImage(
+                                                    modifier = Modifier
+                                                        .size(28.dp)
+                                                        .clip(CircleShape),
+                                                    model = videoDetail.author.face,
+                                                    contentDescription = null,
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                                Text(
+                                                    text = videoDetail.author.name,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = Color.White.copy(alpha = 0.8f)
+                                                )
+                                            }
+                                        }
+                                        if (Prefs.isLogin && showFollowButton) {
+                                            IconButton(
+                                                modifier = Modifier.size(36.dp),
+                                                onClick = {
+                                                    if (isFollowing) {
+                                                        delFollow { success ->
+                                                            scope.launch(Dispatchers.Main) {
+                                                                if (success) "已取消关注".toast(context)
+                                                                else "取消关注失败".toast(context)
+                                                            }
+                                                        }
+                                                    } else {
+                                                        addFollow { success ->
+                                                            scope.launch(Dispatchers.Main) {
+                                                                if (success) "关注成功".toast(context)
+                                                                else "关注失败".toast(context)
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                colors = OutlinedButtonDefaults.colors(
+                                                    containerColor = Color.White.copy(alpha = 0.15f)
+                                                ),
+                                                border = OutlinedButtonDefaults.border()
+                                            ) {
+                                                Icon(
+                                                    modifier = Modifier.size(18.dp),
+                                                    imageVector = if (isFollowing) Icons.Rounded.Done else Icons.Rounded.Add,
+                                                    contentDescription = null,
+                                                    tint = if (isFollowing) Color(0xfffb7299) else Color.Unspecified
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // 标题
+                                    AutoResizeTitleText(
+                                        text = videoDetail.title,
+                                        style = MaterialTheme.typography.headlineLarge,
+                                        color = Color.White
+                                    )
+
+                                    // 元信息行
+                                    Text(
+                                        text = buildString {
+                                            append(with(videoDetail.stat.view) { if (this >= 10000) "${this / 10000}万" else "$this" })
+                                            append(" 播放")
+                                            append("  ·  ")
+                                            append(with(videoDetail.stat.danmaku) { if (this >= 10000) "${this / 10000}万" else "$this" })
+                                            append(" 弹幕")
+                                            append("  ·  ")
+                                            append(videoDetail.publishDate.formatPubTimeString())
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = Color.White.copy(alpha = 0.7f)
+                                    )
+
+                                    if (videoDetail.tags.isNotEmpty()) {
+                                        VideoTagsRow(
+                                            tags = videoDetail.tags,
+                                            onClickTag = { tag ->
+                                                TagActivity.actionStart(
+                                                    context = context,
+                                                    tagId = tag.id,
+                                                    tagName = tag.name
+                                                )
+                                            }
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    // 按钮行
+                                    VideoInfoButtons(
+                                    playButtonFocusRequester = playButtonFocusRequester,
+                                    commentButtonFocusRequester = commentButtonFocusRequester,
+                                    relatedButtonFocusRequester = relatedButtonFocusRequester,
+                                    lastPlayedTime = lastPlayedTime,
+                                    isLogin = Prefs.isLogin,
+                                    onPlay = {
+                                        logger.fInfo { "Click play button" }
+                                        var title = ""
+                                        var partTitle = ""
+                                        //set video list
+                                        if (videoDetailViewModel.videoDetail?.ugcSeason != null) {
+                                            // 合集
+                                            if (videoDetailViewModel.videoDetail!!.ugcSeason!!.sections.size == 1) {
+                                                // 只有一个分组
+                                                updateUgcSeasonSectionVideoList(0)
+                                            } else {
+                                                // 多个组，找默认播放哪个组的
+                                                val cid =
+                                                    videoDetailViewModel.videoDetail!!.pages.first().cid
+                                                val sectionIndex =
+                                                    videoDetailViewModel.videoDetail!!.ugcSeason!!.sections
+                                                        .indexOfFirst { section -> section.episodes.any { it.cid == cid || it.pages.any { it.cid == cid } } }
+                                                val section =
+                                                    videoDetailViewModel.videoDetail!!.ugcSeason!!.sections.getOrNull(
+                                                        sectionIndex
+                                                    )
+                                                title =
+                                                    if (section?.title == "正片") section.episodes.find { it.cid == cid }!!.title else section?.title
+                                                        ?: ""
+                                                partTitle =
+                                                    if (section?.title == "正片") "" else section?.episodes?.find { it.cid == cid }!!.title
+                                                updateUgcSeasonSectionVideoList(sectionIndex)
+                                            }
+                                        } else {
+                                            // 分 p
+                                            val partVideoList =
+                                                videoDetailViewModel.videoDetail!!.pages.mapIndexed { index, videoPage ->
+                                                    VideoListPart(
+                                                        aid = videoDetailViewModel.videoDetail!!.aid,
+                                                        cid = videoPage.cid,
+                                                        title = videoDetailViewModel.videoDetail!!.title,
+                                                        partTitle = if (videoDetailViewModel.videoDetail!!.pages.size == 1) "" else videoPage.title,
+                                                        index = index,
+                                                    )
+                                                }
+                                            videoInfoRepository.videoList.clear()
+                                            videoInfoRepository.videoList.addAll(partVideoList)
+                                        }
+
+                                        val lastPlayedPage =
+                                            videoDetailViewModel.videoDetail!!.pages.find { it.cid == lastPlayedCid }
+                                        val playPage = lastPlayedPage
+                                            ?: videoDetailViewModel.videoDetail!!.pages.first()
+
+                                        launchPlayerActivity(
+                                            context = context,
+                                            avid = videoDetailViewModel.videoDetail!!.aid,
+                                            cid = playPage.cid,
+                                            title = if (title.isNotEmpty()) title else videoDetailViewModel.videoDetail!!.title,
+                                            partTitle = if (partTitle.isNotEmpty()) partTitle else if (videoDetailViewModel.videoDetail!!.pages.size == 1) "" else playPage.title,
+                                            played = if (playPage.cid == lastPlayedCid) lastPlayedTime * 1000 else 0,
+                                            fromSeason = false,
+                                            isVerticalVideo = videoDetailViewModel.videoDetail!!.pages.first().dimension.isVertical,
+                                            playerIconIdle = videoDetailViewModel.videoDetail!!.playerIcon?.idle
+                                                ?: "",
+                                            playerIconMoving = videoDetailViewModel.videoDetail!!.playerIcon?.moving
+                                                ?: "",
+                                            play = videoDetailViewModel.videoDetail!!.stat.view,
+                                            danmaku = videoDetailViewModel.videoDetail!!.stat.danmaku,
+                                            like = videoDetailViewModel.videoDetail!!.stat.like,
+                                            coin = videoDetailViewModel.videoDetail!!.stat.coin,
+                                            favorite = videoDetailViewModel.videoDetail!!.stat.favorite,
+                                            upName = videoDetailViewModel.videoDetail!!.author.name,
+                                            upId = videoDetailViewModel.videoDetail!!.author.mid,
+                                            upFace = videoDetailViewModel.videoDetail!!.author.face,
+                                            pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString(),
+                                            audioOnlyMode = audioOnlyMode
+                                        )
+                                    },
+                                    isLike = liked,
+                                    onAddLike = {
+                                        scope.launch {
+                                            if (!liked) {
+                                                if (addVideoLike()) {
+                                                    liked = true
+                                                    "点赞成功".toast(context)
+                                                } else {
+                                                    "点赞失败".toast(context)
+                                                }
+                                            }
+                                        }
+                                    },
+                                    onDelLike = {
+                                        scope.launch {
+                                            if (liked) {
+                                                if (delVideoLike()) {
+                                                    liked = false
+                                                    "已取消点赞".toast(context)
+                                                } else {
+                                                    "取消点赞失败".toast(context)
+                                                }
+                                            }
+                                        }
+                                    },
+                                    isCoin = isCoin,
+                                    onAddCoin = {
+                                        scope.launch {
+                                            if (!isCoin) {
+                                                if (addVideoCoin()) {
+                                                    isCoin = true
+                                                    "投币成功".toast(context)
+                                                } else {
+                                                    "投币失败".toast(context)
+                                                }
+                                            }
+                                        }
+                                    },
+                                    isFavorite = favorited,
+                                    userFavoriteFolders = favoriteFolderMetadataList,
+                                    favoriteFolderIds = videoInFavoriteFolderIds,
+                                    onAddToDefaultFavoriteFolder = {
+                                        addVideoToDefaultFavoriteFolder()
+                                        favorited = true
+                                        "已添加到默认收藏夹".toast(context)
+                                    },
+                                    onUpdateFavoriteFolders = {
+                                        updateVideoFavoriteData(it)
+                                        favorited = it.isNotEmpty()
+                                        videoInFavoriteFolderIds.swapList(it)
+                                        if (it.isNotEmpty()) {
+                                            "收藏成功".toast(context)
+                                        } else {
+                                            "已取消收藏".toast(context)
+                                        }
+                                    },
+                                    hasDescription = videoDetail.description.isNotBlank(),
+                                    onShowDescription = { showDescriptionDialog = true },
+                                    onShowComment = { showCommentPanel = true },
+                                    hasRelatedVideos = videoDetailViewModel.relatedVideos.isNotEmpty(),
+                                    onShowRelated = { showRelatedPanel = true }
+                                )
+                                }
+                                // 右侧：封面图
+                                Box(
+                                    modifier = Modifier
+                                        .width(240.dp)
+                                        .animateContentSize()
+                                        .aspectRatio(coverAspectRatio)
+                                ) {
+                                    AsyncImage(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(RoundedCornerShape(12.dp)),
+                                        model = videoDetail.cover,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        onSuccess = { state ->
+                                            val drawable = state.result.drawable
+                                            val intrinsicWidth = drawable.intrinsicWidth
+                                            val intrinsicHeight = drawable.intrinsicHeight
+                                            if (intrinsicWidth > 0 && intrinsicHeight > 0) {
+                                                coverAspectRatio = intrinsicWidth.toFloat() / intrinsicHeight.toFloat()
+                                                println("Cover aspect ratio: $coverAspectRatio")
+                                            }
+                                        },
+                                        onError = {
+                                            coverAspectRatio = 16f / 9f
+                                        }
+                                    )
+
+                                    VideoHeroBadges(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(10.dp),
+                                        videoDetail = videoDetail
+                                    )
+                                }
                             }
                         }
-                    }
-                    item {
-                        VideoInfoData(
-                            defaultFocusRequester = defaultFocusRequester,
-                            videoDetail = videoDetailViewModel.videoDetail!!,
-                            showFollowButton = showFollowButton,
-                            isFollowing = isFollowing,
-                            tags = videoDetailViewModel.videoDetail!!.tags,
-                            isFavorite = favorited,
-                            userFavoriteFolders = favoriteFolderMetadataList,
-                            favoriteFolderIds = videoInFavoriteFolderIds,
-                            onClickCover = {
-                                logger.fInfo { "Click video cover" }
-                                var title = ""
-                                var partTitle = ""
-                                //set video list
-                                if (videoDetailViewModel.videoDetail?.ugcSeason != null) {
-                                    // 合集
-                                    if (videoDetailViewModel.videoDetail!!.ugcSeason!!.sections.size == 1) {
-                                        // 只有一个分组
-                                        updateUgcSeasonSectionVideoList(0)
-                                    } else {
-                                        // 多个组，找默认播放哪个组的
-                                        val cid =
-                                            videoDetailViewModel.videoDetail!!.pages.first().cid
-                                        val sectionIndex =
-                                            videoDetailViewModel.videoDetail!!.ugcSeason!!.sections
-                                                .indexOfFirst { section -> section.episodes.any { it.cid == cid || it.pages.any { it.cid == cid } } }
-                                        val section =
-                                            videoDetailViewModel.videoDetail!!.ugcSeason!!.sections.getOrNull(
-                                                sectionIndex
-                                            )
-                                        title =
-                                            if (section?.title == "正片") section.episodes.find { it.cid == cid }!!.title else section?.title
-                                                ?: ""
-                                        partTitle =
-                                            if (section?.title == "正片") "" else section?.episodes?.find { it.cid == cid }!!.title
-                                        updateUgcSeasonSectionVideoList(sectionIndex)
-                                    }
-                                } else {
-                                    // 分 p
-                                    val partVideoList =
-                                        videoDetailViewModel.videoDetail!!.pages.mapIndexed { index, videoPage ->
-                                            VideoListPart(
-                                                aid = videoDetailViewModel.videoDetail!!.aid,
-                                                cid = videoPage.cid,
-                                                title = videoDetailViewModel.videoDetail!!.title,
-                                                partTitle = if (videoDetailViewModel.videoDetail!!.pages.size == 1) "" else videoPage.title,
-                                                index = index,
-                                            )
-                                        }
-                                    videoInfoRepository.videoList.clear()
-                                    videoInfoRepository.videoList.addAll(partVideoList)
-                                }
-
-                                val lastPlayedPage =
-                                    videoDetailViewModel.videoDetail!!.pages.find { it.cid == lastPlayedCid }
-                                val playPage = lastPlayedPage
-                                    ?: videoDetailViewModel.videoDetail!!.pages.first()
-
-                                launchPlayerActivity(
-                                    context = context,
-                                    avid = videoDetailViewModel.videoDetail!!.aid,
-                                    cid = playPage.cid,
-                                    title = if (title.isNotEmpty()) title else videoDetailViewModel.videoDetail!!.title,
-                                    partTitle = if (partTitle.isNotEmpty()) partTitle else if (videoDetailViewModel.videoDetail!!.pages.size == 1) "" else playPage.title,
-                                    played = if (playPage.cid == lastPlayedCid) lastPlayedTime * 1000 else 0,
-                                    fromSeason = false,
-                                    isVerticalVideo = videoDetailViewModel.videoDetail!!.pages.first().dimension.isVertical,
-                                    playerIconIdle = videoDetailViewModel.videoDetail!!.playerIcon?.idle
-                                        ?: "",
-                                    playerIconMoving = videoDetailViewModel.videoDetail!!.playerIcon?.moving
-                                        ?: "",
-                                    play = videoDetailViewModel.videoDetail!!.stat.view,
-                                    danmaku = videoDetailViewModel.videoDetail!!.stat.danmaku,
-                                    like = videoDetailViewModel.videoDetail!!.stat.like,
-                                    coin = videoDetailViewModel.videoDetail!!.stat.coin,
-                                    favorite = videoDetailViewModel.videoDetail!!.stat.favorite,
-                                    upName = videoDetailViewModel.videoDetail!!.author.name,
-                                    upId = videoDetailViewModel.videoDetail!!.author.mid,
-                                    upFace = videoDetailViewModel.videoDetail!!.author.face,
-                                    pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString(),
-                                    audioOnlyMode = audioOnlyMode
-                                )
-                            },
-                            onClickUp = {
-                                UpInfoActivity.actionStart(
-                                    context,
-                                    mid = videoDetailViewModel.videoDetail!!.author.mid,
-                                    name = videoDetailViewModel.videoDetail!!.author.name,
-                                    face = videoDetailViewModel.videoDetail!!.author.face
-                                )
-                            },
-                            onAddFollow = {
-                                addFollow { success ->
-                                    scope.launch(Dispatchers.Main) {
-                                        if (success) {
-                                            "关注成功".toast(context)
-                                        } else {
-                                            "关注失败".toast(context)
-                                        }
-                                    }
-                                }
-                            },
-                            onDelFollow = {
-                                delFollow { success ->
-                                    scope.launch(Dispatchers.Main) {
-                                        if (success) {
-                                            "已取消关注".toast(context)
-                                        } else {
-                                            "取消关注失败".toast(context)
-                                        }
-                                    }
-                                }
-                            },
-                            onClickTip = { tag ->
-                                TagActivity.actionStart(
-                                    context = context,
-                                    tagId = tag.id,
-                                    tagName = tag.name
-                                )
-                            },
-                            onAddToDefaultFavoriteFolder = {
-                                addVideoToDefaultFavoriteFolder()
-                                favorited = true
-                                "已添加到默认收藏夹".toast(context)
-                            },
-                            onUpdateFavoriteFolders = {
-                                updateVideoFavoriteData(it)
-                                favorited = it.isNotEmpty()
-                                videoInFavoriteFolderIds.swapList(it)
-                                if (it.isNotEmpty()) {
-                                    "收藏成功".toast(context)
-                                } else {
-                                    "已取消收藏".toast(context)
-                                }
-                            },
-                            isLike = liked,
-                            onAddLike = {
-                                scope.launch {
-                                    if (!liked) {
-                                        if (addVideoLike()) {
-                                            liked = true
-                                            "点赞成功".toast(context)
-                                        } else {
-                                            "点赞失败".toast(context)
-                                        }
-                                    }
-                                }
-                            },
-                            onDelLike = {
-                                scope.launch {
-                                    if (liked) {
-                                        if (delVideoLike()) {
-                                            liked = false
-                                            "已取消点赞".toast(context)
-                                        } else {
-                                            "取消点赞失败".toast(context)
-                                        }
-                                    }
-                                }
-                            },
-                            isCoin = isCoin,
-                            onAddCoin = {
-                                scope.launch {
-                                    if (!isCoin) {
-                                        if (addVideoCoin()) {
-                                            isCoin = true
-                                            "投币成功".toast(context)
-                                        } else {
-                                            "投币失败".toast(context)
-                                        }
-                                    }
-                                }
-                            },
-                            onShowDescription = {
-                                showDescriptionDialog = true
-                            },
-                            onShowComment = {
-                                showCommentPanel = true
-                            },
-                            commentButtonFocusRequester = commentButtonFocusRequester
-                        )
                     }
                     if (videoDetailViewModel.videoDetail?.ugcSeason == null) {
                         item {
@@ -1017,24 +1217,18 @@ fun VideoInfoScreen(
                             )
                         }
                     }
-                    if (videoDetailViewModel.relatedVideos.isNotEmpty()) {
-                        item {
-                            VideosRow(
-                                header = stringResource(R.string.video_info_related_video_title),
-                                videos = videoDetailViewModel.relatedVideos,
-                                showMore = {},
-                                onOpenSeasonInfo = { videoData ->
-                                    SeasonInfoActivity.actionStart(
-                                        context = context,
-                                        epId = videoData.epId!!,
-                                        proxyArea = ProxyArea.checkProxyArea(videoData.title)
-                                    )
-                                },
-                                onOpenVideoInfo = { videoData ->
-                                    VideoInfoActivity.actionStart(context, videoData.avid)
-                                }
-                            )
-                        }
+                }
+
+            if (topArgueTips.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    topArgueTips.forEach { tipText ->
+                        ArgueTip(text = tipText)
                     }
                 }
             }
@@ -1081,6 +1275,29 @@ fun VideoInfoScreen(
             commentButtonFocusRequester.requestFocus()
         }
     }
+
+    RelatedVideosPanel(
+        show = showRelatedPanel,
+        videos = videoDetailViewModel.relatedVideos,
+        onHide = { showRelatedPanel = false },
+        onOpenVideoInfo = { videoData ->
+            VideoInfoActivity.actionStart(context, videoData.avid)
+        },
+        onOpenSeasonInfo = { videoData ->
+            SeasonInfoActivity.actionStart(
+                context = context,
+                epId = videoData.epId!!,
+                proxyArea = ProxyArea.checkProxyArea(videoData.title)
+            )
+        }
+    )
+
+    // 推荐面板关闭后，焦点返回推荐按钮
+    LaunchedEffect(showRelatedPanel) {
+        if (!showRelatedPanel) {
+            relatedButtonFocusRequester.requestFocus()
+        }
+    }
 }
 
 private fun VideoDetail.isCurrentDetailTargetVertical(
@@ -1121,25 +1338,173 @@ private fun Episode.verticalStateForCid(cid: Long): Boolean? {
 }
 
 @Composable
+private fun VideoHeroBadges(
+    videoDetail: VideoDetail,
+    modifier: Modifier = Modifier,
+) {
+    if (!videoDetail.isInteractive && !videoDetail.isChargingArc) return
+
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (videoDetail.isInteractive) {
+            Row(
+                modifier = Modifier
+                    .background(
+                        color = Color.Black.copy(alpha = 0.45f),
+                        shape = MaterialTheme.shapes.extraSmall
+                    )
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    modifier = Modifier.size(16.dp),
+                    imageVector = Icons.Rounded.PlayCircle,
+                    contentDescription = null,
+                    tint = InteractiveBadgeColor
+                )
+                Text(
+                    text = "互动视频",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = InteractiveBadgeColor
+                )
+            }
+        }
+
+        if (videoDetail.isChargingArc) {
+            Text(
+                modifier = Modifier
+                    .background(
+                        color = Color.Black.copy(alpha = 0.45f),
+                        shape = MaterialTheme.shapes.extraSmall
+                    )
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                text = if (videoDetail.chargingArcBadge.isNotBlank()) {
+                    "⚡${videoDetail.chargingArcBadge}"
+                } else {
+                    "⚡充电专属"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = ChargingBadgeColor
+            )
+        }
+    }
+}
+
+@Composable
+private fun VideoTagsRow(
+    tags: List<Tag>,
+    modifier: Modifier = Modifier,
+    onClickTag: (Tag) -> Unit,
+) {
+    val focusRequester = remember { FocusRequester() }
+    val currentOnClickTag by rememberUpdatedState(onClickTag)
+
+    LazyRow(
+        modifier = modifier.focusRestorer(focusRequester),
+        contentPadding = PaddingValues(vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        itemsIndexed(items = tags, key = { _, tag -> tag.id }) { index, tag ->
+            var hasFocus by remember(tag.id) { mutableStateOf(false) }
+
+            Surface(
+                modifier = Modifier
+                    .ifElse(index == 0, Modifier.focusRequester(focusRequester))
+                    .onFocusChanged { hasFocus = it.hasFocus },
+                colors = ClickableSurfaceDefaults.colors(
+                    containerColor = Color.White.copy(alpha = 0.12f),
+                    focusedContainerColor = Color.White,
+                    pressedContainerColor = Color.White
+                ),
+                scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1.05f),
+                shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(4.dp)),
+                border = ClickableSurfaceDefaults.border(
+                    border = Border.None,
+                    focusedBorder = Border.None,
+                    pressedBorder = Border.None
+                ),
+                onClick = { currentOnClickTag(tag) }
+            ) {
+                Text(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    text = tag.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (hasFocus) Color.Black else Color.White.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AutoResizeTitleText(
+    text: String,
+    modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.headlineLarge,
+    minFontSize: androidx.compose.ui.unit.TextUnit = 24.sp,
+    maxLines: Int = 2,
+    color: Color = Color.White,
+) {
+    var resizedStyle by remember(text, style) { mutableStateOf(style) }
+    var readyToDraw by remember(text, style) { mutableStateOf(false) }
+
+    Text(
+        text = text,
+        modifier = modifier.drawWithContent {
+            if (readyToDraw) {
+                drawContent()
+            }
+        },
+        style = resizedStyle,
+        maxLines = maxLines,
+        overflow = TextOverflow.Clip,
+        color = color,
+        onTextLayout = { result ->
+            if (result.hasVisualOverflow && resizedStyle.fontSize > minFontSize) {
+                resizedStyle = resizedStyle.copy(fontSize = resizedStyle.fontSize * 0.95f)
+            } else {
+                readyToDraw = true
+            }
+        }
+    )
+}
+
+@Composable
 fun ArgueTip(
     modifier: Modifier = Modifier,
     text: String
 ) {
     Surface(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 36.dp),
+            .fillMaxWidth(),
         colors = SurfaceDefaults.colors(
-            containerColor = Color.Yellow.copy(alpha = 0.2f),
+            containerColor = Color.Transparent,
             contentColor = Color.Yellow
         ),
         shape = MaterialTheme.shapes.small
     ) {
         Row(
-            modifier = Modifier.padding(
-                horizontal = 16.dp,
-                vertical = 8.dp
-            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Yellow.copy(alpha = 0.22f),
+                            Color.Yellow.copy(alpha = 0.12f),
+                            Color.Transparent
+                        )
+                    )
+                )
+                .padding(
+                    horizontal = 16.dp,
+                    vertical = 8.dp
+                ),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1149,409 +1514,6 @@ fun ArgueTip(
                 tint = Color.Yellow
             )
             Text(text = text)
-        }
-    }
-}
-
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-fun VideoInfoData(
-    modifier: Modifier = Modifier,
-    defaultFocusRequester: FocusRequester,
-    videoDetail: VideoDetail,
-    showFollowButton: Boolean,
-    isFollowing: Boolean,
-    tags: List<Tag>,
-    isFavorite: Boolean,
-    userFavoriteFolders: List<FavoriteFolderMetadata> = emptyList(),
-    favoriteFolderIds: List<Long> = emptyList(),
-    onClickCover: () -> Unit,
-    onClickUp: () -> Unit,
-    onAddFollow: () -> Unit,
-    onDelFollow: () -> Unit,
-    onClickTip: (Tag) -> Unit,
-    onAddToDefaultFavoriteFolder: () -> Unit,
-    onUpdateFavoriteFolders: (List<Long>) -> Unit,
-    isLike: Boolean,
-    onAddLike: () -> Unit = {},
-    onDelLike: () -> Unit = {},
-    isCoin: Boolean = false,
-    onAddCoin: () -> Unit = {},
-    onShowDescription: () -> Unit = {},
-    onShowComment: () -> Unit = {},
-    commentButtonFocusRequester: FocusRequester
-) {
-//    val localDensity = LocalDensity.current
-//    var heightIs by remember { mutableStateOf(0.dp) }
-    val isLogin by remember { mutableStateOf(Prefs.isLogin) }
-//    var coverHasFocus by remember { mutableStateOf(false) }
-    val videoDuration =
-        videoDetail.pages.sumOf { it.duration }.takeIf { videoDetail.pages.isNotEmpty() } ?: 0
-
-    Row(
-        modifier = modifier
-            .padding(start = 36.dp, end = 36.dp, top = 12.dp, bottom = 18.dp),
-    ) {
-        Surface(
-            modifier = Modifier
-                .focusRequester(defaultFocusRequester)
-                .width(260.dp)
-                .aspectRatio(1.6f)
-//                .onGloballyPositioned { coordinates ->
-//                    heightIs = with(localDensity) { coordinates.size.height.toDp() }
-//                }
-//                .onFocusChanged { coverHasFocus = it.hasFocus }
-                .padding(4.dp),
-            onClick = onClickCover,
-            shape = ClickableSurfaceDefaults.shape(
-                shape = MaterialTheme.shapes.medium,
-            ),
-            scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1.05f),
-            border = ClickableSurfaceDefaults.border(
-                focusedBorder = Border(
-                    border = BorderStroke(
-                        width = 3.dp,
-                        color = MaterialTheme.colorScheme.border
-                    ),
-                    shape = MaterialTheme.shapes.medium
-                )
-            )
-        ) {
-            AsyncImage(
-                modifier = Modifier
-                    .fillMaxSize(),
-                // model = if (videoDetail.ugcSeason != null) videoDetail.ugcSeason!!.cover else videoDetail.cover,
-                model = videoDetail.cover,
-                contentDescription = null,
-                contentScale = ContentScale.Crop
-            )
-            if (videoDetail.isInteractive || videoDetail.isChargingArc) {
-                Column(
-                    modifier = Modifier
-                        .padding(6.dp)
-                        .align(Alignment.TopEnd),
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (videoDetail.isInteractive) {
-                        Row(
-                            modifier = Modifier
-                                .background(
-                                    color = Color.Black.copy(0.3f),
-                                    shape = MaterialTheme.shapes.extraSmall
-                                )
-                                .padding(horizontal = 4.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.PlayCircle,
-                                contentDescription = null,
-                                tint = InteractiveBadgeColor
-                            )
-                            Text(
-                                text = "互动视频",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = InteractiveBadgeColor
-                            )
-                        }
-                    }
-                    if (videoDetail.isChargingArc) {
-                        Text(
-                            modifier = Modifier
-                                .background(
-                                    color = Color.Black.copy(0.3f),
-                                    shape = MaterialTheme.shapes.extraSmall
-                                )
-                                .padding(all = 2.dp),
-                            text = if (videoDetail.chargingArcBadge.isNotBlank()) {
-                                "⚡${videoDetail.chargingArcBadge}"
-                            } else {
-                                "⚡充电专属"
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = ChargingBadgeColor
-                        )
-                    }
-                }
-            }
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .clip(
-                        RoundedCornerShape(
-                            topStart = 0.dp,
-                            topEnd = 0.dp,
-                            bottomStart = 12.dp,
-                            bottomEnd = 12.dp
-                        )
-                    )
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.8f)
-                            )
-                        )
-                    )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Icon(
-                        modifier = Modifier,
-                        painter = painterResource(id = R.drawable.ic_play_count),
-                        contentDescription = null,
-                        tint = Color.White
-                    )
-                    Text(
-                        text = with(videoDetail.stat.view) { if (this >= 10000) "${this / 10000}万" else "$this" },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(
-                        modifier = Modifier,
-                        painter = painterResource(id = R.drawable.ic_danmaku_count),
-                        contentDescription = null,
-                        tint = Color.White
-                    )
-                    Text(
-                        text = with(videoDetail.stat.danmaku) { if (this >= 10000) "${this / 10000}万" else "$this" },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White
-                    )
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        text = (videoDuration * 1000L).formatHourMinSec(),
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-        }
-        Spacer(modifier = Modifier.width(24.dp))
-        Column(
-            modifier = Modifier
-                .fillMaxWidth(),
-//                .height(heightIs),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            // 基本信息
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = videoDetail.title,
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = Color.White
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp, bottom = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    CompositionLocalProvider(
-                        LocalTextStyle provides MaterialTheme.typography.labelMedium
-                    ) {
-                        Text(text = "${videoDetail.stat.like} 点赞")
-                        Text(text = "·")
-                        Text(text = "${videoDetail.stat.coin} 投币")
-                        Text(text = "·")
-                        Text(text = "${videoDetail.stat.favorite} 收藏")
-                        Text(text = "·")
-                        Text(text = videoDetail.publishDate.formatPubTimeString())
-                    }
-                }
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .offset(x = (-3).dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp)
-                ) {
-                    if (isLogin) {
-                        item {
-                            LikeButton(
-                                modifier = Modifier
-                                    .height(32.dp), // 设置高度
-                                isLike = isLike,
-                                onToggleLike = {
-                                    if (isLike) {
-                                        onDelLike()
-                                    } else {
-                                        onAddLike()
-                                    }
-                                }
-                            )
-                        }
-                        item {
-                            FavoriteButton(
-                                modifier = Modifier
-                                    .height(32.dp), // 设置高度
-                                isFavorite = isFavorite,
-                                userFavoriteFolders = userFavoriteFolders,
-                                favoriteFolderIds = favoriteFolderIds,
-                                onAddToDefaultFavoriteFolder = onAddToDefaultFavoriteFolder,
-                                onUpdateFavoriteFolders = onUpdateFavoriteFolders
-                            )
-                        }
-                        item {
-                            CoinButton(
-                                modifier = Modifier
-                                    .height(32.dp), // 设置高度
-                                isCoin = isCoin,
-                                onAddCoin = {
-                                    onAddCoin()
-                                }
-                            )
-                        }
-                    }
-                    item {
-                        UpButton(
-                            name = videoDetail.author.name,
-                            followed = isFollowing,
-                            showFollowButton = showFollowButton,
-                            onClickUp = onClickUp,
-                            onAddFollow = onAddFollow,
-                            onDelFollow = onDelFollow
-                        )
-                    }
-
-                    // 简介按钮
-                    if (videoDetail.description.isNotBlank()) {
-                        item {
-                            Row(
-                                modifier = Modifier
-                                    .clip(MaterialTheme.shapes.small)
-                                    .background(Color.White.copy(alpha = 0.2f))
-                                    .focusedBorder(MaterialTheme.shapes.small)
-                                    .padding(horizontal = 4.dp)
-                                    .clickable { onShowDescription() }
-                                    .height(30.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = "简介>>",
-                                    color = Color.White
-                                )
-                            }
-                        }
-                    }
-
-                    // 评论按钮
-                    item {
-                        Row(
-                            modifier = Modifier
-                                .clip(MaterialTheme.shapes.small)
-                                .background(Color.White.copy(alpha = 0.2f))
-                                .focusedBorder(MaterialTheme.shapes.small)
-                                .padding(horizontal = 4.dp)
-                                .focusRequester(commentButtonFocusRequester)
-                                .clickable { onShowComment() }
-                                .height(30.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = "评论>>",
-                                color = Color.White
-                            )
-                        }
-                    }
-                }
-            }
-            // 标签列表
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .offset(x = (-2).dp, y = (-2).dp),
-                contentPadding = PaddingValues(horizontal = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(items = tags) { tag ->
-                    SuggestionChip(onClick = {
-                        onClickTip(tag)
-                    }) {
-                        Text(text = tag.name)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun UpButton(
-    modifier: Modifier = Modifier,
-    name: String,
-    followed: Boolean,
-    showFollowButton: Boolean = false,
-    onClickUp: () -> Unit,
-    onAddFollow: () -> Unit,
-    onDelFollow: () -> Unit
-) {
-    val view = LocalView.current
-    val isLogin by remember { mutableStateOf(if (!view.isInEditMode) Prefs.isLogin else true) }
-
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .clip(MaterialTheme.shapes.small)
-                .background(Color.White.copy(alpha = 0.2f))
-                .focusedBorder(MaterialTheme.shapes.small)
-                .padding(4.dp)
-                .clickable { onClickUp() },
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            UpIcon(color = Color.White)
-            Text(text = name, color = Color.White)
-        }
-        if (isLogin && showFollowButton) {
-            Row(
-                modifier = Modifier
-                    .clip(MaterialTheme.shapes.small)
-                    .background(Color.White.copy(alpha = 0.2f))
-                    .focusedBorder(MaterialTheme.shapes.small)
-                    .padding(horizontal = 4.dp, vertical = 3.dp)
-                    .clickable { if (followed) onDelFollow() else onAddFollow() }
-                    .animateContentSize(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (followed) {
-                    Icon(
-                        imageVector = Icons.Rounded.Done,
-                        contentDescription = null,
-                        tint = Color.White
-                    )
-                    Text(
-                        text = stringResource(R.string.video_info_followed),
-                        color = Color.White
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = null,
-                        tint = Color.White
-                    )
-                    Text(text = stringResource(R.string.video_info_follow), color = Color.White)
-                }
-            }
         }
     }
 }
@@ -1635,97 +1597,129 @@ private fun VideoPartButton(
     onClick: () -> Unit
 ) {
     var hasFocus by remember { mutableStateOf(false) }
-    val borderColor = when {
-        isLastPlayed -> Color(0xFFE39B17)
-        isCurrentIntent -> MaterialTheme.colorScheme.primary
-        else -> null
-    }
-    val focusedBorderColor = when {
-        isLastPlayed -> Color(0xFFE39B17)
-        isCurrentIntent -> Color(0xFF00BFFF)
-        else -> null
-    }
     val goldColor = Color(0xFFE39B17)
+    val lastPlayedColor = Color(0xFFE39B17)
+    val focusedColor = Color(0xFFF1CD8B)
+
+    val progressFraction = remember(played, duration) {
+        if (duration <= 0) 0f
+        else if (played < 0) 1f
+        else (played.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+    }
+
+    val durationText = remember(duration) {
+        if (duration <= 0) ""
+        else {
+            val min = duration / 60
+            val sec = duration % 60
+            "%d:%02d".format(min, sec)
+        }
+    }
+
+    val prefix = when (type) {
+        VideoPartType.Episode -> "EP"
+        VideoPartType.Part -> "P"
+    }
 
     Surface(
         modifier = modifier.onFocusChanged { hasFocus = it.hasFocus },
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            focusedContainerColor = Color(0xFF382b46),
-            pressedContainerColor = Color(0xFF382b46)
+            containerColor = Color.White.copy(alpha = 0.25f),
+            focusedContainerColor = Color.White.copy(alpha = 0.45f),
+            pressedContainerColor = Color.White.copy(alpha = 0.45f)
         ),
-        scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1f),
-        shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
+        scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1.05f),
+        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(12.dp)),
         border = ClickableSurfaceDefaults.border(
-            border = borderColor?.let {
-                Border(
-                    border = BorderStroke(2.dp, it),
-                    shape = MaterialTheme.shapes.medium
-                )
-            } ?: Border.None,
-            focusedBorder = focusedBorderColor?.let {
-                Border(
-                    border = BorderStroke(2.dp, it),
-                    shape = MaterialTheme.shapes.medium
-                )
-            } ?: Border.None,
-            pressedBorder = focusedBorderColor?.let {
-                Border(
-                    border = BorderStroke(2.dp, it),
-                    shape = MaterialTheme.shapes.medium
-                )
-            } ?: Border.None
+            border = if (isCurrentIntent) Border(
+                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
+                shape = RoundedCornerShape(12.dp)
+            ) else Border.None,
+            focusedBorder = Border(
+                border = BorderStroke(3.dp, if (isLastPlayed) lastPlayedColor else focusedColor),
+                shape = RoundedCornerShape(12.dp)
+            ),
+            pressedBorder = Border(
+                border = BorderStroke(3.dp, if (isLastPlayed) lastPlayedColor else focusedColor),
+                shape = RoundedCornerShape(12.dp)
+            )
         ),
         onClick = { onClick() }
     ) {
         Box(
-            modifier = Modifier
-                .size(200.dp, 64.dp)
+            modifier = Modifier.width(200.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.75f))
-                    .fillMaxHeight()
-                    .fillMaxWidth(if (played < 0) 1f else (played / duration.toFloat()))
-            ) {}
+            Column {
+                Row(
+                    modifier = Modifier
+                        .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 8.dp)
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // 编号标签
+                    Text(
+                        text = "$prefix$index",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (isLastPlayed) goldColor
+                        else if (hasFocus) Color.White
+                        else Color.White.copy(alpha = 0.45f),
+                        maxLines = 1
+                    )
 
-            val textStyle = LocalTextStyle.current
-            val isFinished = duration <= 0 || played / duration.toFloat() >= 0.95f
-            val prefixText = if (isLastPlayed && played > 0) (if (isFinished) "已播完 " else "继续播放 ") else ""
-            val mainText = when (type) {
-                VideoPartType.Episode -> "EP"
-                VideoPartType.Part -> "P"
-            } + "$index $title"
-
-            if (isLastPlayed && hasFocus) {
-                Text(
-                    modifier = Modifier.padding(8.dp),
-                    text = buildAnnotatedString {
-                        withStyle(style = SpanStyle(color = goldColor)) {
-                            append(prefixText)
-                        }
-                        withStyle(style = SpanStyle(color = Color.White)) {
-                            append(mainText)
-                        }
-                    },
-                    style = textStyle,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            } else {
-                Text(
-                    modifier = Modifier.padding(8.dp),
-                    text = buildAnnotatedString {
-                        if (isLastPlayed && played > 0) {
-                            withStyle(style = SpanStyle(color = goldColor)) {
-                                append(prefixText)
+                    // 标题 + 时长/状态
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (isLastPlayed) Color.White else Color.White.copy(alpha = 0.85f),
+                            minLines = 2,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (isLastPlayed) {
+                                Icon(
+                                    modifier = Modifier.size(12.dp),
+                                    imageVector = Icons.Rounded.PlayCircle,
+                                    contentDescription = null,
+                                    tint = goldColor
+                                )
+                            }
+                            if (durationText.isNotEmpty()) {
+                                Text(
+                                    text = durationText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White.copy(alpha = 0.4f)
+                                )
                             }
                         }
-                        append(mainText)
-                    },
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                    }
+                }
+
+                // 底部进度条
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
+                        .background(Color.White.copy(alpha = 0.12f))
+                ) {
+                    if (progressFraction > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progressFraction)
+                                .background(Color(0xFF00E676))
+                        )
+                    }
+                }
             }
         }
     }
@@ -1738,16 +1732,25 @@ private enum class VideoPartType {
 @Composable
 private fun VideoPartRowButton(
     modifier: Modifier = Modifier,
+    buttonSize: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit
 ) {
+    val iconSize = max(buttonSize.value * 0.75f, 16f).dp
+
     Surface(
-        modifier = modifier.size(width = 64.dp, height = 64.dp),
+        modifier = modifier.size(buttonSize),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
-            pressedContainerColor = MaterialTheme.colorScheme.inverseSurface
+            containerColor = Color.White.copy(alpha = 0.08f),
+            focusedContainerColor = Color.White.copy(alpha = 0.2f),
+            pressedContainerColor = Color.White.copy(alpha = 0.2f)
         ),
-        shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
+        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(8.dp)),
+        border = ClickableSurfaceDefaults.border(
+            focusedBorder = Border(
+                border = BorderStroke(1.5.dp, Color(0xFFF1CD8B)),
+                shape = RoundedCornerShape(8.dp)
+            )
+        ),
         onClick = onClick
     ) {
         Box(
@@ -1756,7 +1759,7 @@ private fun VideoPartRowButton(
         ) {
             Icon(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(iconSize)
                     .rotate(90f),
                 imageVector = Icons.Rounded.ViewModule,
                 contentDescription = null
@@ -1782,8 +1785,13 @@ fun VideoPartRow(
     var hasFocus by remember { mutableStateOf(false) }
     var showPartListDialog by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    val initialFocusIndex = remember(lastPlayedCid, pages) {
+        pages.indexOfFirst { it.cid == lastPlayedCid }
+            .takeIf { it >= 0 }
+            ?: 0
+    }
     val titleFontSize by animateFloatAsState(
-        targetValue = if (hasFocus) 30f else 14f,
+        targetValue = if (hasFocus) 21f else 14f,
         label = "title font size",
         animationSpec = tween(
             durationMillis = 120
@@ -1815,11 +1823,13 @@ fun VideoPartRow(
                 text = (titleText ?: stringResource(R.string.video_info_part_row_title))
                         + (" - $subtitle".takeIf { subtitle.isNotBlank() } ?: ""),
                 fontSize = titleFontSize.sp,
+                color = if (hasFocus) Color.White else Color.White.copy(alpha = 0.6f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             if (enablePartListDialog) {
                 VideoPartRowButton(
+                    buttonSize = max(titleFontSize * 1.5f, 21f).dp,
                     onClick = { showPartListDialog = true }
                 )
             }
@@ -1836,7 +1846,7 @@ fun VideoPartRow(
             itemsIndexed(items = pages, key = { _, page -> page.cid }) { index, page ->
                 VideoPartButton(
                     modifier = Modifier
-                        .ifElse(index == 0, Modifier.focusRequester(focusRequester)),
+                        .ifElse(index == initialFocusIndex, Modifier.focusRequester(focusRequester)),
                     index = index + 1,
                     title = page.title,
                     played = if (page.cid == lastPlayedCid) lastPlayedTime else 0,
@@ -1875,6 +1885,19 @@ fun VideoUgcSeasonRow(
     var hasFocus by remember { mutableStateOf(false) }
     var showUgcListDialog by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    val initialFocusIndex = remember(lastPlayedCid, intentAid, episodes) {
+        when {
+            lastPlayedCid != 0L -> {
+                episodes.indexOfFirst {
+                    it.cid == lastPlayedCid || it.pages.any { page -> page.cid == lastPlayedCid }
+                }
+            }
+
+            intentAid != 0L -> episodes.indexOfFirst { it.aid == intentAid }
+            else -> -1
+        }.takeIf { it >= 0 } ?: 0
+    }
+    val titleColor = if (hasFocus) Color.White else Color.White.copy(alpha = 0.6f)
     val titleFontSize by animateFloatAsState(
         targetValue = if (hasFocus) 30f else 14f,
         label = "title font size",
@@ -1905,21 +1928,23 @@ fun VideoUgcSeasonRow(
 
     Column(
         modifier = modifier
-            .padding(start = 26.dp)
+            .padding(bottom = 24.dp)
             .onFocusChanged { hasFocus = it.hasFocus },
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
-            modifier = Modifier.padding(start = 10.dp),
+            modifier = Modifier.padding(start = 48.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 text = title,
-                fontSize = titleFontSize.sp
+                fontSize = titleFontSize.sp,
+                color = titleColor
             )
             if (enableUgcListDialog) {
                 VideoPartRowButton(
+                    buttonSize = 32.dp,
                     onClick = { showUgcListDialog = true }
                 )
             }
@@ -1927,24 +1952,28 @@ fun VideoUgcSeasonRow(
 
         LazyRow(
             modifier = Modifier
-                .padding(top = 4.dp)
+                .padding(top = 15.dp)
                 .focusRestorer(focusRequester),
             state = listState,
-            contentPadding = PaddingValues(12.dp),
+            contentPadding = PaddingValues(horizontal = 48.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             itemsIndexed(items = episodes) { index, episode ->
-                VideoPartButton(
+                val episodeTitle by remember { mutableStateOf(ugcEpisodeDisplayTitle(episode)) }
+                UgcEpisodeButton(
                     modifier = Modifier
-                        .ifElse(index == 0, Modifier.focusRequester(focusRequester))
+                        .ifElse(index == initialFocusIndex, Modifier.focusRequester(focusRequester))
                         .onFocusChanged { if (it.hasFocus) focusingEpisode = episode },
-                    index = index + 1,
-                    title = episode.title,
-                    played = if (episode.cid == lastPlayedCid) lastPlayedTime else 0,
+                    title = episodeTitle,
+                    cover = episode.cover,
+                    viewCount = episode.viewCount,
+                    danmakuCount = episode.danmakuCount,
+                    isInteractive = episode.isInteractive,
+                    isChargingArc = episode.isChargingArc,
+                    chargingArcBadge = episode.chargingArcBadge,
+                    played = if (episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid }) lastPlayedTime else 0,
                     isLastPlayed = episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid },
-                    isCurrentIntent = episode.aid == intentAid,
                     duration = episode.duration,
-                    type = VideoPartType.Episode,
                     onClick = { onClickEp(episode.aid, episode.cid) }
                 )
             }
@@ -1971,9 +2000,292 @@ fun VideoUgcSeasonRow(
         lastPlayedCid = lastPlayedCid,
         lastPlayedTime = lastPlayedTime,
         intentAid = intentAid,
+        sectionTitle = title,
         title = "合集列表",
         onClick = onClickEp
     )
+}
+
+private fun ugcEpisodeDisplayTitle(episode: Episode): String {
+    return episode.longTitle.ifBlank { episode.title }
+}
+
+private fun formatUgcEpisodeCount(count: Long): String {
+    return when {
+        count >= 10000 -> "${count / 10000}万"
+        else -> count.toString()
+    }
+}
+
+@Composable
+private fun UgcEpisodeButton(
+    modifier: Modifier = Modifier,
+    title: String,
+    cover: String,
+    viewCount: Long = 0,
+    danmakuCount: Int = 0,
+    isInteractive: Boolean = false,
+    isChargingArc: Boolean = false,
+    chargingArcBadge: String = "",
+    duration: Int,
+    played: Int = 0,
+    isLastPlayed: Boolean = false,
+    onClick: () -> Unit
+) {
+    val isPreview = LocalInspectionMode.current
+    val lastPlayedColor = Color(0xFFE39B17)
+    val focusedColor = Color(0xFFF1CD8B)
+
+    val durationText = remember(duration) {
+        if (duration <= 0) ""
+        else {
+            val min = duration / 60
+            val sec = duration % 60
+            "%d:%02d".format(min, sec)
+        }
+    }
+
+    val progressFraction = remember(played, duration) {
+        if (duration <= 0) 0f
+        else if (played < 0) 1f
+        else (played.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+    }
+    val playText = remember(viewCount) {
+        if (viewCount > 0) formatUgcEpisodeCount(viewCount) else ""
+    }
+    val danmakuText = remember(danmakuCount) {
+        if (danmakuCount > 0) formatUgcEpisodeCount(danmakuCount.toLong()) else ""
+    }
+
+    Surface(
+        modifier = modifier.width(220.dp),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent,
+            focusedContainerColor = Color.Transparent,
+            pressedContainerColor = Color.Transparent
+        ),
+        scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1.05f),
+        shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
+        border = ClickableSurfaceDefaults.border(
+            border = Border.None,
+            focusedBorder = Border(
+                border = BorderStroke(2.dp, if (isLastPlayed) lastPlayedColor else focusedColor),
+                shape = MaterialTheme.shapes.medium
+            ),
+            pressedBorder = Border.None
+        ),
+        onClick = onClick
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                    .background(if (isPreview) Color.Gray else Color.Black)
+            ) {
+                AsyncImage(
+                    modifier = Modifier.fillMaxSize(),
+                    model = cover.resizedImageUrl(ImageSize.TvEpisodeCover),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop
+                )
+
+                VideoEpisodeBadges(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp),
+                    isInteractive = isInteractive,
+                    isChargingArc = isChargingArc,
+                    chargingArcBadge = chargingArcBadge
+                )
+
+                if (playText.isNotEmpty() || danmakuText.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.8f)
+                                    )
+                                )
+                            )
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (playText.isNotEmpty()) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_play_count),
+                                contentDescription = null,
+                                tint = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = playText,
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                maxLines = 1
+                            )
+                        }
+
+                        if (danmakuText.isNotEmpty()) {
+                            if (playText.isNotEmpty()) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_danmaku_count),
+                                contentDescription = null,
+                                tint = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = danmakuText,
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+
+                if (isLastPlayed) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.3f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            modifier = Modifier.size(36.dp),
+                            imageVector = Icons.Rounded.PlayCircle,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.9f)
+                        )
+                    }
+                }
+
+                if (durationText.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(4.dp)
+                            .background(
+                                Color.Black.copy(alpha = 0.7f),
+                                RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = durationText,
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                if (progressFraction > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(Color.White.copy(alpha = 0.2f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progressFraction)
+                                .background(lastPlayedColor)
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 13.sp,
+                    color = Color.White,
+                    minLines = 2,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoEpisodeBadges(
+    modifier: Modifier = Modifier,
+    isInteractive: Boolean,
+    isChargingArc: Boolean,
+    chargingArcBadge: String,
+) {
+    if (!isInteractive && !isChargingArc) return
+
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalAlignment = Alignment.End
+    ) {
+        if (isInteractive) {
+            Row(
+                modifier = Modifier
+                    .background(
+                        color = Color.Black.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(6.dp)
+                    )
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    modifier = Modifier.size(14.dp),
+                    imageVector = Icons.Rounded.PlayCircle,
+                    contentDescription = null,
+                    tint = InteractiveBadgeColor
+                )
+                Text(
+                    text = "互动视频",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = InteractiveBadgeColor,
+                    maxLines = 1
+                )
+            }
+        }
+
+        if (isChargingArc) {
+            Text(
+                modifier = Modifier
+                    .background(
+                        color = Color.Black.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(6.dp)
+                    )
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                text = "⚡${chargingArcBadge.ifBlank { ChargingBadgeDefaultText }}",
+                style = MaterialTheme.typography.labelSmall,
+                color = ChargingBadgeColor,
+                maxLines = 1
+            )
+        }
+    }
 }
 
 @Composable
@@ -2021,7 +2333,7 @@ private fun VideoPartListDialog(
             properties = DialogProperties(usePlatformDefaultWidth = false),
             text = {
                 Column(
-                    modifier = Modifier.size(600.dp, 330.dp),
+                    modifier = Modifier.size(660.dp, 380.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     TabRow(
@@ -2065,10 +2377,10 @@ private fun VideoPartListDialog(
                                 if (tabCount > 1) tabRowFocusRequester.requestFocus() else onHideDialog()
                             },
                         state = listState,
-                        columns = GridCells.Fixed(2),
+                        columns = GridCells.Fixed(3),
                         contentPadding = PaddingValues(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         itemsIndexed(
                             items = selectedVideoPart,
@@ -2103,6 +2415,7 @@ private fun VideoUgcListDialog(
     lastPlayedCid: Long = 0,
     lastPlayedTime: Int = 0,
     intentAid: Long = 0,
+    sectionTitle: String,
     onHideDialog: () -> Unit,
     onClick: (avid: Long, cid: Long) -> Unit
 ) {
@@ -2140,7 +2453,7 @@ private fun VideoUgcListDialog(
             properties = DialogProperties(usePlatformDefaultWidth = false),
             text = {
                 Column(
-                    modifier = Modifier.size(600.dp, 330.dp),
+                    modifier = Modifier.size(700.dp, 400.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     TabRow(
@@ -2184,10 +2497,10 @@ private fun VideoUgcListDialog(
                                 if (tabCount > 1) tabRowFocusRequester.requestFocus() else onHideDialog()
                             },
                         state = listState,
-                        columns = GridCells.Fixed(2),
+                        columns = GridCells.Fixed(3),
                         contentPadding = PaddingValues(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         itemsIndexed(
                             items = selectedVideoPart,
@@ -2195,15 +2508,20 @@ private fun VideoUgcListDialog(
                         ) { index, episode ->
                             val buttonModifier =
                                 if (index == 0) Modifier.focusRequester(videoListFocusRequester) else Modifier
+                            val absoluteIndex = selectedTabIndex * 20 + index + 1
+                            val episodeTitle by remember { mutableStateOf(ugcEpisodeDisplayTitle(episode)) }
 
-                            VideoPartButton(
-                                modifier = buttonModifier,
-                                index = selectedTabIndex * 20 + index + 1,
-                                type = VideoPartType.Episode,
-                                title = episode.title,
-                                played = if (episode.cid == lastPlayedCid) lastPlayedTime else 0,
+                            UgcEpisodeButton(
+                                modifier = buttonModifier.focusedScale(0.95f),
+                                title = episodeTitle,
+                                cover = episode.cover,
+                                viewCount = episode.viewCount,
+                                danmakuCount = episode.danmakuCount,
+                                isInteractive = episode.isInteractive,
+                                isChargingArc = episode.isChargingArc,
+                                chargingArcBadge = episode.chargingArcBadge,
+                                played = if (episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid }) lastPlayedTime else 0,
                                 isLastPlayed = episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid },
-                                isCurrentIntent = episode.aid == intentAid,
                                 duration = episode.duration,
                                 onClick = { onClick(episode.aid, episode.cid) }
                             )
@@ -2263,93 +2581,3 @@ fun VideoPartRowPreview() {
     }
 }
 
-@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Composable
-private fun UpButtonPreview() {
-    var followed by remember { mutableStateOf(false) }
-    BVTheme {
-        UpButton(
-            name = "12435678",
-            followed = followed,
-            onClickUp = { followed = !followed },
-            onAddFollow = {},
-            onDelFollow = {}
-        )
-    }
-}
-
-@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Composable
-private fun CoverPreview() {
-    Box {
-        AsyncImage(
-            modifier = Modifier
-                .fillMaxSize(),
-            // model = if (videoDetail.ugcSeason != null) videoDetail.ugcSeason!!.cover else videoDetail.cover,
-            model = "http://i2.hdslb.com/bfs/archive/af17fc07b8f735e822563cc45b7b5607a491dfff.jpg",
-            contentDescription = null,
-            contentScale = ContentScale.Crop
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(48.dp)
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 0.dp,
-                        topEnd = 0.dp,
-                        bottomStart = 16.dp,
-                        bottomEnd = 16.dp
-                    )
-                )
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.8f)
-                        )
-                    )
-                )
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Icon(
-                    modifier = Modifier,
-                    painter = painterResource(id = R.drawable.ic_play_count),
-                    contentDescription = null,
-                    tint = Color.White
-                )
-                Text(
-                    text = "3009",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Icon(
-                    modifier = Modifier,
-                    painter = painterResource(id = R.drawable.ic_danmaku_count),
-                    contentDescription = null,
-                    tint = Color.White
-                )
-                Text(
-                    text = "1099",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White
-                )
-
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = "12:34",
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-        }
-    }
-}

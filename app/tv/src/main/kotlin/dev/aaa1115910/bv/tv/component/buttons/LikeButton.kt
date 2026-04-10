@@ -36,7 +36,6 @@ fun LikeButton(
         modifier = modifier,
         onClick = {onToggleLike()},
         contentPadding = contentPadding,
-        shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)), // 设置为小圆角
         colors = colors,
         border = border,
     ) {

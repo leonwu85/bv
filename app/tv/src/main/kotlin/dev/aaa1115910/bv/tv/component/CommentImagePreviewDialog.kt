@@ -47,7 +47,9 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
+import coil.imageLoader
 import coil.request.ImageRequest
+import coil.size.Precision
 import dev.aaa1115910.biliapi.entity.Picture
 import kotlinx.coroutines.delay
 import kotlin.math.max
@@ -71,14 +73,20 @@ fun CommentImagePreviewDialog(
     var offsetY by remember(show, pictures, initialIndex) { mutableFloatStateOf(0f) }
     var previewAreaSize by remember { mutableStateOf(IntSize.Zero) }
     val imageFocusRequester = remember { FocusRequester() }
+    val prefetchedIndexes = remember(show, pictures) { mutableSetOf<Int>() }
     val requestWidth = previewAreaSize.width.takeIf { it > 0 } ?: 1920
     val requestHeight = previewAreaSize.height.takeIf { it > 0 } ?: 1080
+    val imageLoader = context.imageLoader
+
+    fun buildImageRequest(index: Int) = ImageRequest.Builder(context)
+        .data(pictures[index].url)
+        .size(requestWidth, requestHeight)
+        .precision(Precision.INEXACT)
+        .allowHardware(false)
+        .build()
+
     val previewImageRequest = remember(context, pictures, currentIndex, requestWidth, requestHeight) {
-        ImageRequest.Builder(context)
-            .data(pictures[currentIndex].url)
-            .size(requestWidth, requestHeight)
-            .allowHardware(false)
-            .build()
+        buildImageRequest(currentIndex)
     }
 
     fun maxTranslation(): Float {
@@ -107,6 +115,20 @@ fun CommentImagePreviewDialog(
             val maxTranslation = maxTranslation()
             offsetX = offsetX.coerceIn(-maxTranslation, maxTranslation)
             offsetY = offsetY.coerceIn(-maxTranslation, maxTranslation)
+        }
+    }
+
+    LaunchedEffect(show, currentIndex, pictures, requestWidth, requestHeight) {
+        if (!show || pictures.size <= 1 || previewAreaSize == IntSize.Zero) return@LaunchedEffect
+
+        val preloadIndexes = (1..3)
+            .map { currentIndex + it }
+            .filter { it <= pictures.lastIndex }
+            .filter { it !in prefetchedIndexes }
+
+        preloadIndexes.forEach { index ->
+            prefetchedIndexes += index
+            imageLoader.enqueue(buildImageRequest(index))
         }
     }
 

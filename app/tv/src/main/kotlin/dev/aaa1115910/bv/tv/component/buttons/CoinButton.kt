@@ -37,7 +37,6 @@ fun CoinButton(
         contentPadding = contentPadding,
         colors = colors,
         border = border,
-        shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)), // 设置为小圆角
         onClick = {onAddCoin()}
     ) {
         Row(

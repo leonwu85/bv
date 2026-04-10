@@ -28,6 +28,11 @@ data class Episode(
     val longTitle: String,
     val cover: String,
     val duration: Int,
+    val viewCount: Long = 0,
+    val danmakuCount: Int = 0,
+    val isInteractive: Boolean = false,
+    val isChargingArc: Boolean = false,
+    val chargingArcBadge: String = "",
     val dimension: Dimension?,
     val pages: List<VideoPage>
 ) {
@@ -41,6 +46,11 @@ data class Episode(
             longTitle = episode.title,
             cover = episode.cover,
             duration = episode.page.duration.toInt(),
+            viewCount = 0,
+            danmakuCount = 0,
+            isInteractive = false,
+            isChargingArc = false,
+            chargingArcBadge = "",
             dimension = Dimension.fromDimension(episode.page.dimension),
             pages = episode.pagesList.map { VideoPage.fromPage(it) }
         )
@@ -55,6 +65,15 @@ data class Episode(
                 longTitle = episode.title,
                 cover = episode.arc.pic,
                 duration = episode.arc.duration,
+                viewCount = episode.arc.stat.view,
+                danmakuCount = episode.arc.stat.danmaku,
+                isInteractive = episode.arc.rights.isSteinGate == 1,
+                isChargingArc = episode.arc.isChargeableSeason,
+                chargingArcBadge = when {
+                    !episode.arc.isChargeableSeason -> ""
+                    episode.arc.rights.payFreeWatch == 1 -> "限时免费"
+                    else -> "充电专属"
+                },
                 dimension = Dimension.fromDimension(episode.page.dimension),
                 pages = episode.pages.map { VideoPage.fromVideoPage(it) }
             )
@@ -69,6 +88,15 @@ data class Episode(
             longTitle = episode.longTitle,
             epid = episode.epId,
             duration = episode.duration,
+            viewCount = episode.stat?.play ?: 0,
+            danmakuCount = episode.stat?.danmakus ?: 0,
+            isInteractive = false,
+            isChargingArc = episode.badge.contains("充电") || episode.badge.contains("限时免费"),
+            chargingArcBadge = if (episode.badge.contains("充电") || episode.badge.contains("限时免费")) {
+                episode.badge
+            } else {
+                ""
+            },
             dimension = episode.dimension?.let { Dimension.fromDimension(it) },
             pages = emptyList()
         )
