@@ -1,36 +1,34 @@
 package dev.aaa1115910.bv.tv.screens.user
 
 import android.content.Intent
-import androidx.compose.animation.core.LinearEasing
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -41,55 +39,43 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
+import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
-import dev.aaa1115910.biliapi.entity.season.FollowingSeasonStatus
-import dev.aaa1115910.biliapi.entity.season.FollowingSeasonType
 import dev.aaa1115910.biliapi.http.entity.AuthFailureException
-import dev.aaa1115910.biliapi.repositories.FavoriteRepository
-import dev.aaa1115910.biliapi.repositories.HistoryRepository
-import dev.aaa1115910.biliapi.repositories.SeasonRepository
 import dev.aaa1115910.biliapi.repositories.UserRepository
 import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.R
-import dev.aaa1115910.bv.entity.carddata.SeasonCardData
-import dev.aaa1115910.bv.entity.carddata.VideoCardData
-import dev.aaa1115910.bv.entity.proxy.ProxyArea
-import dev.aaa1115910.bv.tv.activities.user.FavoriteActivity
 import dev.aaa1115910.bv.tv.activities.user.FollowActivity
 import dev.aaa1115910.bv.tv.activities.user.FollowingSeasonActivity
 import dev.aaa1115910.bv.tv.activities.user.HistoryActivity
 import dev.aaa1115910.bv.tv.activities.user.UserSwitchActivity
-import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
-import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
-import dev.aaa1115910.bv.tv.component.videocard.SeasonCard
-import dev.aaa1115910.bv.tv.component.videocard.VideosRow
+import dev.aaa1115910.bv.tv.activities.user.FavoriteActivity
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.Prefs
-import dev.aaa1115910.bv.util.fException
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.fWarn
-import dev.aaa1115910.bv.util.formatHourMinSec
+import dev.aaa1115910.bv.util.isDpadLeft
+import dev.aaa1115910.bv.util.isDpadRight
+import dev.aaa1115910.bv.util.isKeyDown
 import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.viewmodel.UserViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -102,185 +88,63 @@ import org.koin.compose.getKoin
 @Composable
 fun UserInfoScreen(
     modifier: Modifier = Modifier,
+    initialFocusRequester: FocusRequester? = null,
+    autoRequestInitialFocus: Boolean = true,
+    onRequestDrawerFocus: (() -> Unit)? = null,
     userViewModel: UserViewModel = koinViewModel(),
     userRepository: UserRepository = getKoin().get(),
-    favoriteRepository: FavoriteRepository = getKoin().get(),
-    seasonRepository: SeasonRepository = getKoin().get(),
-    historyRepository: HistoryRepository = getKoin().get(),
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     val logger = KotlinLogging.logger { }
-    val focusRequester = remember { FocusRequester() }
-    var showLargeTitle by remember { mutableStateOf(true) }
-
-    val titleFontSize by animateFloatAsState(
-        targetValue = if (showLargeTitle) 48f else 24f,
-        label = "title font size"
-    )
-    val randomTitleList = context.resources.getStringArray(R.array.user_homepage_random_title)
-    val title by remember { mutableStateOf(randomTitleList.random()) }
-
+    val focusRequester = initialFocusRequester ?: remember { FocusRequester() }
+    var contentHasFocus by remember { mutableStateOf(false) }
     var followingUpCount by remember { mutableIntStateOf(0) }
-
-    val histories = remember { mutableStateListOf<VideoCardData>() }
-    val animes = remember { mutableStateListOf<SeasonCardData>() }
-    val favorites = remember { mutableStateListOf<VideoCardData>() }
-
-    val updateHistories = {
-        scope.launch(Dispatchers.IO) {
-            runCatching {
-                val data = historyRepository.getHistories(
-                    cursor = 0,
-                    preferApiType = Prefs.apiType
-                )
-                histories.clear()
-                data.data.forEach { historyItem ->
-                    histories.add(
-                        VideoCardData(
-                            avid = historyItem.oid,
-                            title = historyItem.title,
-                            cover = historyItem.cover,
-                            upName = historyItem.author,
-                            timeString = if (historyItem.progress == -1) context.getString(R.string.play_time_finish)
-                            else context.getString(
-                                R.string.play_time_history,
-                                (historyItem.progress * 1000L).formatHourMinSec(),
-                                (historyItem.duration * 1000L).formatHourMinSec()
-                            )
-                        )
-                    )
-                }
-            }.onFailure {
-                logger.fWarn { "Load recent videos failed: ${it.stackTraceToString()}" }
-                when (it) {
-                    is AuthFailureException -> {
-                        withContext(Dispatchers.Main) {
-                            context.getString(R.string.exception_auth_failure).toast(context)
-                        }
-                        logger.fInfo { "User auth failure" }
-                        if (!BuildConfig.DEBUG) userViewModel.logout()
-                    }
-
-                    else -> {}
-                }
-            }
-        }
-    }
-
-    val updateFollowedAnimes = {
-        scope.launch(Dispatchers.IO) {
-            runCatching {
-                val followingSeasonData = seasonRepository.getFollowingSeasons(
-                    type = FollowingSeasonType.Bangumi,
-                    status = FollowingSeasonStatus.All,
-                    pageNumber = 1,
-                    pageSize = 15,
-                    preferApiType = Prefs.apiType
-                )
-                animes.clear()
-                followingSeasonData.list.forEach { followedSeason ->
-                    animes.add(
-                        SeasonCardData(
-                            seasonId = followedSeason.seasonId,
-                            title = followedSeason.title,
-                            cover = followedSeason.cover,
-                            rating = null
-                        )
-                    )
-                }
-            }.onFailure {
-                logger.fWarn { "Load followed animes failed: ${it.stackTraceToString()}" }
-                when (it) {
-                    is AuthFailureException -> {
-                        withContext(Dispatchers.Main) {
-                            context.getString(R.string.exception_auth_failure).toast(context)
-                        }
-                        logger.fInfo { "User auth failure" }
-                        if (!BuildConfig.DEBUG) userViewModel.logout()
-                    }
-
-                    else -> {}
-                }
-            }
-        }
-    }
-
-    val updateFavoriteVideos = {
-        scope.launch(Dispatchers.IO) {
-            var defaultFolderId: Long = 0
-            runCatching {
-                val favoriteFolderMetadataList =
-                    favoriteRepository.getAllFavoriteFolderMetadataList(
-                        mid = Prefs.uid,
-                        preferApiType = Prefs.apiType
-                    )
-                if (favoriteFolderMetadataList.isEmpty()) {
-                    "未找到收藏夹".toast(context)
-                    return@launch
-                }
-                defaultFolderId =
-                    favoriteFolderMetadataList.find { it.title == "默认收藏夹" }?.id ?: 0
-                logger.fInfo { "Get favorite folders: ${favoriteFolderMetadataList.map { it.id }}" }
-            }.onFailure {
-                logger.fException(it) { "Load favorite folders failed" }
-            }
-            runCatching {
-                val favoriteItems = favoriteRepository.getFavoriteFolderData(
-                    mediaId = defaultFolderId,
-                    preferApiType = Prefs.apiType
-                ).medias
-                favorites.clear()
-                favoriteItems.forEach { favoriteItem ->
-                    favorites.add(
-                        VideoCardData(
-                            avid = favoriteItem.id,
-                            title = favoriteItem.title,
-                            cover = favoriteItem.cover,
-                            upName = favoriteItem.upper.name,
-                            time = favoriteItem.duration.toLong() * 1000
-                        )
-                    )
-                }
-            }.onFailure {
-                logger.fWarn { "Load favorite items failed: ${it.stackTraceToString()}" }
-                when (it) {
-                    is AuthFailureException -> {
-                        withContext(Dispatchers.Main) {
-                            context.getString(R.string.exception_auth_failure).toast(context)
-                        }
-                        logger.fInfo { "User auth failure" }
-                        if (!BuildConfig.DEBUG) userViewModel.logout()
-                    }
-
-                    else -> {}
-                }
-            }
-        }
-    }
+    var incognitoModeEnabled by remember { mutableStateOf(Prefs.incognitoMode) }
 
     val updateFollowingUpCount = {
         scope.launch(Dispatchers.IO) {
-            logger.fInfo { "Update following up count with user ${Prefs.uid}" }
-            followingUpCount = userRepository.getFollowingUpCount(
-                mid = Prefs.uid,
-                preferApiType = Prefs.apiType
-            )
-            logger.fInfo { "Following up count: $followingUpCount" }
+            runCatching {
+                logger.fInfo { "Update following up count with user ${Prefs.uid}" }
+                userRepository.getFollowingUpCount(
+                    mid = Prefs.uid,
+                    preferApiType = Prefs.apiType
+                )
+            }.onSuccess {
+                followingUpCount = it
+                logger.fInfo { "Following up count: $followingUpCount" }
+            }.onFailure {
+                logger.fWarn { "Load followed users count failed: ${it.stackTraceToString()}" }
+                when (it) {
+                    is AuthFailureException -> {
+                        withContext(Dispatchers.Main) {
+                            context.getString(R.string.exception_auth_failure).toast(context)
+                        }
+                        logger.fInfo { "User auth failure" }
+                        if (!BuildConfig.DEBUG) userViewModel.logout()
+                    }
+
+                    else -> {}
+                }
+            }
         }
     }
 
     val updateData = {
         userViewModel.updateUserInfo(forceUpdate = true)
-        updateHistories()
-        updateFollowedAnimes()
-        updateFavoriteVideos()
+        incognitoModeEnabled = Prefs.incognitoMode
         updateFollowingUpCount()
     }
 
+    BackHandler(enabled = contentHasFocus && onRequestDrawerFocus != null) {
+        onRequestDrawerFocus?.invoke()
+    }
+
     LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
+        if (autoRequestInitialFocus) {
+            focusRequester.requestFocus()
+        }
         updateData()
     }
 
@@ -303,30 +167,27 @@ fun UserInfoScreen(
     }
 
     Scaffold(
-        modifier = modifier,
-        topBar = {
-            Box(
-                modifier = Modifier.padding(start = 48.dp, top = 24.dp, bottom = 8.dp)
-            ) {
-                Text(
-                    text = title,
-                    fontSize = titleFontSize.sp
-                )
+        modifier = modifier
+            .onFocusChanged { contentHasFocus = it.hasFocus }
+            .onKeyEvent {
+                if (contentHasFocus && onRequestDrawerFocus != null && it.isKeyDown() && it.isDpadLeft()) {
+                    onRequestDrawerFocus()
+                    true
+                } else {
+                    false
+                }
             }
-
-        }
     ) { innerPadding ->
         LazyColumn(
-            modifier = Modifier.padding(innerPadding),
-            contentPadding = PaddingValues(bottom = 24.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentPadding = PaddingValues(start = 48.dp, top = 24.dp, end = 48.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             item {
-                UserRow(
-                    modifier = Modifier
-                        .focusRequester(focusRequester)
-                        .onFocusChanged {
-                            showLargeTitle = it.hasFocus
-                        },
+                UserInfo(
+                    modifier = Modifier.fillMaxWidth(),
                     username = userViewModel.username,
                     face = userViewModel.face,
                     uid = userViewModel.responseData?.mid ?: 0,
@@ -344,37 +205,34 @@ fun UserInfoScreen(
                     },
                     showLabel = userViewModel.responseData?.vip?.avatarSubscript == 1,
                     labelUrl = userViewModel.responseData?.vip?.label?.imgLabelUriHansStatic ?: "",
+                    coins = userViewModel.responseData?.coins ?: 0f,
                     followingUpCount = followingUpCount,
+                )
+            }
+            item {
+                UserQuickAccessSection(
+                    modifier = Modifier.fillMaxWidth(),
+                    initialFocusRequester = focusRequester,
+                    followingUpCount = followingUpCount,
+                    incognitoModeEnabled = incognitoModeEnabled,
+                    onOpenHistory = {
+                        context.startActivity(Intent(context, HistoryActivity::class.java))
+                    },
+                    onOpenFollowingSeason = {
+                        context.startActivity(Intent(context, FollowingSeasonActivity::class.java))
+                    },
+                    onOpenFavorite = {
+                        context.startActivity(Intent(context, FavoriteActivity::class.java))
+                    },
                     onOpenFollowingUser = {
                         context.startActivity(Intent(context, FollowActivity::class.java))
                     },
                     onOpenUserSwitch = {
                         context.startActivity(Intent(context, UserSwitchActivity::class.java))
                     },
-                    coins = userViewModel.responseData?.coins ?: 0f
-                )
-            }
-            item {
-                RecentVideosRow(
-                    videos = histories,
-                    showMore = {
-                        context.startActivity(Intent(context, HistoryActivity::class.java))
-                    }
-                )
-            }
-            item {
-                FollowingAnimeVideosRow(
-                    videos = animes,
-                    showMore = {
-                        context.startActivity(Intent(context, FollowingSeasonActivity::class.java))
-                    }
-                )
-            }
-            item {
-                FavoriteVideosRow(
-                    videos = favorites,
-                    showMore = {
-                        context.startActivity(Intent(context, FavoriteActivity::class.java))
+                    onToggleIncognito = {
+                        incognitoModeEnabled = !incognitoModeEnabled
+                        Prefs.incognitoMode = incognitoModeEnabled
                     }
                 )
             }
@@ -393,379 +251,128 @@ private fun UserInfo(
     nextLevelExp: Int,
     showLabel: Boolean,
     labelUrl: String,
-    onClick: () -> Unit,
-    coins: Float = 0f
-) {
-    var hasFocus by remember { mutableStateOf(false) }
-    val levelSlider by animateFloatAsState(
-        targetValue = currentExp.toFloat() / nextLevelExp,
-        animationSpec = tween(
-            durationMillis = 1500,
-            easing = LinearEasing
-        ),
-        label = "Loading level exp slider"
-    )
-
-    Surface(
-        modifier = modifier
-            .size(480.dp, 140.dp)
-            .onFocusChanged { hasFocus = it.hasFocus },
-        colors = ClickableSurfaceDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-        shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
-        onClick = onClick
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            androidx.compose.material3.Surface(
-                modifier = Modifier
-                    .padding(start = 24.dp, end = 8.dp)
-                    .size(80.dp)
-                    .clip(CircleShape),
-                color = Color.White
-            ) {
-                AsyncImage(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape),
-                    model = face,
-                    contentDescription = null,
-                    contentScale = ContentScale.FillBounds
-                )
-            }
-            Column(
-                modifier = Modifier
-                    .padding(
-                        start = 6.dp,
-                        top = 24.dp,
-                        end = 24.dp,
-                        bottom = 24.dp
-                    )
-                    .height(80.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                val startPaddingValue = 6.dp
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                    Row(
-                        modifier = Modifier.padding(end = startPaddingValue),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (showLabel)
-                            AsyncImage(
-                                //大会员 Tag 给定指定大小范围，避免加载时大小会突然变得非常大导致画面闪烁
-                                modifier = Modifier
-                                    .height(22.dp)
-                                    .widthIn(max = 96.dp),
-                                model = labelUrl,
-                                contentDescription = null,
-                                contentScale = ContentScale.FillHeight
-                            )
-                        Text(
-                            text = username,
-                            style = MaterialTheme.typography.titleLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.padding(start = startPaddingValue),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    Text(text = stringResource(R.string.user_info_level, level))
-                    Text(text = stringResource(R.string.user_info_coins, coins))
-                    Text(text = stringResource(R.string.user_info_uid, uid))
-                }
-
-                val sliderColor = if (hasFocus) {
-                    SliderDefaults.colors(
-                        disabledThumbColor = Color.Transparent,
-                        disabledActiveTrackColor = MaterialTheme.colorScheme.inverseOnSurface,
-                        disabledInactiveTrackColor = MaterialTheme.colorScheme.inverseOnSurface.copy(
-                            alpha = 0.3f
-                        )
-                    )
-                } else {
-                    SliderDefaults.colors(
-                        disabledThumbColor = Color.Transparent,
-                        disabledActiveTrackColor = MaterialTheme.colorScheme.primary,
-                    )
-                }
-
-                LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    progress = { levelSlider },
-                    gapSize = 0.dp,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun IncognitoModeCard(
-    modifier: Modifier = Modifier
-) {
-    var enabled by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        enabled = Prefs.incognitoMode
-    }
-
-    IncognitoModeCardContent(
-        modifier = modifier,
-        enabled = enabled,
-        onClick = {
-            enabled = !enabled
-            Prefs.incognitoMode = enabled
-        }
-    )
-}
-
-@Composable
-private fun IncognitoModeCardContent(
-    modifier: Modifier = Modifier,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = modifier.height(140.dp),
-        colors = ClickableSurfaceDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-        shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
-        onClick = onClick
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxHeight()
-                .padding(horizontal = 24.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.SpaceAround,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = stringResource(R.string.user_info_Incognito_mode_title),
-                style = MaterialTheme.typography.titleLarge
-            )
-            Text(
-                text = if (enabled) "\uD83D\uDC7B" + stringResource(R.string.user_info_Incognito_mode_on)
-                else stringResource(R.string.user_info_Incognito_mode_off),
-                style = MaterialTheme.typography.titleMedium
-            )
-        }
-    }
-}
-
-@Composable
-private fun FollowedUserCard(
-    modifier: Modifier = Modifier,
-    size: Int,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = modifier.height(140.dp),
-        colors = ClickableSurfaceDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-        shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
-        onClick = onClick
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxHeight()
-                .padding(horizontal = 24.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.SpaceAround,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = stringResource(R.string.user_homepage_follow),
-                style = MaterialTheme.typography.titleLarge
-            )
-            Text(
-                text = "$size",
-                style = MaterialTheme.typography.titleMedium
-            )
-        }
-    }
-}
-
-@Composable
-private fun UserSwitchCard(
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = modifier.height(140.dp),
-        colors = ClickableSurfaceDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-        shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
-        onClick = onClick
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxHeight()
-                .padding(horizontal = 24.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.SpaceAround,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = stringResource(R.string.user_homepage_user_switch),
-                style = MaterialTheme.typography.titleLarge
-            )
-        }
-    }
-}
-
-@Composable
-private fun UserRow(
-    modifier: Modifier = Modifier,
-    username: String,
-    face: String,
-    uid: Long,
-    level: Int,
-    currentExp: Int,
-    nextLevelExp: Int,
-    showLabel: Boolean,
-    labelUrl: String,
     followingUpCount: Int,
-    onOpenFollowingUser: () -> Unit,
-    onOpenUserSwitch: () -> Unit,
     coins: Float = 0f
 ) {
+    val levelSlider by animateFloatAsState(
+        targetValue = if (nextLevelExp <= 0) 0f else (currentExp.toFloat() / nextLevelExp.toFloat()).coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 900),
+        label = "user level progress"
+    )
     val animateFollowingNumber by animateIntAsState(
         targetValue = followingUpCount,
         label = "animate following number"
     )
 
-    LazyRow(
-        modifier = modifier.padding(vertical = 28.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.Start),
-        contentPadding = PaddingValues(horizontal = 50.dp)
+    Surface(
+        modifier = modifier,
+        colors = SurfaceDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
+        ),
+        shape = MaterialTheme.shapes.extraLarge
     ) {
-        item {
-            UserInfo(
-                modifier = Modifier,
-                face = face,
-                username = username,
-                uid = uid,
-                level = level,
-                currentExp = currentExp,
-                nextLevelExp = nextLevelExp,
-                showLabel = showLabel,
-                labelUrl = labelUrl,
-                onClick = { },
-                coins = coins
-            )
-        }
-        item {
-            IncognitoModeCard()
-        }
-        item {
-            FollowedUserCard(
-                size = animateFollowingNumber,
-                onClick = onOpenFollowingUser
-            )
-        }
-        item {
-            UserSwitchCard(
-                onClick = onOpenUserSwitch
-            )
-        }
-    }
-}
-
-@Composable
-private fun RecentVideosRow(
-    modifier: Modifier = Modifier,
-    videos: List<VideoCardData>,
-    showMore: () -> Unit
-) {
-    val context = LocalContext.current
-    VideosRow(
-        modifier = modifier
-            .padding(vertical = 8.dp),
-        header = stringResource(R.string.user_homepage_recent),
-        hideShowMore = false,
-        showMore = showMore,
-        videos = videos,
-        onOpenSeasonInfo = { videoData ->
-            SeasonInfoActivity.actionStart(
-                context = context,
-                epId = videoData.epId!!,
-                proxyArea = ProxyArea.checkProxyArea(videoData.title)
-            )
-        },
-        onOpenVideoInfo = { videoData ->
-            VideoInfoActivity.actionStart(context, videoData.avid)
-        }
-    )
-}
-
-@Composable
-private fun FollowingAnimeVideosRow(
-    modifier: Modifier = Modifier,
-    videos: List<SeasonCardData>,
-    showMore: () -> Unit
-) {
-    val context = LocalContext.current
-    val density = LocalDensity.current
-    var hasFocus by remember { mutableStateOf(false) }
-    val titleFontSize by animateFloatAsState(
-        targetValue = if (hasFocus) 30f else 14f,
-        label = "title font size",
-        animationSpec = tween(
-            durationMillis = 120
-        )
-    )
-    var rowHeight by remember { mutableStateOf(0.dp) }
-
-    Column(
-        modifier = modifier
-            .padding(vertical = 8.dp)
-            .onFocusChanged { hasFocus = it.hasFocus }
-    ) {
-        Text(
-            modifier = Modifier.padding(start = 50.dp),
-            text = stringResource(R.string.user_homepage_anime),
-            fontSize = titleFontSize.sp
-        )
-        LazyRow(
+        Box(
             modifier = Modifier
-                .padding(top = 15.dp)
-                .onGloballyPositioned {
-                    rowHeight = with(density) {
-                        it.size.height.toDp()
-                    }
-                },
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            contentPadding = PaddingValues(horizontal = 62.dp)
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f),
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)
+                        )
+                    )
+                )
+                .padding(32.dp)
         ) {
-            items(items = videos) { seasonCardData ->
-                SeasonCard(
-                    modifier = Modifier.width(150.dp),
-                    data = seasonCardData,
-                    onClick = {
-                        SeasonInfoActivity.actionStart(
-                            context = context,
-                            seasonId = seasonCardData.seasonId,
-                            proxyArea = ProxyArea.checkProxyArea(seasonCardData.title)
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(102.dp)
+                            .clip(CircleShape)
+                            .border(
+                                width = 2.dp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                shape = CircleShape
+                            )
+                            .background(Color.White.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            modifier = Modifier
+                                .size(104.dp)
+                                .clip(CircleShape),
+                            model = face,
+                            contentDescription = null,
+                            contentScale = ContentScale.FillBounds
                         )
                     }
-                )
-            }
-            item {
-                Button(
-                    modifier = Modifier.height(rowHeight),
-                    shape = ButtonDefaults.shape(shape = MaterialTheme.shapes.medium),
-                    onClick = showMore
-                ) {
+
                     Column(
-                        modifier = Modifier.fillMaxHeight(),
-                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(text = "显示更多")
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = username,
+                                style = MaterialTheme.typography.titleLarge.copy(fontSize = 34.sp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (showLabel) {
+                                AsyncImage(
+                                    modifier = Modifier
+                                        .height(24.dp)
+                                        .widthIn(max = 112.dp),
+                                    model = labelUrl,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.FillHeight
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = stringResource(R.string.user_info_uid, uid),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = stringResource(R.string.user_info_coins, coins),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
+
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        UserMetricBadge(text = stringResource(R.string.user_info_level, level))
+                        UserMetricBadge(
+                            text = stringResource(R.string.user_homepage_follow),
+                            value = animateFollowingNumber.toString()
+                        )
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "$currentExp/$nextLevelExp",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        progress = { levelSlider },
+                        gapSize = 0.dp,
+                    )
                 }
             }
         }
@@ -773,30 +380,283 @@ private fun FollowingAnimeVideosRow(
 }
 
 @Composable
-private fun FavoriteVideosRow(
-    modifier: Modifier = Modifier,
-    videos: List<VideoCardData>,
-    showMore: () -> Unit
+private fun UserMetricBadge(
+    text: String,
+    value: String? = null,
 ) {
-    val context = LocalContext.current
-    VideosRow(
-        modifier = modifier
-            .padding(vertical = 8.dp),
-        header = stringResource(R.string.user_homepage_favorite),
-        hideShowMore = false,
-        showMore = showMore,
-        videos = videos,
-        onOpenSeasonInfo = { videoData ->
-            SeasonInfoActivity.actionStart(
-                context = context,
-                epId = videoData.epId!!,
-                proxyArea = ProxyArea.checkProxyArea(videoData.title)
+    Column(
+        modifier = Modifier
+            .background(
+                color = Color.White.copy(alpha = 0.16f),
+                shape = MaterialTheme.shapes.large
             )
-        },
-        onOpenVideoInfo = { videoData ->
-            VideoInfoActivity.actionStart(context, videoData.avid)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (value != null) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium
+            )
         }
-    )
+    }
+}
+
+@Composable
+private fun UserQuickAccessSection(
+    modifier: Modifier = Modifier,
+    initialFocusRequester: FocusRequester,
+    followingUpCount: Int,
+    incognitoModeEnabled: Boolean,
+    onOpenHistory: () -> Unit,
+    onOpenFollowingSeason: () -> Unit,
+    onOpenFavorite: () -> Unit,
+    onOpenFollowingUser: () -> Unit,
+    onOpenUserSwitch: () -> Unit,
+    onToggleIncognito: () -> Unit,
+) {
+    val focusRequesters = remember(initialFocusRequester) {
+        listOf(
+            initialFocusRequester,
+            FocusRequester(),
+            FocusRequester(),
+            FocusRequester(),
+            FocusRequester(),
+            FocusRequester()
+        )
+    }
+
+    Column(
+        modifier = modifier.focusGroup(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            UserActionCard(
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequesters[0])
+                    .onPreviewKeyEvent {
+                        if (!it.isKeyDown()) return@onPreviewKeyEvent false
+                        when {
+                            it.isDpadLeft() -> false
+                            it.isDpadRight() -> {
+                                focusRequesters[1].requestFocus()
+                                true
+                            }
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP -> true
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                focusRequesters[3].requestFocus()
+                                true
+                            }
+                            else -> false
+                        }
+                    },
+                title = stringResource(R.string.title_activity_history),
+                subtitle = stringResource(R.string.user_homepage_recent_desc),
+                badgeText = "",
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+                onClick = onOpenHistory
+            )
+            UserActionCard(
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequesters[1])
+                    .onPreviewKeyEvent {
+                        if (!it.isKeyDown()) return@onPreviewKeyEvent false
+                        when {
+                            it.isDpadLeft() -> {
+                                focusRequesters[0].requestFocus()
+                                true
+                            }
+                            it.isDpadRight() -> {
+                                focusRequesters[2].requestFocus()
+                                true
+                            }
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP -> true
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                focusRequesters[4].requestFocus()
+                                true
+                            }
+                            else -> false
+                        }
+                    },
+                title = stringResource(R.string.title_activity_following_season),
+                subtitle = stringResource(R.string.user_homepage_anime_desc),
+                badgeText = "",
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.9f),
+                onClick = onOpenFollowingSeason
+            )
+            UserActionCard(
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequesters[2])
+                    .onPreviewKeyEvent {
+                        if (!it.isKeyDown()) return@onPreviewKeyEvent false
+                        when {
+                            it.isDpadLeft() -> {
+                                focusRequesters[1].requestFocus()
+                                true
+                            }
+                            it.isDpadRight() -> true
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP -> true
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                focusRequesters[5].requestFocus()
+                                true
+                            }
+                            else -> false
+                        }
+                    },
+                title = stringResource(R.string.title_activity_favorite),
+                subtitle = stringResource(R.string.user_homepage_favorite_desc),
+                badgeText = "",
+                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f),
+                onClick = onOpenFavorite
+            )
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            UserActionCard(
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequesters[3])
+                    .onPreviewKeyEvent {
+                        if (!it.isKeyDown()) return@onPreviewKeyEvent false
+                        when {
+                            it.isDpadLeft() -> false
+                            it.isDpadRight() -> {
+                                focusRequesters[4].requestFocus()
+                                true
+                            }
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP -> {
+                                focusRequesters[0].requestFocus()
+                                true
+                            }
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> true
+                            else -> false
+                        }
+                    },
+                title = stringResource(R.string.user_homepage_follow),
+                subtitle = stringResource(R.string.user_homepage_follow_desc),
+                badgeText = followingUpCount.toString(),
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f),
+                onClick = onOpenFollowingUser
+            )
+            UserActionCard(
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequesters[4])
+                    .onPreviewKeyEvent {
+                        if (!it.isKeyDown()) return@onPreviewKeyEvent false
+                        when {
+                            it.isDpadLeft() -> {
+                                focusRequesters[3].requestFocus()
+                                true
+                            }
+                            it.isDpadRight() -> {
+                                focusRequesters[5].requestFocus()
+                                true
+                            }
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP -> {
+                                focusRequesters[1].requestFocus()
+                                true
+                            }
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> true
+                            else -> false
+                        }
+                    },
+                title = stringResource(R.string.user_homepage_user_switch),
+                subtitle = stringResource(R.string.user_homepage_user_switch_desc),
+                badgeText = "",
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.78f),
+                onClick = onOpenUserSwitch
+            )
+            UserActionCard(
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequesters[5])
+                    .onPreviewKeyEvent {
+                        if (!it.isKeyDown()) return@onPreviewKeyEvent false
+                        when {
+                            it.isDpadLeft() -> {
+                                focusRequesters[4].requestFocus()
+                                true
+                            }
+                            it.isDpadRight() -> true
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP -> {
+                                focusRequesters[2].requestFocus()
+                                true
+                            }
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> true
+                            else -> false
+                        }
+                    },
+                title = stringResource(R.string.user_info_Incognito_mode_title),
+                subtitle = stringResource(R.string.user_homepage_incognito_desc),
+                badgeText = if (incognitoModeEnabled) {
+                    stringResource(R.string.user_info_Incognito_mode_on)
+                } else {
+                    stringResource(R.string.user_info_Incognito_mode_off)
+                },
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                onClick = onToggleIncognito
+            )
+        }
+    }
+}
+
+@Composable
+private fun UserActionCard(
+    modifier: Modifier = Modifier,
+    title: String,
+    subtitle: String,
+    badgeText: String,
+    containerColor: Color,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = modifier.height(116.dp),
+        colors = ClickableSurfaceDefaults.colors(containerColor = containerColor),
+        shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.extraLarge),
+        onClick = onClick
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 22.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                // 居右
+                modifier = Modifier.align(Alignment.End),
+                text = badgeText,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
 }
 
 @Preview
@@ -804,6 +664,7 @@ private fun FavoriteVideosRow(
 private fun UserInfoPreview() {
     BVTheme {
         UserInfo(
+            modifier = Modifier.fillMaxWidth(),
             face = "",
             username = "Username",
             uid = 12345,
@@ -812,14 +673,14 @@ private fun UserInfoPreview() {
             nextLevelExp = 2345,
             showLabel = false,
             labelUrl = "",
-            onClick = {}
+            followingUpCount = 466,
         )
     }
 }
 
-@Preview
+@Preview(device = "id:tv_1080p")
 @Composable
-private fun UserInfoFocusedPreview() {
+private fun UserQuickAccessSectionPreview() {
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
@@ -827,80 +688,17 @@ private fun UserInfoFocusedPreview() {
     }
 
     BVTheme {
-        UserInfo(
-            modifier = Modifier.focusRequester(focusRequester),
-            face = "",
-            username = "Username",
-            uid = 12345,
-            level = 6,
-            currentExp = 1234,
-            nextLevelExp = 2345,
-            showLabel = false,
-            labelUrl = "",
-            onClick = {}
-        )
-    }
-}
-
-@Preview
-@Composable
-private fun IncognitoModeCardOnPreview() {
-    BVTheme {
-        IncognitoModeCardContent(
-            enabled = true,
-            onClick = {}
-        )
-    }
-}
-
-@Preview
-@Composable
-private fun IncognitoModeCardOffPreview() {
-    BVTheme {
-        IncognitoModeCardContent(
-            enabled = false,
-            onClick = {}
-        )
-    }
-}
-
-@Preview
-@Composable
-private fun FollowedUserCardPreview() {
-    BVTheme {
-        FollowedUserCard(
-            size = 466,
-            onClick = {}
-        )
-    }
-}
-
-@Preview
-@Composable
-private fun UserSwitchCardPreview() {
-    BVTheme {
-        UserSwitchCard(
-            onClick = {}
-        )
-    }
-}
-
-@Preview(device = "id:tv_1080p")
-@Composable
-private fun UserRowPreview() {
-    BVTheme {
-        UserRow(
-            username = "Username",
-            face = "",
-            uid = 1234567890,
-            level = 4,
-            currentExp = 123,
-            nextLevelExp = 431,
-            showLabel = false,
-            labelUrl = "",
+        UserQuickAccessSection(
+            modifier = Modifier.fillMaxWidth(),
+            initialFocusRequester = focusRequester,
             followingUpCount = 466,
-            onOpenFollowingUser = { },
-            onOpenUserSwitch = {}
+            incognitoModeEnabled = true,
+            onOpenHistory = {},
+            onOpenFollowingSeason = {},
+            onOpenFavorite = {},
+            onOpenFollowingUser = {},
+            onOpenUserSwitch = {},
+            onToggleIncognito = {}
         )
     }
 }

@@ -94,6 +94,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
+private enum class DynamicFocusLayer {
+    SubTab,
+    Content,
+}
+
 @Composable
 fun NewDynamicsScreen(
     modifier: Modifier = Modifier,
@@ -101,6 +106,7 @@ fun NewDynamicsScreen(
     tabRowFocusRequester: FocusRequester,
     initialSelectedTabIndex: Int = 0,
     onSelectedTabChanged: (Int) -> Unit = {},
+    onBackToParentTabRow: () -> Unit = {},
     onLeftKeyEvent: () -> Unit = {},
     onRightKeyEvent: () -> Unit = {},
     dynamicViewModel: DynamicViewModel = koinViewModel()
@@ -110,7 +116,7 @@ fun NewDynamicsScreen(
 
     var selectedTabIndex by remember { mutableIntStateOf(initialSelectedTabIndex) }
     var currentFocusedIndex by remember { mutableIntStateOf(-1) }
-    var contentHasFocus by remember { mutableStateOf(false) }
+    var focusLayer by remember { mutableStateOf<DynamicFocusLayer?>(null) }
 
     // 当子 Tab 切换时通知父组件记住选择
     LaunchedEffect(selectedTabIndex) {
@@ -225,8 +231,12 @@ fun NewDynamicsScreen(
     }
 
     // 在内容区域按返回键时，先将焦点给到子 TabRow
-    BackHandler(contentHasFocus) {
-        tabRowFocusRequester.requestFocus()
+    BackHandler(focusLayer != null) {
+        when (focusLayer) {
+            DynamicFocusLayer.Content -> tabRowFocusRequester.requestFocus()
+            DynamicFocusLayer.SubTab -> onBackToParentTabRow()
+            null -> Unit
+        }
     }
 
     if (dynamicViewModel.isLogin) {
@@ -252,6 +262,13 @@ fun NewDynamicsScreen(
                         currentFocusedIndex = -1
                     }
                 },
+                onFocusChanged = {
+                    if (it) {
+                        focusLayer = DynamicFocusLayer.SubTab
+                    } else if (focusLayer == DynamicFocusLayer.SubTab) {
+                        focusLayer = null
+                    }
+                },
                 onLeftKeyEvent = onLeftKeyEvent,
                 onRightKeyEvent = onRightKeyEvent
             )
@@ -260,7 +277,13 @@ fun NewDynamicsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .onFocusChanged { contentHasFocus = it.hasFocus }
+                    .onFocusChanged {
+                        if (it.hasFocus) {
+                            focusLayer = DynamicFocusLayer.Content
+                        } else if (focusLayer == DynamicFocusLayer.Content) {
+                            focusLayer = null
+                        }
+                    }
             ) {
                 // Tip 叠加层
                 if (showTip) {
@@ -319,6 +342,7 @@ private fun DynamicTabRow(
     selectedTabIndex: Int,
     onTabSelected: (Int) -> Unit,
     onTabClick: (Int) -> Unit,
+    onFocusChanged: (Boolean) -> Unit = {},
     onLeftKeyEvent: () -> Unit = {},
     onRightKeyEvent: () -> Unit = {}
 ) {
@@ -329,6 +353,7 @@ private fun DynamicTabRow(
             .fillMaxWidth()
             .padding(vertical = 0.dp)
             .focusRestorer(tabRowFocusRequester)
+            .onFocusChanged { onFocusChanged(it.hasFocus) }
             .onPreviewKeyEvent {
                 if (it.type == KeyEventType.KeyDown) {
                     // 在第一个子 tab 按左键，跳转到父级上一个 tab

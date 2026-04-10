@@ -9,8 +9,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.ArrowDropUp
@@ -52,17 +55,22 @@ import dev.aaa1115910.bv.entity.DynamicPageStyle
 import dev.aaa1115910.bv.entity.DynamicTabType
 import dev.aaa1115910.bv.entity.ThemeType
 import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
+import dev.aaa1115910.bv.tv.component.UgcTopNavItem
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
+import dev.aaa1115910.bv.tv.screens.main.DrawerItem
 import dev.aaa1115910.bv.tv.component.settings.SettingListItem
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
 import dev.aaa1115910.bv.tv.component.HomeTopNavItem
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
 import dev.aaa1115910.bv.tv.util.NavItemConfig
+import dev.aaa1115910.bv.tv.util.parseDrawerItemsOrderToConfig
 import dev.aaa1115910.bv.tv.util.moveNavItemToFirstAndUnhide
 import dev.aaa1115910.bv.tv.util.parseNavItemsOrderToConfig
+import dev.aaa1115910.bv.tv.util.parseUgcNavItemsOrderToConfig
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.toast
 import kotlin.math.roundToInt
 
 @Composable
@@ -76,12 +84,15 @@ fun UISetting(
     var showDefaultHomeTabDialog by remember { mutableStateOf(false) }
     var showGridColumnsDialog by remember { mutableStateOf(false) }
     var showHomeNavItemsDialog by remember { mutableStateOf(false) }
+    var showUgcNavItemsDialog by remember { mutableStateOf(false) }
+    var showDrawerNavItemsDialog by remember { mutableStateOf(false) }
     var showLongPressActionDialog by remember { mutableStateOf(false) }
     var showOnlineViewerCountDialog by remember { mutableStateOf(false) }
     var showDynamicPageStyleDialog by remember { mutableStateOf(false) }
     var showDynamicDefaultTabDialog by remember { mutableStateOf(false) }
     val density by Prefs.densityFlow.collectAsState(context.resources.displayMetrics.widthPixels / 960f)
     val themeType by Prefs.themeTypeFlow.collectAsState(Prefs.themeType)
+    val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
     val showOnlineViewerCount by Prefs.showOnlineViewerCountFlow.collectAsState(Prefs.showOnlineViewerCount)
     var defaultHomeTab by remember { mutableStateOf(HomeTopNavItem.entries.getOrElse(Prefs.defaultHomeTab) { HomeTopNavItem.Recommend }) }
     var gridColumns by remember { mutableStateOf(Prefs.gridColumns) }
@@ -141,6 +152,28 @@ fun UISetting(
                         title = stringResource(R.string.settings_ui_home_nav_items_title),
                         supportText = stringResource(R.string.settings_ui_home_nav_items_text),
                         onClick = { showHomeNavItemsDialog = true }
+                    )
+                }
+                item {
+                    SettingListItem(
+                        title = stringResource(R.string.settings_ui_ugc_nav_items_title),
+                        supportText = stringResource(R.string.settings_ui_ugc_nav_items_text),
+                        onClick = { showUgcNavItemsDialog = true }
+                    )
+                }
+                item {
+                    SettingListItem(
+                        title = stringResource(R.string.settings_ui_drawer_nav_items_title),
+                        supportText = stringResource(R.string.settings_ui_drawer_nav_items_text),
+                        onClick = { showDrawerNavItemsDialog = true }
+                    )
+                }
+                item {
+                    SettingSwitchListItem(
+                        title = stringResource(R.string.settings_ui_main_animation_title),
+                        supportText = stringResource(R.string.settings_ui_main_animation_text),
+                        checked = enableMainUiAnimation,
+                        onCheckedChange = { Prefs.enableMainUiAnimation = it }
                     )
                 }
                 item {
@@ -232,6 +265,18 @@ fun UISetting(
         show = showHomeNavItemsDialog,
         onHideDialog = { showHomeNavItemsDialog = false },
         initialOrderString = Prefs.homeNavItemsOrder
+    )
+
+    UgcNavItemsEditDialog(
+        show = showUgcNavItemsDialog,
+        onHideDialog = { showUgcNavItemsDialog = false },
+        initialOrderString = Prefs.ugcNavItemsOrder
+    )
+
+    DrawerNavItemsEditDialog(
+        show = showDrawerNavItemsDialog,
+        onHideDialog = { showDrawerNavItemsDialog = false },
+        initialOrderString = Prefs.drawerItemsOrder
     )
 
     LongPressActionDialog(
@@ -621,6 +666,277 @@ private fun HomeNavItemsEditDialog(
 }
 
 @Composable
+private fun DrawerNavItemsEditDialog(
+    modifier: Modifier = Modifier,
+    show: Boolean,
+    onHideDialog: () -> Unit,
+    initialOrderString: String
+) {
+    if (!show) return
+
+    val scope = rememberCoroutineScope()
+    val focusRequester = remember { FocusRequester() }
+
+    val initialConfigs = remember(initialOrderString) {
+        parseDrawerItemsOrderToConfig(initialOrderString)
+    }
+
+    var navConfigs by remember { mutableStateOf(initialConfigs) }
+    var defaultDrawerItemOrdinal by remember { mutableIntStateOf(Prefs.defaultDrawerTab) }
+    var selectedIndex by remember { mutableIntStateOf(0) }
+    val focusRequesters = remember(navConfigs.size) {
+        List(navConfigs.size) { FocusRequester() }
+    }
+
+    LaunchedEffect(show) {
+        if (show) {
+            focusRequester.requestFocus(scope)
+            focusRequesters.firstOrNull()?.requestFocus()
+        }
+    }
+
+    TvAlertDialog(
+        modifier = modifier,
+        onDismissRequest = {
+            saveDrawerNavConfigs(navConfigs, defaultDrawerItemOrdinal)
+            onHideDialog()
+        },
+        title = { Text(text = stringResource(R.string.settings_ui_drawer_nav_items_title)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .focusRequester(focusRequester)
+                    .focusable()
+                    .onPreviewKeyEvent {
+                        if (it.type == KeyEventType.KeyDown) {
+                            when (it.key) {
+                                Key.Back -> {
+                                    saveDrawerNavConfigs(navConfigs, defaultDrawerItemOrdinal)
+                                    onHideDialog()
+                                    true
+                                }
+                                Key.DirectionLeft -> {
+                                    if (selectedIndex > 0) {
+                                        navConfigs = navConfigs.toMutableList().apply {
+                                            val temp = this[selectedIndex]
+                                            this[selectedIndex] = this[selectedIndex - 1]
+                                            this[selectedIndex - 1] = temp
+                                        }
+                                        selectedIndex--
+                                    }
+                                    true
+                                }
+                                Key.DirectionRight -> {
+                                    if (selectedIndex < navConfigs.size - 1) {
+                                        navConfigs = navConfigs.toMutableList().apply {
+                                            val temp = this[selectedIndex]
+                                            this[selectedIndex] = this[selectedIndex + 1]
+                                            this[selectedIndex + 1] = temp
+                                        }
+                                        selectedIndex++
+                                    }
+                                    true
+                                }
+                                Key.DirectionUp -> {
+                                    if (selectedIndex > 0) selectedIndex--
+                                    true
+                                }
+                                Key.DirectionDown -> {
+                                    if (selectedIndex < navConfigs.size - 1) selectedIndex++
+                                    true
+                                }
+                                Key.Enter, Key.DirectionCenter -> {
+                                    val config = navConfigs[selectedIndex]
+                                    if (config.ordinal != defaultDrawerItemOrdinal) {
+                                        navConfigs = navConfigs.toMutableList().apply {
+                                            this[selectedIndex] = config.copy(hidden = !config.hidden)
+                                        }
+                                    }
+                                    true
+                                }
+                                else -> false
+                            }
+                        }
+                        false
+                    }
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_ui_drawer_nav_items_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                navConfigs.forEachIndexed { index, config ->
+                    val drawerItem = DrawerItem.entries.getOrNull(config.ordinal)?.takeIf { it.isConfigurable }
+                    if (drawerItem != null) {
+                        val isSelected = index == selectedIndex
+                        DrawerItemEditRow(
+                            drawerItem = drawerItem,
+                            hidden = config.hidden,
+                            selected = isSelected,
+                            isDefaultDrawerItem = config.ordinal == defaultDrawerItemOrdinal,
+                            onFocus = { selectedIndex = index },
+                            onLongClick = {
+                                defaultDrawerItemOrdinal = config.ordinal
+                                navConfigs = navConfigs.toMutableList().apply {
+                                    this[index] = config.copy(hidden = false)
+                                }
+                                Prefs.defaultDrawerTab = config.ordinal
+                            },
+                            focusRequester = focusRequesters[index]
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {}
+    )
+}
+
+@Composable
+private fun UgcNavItemsEditDialog(
+    modifier: Modifier = Modifier,
+    show: Boolean,
+    onHideDialog: () -> Unit,
+    initialOrderString: String
+) {
+    if (!show) return
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val focusRequester = remember { FocusRequester() }
+
+    val initialConfigs = remember(initialOrderString) {
+        parseUgcNavItemsOrderToConfig(initialOrderString)
+    }
+
+    var navConfigs by remember { mutableStateOf(initialConfigs) }
+    var selectedIndex by remember { mutableIntStateOf(0) }
+    val listState = rememberLazyListState()
+    val focusRequesters = remember(navConfigs.size) {
+        List(navConfigs.size) { FocusRequester() }
+    }
+
+    LaunchedEffect(show) {
+        if (show) {
+            focusRequester.requestFocus(scope)
+            focusRequesters.firstOrNull()?.requestFocus()
+        }
+    }
+
+    LaunchedEffect(selectedIndex, navConfigs.size) {
+        if (navConfigs.isNotEmpty()) {
+            listState.animateScrollToItem(selectedIndex)
+        }
+    }
+
+    TvAlertDialog(
+        modifier = modifier,
+        onDismissRequest = {
+            saveUgcNavConfigs(navConfigs)
+            onHideDialog()
+        },
+        title = { Text(text = stringResource(R.string.settings_ui_ugc_nav_items_title)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .focusRequester(focusRequester)
+                    .focusable()
+                    .onPreviewKeyEvent {
+                        if (it.type == KeyEventType.KeyDown) {
+                            when (it.key) {
+                                Key.Back -> {
+                                    saveUgcNavConfigs(navConfigs)
+                                    onHideDialog()
+                                    true
+                                }
+                                Key.DirectionLeft -> {
+                                    if (selectedIndex > 0) {
+                                        navConfigs = navConfigs.toMutableList().apply {
+                                            val temp = this[selectedIndex]
+                                            this[selectedIndex] = this[selectedIndex - 1]
+                                            this[selectedIndex - 1] = temp
+                                        }
+                                        selectedIndex--
+                                    }
+                                    true
+                                }
+                                Key.DirectionRight -> {
+                                    if (selectedIndex < navConfigs.size - 1) {
+                                        navConfigs = navConfigs.toMutableList().apply {
+                                            val temp = this[selectedIndex]
+                                            this[selectedIndex] = this[selectedIndex + 1]
+                                            this[selectedIndex + 1] = temp
+                                        }
+                                        selectedIndex++
+                                    }
+                                    true
+                                }
+                                Key.DirectionUp -> {
+                                    if (selectedIndex > 0) selectedIndex--
+                                    true
+                                }
+                                Key.DirectionDown -> {
+                                    if (selectedIndex < navConfigs.size - 1) selectedIndex++
+                                    true
+                                }
+                                Key.Enter, Key.DirectionCenter -> {
+                                    val config = navConfigs[selectedIndex]
+                                    val visibleCount = navConfigs.count { !it.hidden }
+                                    if (!config.hidden && visibleCount <= 1) {
+                                        context.getString(R.string.settings_ui_ugc_nav_items_keep_one).toast(context)
+                                    } else {
+                                        navConfigs = navConfigs.toMutableList().apply {
+                                            this[selectedIndex] = config.copy(hidden = !config.hidden)
+                                        }
+                                    }
+                                    true
+                                }
+                                else -> false
+                            }
+                        }
+                        false
+                    }
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_ui_ugc_nav_items_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp),
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    itemsIndexed(
+                        items = navConfigs,
+                        key = { _, config -> config.ordinal }
+                    ) { index, config ->
+                        val navItem = UgcTopNavItem.entries.getOrNull(config.ordinal)
+                        if (navItem != null) {
+                            UgcNavItemEditRow(
+                                navItem = navItem,
+                                hidden = config.hidden,
+                                selected = index == selectedIndex,
+                                onFocus = { selectedIndex = index },
+                                focusRequester = focusRequesters[index],
+                                context = context
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {}
+    )
+}
+
+@Composable
 private fun NavItemEditRow(
     navItem: HomeTopNavItem,
     hidden: Boolean,
@@ -686,6 +1002,104 @@ private fun NavItemEditRow(
     )
 }
 
+@Composable
+private fun UgcNavItemEditRow(
+    navItem: UgcTopNavItem,
+    hidden: Boolean,
+    selected: Boolean,
+    onFocus: () -> Unit,
+    focusRequester: FocusRequester,
+    context: android.content.Context
+) {
+    ListItem(
+        selected = selected,
+        onClick = { },
+        modifier = Modifier
+            .focusRequester(focusRequester)
+            .onFocusChanged { if (it.hasFocus) onFocus() },
+        colors = androidx.tv.material3.ListItemDefaults.colors(
+            containerColor = Color.Transparent,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+            focusedSelectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            pressedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        headlineContent = {
+            Text(
+                text = navItem.getDisplayName(context),
+                color = if (hidden) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
+        },
+        trailingContent = {
+            Text(
+                text = if (hidden) stringResource(R.string.settings_ui_home_nav_hidden) else stringResource(R.string.settings_ui_home_nav_visible),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (hidden) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    )
+}
+
+@Composable
+private fun DrawerItemEditRow(
+    drawerItem: DrawerItem,
+    hidden: Boolean,
+    selected: Boolean,
+    isDefaultDrawerItem: Boolean,
+    onFocus: () -> Unit,
+    onLongClick: () -> Unit,
+    focusRequester: FocusRequester
+) {
+    ListItem(
+        selected = selected,
+        onClick = { },
+        onLongClick = onLongClick,
+        modifier = Modifier
+            .focusRequester(focusRequester)
+            .onFocusChanged { if (it.hasFocus) onFocus() },
+        colors = androidx.tv.material3.ListItemDefaults.colors(
+            containerColor = Color.Transparent,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+            focusedSelectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            pressedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        headlineContent = {
+            Text(
+                text = drawerItem.displayName,
+                color = if (hidden) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
+        },
+        trailingContent = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (isDefaultDrawerItem) {
+                    Text(
+                        text = stringResource(R.string.settings_ui_home_nav_default_tag),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Text(
+                    text = if (hidden) stringResource(R.string.settings_ui_home_nav_hidden) else stringResource(R.string.settings_ui_home_nav_visible),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (hidden) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    )
+}
+
 /**
  * 保存导航项配置到 Prefs
  * 默认标签强制不隐藏
@@ -701,6 +1115,68 @@ private fun saveNavConfigs(navConfigs: List<NavItemConfig>) {
         if (shouldHide) "-${config.ordinal}" else "${config.ordinal}"
     }
     Prefs.homeNavItemsOrder = finalOrderString
+}
+
+/**
+ * 保存 UGC 导航项配置到 Prefs
+ * 至少保留一个分区可见，兜底显示第一个分区
+ */
+private fun saveUgcNavConfigs(navConfigs: List<NavItemConfig>) {
+    val fallbackOrdinal = UgcTopNavItem.Douga.ordinal
+    val normalizedConfigs = navConfigs.let { configs ->
+        if (configs.any { !it.hidden }) {
+            configs
+        } else {
+            configs.map { config ->
+                if (config.ordinal == fallbackOrdinal) {
+                    config.copy(hidden = false)
+                } else {
+                    config
+                }
+            }
+        }
+    }
+
+    Prefs.ugcNavItemsOrder = normalizedConfigs.joinToString(",") { config ->
+        if (config.hidden) "-${config.ordinal}" else "${config.ordinal}"
+    }
+}
+
+/**
+ * 保存左侧业务导航项配置到 Prefs
+ * 至少保留一个业务项可见，兜底显示首页
+ */
+private fun saveDrawerNavConfigs(navConfigs: List<NavItemConfig>, defaultDrawerItemOrdinal: Int) {
+    val effectiveDefaultOrdinal = DrawerItem.entries
+        .getOrNull(defaultDrawerItemOrdinal)
+        ?.takeIf { it.isConfigurable }
+        ?.ordinal
+        ?: DrawerItem.defaultConfigurableItem.ordinal
+
+    val normalizedConfigs = navConfigs.map { config ->
+        if (config.ordinal == effectiveDefaultOrdinal) {
+            config.copy(hidden = false)
+        } else {
+            config
+        }
+    }.let { configs ->
+        if (configs.any { !it.hidden }) {
+            configs
+        } else {
+            configs.map { config ->
+                if (config.ordinal == effectiveDefaultOrdinal) {
+                    config.copy(hidden = false)
+                } else {
+                    config
+                }
+            }
+        }
+    }
+
+    Prefs.drawerItemsOrder = normalizedConfigs.joinToString(",") { config ->
+        if (config.hidden) "-${config.ordinal}" else "${config.ordinal}"
+    }
+    Prefs.defaultDrawerTab = effectiveDefaultOrdinal
 }
 
 @Composable

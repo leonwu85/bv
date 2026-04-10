@@ -4,15 +4,13 @@ import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,39 +22,35 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.aaa1115910.bv.R
-import dev.aaa1115910.bv.tv.component.UserPanel
 import dev.aaa1115910.bv.tv.activities.settings.SettingsActivity
-import dev.aaa1115910.bv.tv.activities.user.FavoriteActivity
-import dev.aaa1115910.bv.tv.activities.user.FollowingSeasonActivity
-import dev.aaa1115910.bv.tv.activities.user.HistoryActivity
-import dev.aaa1115910.bv.tv.activities.user.LoginActivity
-import dev.aaa1115910.bv.tv.activities.user.ToViewActivity
-import dev.aaa1115910.bv.tv.activities.user.UserInfoActivity
 import dev.aaa1115910.bv.tv.screens.main.DrawerContent
 import dev.aaa1115910.bv.tv.screens.main.DrawerItem
 import dev.aaa1115910.bv.tv.screens.main.HomeContent
 import dev.aaa1115910.bv.tv.screens.main.LiveContent
 import dev.aaa1115910.bv.tv.screens.main.PgcContent
+import dev.aaa1115910.bv.tv.screens.main.SettingsContent
 import dev.aaa1115910.bv.tv.screens.main.UgcContent
-import dev.aaa1115910.bv.tv.screens.main.currentSelectedTabs
-import dev.aaa1115910.bv.tv.screens.main.drawerItemFocusRequesters
+import dev.aaa1115910.bv.tv.screens.main.UserContent
 import dev.aaa1115910.bv.tv.screens.search.SearchInputScreen
+import dev.aaa1115910.bv.tv.util.drawerNavItemsFlow
+import dev.aaa1115910.bv.tv.util.parseDrawerItemsOrder
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fException
 import dev.aaa1115910.bv.util.fInfo
@@ -76,17 +70,54 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val logger = KotlinLogging.logger("MainScreen")
-    val scope = rememberCoroutineScope()
-    var showUserPanel by remember { mutableStateOf(false) }
+    val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
+    val drawerMenuItems by drawerNavItemsFlow.collectAsState(
+        initial = remember { parseDrawerItemsOrder(Prefs.drawerItemsOrder) }
+    )
+    val preferredDefaultDrawerItem = remember(drawerMenuItems) {
+        DrawerItem.entries
+            .getOrNull(Prefs.defaultDrawerTab)
+            ?.takeIf { it.isConfigurable && it in drawerMenuItems }
+    }
     var lastPressBack: Long by remember { mutableLongStateOf(0L) }
-    var selectedDrawerItem by remember { mutableStateOf(DrawerItem.Home) }
-    var focusedDrawerItem by remember { mutableStateOf(DrawerItem.Home) }
+    var selectedDrawerItem by remember {
+        mutableStateOf(
+            preferredDefaultDrawerItem
+                ?: drawerMenuItems.firstOrNull()
+                ?: DrawerItem.defaultConfigurableItem
+        )
+    }
+    val drawerFocusRequesters = remember {
+        DrawerItem.entries.associateWith { FocusRequester() }
+    }
+
+    var homeSelectedTabIndex by rememberSaveable { mutableIntStateOf(Prefs.defaultHomeTab) }
+    var ugcSelectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    var pgcSelectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
 
     val mainFocusRequester = remember { FocusRequester() }
     val ugcFocusRequester = remember { FocusRequester() }
     val pgcFocusRequester = remember { FocusRequester() }
     val liveFocusRequester = remember { FocusRequester() }
     val searchFocusRequester = remember { FocusRequester() }
+    val userFocusRequester = remember { FocusRequester() }
+    val settingsFocusRequester = remember { FocusRequester() }
+
+    fun requestDrawerFocus(item: DrawerItem) {
+        drawerFocusRequesters[item]?.requestFocus()
+    }
+
+    fun requestContentFocus(item: DrawerItem) {
+        when (item) {
+            DrawerItem.User -> userFocusRequester.requestFocus()
+            DrawerItem.Home -> mainFocusRequester.requestFocus()
+            DrawerItem.UGC -> ugcFocusRequester.requestFocus()
+            DrawerItem.PGC -> pgcFocusRequester.requestFocus()
+            DrawerItem.Live -> liveFocusRequester.requestFocus()
+            DrawerItem.Search -> searchFocusRequester.requestFocus()
+            DrawerItem.Settings -> settingsFocusRequester.requestFocus()
+        }
+    }
 
     // 时间显示状态
     var currentTime by remember {
@@ -107,7 +138,6 @@ fun MainScreen(
         val currentTime = System.currentTimeMillis()
         if (currentTime - lastPressBack < 1500) {
             logger.fInfo { "Exiting Bv Video" }
-            currentSelectedTabs[DrawerItem.Home] = Prefs.defaultHomeTab
             (context as Activity).finish()
         } else {
             lastPressBack = currentTime
@@ -115,32 +145,30 @@ fun MainScreen(
         }
     }
 
-    val onFocusToContent: () -> Unit = {
-        when (focusedDrawerItem) {
-            DrawerItem.Home -> mainFocusRequester.requestFocus()
-            DrawerItem.UGC -> ugcFocusRequester.requestFocus()
-            DrawerItem.PGC -> pgcFocusRequester.requestFocus()
-            DrawerItem.Live -> liveFocusRequester.requestFocus()
-            DrawerItem.Search -> searchFocusRequester.requestFocus()
-            else -> {
-                // 搜索+右侧是搜索->用户+用户内容不是放右侧的，右侧还是搜索。
-                // 让内容对应的菜单获得焦点
-                drawerItemFocusRequesters[selectedDrawerItem]?.requestFocus()
-                when (selectedDrawerItem) {
-                    DrawerItem.Home -> mainFocusRequester.requestFocus()
-                    DrawerItem.UGC -> ugcFocusRequester.requestFocus()
-                    DrawerItem.PGC -> pgcFocusRequester.requestFocus()
-                    DrawerItem.Live -> liveFocusRequester.requestFocus()
-                    DrawerItem.Search -> searchFocusRequester.requestFocus()
-                    else -> {}
-                }
-            }
+    val onFocusToContent: (DrawerItem) -> Unit = { drawerItem ->
+        requestContentFocus(drawerItem)
+    }
+
+    LaunchedEffect(drawerMenuItems) {
+        val fallbackItem = preferredDefaultDrawerItem
+            ?: drawerMenuItems.firstOrNull()
+            ?: DrawerItem.defaultConfigurableItem
+        if (selectedDrawerItem.isConfigurable && selectedDrawerItem !in drawerMenuItems) {
+            selectedDrawerItem = fallbackItem
+        }
+    }
+
+    LaunchedEffect(userViewModel.isLogin) {
+        if (userViewModel.isLogin) {
+            userViewModel.updateUserInfo()
+        } else {
+            userViewModel.clearUserInfo()
         }
     }
 
     LaunchedEffect(Unit) {
         runCatching {
-            mainFocusRequester.requestFocus()
+            requestContentFocus(selectedDrawerItem)
         }.onFailure {
             logger.fException(it) { "request default focus requester failed" }
         }
@@ -178,27 +206,16 @@ fun MainScreen(
             ) {
                 DrawerContent(
                     modifier = Modifier.fillMaxWidth(),
+                    focusRequesters = drawerFocusRequesters,
                     currentDrawerItem = selectedDrawerItem,
                     isLogin = userViewModel.isLogin,
                     avatar = userViewModel.face,
                     username = userViewModel.username,
-                    //avatar = "https://i2.hdslb.com/bfs/face/ef0457addb24141e15dfac6fbf45293ccf1e32ab.jpg",
-                    //username = "碧诗",
                     onDrawerItemChanged = { selectedDrawerItem = it },
-                    onDrawerItemfocused = {
-                        focusedDrawerItem = it
-                    },
                     onOpenSettings = {
                         context.startActivity(Intent(context, SettingsActivity::class.java))
                     },
-                    onShowUserPanel = {
-                        // showUserPanel = true
-                        context.startActivity(Intent(context, UserInfoActivity::class.java))
-                    },
-                    onFocusToContent = onFocusToContent,
-                    onLogin = {
-                        context.startActivity(Intent(context, LoginActivity::class.java))
-                    }
+                    onFocusToContent = onFocusToContent
                 )
             }
 
@@ -210,23 +227,56 @@ fun MainScreen(
                 targetState = selectedDrawerItem,
                 label = "main animated content",
                 transitionSpec = {
-                    val coefficient = 20
-                    if (targetState.ordinal < initialState.ordinal) {
-                        slideInVertically { -it / coefficient } togetherWith
-                                fadeOut(animationSpec = tween(200)) + slideOutVertically { it / coefficient }
+                    if (!enableMainUiAnimation) {
+                        EnterTransition.None togetherWith ExitTransition.None
                     } else {
-                        slideInVertically { it / coefficient } togetherWith
-                                fadeOut(animationSpec = tween(200)) + slideOutVertically { -it / coefficient }
+                        val coefficient = 20
+                        if (targetState.ordinal < initialState.ordinal) {
+                            slideInVertically { -it / coefficient } togetherWith
+                                    fadeOut(animationSpec = tween(200)) + slideOutVertically { it / coefficient }
+                        } else {
+                            slideInVertically { it / coefficient } togetherWith
+                                    fadeOut(animationSpec = tween(200)) + slideOutVertically { -it / coefficient }
+                        }
                     }
                 }
             ) { screen ->
                 when (screen) {
-                    DrawerItem.Home -> HomeContent(navFocusRequester = mainFocusRequester)
-                    DrawerItem.UGC -> UgcContent(navFocusRequester = ugcFocusRequester)
-                    DrawerItem.PGC -> PgcContent(navFocusRequester = pgcFocusRequester)
-                    DrawerItem.Live -> LiveContent(navFocusRequester = liveFocusRequester)
-                    DrawerItem.Search -> SearchInputScreen(defaultFocusRequester = searchFocusRequester)
-                    else -> {}
+                    DrawerItem.User -> UserContent(
+                        navFocusRequester = userFocusRequester,
+                        onRequestDrawerFocus = { requestDrawerFocus(DrawerItem.User) },
+                        userViewModel = userViewModel
+                    )
+                    DrawerItem.Home -> HomeContent(
+                        navFocusRequester = mainFocusRequester,
+                        selectedTabOrdinal = homeSelectedTabIndex,
+                        onSelectedTabChanged = { homeSelectedTabIndex = it },
+                        onRequestDrawerFocus = { requestDrawerFocus(DrawerItem.Home) }
+                    )
+                    DrawerItem.UGC -> UgcContent(
+                        navFocusRequester = ugcFocusRequester,
+                        selectedTabOrdinal = ugcSelectedTabIndex,
+                        onSelectedTabChanged = { ugcSelectedTabIndex = it },
+                        onRequestDrawerFocus = { requestDrawerFocus(DrawerItem.UGC) }
+                    )
+                    DrawerItem.PGC -> PgcContent(
+                        navFocusRequester = pgcFocusRequester,
+                        selectedTabOrdinal = pgcSelectedTabIndex,
+                        onSelectedTabChanged = { pgcSelectedTabIndex = it },
+                        onRequestDrawerFocus = { requestDrawerFocus(DrawerItem.PGC) }
+                    )
+                    DrawerItem.Live -> LiveContent(
+                        navFocusRequester = liveFocusRequester,
+                        onRequestDrawerFocus = { requestDrawerFocus(DrawerItem.Live) }
+                    )
+                    DrawerItem.Search -> SearchInputScreen(
+                        defaultFocusRequester = searchFocusRequester,
+                        onRequestDrawerFocus = { requestDrawerFocus(DrawerItem.Search) }
+                    )
+                    DrawerItem.Settings -> SettingsContent(
+                        navFocusRequester = settingsFocusRequester,
+                        onRequestDrawerFocus = { requestDrawerFocus(DrawerItem.Settings) }
+                    )
                 }
             }
 
@@ -241,76 +291,6 @@ fun MainScreen(
                 ),
                 color = MaterialTheme.colorScheme.onSurface
             )
-
-            // Box(
-            //     modifier = Modifier
-            //         .fillMaxSize()
-            //         .padding(start = 80.dp) // 为 NavigationRail 留出空间
-            // ) {
-            //     NavHost(
-            //         navController,
-            //         startDestination = startDestination.displayName
-            //     ) {
-            //         DrawerItem.entries.forEach { destination ->
-            //             composable(destination.displayName) {
-            //                 when (destination.displayName) {
-            //                     DrawerItem.Home.displayName -> HomeContent(navFocusRequester = mainFocusRequester)
-            //                     DrawerItem.UGC.displayName -> UgcContent(navFocusRequester = ugcFocusRequester)
-            //                     DrawerItem.PGC.displayName -> PgcContent(navFocusRequester = pgcFocusRequester)
-            //                     DrawerItem.Search.displayName -> SearchInputScreen(defaultFocusRequester = searchFocusRequester)
-            //                     else -> {}
-            //                 }
-            //             }
-            //         }
-            //     }
-            // }
-        }
-        AnimatedVisibility(
-            visible = showUserPanel,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.6f))
-            ) {
-                AnimatedVisibility(
-                    modifier = Modifier
-                        .align(Alignment.Center),
-                    visible = showUserPanel,
-                    enter = fadeIn() + scaleIn(),
-                    exit = fadeOut()
-                ) {
-                    UserPanel(
-                        modifier = Modifier
-                            .padding(12.dp),
-                        username = userViewModel.username,
-                        face = userViewModel.face,
-                        onHide = { showUserPanel = false },
-                        onGoMy = {
-                            context.startActivity(Intent(context, UserInfoActivity::class.java))
-                        },
-                        onGoHistory = {
-                            context.startActivity(Intent(context, HistoryActivity::class.java))
-                        },
-                        onGoFavorite = {
-                            context.startActivity(Intent(context, FavoriteActivity::class.java))
-                        },
-                        onGoFollowing = {
-                            context.startActivity(
-                                Intent(
-                                    context,
-                                    FollowingSeasonActivity::class.java
-                                )
-                            )
-                        },
-                        onGoLater = {
-                            context.startActivity(Intent(context, ToViewActivity::class.java))
-                        }
-                    )
-                }
-            }
         }
     }
 }

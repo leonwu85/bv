@@ -66,10 +66,17 @@ private data class SubAreaNavItem(val area: LiveAreaItem) : TopNavItem {
     override fun getDisplayName(context: Context): String = area.name
 }
 
+private enum class LiveFocusLayer {
+    ParentNav,
+    SubNav,
+    Content,
+}
+
 @Composable
 fun LiveContent(
     modifier: Modifier = Modifier,
     navFocusRequester: FocusRequester,
+    onRequestDrawerFocus: () -> Unit = {},
     liveViewModel: LiveViewModel = koinViewModel()
 ) {
     val scope = rememberCoroutineScope()
@@ -78,9 +85,7 @@ fun LiveContent(
 
     val gridState = rememberLazyGridState()
     val subNavFocusRequester = remember { FocusRequester() }
-    var focusOnContent by remember { mutableStateOf(false) }
-    var parentNavHasFocus by remember { mutableStateOf(false) }
-    var subNavHasFocus by remember { mutableStateOf(false) }
+    var focusLayer by remember { mutableStateOf<LiveFocusLayer?>(null) }
 
     val currentRoomList = liveViewModel.getCurrentRoomList()
     val currentHistoryList = liveViewModel.historyList
@@ -136,21 +141,23 @@ fun LiveContent(
     // 判断当前是否有子分区导航
     val hasSubNav = liveViewModel.currentTabType == LiveTabType.Area && liveViewModel.subAreaList.isNotEmpty()
 
-    BackHandler(focusOnContent || subNavHasFocus || parentNavHasFocus) {
+    BackHandler(focusLayer != null) {
         logger.info { "onFocusBackToNav" }
-        if (subNavHasFocus) {
-            navFocusRequester.requestFocus(scope)
-            return@BackHandler
-        }
-        if (parentNavHasFocus) {
-            drawerItemFocusRequesters[DrawerItem.Live]?.requestFocus()
-            return@BackHandler
-        }
-        // 如果没有子分区导航，直接返回到主分区导航
-        if (hasSubNav) {
-            subNavFocusRequester.requestFocus(scope)
-        } else {
-            navFocusRequester.requestFocus(scope)
+        when (focusLayer) {
+            LiveFocusLayer.Content -> {
+                if (hasSubNav) {
+                    subNavFocusRequester.requestFocus(scope)
+                } else {
+                    navFocusRequester.requestFocus(scope)
+                }
+            }
+            LiveFocusLayer.SubNav -> {
+                navFocusRequester.requestFocus(scope)
+            }
+            LiveFocusLayer.ParentNav -> {
+                onRequestDrawerFocus()
+            }
+            null -> Unit
         }
     }
 
@@ -183,7 +190,13 @@ fun LiveContent(
                         modifier = Modifier
                             .focusRequester(navFocusRequester)
                             .padding(end = 80.dp)
-                            .onFocusChanged { parentNavHasFocus = it.hasFocus },
+                            .onFocusChanged {
+                                if (it.hasFocus) {
+                                    focusLayer = LiveFocusLayer.ParentNav
+                                } else if (focusLayer == LiveFocusLayer.ParentNav) {
+                                    focusLayer = null
+                                }
+                            },
                         items = parentNavItems,
                         isLargePadding = false,
                         initialSelectedItem = initialSelectedItem,
@@ -240,7 +253,7 @@ fun LiveContent(
                             }
                         },
                         onLeftKeyEvent = {
-                            drawerItemFocusRequesters[DrawerItem.Live]?.requestFocus()
+                            onRequestDrawerFocus()
                         }
                     )
                 }
@@ -254,9 +267,15 @@ fun LiveContent(
                             modifier = Modifier
                                 .focusRequester(subNavFocusRequester)
                                 .padding(end = 80.dp)
-                                .onFocusChanged { subNavHasFocus = it.hasFocus },
+                                .onFocusChanged {
+                                    if (it.hasFocus) {
+                                        focusLayer = LiveFocusLayer.SubNav
+                                    } else if (focusLayer == LiveFocusLayer.SubNav) {
+                                        focusLayer = null
+                                    }
+                                },
                             items = subNavItems,
-                            isLargePadding = !focusOnContent && currentListOnTop,
+                            isLargePadding = focusLayer != LiveFocusLayer.Content && currentListOnTop,
                             initialSelectedItem = subNavItems.firstOrNull {
                                 it.area.id == liveViewModel.currentSubArea?.id
                             },
@@ -288,7 +307,13 @@ fun LiveContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .onFocusChanged { focusOnContent = it.hasFocus }
+                .onFocusChanged {
+                    if (it.hasFocus) {
+                        focusLayer = LiveFocusLayer.Content
+                    } else if (focusLayer == LiveFocusLayer.Content) {
+                        focusLayer = null
+                    }
+                }
         ) {
             if (currentListSize == 0 && liveViewModel.loading) {
                 LoadingTip()

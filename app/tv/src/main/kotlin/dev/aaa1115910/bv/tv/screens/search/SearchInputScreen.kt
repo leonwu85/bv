@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import dev.aaa1115910.bv.tv.screens.main.drawerItemFocusRequesters
-import dev.aaa1115910.bv.tv.screens.main.DrawerItem
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -66,10 +64,15 @@ import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.viewmodel.search.SearchInputViewModel
 import org.koin.androidx.compose.koinViewModel
 
+private enum class SearchInputFocusLayer {
+    Content,
+}
+
 @Composable
 fun SearchInputScreen(
     modifier: Modifier = Modifier,
     defaultFocusRequester: FocusRequester,
+    onRequestDrawerFocus: () -> Unit = {},
     searchInputViewModel: SearchInputViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
@@ -81,7 +84,7 @@ fun SearchInputScreen(
 
     var enableProxy by remember { mutableStateOf(false) }
 
-    var focusOnContent by remember { mutableStateOf(false) }
+    var focusLayer by remember { mutableStateOf<SearchInputFocusLayer?>(null) }
 
     val onSearch: (String) -> Unit = { keyword ->
         SearchResultActivity.actionStart(context, keyword, enableProxy)
@@ -93,13 +96,15 @@ fun SearchInputScreen(
         searchInputViewModel.updateSuggests()
     }
 
-    BackHandler(enabled = focusOnContent) {
-        drawerItemFocusRequesters[DrawerItem.Search]?.requestFocus()
+    BackHandler(enabled = focusLayer != null) {
+        onRequestDrawerFocus()
     }
 
     SearchInputScreenContent(
         modifier = modifier
-            .onFocusChanged { focusOnContent = it.hasFocus },
+            .onFocusChanged {
+                focusLayer = if (it.hasFocus) SearchInputFocusLayer.Content else null
+            },
         defaultFocusRequester = defaultFocusRequester,
         searchKeyword = searchKeyword,
         onSearchKeywordChange = { searchInputViewModel.keyword = it },

@@ -2,6 +2,8 @@ package dev.aaa1115910.bv.tv.screens.main
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -14,6 +16,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +29,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import dev.aaa1115910.bv.tv.component.TopNav
 import dev.aaa1115910.bv.tv.component.UgcTopNavItem
 import dev.aaa1115910.bv.tv.screens.main.ugc.CreateUgcContent
+import dev.aaa1115910.bv.tv.util.parseUgcNavItemsOrder
+import dev.aaa1115910.bv.tv.util.ugcNavItemsFlow
+import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.requestFocus
 import dev.aaa1115910.bv.viewmodel.ugc.UgcAiViewModel
@@ -59,116 +65,61 @@ import dev.aaa1115910.bv.viewmodel.ugc.UgcSportsViewModel
 import dev.aaa1115910.bv.viewmodel.ugc.UgcTechViewModel
 import dev.aaa1115910.bv.viewmodel.ugc.UgcTravelViewModel
 import dev.aaa1115910.bv.viewmodel.ugc.UgcVlogViewModel
+import dev.aaa1115910.bv.viewmodel.ugc.UgcViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.koin.androidx.compose.koinViewModel
+
+private enum class UgcFocusLayer {
+    TopNav,
+    Content,
+}
 
 @Composable
 fun UgcContent(
     modifier: Modifier = Modifier,
     navFocusRequester: FocusRequester,
-    ugcDougaViewModel: UgcDougaViewModel = koinViewModel(),
-    ugcGameViewModel: UgcGameViewModel = koinViewModel(),
-    ugcKichikuViewModel: UgcKichikuViewModel = koinViewModel(),
-    ugcMusicViewModel: UgcMusicViewModel = koinViewModel(),
-    ugcDanceViewModel: UgcDanceViewModel = koinViewModel(),
-    ugcCinephileViewModel: UgcCinephileViewModel = koinViewModel(),
-    ugcEntViewModel: UgcEntViewModel = koinViewModel(),
-    ugcKnowledgeViewModel: UgcKnowledgeViewModel = koinViewModel(),
-    ugcTechViewModel: UgcTechViewModel = koinViewModel(),
-    ugcInformationViewModel: UgcInformationViewModel = koinViewModel(),
-    ugcFoodViewModel: UgcFoodViewModel = koinViewModel(),
-    ugcShortplayViewModel: UgcShortplayViewModel = koinViewModel(),
-    ugcCarViewModel: UgcCarViewModel = koinViewModel(),
-    ugcFashionViewModel: UgcFashionViewModel = koinViewModel(),
-    ugcSportsViewModel: UgcSportsViewModel = koinViewModel(),
-    ugcAnimalViewModel: UgcAnimalViewModel = koinViewModel(),
-    ugcVlogViewModel: UgcVlogViewModel = koinViewModel(),
-    ugcPaintingViewModel: UgcPaintingViewModel = koinViewModel(),
-    ugcAiViewModel: UgcAiViewModel = koinViewModel(),
-    ugcHomeViewModel: UgcHomeViewModel = koinViewModel(),
-    ugcOutdoorsViewModel: UgcOutdoorsViewModel = koinViewModel(),
-    ugcGymViewModel: UgcGymViewModel = koinViewModel(),
-    ugcHandmakeViewModel: UgcHandmakeViewModel = koinViewModel(),
-    ugcTravelViewModel: UgcTravelViewModel = koinViewModel(),
-    ugcRuralViewModel: UgcRuralViewModel = koinViewModel(),
-    ugcParentingViewModel: UgcParentingViewModel = koinViewModel(),
-    ugcHealthViewModel: UgcHealthViewModel = koinViewModel(),
-    ugcEmotionViewModel: UgcEmotionViewModel = koinViewModel(),
-    ugcLifeJoyViewModel: UgcLifeJoyViewModel = koinViewModel(),
-    ugcLifeExperienceViewModel: UgcLifeExperienceViewModel = koinViewModel(),
-    ugcMysticismViewModel: UgcMysticismViewModel = koinViewModel(),
+    selectedTabOrdinal: Int = UgcTopNavItem.Douga.ordinal,
+    onSelectedTabChanged: (Int) -> Unit = {},
+    onRequestDrawerFocus: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger("UgcContent")
+    val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
+    val ugcNavItems by ugcNavItemsFlow.collectAsState(
+        initial = remember { parseUgcNavItemsOrder(Prefs.ugcNavItemsOrder) }
+    )
 
     // 为当前选中的tab创建LazyGridState
     val currentLazyGridState = rememberLazyGridState()
-    var focusOnContent by remember { mutableStateOf(false) }
-    var topNavHasFocus by remember { mutableStateOf(false) }
+    val instantiatedViewModels = remember { mutableMapOf<UgcTopNavItem, UgcViewModel>() }
+    var focusLayer by remember { mutableStateOf<UgcFocusLayer?>(null) }
 
-    // 使用remember的key参数确保只有在DrawerItem.UGC的tab状态变化时才重新计算
-    var selectedTab by remember {
-        mutableStateOf(
-            currentSelectedTabs[DrawerItem.UGC]
-                ?.let { UgcTopNavItem.entries.getOrNull(it) }
-                ?: UgcTopNavItem.Douga
-        )
-    }
+    val selectedTab = UgcTopNavItem.entries
+        .getOrElse(selectedTabOrdinal) { UgcTopNavItem.Douga }
+        .takeIf { it in ugcNavItems }
+        ?: ugcNavItems.first()
+    val currentViewModel = rememberUgcViewModel(selectedTab)
 
-    // 获取所有ViewModels的映射
-    val viewModelMap = remember {
-        mapOf(
-            UgcTopNavItem.Douga to ugcDougaViewModel,
-            UgcTopNavItem.Game to ugcGameViewModel,
-            UgcTopNavItem.Kichiku to ugcKichikuViewModel,
-            UgcTopNavItem.Music to ugcMusicViewModel,
-            UgcTopNavItem.Dance to ugcDanceViewModel,
-            UgcTopNavItem.Cinephile to ugcCinephileViewModel,
-            UgcTopNavItem.Ent to ugcEntViewModel,
-            UgcTopNavItem.Knowledge to ugcKnowledgeViewModel,
-            UgcTopNavItem.Tech to ugcTechViewModel,
-            UgcTopNavItem.Information to ugcInformationViewModel,
-            UgcTopNavItem.Food to ugcFoodViewModel,
-            UgcTopNavItem.ShortPlay to ugcShortplayViewModel,
-            UgcTopNavItem.Car to ugcCarViewModel,
-            UgcTopNavItem.Fashion to ugcFashionViewModel,
-            UgcTopNavItem.Sports to ugcSportsViewModel,
-            UgcTopNavItem.Animal to ugcAnimalViewModel,
-            UgcTopNavItem.Vlog to ugcVlogViewModel,
-            UgcTopNavItem.Painting to ugcPaintingViewModel,
-            UgcTopNavItem.Ai to ugcAiViewModel,
-            UgcTopNavItem.Home to ugcHomeViewModel,
-            UgcTopNavItem.Outdoors to ugcOutdoorsViewModel,
-            UgcTopNavItem.Gym to ugcGymViewModel,
-            UgcTopNavItem.Handmake to ugcHandmakeViewModel,
-            UgcTopNavItem.Travel to ugcTravelViewModel,
-            UgcTopNavItem.Rural to ugcRuralViewModel,
-            UgcTopNavItem.Parenting to ugcParentingViewModel,
-            UgcTopNavItem.Health to ugcHealthViewModel,
-            UgcTopNavItem.Emotion to ugcEmotionViewModel,
-            UgcTopNavItem.LifeJoy to ugcLifeJoyViewModel,
-            UgcTopNavItem.LifeExperience to ugcLifeExperienceViewModel,
-            UgcTopNavItem.Mysticism to ugcMysticismViewModel
-        )
-    }
-
-    // 当选中标签变化时，保存到全局状态并处理懒加载
-    LaunchedEffect(selectedTab) {
-        currentSelectedTabs[DrawerItem.UGC] = selectedTab.ordinal
-
-        // 取消所有其他ViewModel的延迟加载
-        viewModelMap.values.forEach { viewModel ->
-            viewModel.cancelDelayedLoad()
+    LaunchedEffect(selectedTab, currentViewModel) {
+        if (selectedTab.ordinal != selectedTabOrdinal) {
+            onSelectedTabChanged(selectedTab.ordinal)
         }
 
-        // 为当前选中的ViewModel开始延迟加载
-        viewModelMap[selectedTab]?.loadDataWithDelay(300L)
+        instantiatedViewModels[selectedTab] = currentViewModel
+
+        instantiatedViewModels.forEach { (navItem, viewModel) ->
+            if (navItem != selectedTab) {
+                viewModel.cancelDelayedLoad()
+            }
+        }
+
+        currentViewModel.loadDataWithDelay(300L)
     }
 
-    BackHandler(focusOnContent || topNavHasFocus) {
+    BackHandler(focusLayer != null) {
         logger.fInfo { "onFocusBackToNav" }
-        if (topNavHasFocus) {
-            drawerItemFocusRequesters[DrawerItem.UGC]?.requestFocus()
+        if (focusLayer == UgcFocusLayer.TopNav) {
+            onRequestDrawerFocus()
             return@BackHandler
         }
         navFocusRequester.requestFocus(scope)
@@ -184,26 +135,27 @@ fun UgcContent(
             TopNav(
                 modifier = Modifier
                     .focusRequester(navFocusRequester)
-                    .onFocusChanged { topNavHasFocus = it.hasFocus },
-                items = UgcTopNavItem.entries,
-                isLargePadding = !focusOnContent,
+                    .onFocusChanged {
+                        if (it.hasFocus) {
+                            focusLayer = UgcFocusLayer.TopNav
+                        } else if (focusLayer == UgcFocusLayer.TopNav) {
+                            focusLayer = null
+                        }
+                    },
+                items = ugcNavItems,
+                isLargePadding = focusLayer != UgcFocusLayer.Content,
                 initialSelectedItem = selectedTab,
                 onSelectedChanged = { nav ->
-                    selectedTab = nav as UgcTopNavItem
-                    // 取消非selectedTab的所有延迟加载
-                    viewModelMap
-                        .filterKeys { it != selectedTab }
-                        .values
-                        .forEach { it.cancelDelayedLoad() }
-
+                    onSelectedTabChanged((nav as UgcTopNavItem).ordinal)
                 },
                 onClick = { nav ->
-                    // 点击时立即加载数据
-                    viewModelMap[nav as UgcTopNavItem]?.reloadAll()
+                    if (nav == selectedTab) {
+                        currentViewModel.reloadAll()
+                    }
                 },
                 onLeftKeyEvent = {
                     // 顶部栏最左侧按左键时，跳转到左侧导航栏
-                    drawerItemFocusRequesters[DrawerItem.UGC]?.requestFocus()
+                    onRequestDrawerFocus()
                 }
             )
         }
@@ -212,28 +164,80 @@ fun UgcContent(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .onFocusChanged { focusOnContent = it.hasFocus }
+                .onFocusChanged {
+                    if (it.hasFocus) {
+                        focusLayer = UgcFocusLayer.Content
+                    } else if (focusLayer == UgcFocusLayer.Content) {
+                        focusLayer = null
+                    }
+                }
         ) {
             AnimatedContent(
                 targetState = selectedTab,
                 label = "ugc animated content",
                 transitionSpec = {
-                    val coefficient = 10
-                    if (targetState.ordinal < initialState.ordinal) {
-                        fadeIn() + slideInHorizontally { -it / coefficient } togetherWith
-                                fadeOut() + slideOutHorizontally { it / coefficient }
+                    if (!enableMainUiAnimation) {
+                        EnterTransition.None togetherWith ExitTransition.None
                     } else {
-                        fadeIn() + slideInHorizontally { it / coefficient } togetherWith
-                                fadeOut() + slideOutHorizontally { -it / coefficient }
+                        val coefficient = 10
+                        if (targetState.ordinal < initialState.ordinal) {
+                            fadeIn() + slideInHorizontally { -it / coefficient } togetherWith
+                                    fadeOut() + slideOutHorizontally { it / coefficient }
+                        } else {
+                            fadeIn() + slideInHorizontally { it / coefficient } togetherWith
+                                    fadeOut() + slideOutHorizontally { -it / coefficient }
+                        }
                     }
                 }
             ) { screen ->
+                val screenViewModel = rememberUgcViewModel(screen)
+                LaunchedEffect(screen, screenViewModel) {
+                    instantiatedViewModels[screen] = screenViewModel
+                }
+
                 CreateUgcContent(
                     navItem = screen,
                     lazyGridState = currentLazyGridState,
-                    ugcViewModel = viewModelMap[screen]!!
+                    ugcViewModel = screenViewModel
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun rememberUgcViewModel(navItem: UgcTopNavItem): UgcViewModel {
+    return when (navItem) {
+        UgcTopNavItem.Douga -> koinViewModel<UgcDougaViewModel>()
+        UgcTopNavItem.Game -> koinViewModel<UgcGameViewModel>()
+        UgcTopNavItem.Kichiku -> koinViewModel<UgcKichikuViewModel>()
+        UgcTopNavItem.Music -> koinViewModel<UgcMusicViewModel>()
+        UgcTopNavItem.Dance -> koinViewModel<UgcDanceViewModel>()
+        UgcTopNavItem.Cinephile -> koinViewModel<UgcCinephileViewModel>()
+        UgcTopNavItem.Ent -> koinViewModel<UgcEntViewModel>()
+        UgcTopNavItem.Knowledge -> koinViewModel<UgcKnowledgeViewModel>()
+        UgcTopNavItem.Tech -> koinViewModel<UgcTechViewModel>()
+        UgcTopNavItem.Information -> koinViewModel<UgcInformationViewModel>()
+        UgcTopNavItem.Food -> koinViewModel<UgcFoodViewModel>()
+        UgcTopNavItem.ShortPlay -> koinViewModel<UgcShortplayViewModel>()
+        UgcTopNavItem.Car -> koinViewModel<UgcCarViewModel>()
+        UgcTopNavItem.Fashion -> koinViewModel<UgcFashionViewModel>()
+        UgcTopNavItem.Sports -> koinViewModel<UgcSportsViewModel>()
+        UgcTopNavItem.Animal -> koinViewModel<UgcAnimalViewModel>()
+        UgcTopNavItem.Vlog -> koinViewModel<UgcVlogViewModel>()
+        UgcTopNavItem.Painting -> koinViewModel<UgcPaintingViewModel>()
+        UgcTopNavItem.Ai -> koinViewModel<UgcAiViewModel>()
+        UgcTopNavItem.Home -> koinViewModel<UgcHomeViewModel>()
+        UgcTopNavItem.Outdoors -> koinViewModel<UgcOutdoorsViewModel>()
+        UgcTopNavItem.Gym -> koinViewModel<UgcGymViewModel>()
+        UgcTopNavItem.Handmake -> koinViewModel<UgcHandmakeViewModel>()
+        UgcTopNavItem.Travel -> koinViewModel<UgcTravelViewModel>()
+        UgcTopNavItem.Rural -> koinViewModel<UgcRuralViewModel>()
+        UgcTopNavItem.Parenting -> koinViewModel<UgcParentingViewModel>()
+        UgcTopNavItem.Health -> koinViewModel<UgcHealthViewModel>()
+        UgcTopNavItem.Emotion -> koinViewModel<UgcEmotionViewModel>()
+        UgcTopNavItem.LifeJoy -> koinViewModel<UgcLifeJoyViewModel>()
+        UgcTopNavItem.LifeExperience -> koinViewModel<UgcLifeExperienceViewModel>()
+        UgcTopNavItem.Mysticism -> koinViewModel<UgcMysticismViewModel>()
     }
 }

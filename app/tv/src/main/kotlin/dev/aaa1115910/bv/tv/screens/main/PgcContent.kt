@@ -2,6 +2,8 @@ package dev.aaa1115910.bv.tv.screens.main
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -14,6 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,33 +36,35 @@ import dev.aaa1115910.bv.tv.screens.main.pgc.GuoChuangContent
 import dev.aaa1115910.bv.tv.screens.main.pgc.MovieContent
 import dev.aaa1115910.bv.tv.screens.main.pgc.TvContent
 import dev.aaa1115910.bv.tv.screens.main.pgc.VarietyContent
+import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.requestFocus
-import dev.aaa1115910.bv.util.rememberDebouncer
 import dev.aaa1115910.bv.viewmodel.pgc.PgcAnimeViewModel
 import dev.aaa1115910.bv.viewmodel.pgc.PgcDocumentaryViewModel
 import dev.aaa1115910.bv.viewmodel.pgc.PgcGuoChuangViewModel
 import dev.aaa1115910.bv.viewmodel.pgc.PgcMovieViewModel
 import dev.aaa1115910.bv.viewmodel.pgc.PgcTvViewModel
 import dev.aaa1115910.bv.viewmodel.pgc.PgcVarietyViewModel
+import dev.aaa1115910.bv.viewmodel.pgc.PgcViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+
+private enum class PgcFocusLayer {
+    TopNav,
+    Content,
+}
 
 @Composable
 fun PgcContent(
     modifier: Modifier = Modifier,
     navFocusRequester: FocusRequester,
-    pgcAnimeViewModel: PgcAnimeViewModel = koinViewModel(),
-    pgcGuoChuangViewModel: PgcGuoChuangViewModel = koinViewModel(),
-    pgcMovieViewModel: PgcMovieViewModel = koinViewModel(),
-    pgcDocumentaryViewModel: PgcDocumentaryViewModel = koinViewModel(),
-    pgcTvViewModel: PgcTvViewModel = koinViewModel(),
-    pgcVarietyViewModel: PgcVarietyViewModel = koinViewModel()
+    selectedTabOrdinal: Int = PgcTopNavItem.Anime.ordinal,
+    onSelectedTabChanged: (Int) -> Unit = {},
+    onRequestDrawerFocus: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger("PgcContent")
+    val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
 
     val animeState = rememberLazyListState()
     val guoChuangState = rememberLazyListState()
@@ -67,22 +72,16 @@ fun PgcContent(
     val documentaryState = rememberLazyListState()
     val tvState = rememberLazyListState()
     val varietyState = rememberLazyListState()
-    
-    var focusOnContent by remember { mutableStateOf(false) }
-    var topNavHasFocus by remember { mutableStateOf(false) }
 
-    // 使用remember的key参数确保只有在DrawerItem.PGC的tab状态变化时才重新计算
-    var selectedTab by remember {
-        mutableStateOf(
-            currentSelectedTabs[DrawerItem.PGC]
-                ?.let { PgcTopNavItem.entries.getOrNull(it) }
-                ?: PgcTopNavItem.Anime
-        )
-    }
+    var focusLayer by remember { mutableStateOf<PgcFocusLayer?>(null) }
 
-    // 当选中标签变化时，保存到全局状态
+    val selectedTab = PgcTopNavItem.entries.getOrElse(selectedTabOrdinal) { PgcTopNavItem.Anime }
+    val currentViewModel = rememberPgcViewModel(selectedTab)
+
     LaunchedEffect(selectedTab) {
-        currentSelectedTabs[DrawerItem.PGC] = selectedTab.ordinal
+        if (selectedTab.ordinal != selectedTabOrdinal) {
+            onSelectedTabChanged(selectedTab.ordinal)
+        }
     }
 
     val currentListOnTop by remember {
@@ -103,52 +102,17 @@ fun PgcContent(
     }
 
     //启动时加载当前选中tab的数据
-    LaunchedEffect(selectedTab) {
-        when (selectedTab) {
-            PgcTopNavItem.Anime -> {
-                if (pgcAnimeViewModel.feedItems.isEmpty()) {
-                    logger.fInfo { "加载动画数据" }
-                    pgcAnimeViewModel.init()
-                }
-            }
-            PgcTopNavItem.GuoChuang -> {
-                if (pgcGuoChuangViewModel.feedItems.isEmpty()) {
-                    logger.fInfo { "加载国创数据" }
-                    pgcGuoChuangViewModel.init()
-                }
-            }
-            PgcTopNavItem.Movie -> {
-                if (pgcMovieViewModel.feedItems.isEmpty()) {
-                    logger.fInfo { "加载电影数据" }
-                    pgcMovieViewModel.init()
-                }
-            }
-            PgcTopNavItem.Documentary -> {
-                if (pgcDocumentaryViewModel.feedItems.isEmpty()) {
-                    logger.fInfo { "加载纪录片数据" }
-                    pgcDocumentaryViewModel.init()
-                }
-            }
-            PgcTopNavItem.Tv -> {
-                if (pgcTvViewModel.feedItems.isEmpty()) {
-                    logger.fInfo { "加载电视剧数据" }
-                    pgcTvViewModel.init()
-                }
-            }
-            PgcTopNavItem.Variety -> {
-                if (pgcVarietyViewModel.feedItems.isEmpty()) {
-                    logger.fInfo { "加载综艺数据" }
-                    pgcVarietyViewModel.init()
-                }
-            }
+    LaunchedEffect(selectedTab, currentViewModel) {
+        if (currentViewModel.feedItems.isEmpty()) {
+            logger.fInfo { "加载 $selectedTab 数据" }
+            currentViewModel.init()
         }
     }
 
-    BackHandler(focusOnContent || topNavHasFocus) {
+    BackHandler(focusLayer != null) {
         logger.fInfo { "onFocusBackToNav" }
-        // 如果顶部导航有焦点，则返回到左边栏的PGC位置
-        if (topNavHasFocus) {
-            drawerItemFocusRequesters[DrawerItem.PGC]?.requestFocus()
+        if (focusLayer == PgcFocusLayer.TopNav) {
+            onRequestDrawerFocus()
             return@BackHandler
         }
         navFocusRequester.requestFocus(scope)
@@ -172,26 +136,27 @@ fun PgcContent(
                 modifier = Modifier
                     .focusRequester(navFocusRequester)
                     .padding(end = 80.dp)
-                    .onFocusChanged { topNavHasFocus = it.hasFocus },
+                    .onFocusChanged {
+                        if (it.hasFocus) {
+                            focusLayer = PgcFocusLayer.TopNav
+                        } else if (focusLayer == PgcFocusLayer.TopNav) {
+                            focusLayer = null
+                        }
+                    },
                 items = PgcTopNavItem.entries,
-                isLargePadding = !focusOnContent && currentListOnTop,
+                isLargePadding = focusLayer != PgcFocusLayer.Content && currentListOnTop,
                 initialSelectedItem = selectedTab,
                 onSelectedChanged = { nav ->
-                    selectedTab = nav as PgcTopNavItem
+                    onSelectedTabChanged((nav as PgcTopNavItem).ordinal)
                 },
                 onClick = { nav ->
-                    when (nav) {
-                        PgcTopNavItem.Anime -> pgcAnimeViewModel.reloadAll()
-                        PgcTopNavItem.GuoChuang -> pgcGuoChuangViewModel.reloadAll()
-                        PgcTopNavItem.Movie -> pgcMovieViewModel.reloadAll()
-                        PgcTopNavItem.Documentary -> pgcDocumentaryViewModel.reloadAll()
-                        PgcTopNavItem.Tv -> pgcTvViewModel.reloadAll()
-                        PgcTopNavItem.Variety -> pgcVarietyViewModel.reloadAll()
+                    if (nav == selectedTab) {
+                        currentViewModel.reloadAll()
                     }
                 },
                 onLeftKeyEvent = {
                     // 顶部栏最左侧按左键时，跳转到左侧导航栏
-                    drawerItemFocusRequesters[DrawerItem.PGC]?.requestFocus()
+                    onRequestDrawerFocus()
                 }
             )
         }
@@ -200,19 +165,29 @@ fun PgcContent(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .onFocusChanged { focusOnContent = it.hasFocus }
+                .onFocusChanged {
+                    if (it.hasFocus) {
+                        focusLayer = PgcFocusLayer.Content
+                    } else if (focusLayer == PgcFocusLayer.Content) {
+                        focusLayer = null
+                    }
+                }
         ) {
             AnimatedContent(
                 targetState = selectedTab,
                 label = "pgc animated content",
                 transitionSpec = {
-                    val coefficient = 10
-                    if (targetState.ordinal < initialState.ordinal) {
-                        fadeIn() + slideInHorizontally { -it / coefficient } togetherWith
-                                fadeOut() + slideOutHorizontally { it / coefficient }
+                    if (!enableMainUiAnimation) {
+                        EnterTransition.None togetherWith ExitTransition.None
                     } else {
-                        fadeIn() + slideInHorizontally { it / coefficient } togetherWith
-                                fadeOut() + slideOutHorizontally { -it / coefficient }
+                        val coefficient = 10
+                        if (targetState.ordinal < initialState.ordinal) {
+                            fadeIn() + slideInHorizontally { -it / coefficient } togetherWith
+                                    fadeOut() + slideOutHorizontally { it / coefficient }
+                        } else {
+                            fadeIn() + slideInHorizontally { it / coefficient } togetherWith
+                                    fadeOut() + slideOutHorizontally { -it / coefficient }
+                        }
                     }
                 }
             ) { screen ->
@@ -226,5 +201,17 @@ fun PgcContent(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun rememberPgcViewModel(navItem: PgcTopNavItem): PgcViewModel {
+    return when (navItem) {
+        PgcTopNavItem.Anime -> koinViewModel<PgcAnimeViewModel>()
+        PgcTopNavItem.GuoChuang -> koinViewModel<PgcGuoChuangViewModel>()
+        PgcTopNavItem.Movie -> koinViewModel<PgcMovieViewModel>()
+        PgcTopNavItem.Documentary -> koinViewModel<PgcDocumentaryViewModel>()
+        PgcTopNavItem.Tv -> koinViewModel<PgcTvViewModel>()
+        PgcTopNavItem.Variety -> koinViewModel<PgcVarietyViewModel>()
     }
 }

@@ -33,6 +33,14 @@ class UserViewModel(
 
     var responseData: MyInfoData? by mutableStateOf(null)
 
+    init {
+        if (userRepository.isLogin) {
+            viewModelScope.launch(Dispatchers.IO) {
+                userRepository.reloadAvatar()
+            }
+        }
+    }
+
     fun updateUserInfo(forceUpdate: Boolean = false) {
         if (!forceUpdate) {
             if (!shouldUpdateInfo || !userRepository.isLogin) return

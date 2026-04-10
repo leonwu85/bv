@@ -10,8 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -35,6 +35,7 @@ import androidx.tv.material3.Text
 import dev.aaa1115910.biliapi.entity.pgc.PgcType
 import dev.aaa1115910.biliapi.entity.ugc.UgcTypeV2
 import dev.aaa1115910.bv.BVApp
+import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.getDisplayName
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.isKeyDown
@@ -47,44 +48,52 @@ fun TopNav(
     items: List<TopNavItem>,
     isLargePadding: Boolean,
     initialSelectedItem: TopNavItem? = null,
+    focusSelectedToken: Int = 0,
     onFocusedChanged: (TopNavItem) -> Unit = {},
     onSelectedChanged: (TopNavItem) -> Unit = {},
     onClick: (TopNavItem) -> Unit = {},
     onLeftKeyEvent: () -> Unit = {}
 ) {
-    val focusRequester = remember { FocusRequester() }
+    if (items.isEmpty()) return
 
-    var selectedNav by remember(initialSelectedItem) {
+    val focusRequester = remember { FocusRequester() }
+    val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
+    val selectionDispatchDelay = if (enableMainUiAnimation) 200L else 0L
+    val focusUnlockDelay = if (enableMainUiAnimation) 400L else 0L
+
+    var highlightedNav by remember(initialSelectedItem, items) {
         mutableStateOf(initialSelectedItem ?: items.first())
     }
 
-    var selectedTabIndex by remember(initialSelectedItem) {
-        mutableIntStateOf(
-            if (initialSelectedItem != null) {
-                val index = items.indexOf(initialSelectedItem)
-                if (index >= 0) index else 0
-            } else 0
-        )
-    }
+    val highlightedTabIndex = items.indexOf(highlightedNav).takeIf { it >= 0 } ?: 0
 
-    var tabMoved by remember { mutableStateOf(true) }
+    var canMoveFocusDown by remember { mutableStateOf(true) }
 
     LaunchedEffect(items, initialSelectedItem) {
-        if (items.isEmpty()) return@LaunchedEffect
-
         val nextSelectedItem = initialSelectedItem?.takeIf { it in items } ?: items.first()
-        selectedNav = nextSelectedItem
-        selectedTabIndex = items.indexOf(nextSelectedItem).takeIf { it >= 0 } ?: 0
-        tabMoved = true
+        highlightedNav = nextSelectedItem
+        canMoveFocusDown = true
     }
 
-    LaunchedEffect(selectedNav) {
-        if (selectedNav !in items) return@LaunchedEffect
-        delay(200)
-        onSelectedChanged(selectedNav)
-        // 别急着向下移动焦点，动画还没结束
-        delay(400)
-        tabMoved = true
+    LaunchedEffect(highlightedNav, initialSelectedItem, items) {
+        if (highlightedNav !in items) return@LaunchedEffect
+        if (highlightedNav == initialSelectedItem) {
+            canMoveFocusDown = true
+            return@LaunchedEffect
+        }
+        delay(selectionDispatchDelay)
+        if (highlightedNav != initialSelectedItem) {
+            onSelectedChanged(highlightedNav)
+        }
+        
+        delay(focusUnlockDelay)
+        canMoveFocusDown = true
+    }
+
+    LaunchedEffect(focusSelectedToken, highlightedNav, items) {
+        if (focusSelectedToken <= 0) return@LaunchedEffect
+        if (highlightedNav !in items) return@LaunchedEffect
+        focusRequester.requestFocus()
     }
 
     Row(
@@ -95,37 +104,36 @@ fun TopNav(
     ) {
         TabRow(
             modifier = Modifier
-                .focusProperties { enter = { focusRequester } }
+                .focusProperties { onEnter = { focusRequester.requestFocus() } }
                 .focusRestorer(focusRequester)
                 .onPreviewKeyEvent {
                     if (it.isKeyDown()) {
-                        if (it.key == Key.DirectionLeft && selectedTabIndex == 0) {
+                        if (it.key == Key.DirectionLeft && highlightedTabIndex == 0) {
                             onLeftKeyEvent()
                             return@onPreviewKeyEvent true
                         }
                         if (it.key == Key.DirectionDown) {
-                            return@onPreviewKeyEvent !tabMoved
+                            return@onPreviewKeyEvent !canMoveFocusDown
                         }
                     }
                     false
                 },
-            selectedTabIndex = selectedTabIndex,
+            selectedTabIndex = highlightedTabIndex,
             separator = { Spacer(modifier = Modifier.width(12.dp)) },
         ) {
             items.forEachIndexed { index, tab ->
                 NavItemTab(
                     modifier = Modifier
-                        .ifElse(index == selectedTabIndex, Modifier.focusRequester(focusRequester)),
+                        .ifElse(index == highlightedTabIndex, Modifier.focusRequester(focusRequester)),
                     topNavItem = tab,
-                    selected = index == selectedTabIndex,
+                    selected = index == highlightedTabIndex,
                     onFocus = {
-                        // 只在切换到不同tab时阻止向下移动，需要在更新selectedNav前检查
-                        val isSameTab = tab == selectedNav
-                        selectedNav = tab
-                        selectedTabIndex = index
+                        // 只在切换到不同 tab 时阻止向下移动，等待页面切换完成
+                        val isSameTab = tab == highlightedNav
+                        highlightedNav = tab
                         onFocusedChanged(tab)
                         if (!isSameTab) {
-                            tabMoved = false
+                            canMoveFocusDown = false
                         }
                     },
                     onClick = { onClick(tab) }

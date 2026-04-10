@@ -35,6 +35,7 @@ import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.runBlocking
@@ -45,6 +46,60 @@ import kotlin.math.roundToInt
 object Prefs {
     private val dsm = BVApp.dataStoreManager
     val logger = KotlinLogging.logger { }
+
+    private const val DRAWER_ITEM_SEARCH_ORDINAL = 1
+    private const val DRAWER_ITEM_HOME_ORDINAL = 2
+    private const val DRAWER_ITEM_UGC_ORDINAL = 3
+    private const val DRAWER_ITEM_PGC_ORDINAL = 4
+    private const val DRAWER_ITEM_LIVE_ORDINAL = 5
+
+    private fun buildDefaultDrawerItemsOrder(showLiveInSidebar: Boolean): String {
+        return listOf(
+            DRAWER_ITEM_SEARCH_ORDINAL,
+            DRAWER_ITEM_HOME_ORDINAL,
+            DRAWER_ITEM_UGC_ORDINAL,
+            DRAWER_ITEM_PGC_ORDINAL,
+            if (showLiveInSidebar) DRAWER_ITEM_LIVE_ORDINAL else -DRAWER_ITEM_LIVE_ORDINAL
+        ).joinToString(",")
+    }
+
+    private fun resolveDrawerItemsOrder(orderString: String, showLiveInSidebar: Boolean): String {
+        return if (orderString.isBlank()) {
+            buildDefaultDrawerItemsOrder(showLiveInSidebar)
+        } else {
+            orderString
+        }
+    }
+
+    private fun isDrawerItemVisible(orderString: String, ordinal: Int): Boolean {
+        return orderString
+            .split(",")
+            .mapNotNull { part -> part.toIntOrNull() }
+            .firstOrNull { kotlin.math.abs(it) == ordinal }
+            ?.let { it > 0 }
+            ?: false
+    }
+
+    private fun updateDrawerItemVisibility(orderString: String, ordinal: Int, visible: Boolean): String {
+        val parsedItems = orderString
+            .split(",")
+            .mapNotNull { part ->
+                val value = part.toIntOrNull() ?: return@mapNotNull null
+                kotlin.math.abs(value) to (value < 0)
+            }
+            .toMutableList()
+
+        val targetIndex = parsedItems.indexOfFirst { it.first == ordinal }
+        if (targetIndex >= 0) {
+            parsedItems[targetIndex] = ordinal to !visible
+        } else {
+            parsedItems += ordinal to !visible
+        }
+
+        return parsedItems.joinToString(",") { (itemOrdinal, hidden) ->
+            if (hidden) "-$itemOrdinal" else "$itemOrdinal"
+        }
+    }
 
     var isLogin: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefIsLoginRequest).first() }
@@ -211,10 +266,16 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowFpsRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowFpsKey, value) }
 
-    val showLiveInSidebarFlow: Flow<Boolean> get() = dsm.getPreferenceFlow(PrefKeys.prefShowLiveInSidebarRequest)
+    val showLiveInSidebarFlow: Flow<Boolean>
+        get() = drawerItemsOrderFlow.transform { emit(isDrawerItemVisible(it, DRAWER_ITEM_LIVE_ORDINAL)) }
+
     var showLiveInSidebar: Boolean
-        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowLiveInSidebarRequest).first() }
-        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowLiveInSidebarKey, value) }
+        get() = runBlocking { showLiveInSidebarFlow.first() }
+        set(value) = runBlocking {
+            val updatedOrder = updateDrawerItemVisibility(drawerItemsOrder, DRAWER_ITEM_LIVE_ORDINAL, value)
+            dsm.editPreference(PrefKeys.prefShowLiveInSidebarKey, value)
+            dsm.editPreference(PrefKeys.prefDrawerItemsOrderKey, updatedOrder)
+        }
 
         var showLiveDanmakuEmoji: Boolean
             get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowLiveDanmakuEmojiRequest).first() }
@@ -363,6 +424,13 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefGridColumnsRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefGridColumnsKey, value) }
 
+    var enableMainUiAnimation: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableMainUiAnimationRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableMainUiAnimationKey, value) }
+
+    val enableMainUiAnimationFlow: Flow<Boolean>
+        get() = dsm.getPreferenceFlow(PrefKeys.prefEnableMainUiAnimationRequest)
+
 
     var portraitVideoFixMode: PortraitVideoFixMode
         get() = runBlocking {
@@ -457,6 +525,37 @@ object Prefs {
     var homeNavItemsOrder: String
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefHomeNavItemsOrderRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefHomeNavItemsOrderKey, value) }
+
+    // UGC 分区导航项排序和隐藏状态
+    val ugcNavItemsOrderFlow: Flow<String>
+        get() = dsm.getPreferenceFlow(PrefKeys.prefUgcNavItemsOrderRequest)
+
+    var ugcNavItemsOrder: String
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefUgcNavItemsOrderRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefUgcNavItemsOrderKey, value) }
+
+    var defaultDrawerTab: Int
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDefaultDrawerTabRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDefaultDrawerTabKey, value) }
+
+    // 左侧抽屉导航项排序和隐藏状态
+    val drawerItemsOrderFlow: Flow<String>
+        get() = combine(
+            dsm.getPreferenceFlow(PrefKeys.prefDrawerItemsOrderRequest),
+            dsm.getPreferenceFlow(PrefKeys.prefShowLiveInSidebarRequest)
+        ) { orderString, legacyShowLiveInSidebar ->
+            resolveDrawerItemsOrder(orderString, legacyShowLiveInSidebar)
+        }
+
+    var drawerItemsOrder: String
+        get() = runBlocking { drawerItemsOrderFlow.first() }
+        set(value) = runBlocking {
+            dsm.editPreference(PrefKeys.prefDrawerItemsOrderKey, value)
+            dsm.editPreference(
+                PrefKeys.prefShowLiveInSidebarKey,
+                isDrawerItemVisible(value, DRAWER_ITEM_LIVE_ORDINAL)
+            )
+        }
 
     var skipPgcIntroOutro: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefSkipPgcIntroOutroRequest).first() }
@@ -594,7 +693,9 @@ object PrefKeys {
     val prefThemeTypeKey = intPreferencesKey("theme_type")
     val prefPlayModeKey = intPreferencesKey("play_mode")
     val prefDefaultHomeTabKey = intPreferencesKey("default_home_tab")
+    val prefDefaultDrawerTabKey = intPreferencesKey("default_drawer_tab")
     val prefGridColumnsKey = intPreferencesKey("grid_columns")
+    val prefEnableMainUiAnimationKey = booleanPreferencesKey("enable_main_ui_animation")
     val prefPortraitVideoFixModeKey = intPreferencesKey("portrait_video_fix_mode")
     val prefPlayerShowDebugInfoKey = booleanPreferencesKey("player_show_debug_info")
     val prefPlayerExitWhenAllIsPlayedKey = booleanPreferencesKey("player_exit_when_all_is_played")
@@ -615,6 +716,8 @@ object PrefKeys {
     val prefShowLivePopularityKey = booleanPreferencesKey("show_live_popularity")
     val prefLiveIncognitoModeKey = booleanPreferencesKey("live_incognito_mode")
     val prefHomeNavItemsOrderKey = stringPreferencesKey("home_nav_items_order")
+    val prefUgcNavItemsOrderKey = stringPreferencesKey("ugc_nav_items_order")
+    val prefDrawerItemsOrderKey = stringPreferencesKey("drawer_items_order")
     val prefSkipPgcIntroOutroKey = booleanPreferencesKey("skip_pgc_intro_outro")
     val prefPlayerLongPressActionKey = intPreferencesKey("player_long_press_action")
     val prefShowOnlineViewerCountKey = intPreferencesKey("show_online_viewer_count_v2")
@@ -692,7 +795,9 @@ object PrefKeys {
     val prefThemeTypeRequest = PreferenceRequest(prefThemeTypeKey, ThemeType.Auto.ordinal)
     val prefPlayModeRequest = PreferenceRequest(prefPlayModeKey, PlayMode.Sequential.ordinal)
     val prefDefaultHomeTabRequest = PreferenceRequest(prefDefaultHomeTabKey, 0)
+    val prefDefaultDrawerTabRequest = PreferenceRequest(prefDefaultDrawerTabKey, 2)
     val prefGridColumnsRequest = PreferenceRequest(prefGridColumnsKey, 4)
+    val prefEnableMainUiAnimationRequest = PreferenceRequest(prefEnableMainUiAnimationKey, false)
     val prefPortraitVideoFixModeRequest = PreferenceRequest(prefPortraitVideoFixModeKey, 0)
     val prefPlayerShowDebugInfoRequest = PreferenceRequest(prefPlayerShowDebugInfoKey, true)
     val prefPlayerExitWhenAllIsPlayedRequest = PreferenceRequest(prefPlayerExitWhenAllIsPlayedKey, true)
@@ -716,6 +821,8 @@ object PrefKeys {
         prefHomeNavItemsOrderKey,
         "0,1,2,3,4,5,6"  // 默认全部显示，按原始顺序
     )
+    val prefUgcNavItemsOrderRequest = PreferenceRequest(prefUgcNavItemsOrderKey, "")
+    val prefDrawerItemsOrderRequest = PreferenceRequest(prefDrawerItemsOrderKey, "")
     val prefSkipPgcIntroOutroRequest = PreferenceRequest(prefSkipPgcIntroOutroKey, false)
     val prefPlayerLongPressActionRequest = PreferenceRequest(prefPlayerLongPressActionKey, PlayerLongPressAction.OpenMenu.ordinal)
     val prefShowOnlineViewerCountRequest = PreferenceRequest(prefShowOnlineViewerCountKey, 1)  // 0=不显示, 1=30秒后隐藏, 2=始终显示

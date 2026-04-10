@@ -2,6 +2,8 @@ package dev.aaa1115910.bv.tv.screens.main
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -60,10 +62,18 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
+private enum class HomeFocusLayer {
+    TopNav,
+    Content,
+}
+
 @Composable
 fun HomeContent(
     modifier: Modifier = Modifier,
     navFocusRequester: FocusRequester,
+    selectedTabOrdinal: Int = Prefs.defaultHomeTab,
+    onSelectedTabChanged: (Int) -> Unit = {},
+    onRequestDrawerFocus: () -> Unit = {},
     recommendViewModel: RecommendViewModel = koinViewModel(),
     popularViewModel: PopularViewModel = koinViewModel(),
     dynamicViewModel: DynamicViewModel = koinViewModel(),
@@ -75,6 +85,8 @@ fun HomeContent(
 ) {
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger("HomeContent")
+    val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
+    val navigationFocusDelay = if (enableMainUiAnimation) 100L else 0L
 
     val recommendState = rememberLazyGridState()
     val popularState = rememberLazyGridState()
@@ -83,10 +95,10 @@ fun HomeContent(
     val followingSeasonState = rememberLazyGridState()
     val historyState = rememberLazyGridState()
     val toViewState = rememberLazyGridState()
-    
-    var focusOnContent by remember { mutableStateOf(false) }
-    var topNavHasFocus by remember { mutableStateOf(false) }
+
+    var focusLayer by remember { mutableStateOf<HomeFocusLayer?>(null) }
     val dynamicTabRowFocusRequester = remember { FocusRequester() }
+    var topNavFocusSelectedToken by remember { mutableIntStateOf(0) }
 
     // 记住动态页子 Tab 的选中索引，默认值从设置中读取
     var dynamicSubTabIndex by remember { mutableIntStateOf(Prefs.dynamicDefaultTab.ordinal) }
@@ -106,14 +118,12 @@ fun HomeContent(
         homeNavItems
     }
 
-    // 从全局状态获取上次选择的标签位置，如果没有则默认为Recommend
-    var selectedTab by remember {
-        mutableStateOf(
-            currentSelectedTabs[DrawerItem.Home]
-                ?.let { HomeTopNavItem.entries.getOrNull(it) }
-                ?: HomeTopNavItem.entries.getOrElse(Prefs.defaultHomeTab) { HomeTopNavItem.Recommend }
-        )
-    }
+    val selectedTab = HomeTopNavItem.entries
+        .getOrElse(selectedTabOrdinal) {
+            HomeTopNavItem.entries.getOrElse(Prefs.defaultHomeTab) { HomeTopNavItem.Recommend }
+        }
+        .takeIf { it in effectiveNavItems }
+        ?: effectiveNavItems.first()
     var focusedTopNavItem by remember { mutableStateOf(selectedTab) }
     var pendingDynamicSubTabFocus by remember { mutableStateOf(false) }
 
@@ -165,19 +175,27 @@ fun HomeContent(
         }
     }
 
-    // 当选中标签变化时，保存到全局状态并处理延迟加载
     LaunchedEffect(selectedTab) {
-        currentSelectedTabs[DrawerItem.Home] = selectedTab.ordinal
-        
+        if (selectedTab.ordinal != selectedTabOrdinal) {
+            onSelectedTabChanged(selectedTab.ordinal)
+        }
+
         // 取消之前的延迟加载
         loadJob?.cancel()
-        
+
         // 开始新的延迟加载
         loadJob = scope.launch(Dispatchers.IO) {
             delay(300L)
             initData()
         }
     }
+
+    LaunchedEffect(selectedTab, focusLayer) {
+        if (focusLayer != HomeFocusLayer.TopNav) {
+            focusedTopNavItem = selectedTab
+        }
+    }
+
     val currentListOnTop by remember {
         derivedStateOf {
             with(
@@ -200,22 +218,22 @@ fun HomeContent(
         initData()
     }
 
-    LaunchedEffect(selectedTab, focusedTopNavItem, topNavHasFocus, userViewModel.isLogin, pendingDynamicSubTabFocus) {
+    LaunchedEffect(selectedTab, focusedTopNavItem, focusLayer, userViewModel.isLogin, pendingDynamicSubTabFocus) {
         val shouldFocusDynamicSubTab =
             userViewModel.isLogin &&
                     Prefs.dynamicPageStyle == DynamicPageStyle.New &&
                     selectedTab == HomeTopNavItem.Dynamics &&
                     focusedTopNavItem == HomeTopNavItem.Dynamics &&
-                    topNavHasFocus &&
+                    focusLayer == HomeFocusLayer.TopNav &&
                     pendingDynamicSubTabFocus
 
         if (!shouldFocusDynamicSubTab) return@LaunchedEffect
 
-        delay(100L)
+        delay(navigationFocusDelay)
         if (
             selectedTab == HomeTopNavItem.Dynamics &&
             focusedTopNavItem == HomeTopNavItem.Dynamics &&
-            topNavHasFocus &&
+            focusLayer == HomeFocusLayer.TopNav &&
             pendingDynamicSubTabFocus
         ) {
             pendingDynamicSubTabFocus = false
@@ -223,20 +241,9 @@ fun HomeContent(
         }
     }
 
-    //监听登录变化
-    LaunchedEffect(userViewModel.isLogin) {
-        if (userViewModel.isLogin) {
-            //login
-            userViewModel.updateUserInfo()
-        } else {
-            //logout
-            userViewModel.clearUserInfo()
-        }
-    }
-
-    BackHandler(focusOnContent || topNavHasFocus) {
-        if (topNavHasFocus) {
-            drawerItemFocusRequesters[DrawerItem.Home]?.requestFocus()
+    BackHandler(focusLayer != null) {
+        if (focusLayer == HomeFocusLayer.TopNav) {
+            onRequestDrawerFocus()
             return@BackHandler
         }
         navFocusRequester.requestFocus(scope)
@@ -249,10 +256,17 @@ fun HomeContent(
                 modifier = Modifier
                     .focusRequester(navFocusRequester)
                     .padding(end = 80.dp)
-                    .onFocusChanged { topNavHasFocus = it.hasFocus },
+                    .onFocusChanged {
+                        if (it.hasFocus) {
+                            focusLayer = HomeFocusLayer.TopNav
+                        } else if (focusLayer == HomeFocusLayer.TopNav) {
+                            focusLayer = null
+                        }
+                    },
                 items = effectiveNavItems,
-                isLargePadding = !focusOnContent && currentListOnTop,
+                isLargePadding = focusLayer != HomeFocusLayer.Content && currentListOnTop,
                 initialSelectedItem = selectedTab,
+                focusSelectedToken = topNavFocusSelectedToken,
                 onFocusedChanged = { nav ->
                     val homeNav = nav as HomeTopNavItem
                     focusedTopNavItem = homeNav
@@ -262,8 +276,9 @@ fun HomeContent(
                 },
                 onSelectedChanged = { nav ->
                     loadJob?.cancel()
-                    selectedTab = nav as HomeTopNavItem
-                    if (selectedTab != HomeTopNavItem.Dynamics) {
+                    val nextTab = nav as HomeTopNavItem
+                    onSelectedTabChanged(nextTab.ordinal)
+                    if (nextTab != HomeTopNavItem.Dynamics) {
                         pendingDynamicSubTabFocus = false
                     }
                 },
@@ -323,7 +338,7 @@ fun HomeContent(
                 },
                 onLeftKeyEvent = {
                     // 顶部栏最左侧按左键时，跳转到左侧导航栏
-                    drawerItemFocusRequesters[DrawerItem.Home]?.requestFocus()
+                    onRequestDrawerFocus()
                 }
             )
         }
@@ -332,19 +347,29 @@ fun HomeContent(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .onFocusChanged { focusOnContent = it.hasFocus }
+                .onFocusChanged {
+                    if (it.hasFocus) {
+                        focusLayer = HomeFocusLayer.Content
+                    } else if (focusLayer == HomeFocusLayer.Content) {
+                        focusLayer = null
+                    }
+                }
         ) {
             AnimatedContent(
                 targetState = selectedTab,
                 label = "home animated content",
                 transitionSpec = {
-                    val coefficient = 10
-                    if (targetState.ordinal < initialState.ordinal) {
-                        fadeIn() + slideInHorizontally { -it / coefficient } togetherWith
-                                fadeOut() + slideOutHorizontally { it / coefficient }
+                    if (!enableMainUiAnimation) {
+                        EnterTransition.None togetherWith ExitTransition.None
                     } else {
-                        fadeIn() + slideInHorizontally { it / coefficient } togetherWith
-                                fadeOut() + slideOutHorizontally { -it / coefficient }
+                        val coefficient = 10
+                        if (targetState.ordinal < initialState.ordinal) {
+                            fadeIn() + slideInHorizontally { -it / coefficient } togetherWith
+                                    fadeOut() + slideOutHorizontally { it / coefficient }
+                        } else {
+                            fadeIn() + slideInHorizontally { it / coefficient } togetherWith
+                                    fadeOut() + slideOutHorizontally { -it / coefficient }
+                        }
                     }
                 }
             ) { screen ->
@@ -359,14 +384,19 @@ fun HomeContent(
                                     lazyGridState = dynamicState,
                                     initialSelectedTabIndex = dynamicSubTabIndex,
                                     onSelectedTabChanged = { dynamicSubTabIndex = it },
+                                    onBackToParentTabRow = {
+                                        navFocusRequester.requestFocus(scope)
+                                    },
                                     onLeftKeyEvent = {
                                         // 在子 Tab 最左侧按左键时，跳转到父级上一个 Tab
                                         val currentIndex = effectiveNavItems.indexOf(selectedTab)
                                         if (currentIndex > 0) {
-                                            selectedTab = effectiveNavItems[currentIndex - 1]
+                                            val targetTab = effectiveNavItems[currentIndex - 1]
+                                            pendingDynamicSubTabFocus = false
+                                            onSelectedTabChanged(targetTab.ordinal)
                                             scope.launch {
-                                                delay(100)
-                                                navFocusRequester.requestFocus()
+                                                delay(navigationFocusDelay)
+                                                topNavFocusSelectedToken++
                                             }
                                         }
                                     },
@@ -374,11 +404,13 @@ fun HomeContent(
                                         // 在子 Tab 最右侧按右键时，跳转到父级下一个 Tab
                                         val currentIndex = effectiveNavItems.indexOf(selectedTab)
                                         if (currentIndex < effectiveNavItems.lastIndex) {
-                                            selectedTab = effectiveNavItems[currentIndex + 1]
+                                            val targetTab = effectiveNavItems[currentIndex + 1]
+                                            pendingDynamicSubTabFocus = false
+                                            onSelectedTabChanged(targetTab.ordinal)
                                             // 延迟请求焦点，确保在 AnimatedContent 切换后焦点正确设置
                                             scope.launch {
-                                                delay(100)
-                                                navFocusRequester.requestFocus()
+                                                delay(navigationFocusDelay)
+                                                topNavFocusSelectedToken++
                                             }
                                         }
                                     }
