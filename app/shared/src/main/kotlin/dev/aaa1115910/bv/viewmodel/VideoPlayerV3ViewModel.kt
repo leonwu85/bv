@@ -1,6 +1,7 @@
 package dev.aaa1115910.bv.viewmodel
 
 import android.net.Uri
+import android.os.Build
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -1190,7 +1191,13 @@ class VideoPlayerV3ViewModel(
 
         val slices = buildDanmakuSlices(segmentIndex, convertedItems)
         danmakuSlicesBySegment[segmentIndex] = slices
-        nextDanmakuSliceIndexBySegment.putIfAbsent(segmentIndex, 0)
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.N_MR1) {
+            if (!nextDanmakuSliceIndexBySegment.containsKey(segmentIndex)) {
+                nextDanmakuSliceIndexBySegment[segmentIndex] = 0
+            }
+        } else {
+            nextDanmakuSliceIndexBySegment.putIfAbsent(segmentIndex, 0)
+        }
         if (slices.isNotEmpty()) {
             logger.fInfo {
                 "Prepared ${slices.size} danmaku slices for segment $segmentIndex, total=${convertedItems.size}, first=${slices.first().startPositionMs}, last=${slices.last().endPositionMs}"
