@@ -2,6 +2,7 @@ package dev.aaa1115910.bv.viewmodel.search
 
 import android.content.Context
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
@@ -45,7 +46,7 @@ class SearchResultViewModel(
     var selectedPartition: Partition? by mutableStateOf(null)
     var selectedChildPartition: Partition? by mutableStateOf(null)
 
-    private val updating = mutableMapOf<SearchType, Boolean>().apply {
+    private val updating = mutableStateMapOf<SearchType, Boolean>().apply {
         SearchType.entries.forEach { put(it, false) }
     }
 
@@ -57,34 +58,46 @@ class SearchResultViewModel(
         SearchType.entries.forEach { put(it, SearchTypePage()) }
     }
 
-    private val initeds = mutableMapOf<SearchType, Boolean>().apply {
+    private val requestVersions = mutableMapOf<SearchType, Int>().apply {
+        SearchType.entries.forEach { put(it, 0) }
+    }
+
+    private val initeds = mutableStateMapOf<SearchType, Boolean>().apply {
         SearchType.entries.forEach { put(it, false) }
     }
+
+    /**
+     * 判断指定类型是否正在加载中
+     */
+    fun isLoading(type: SearchType): Boolean = updating[type] == true
+
+    /**
+     * 判断指定类型是否已完成首次加载
+     */
+    fun isInitialized(type: SearchType): Boolean = initeds[type] == true
 
     var enableProxySearchResult = false
 
     fun update() {
-        resetPages()
-        clearResults()
+        val currentType = searchType
+        resetState(currentType)
         viewModelScope.launch {
-            loadMore(searchType, true)
+            loadMore(currentType, true)
         }
     }
 
-    private fun resetPages() {
-        videoSearchResult.resetPage()
-        mediaBangumiSearchResult.resetPage()
-        mediaFtSearchResult.resetPage()
-        biliUserSearchResult.resetPage()
-        liveRoomSearchResult.resetPage()
-    }
-
-    private fun clearResults() {
-        videoSearchResult.clearResult()
-        mediaBangumiSearchResult.clearResult()
-        mediaFtSearchResult.clearResult()
-        biliUserSearchResult.clearResult()
-        liveRoomSearchResult.clearResult()
+    private fun resetState(type: SearchType) {
+        requestVersions[type] = (requestVersions[type] ?: 0) + 1
+        pages[type] = SearchTypePage()
+        hasMore[type] = true
+        updating[type] = false
+        when (type) {
+            SearchType.Video -> videoSearchResult = SearchResult(SearchType.Video)
+            SearchType.MediaBangumi -> mediaBangumiSearchResult = SearchResult(SearchType.MediaBangumi)
+            SearchType.MediaFt -> mediaFtSearchResult = SearchResult(SearchType.MediaFt)
+            SearchType.BiliUser -> biliUserSearchResult = SearchResult(SearchType.BiliUser)
+            SearchType.LiveRoom -> liveRoomSearchResult = SearchResult(SearchType.LiveRoom)
+        }
     }
 
     fun init(searchType: SearchType) {
@@ -101,6 +114,7 @@ class SearchResultViewModel(
         if (hasMore[searchType] != true) return
         if (updating[searchType] == true && !ignoreUpdating) return
 
+        val requestVersion = requestVersions[searchType] ?: 0
         updating[searchType] = true
         viewModelScope.launch(Dispatchers.IO) {
             logger.fInfo { "Load search result: [keyword=$keyword, type=$searchType, page=${pages[searchType]}]" }
@@ -116,6 +130,8 @@ class SearchResultViewModel(
                     enableProxy = enableProxySearchResult
                 )
                 withContext(Dispatchers.Main) {
+                    if (requestVersions[searchType] != requestVersion) return@withContext
+
                     when (searchType) {
                         SearchType.Video -> videoSearchResult =
                             videoSearchResult.appendSearchResultData(searchResultResponse)
@@ -145,11 +161,15 @@ class SearchResultViewModel(
                     if (returnedCount < requestedPageSize) {
                         hasMore[searchType] = false
                     }
-                }
 
-                pages[searchType] = searchResultResponse.page
+                    pages[searchType] = searchResultResponse.page
+                }
             }
-            updating[searchType] = false
+            withContext(Dispatchers.Main) {
+                if (requestVersions[searchType] == requestVersion) {
+                    updating[searchType] = false
+                }
+            }
         }
     }
 
@@ -163,18 +183,6 @@ class SearchResultViewModel(
         var page: SearchTypePage = SearchTypePage()
     ) {
         val count get() = videos.size + mediaBangumis.size + mediaFts.size + biliUsers.size + liveRooms.size
-
-        fun resetPage() {
-            page = SearchTypePage()
-        }
-
-        fun clearResult() {
-            videos = emptyList()
-            mediaBangumis = emptyList()
-            mediaFts = emptyList()
-            biliUsers = emptyList()
-            liveRooms = emptyList()
-        }
 
         fun appendSearchResultData(searchTypeResult: SearchTypeResult): SearchResult {
             return when (type) {

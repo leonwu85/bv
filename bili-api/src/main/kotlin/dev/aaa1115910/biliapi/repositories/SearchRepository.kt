@@ -129,6 +129,7 @@ class SearchRepository(
                         order = order.httpOrderParam,
                         duration = duration.httpDurationParam,
                         sessData = authRepository.sessionData,
+                        dedeUserID = authRepository.mid,
                         buvid3 = authRepository.buvid3,
                     )
                 } else {
@@ -140,6 +141,7 @@ class SearchRepository(
                         order = order.httpOrderParam,
                         duration = duration.httpDurationParam,
                         sessData = authRepository.sessionData,
+                        dedeUserID = authRepository.mid,
                         buvid3 = authRepository.buvid3,
                     )
                 }.getResponseData()

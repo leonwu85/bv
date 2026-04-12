@@ -28,8 +28,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.aaa1115910.biliapi.entity.live.LiveAreaItem
 import dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity
 import dev.aaa1115910.bv.tv.component.live.LiveHistoryCard
@@ -325,11 +328,25 @@ fun LiveContent(
                 ) {
                     val emptyText = when (liveViewModel.currentTabType) {
                         LiveTabType.Recommend -> "暂无推荐直播"
-                        LiveTabType.Following -> "关注的主播暂未开播"
+                        LiveTabType.Following -> "暂无关注的UP主直播中"
                         LiveTabType.History -> "暂无直播历史"
-                        LiveTabType.Area -> "该分区暂无直播"
+                        LiveTabType.Area -> {
+                            val areaName = liveViewModel.currentSubArea?.name
+                                ?: liveViewModel.currentParentGroup?.name
+                            if (areaName.isNullOrBlank()) {
+                                "暂无分区直播中"
+                            } else {
+                                "暂无${areaName}分区直播中"
+                            }
+                        }
                     }
-                    Text(text = emptyText)
+                    Text(
+                        text = emptyText,
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 22.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    )
                 }
             } else {
                 LazyVerticalGrid(

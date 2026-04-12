@@ -4,13 +4,15 @@ import android.content.Context
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,7 +32,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import dev.aaa1115910.biliapi.repositories.SearchFilterDuration
 import dev.aaa1115910.biliapi.repositories.SearchFilterOrderType
@@ -82,11 +86,26 @@ fun SearchResultVideoFilter(
             modifier = modifier
                 .fillMaxWidth(0.8f),
             onDismissRequest = onHideFilter,
-            title = { Text(text = stringResource(R.string.filter_dialog_title)) },
+            title = {
+                Text(
+                    text = stringResource(R.string.filter_dialog_title),
+                    style = MaterialTheme.typography.titleMedium
+                )
+            },
             text = {
-                Column {
-                    LazyRow(
-                        modifier = Modifier.onPreviewKeyEvent {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // 排序方式
+                    Column {
+                        Text(
+                            text = "排序方式",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                        LazyRow(
+                            modifier = Modifier.onPreviewKeyEvent {
                             if (it.key == Key.DirectionDown) {
                                 if (it.nativeKeyEvent.action == KeyEvent.ACTION_UP) {
                                     durationFocusRequester.requestFocus()
@@ -96,6 +115,7 @@ fun SearchResultVideoFilter(
                             }
                             false
                         },
+                        contentPadding = PaddingValues(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(filterRowSpace)
                     ) {
                         items(items = SearchFilterOrderType.webFilters) { orderType ->
@@ -108,6 +128,16 @@ fun SearchResultVideoFilter(
                             )
                         }
                     }
+                    }
+
+                    // 时长筛选
+                    Column {
+                        Text(
+                            text = "视频时长",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
                     LazyRow(
                         modifier = Modifier.onPreviewKeyEvent {
                             if (it.key == Key.DirectionDown) {
@@ -126,6 +156,7 @@ fun SearchResultVideoFilter(
                             }
                             false
                         },
+                        contentPadding = PaddingValues(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(filterRowSpace)
                     ) {
                         items(items = SearchFilterDuration.entries) { duration ->
@@ -138,17 +169,27 @@ fun SearchResultVideoFilter(
                             )
                         }
                     }
-                    LazyRow(
-                        modifier = Modifier.onPreviewKeyEvent {
-                            if (it.key == Key.DirectionDown) {
-                                if (selectedChildPartition == null) return@onPreviewKeyEvent false
-                                if (it.nativeKeyEvent.action == KeyEvent.ACTION_UP) {
-                                    partitionChildFocusRequester.requestFocus()
+                    }
+
+                    // 分区筛选
+                    Column {
+                        Text(
+                            text = "分区",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                        LazyRow(
+                            modifier = Modifier.onPreviewKeyEvent {
+                                if (it.key == Key.DirectionDown) {
+                                    if (selectedChildPartition == null) return@onPreviewKeyEvent false
+                                    if (it.nativeKeyEvent.action == KeyEvent.ACTION_UP) {
+                                        partitionChildFocusRequester.requestFocus()
+                                        return@onPreviewKeyEvent true
+                                    }
                                     return@onPreviewKeyEvent true
                                 }
-                                return@onPreviewKeyEvent true
-                            }
-                            if (it.key == Key.DirectionUp) {
+                                if (it.key == Key.DirectionUp) {
                                 if (it.nativeKeyEvent.action == KeyEvent.ACTION_UP) {
                                     durationFocusRequester.requestFocus()
                                     return@onPreviewKeyEvent true
@@ -157,6 +198,7 @@ fun SearchResultVideoFilter(
                             }
                             false
                         },
+                        contentPadding = PaddingValues(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(filterRowSpace)
                     ) {
                         item {
@@ -184,6 +226,9 @@ fun SearchResultVideoFilter(
                             )
                         }
                     }
+                    }
+
+                    // 子分区
                     AnimatedVisibility(visible = selectedPartition != null) {
                         LazyRow(
                             modifier = Modifier.onPreviewKeyEvent {
@@ -196,6 +241,7 @@ fun SearchResultVideoFilter(
                                 }
                                 false
                             },
+                            contentPadding = PaddingValues(4.dp),
                             horizontalArrangement = Arrangement.spacedBy(filterRowSpace)
                         ) {
                             items(items = selectedPartition?.children ?: emptyList()) { partition ->
@@ -216,7 +262,29 @@ fun SearchResultVideoFilter(
                     }
                 }
             },
-            confirmButton = {},
+            confirmButton = {
+                Surface(
+                    onClick = {
+                        if (!isDialogJustOpened) {
+                            onSelectedOrderChange(SearchFilterOrderType.ComprehensiveSort)
+                            onSelectedDurationChange(SearchFilterDuration.All)
+                            onSelectedPartitionChange(null)
+                            onSelectedChildPartitionChange(null)
+                        }
+                    },
+                    shape = ClickableSurfaceDefaults.shape(SearchTheme.pillShape),
+                    colors = ClickableSurfaceDefaults.colors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        focusedContainerColor = SearchTheme.accentPink,
+                        pressedContainerColor = SearchTheme.accentPink
+                    )
+                ) {
+                    Text(
+                        text = stringResource(R.string.filter_dialog_reset),
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                    )
+                }
+            },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         )
     }
@@ -241,24 +309,38 @@ private fun FilterDialogFilterChip(
         modifier.focusRequester(focusRequester)
     else modifier
 
-    FilterChip(
-        modifier = focusRequesterModifier.onFocusChanged { hasFocus = it.hasFocus },
-        selected = selected,
-        onClick = { if (enabled) onClick() },
-        label = label,
-        border = if (hasFocus) FilterChipDefaults.filterChipBorder(
-            enabled = true,
-            selected = selected,
-            borderColor = MaterialTheme.colorScheme.border,
-            borderWidth = 2.dp,
-            selectedBorderColor = MaterialTheme.colorScheme.border,
-            selectedBorderWidth = 2.dp
-        )
-        else FilterChipDefaults.filterChipBorder(
-            enabled = true,
-            selected = selected
-        )
+    val bgColor by animateColorAsState(
+        targetValue = when {
+            selected -> SearchTheme.accentPink
+            hasFocus -> MaterialTheme.colorScheme.surfaceVariant
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        },
+        animationSpec = tween(150),
+        label = "chip bg"
     )
+    val contentColor = if (selected) Color.White
+    else MaterialTheme.colorScheme.onSurface
+
+    Surface(
+        modifier = focusRequesterModifier
+            .onFocusChanged { hasFocus = it.hasFocus },
+        onClick = { if (enabled) onClick() },
+        shape = ClickableSurfaceDefaults.shape(SearchTheme.chipShape),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = bgColor,
+            focusedContainerColor = bgColor,
+            pressedContainerColor = bgColor,
+            contentColor = contentColor,
+            focusedContentColor = contentColor,
+            pressedContentColor = contentColor
+        )
+    ) {
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+        ) {
+            label()
+        }
+    }
 }
 
 fun SearchFilterOrderType.getDisplayName(context: Context) = when (this) {

@@ -1,10 +1,9 @@
 package dev.aaa1115910.bv.tv.screens.search
 
-import androidx.activity.compose.BackHandler
 import android.content.res.Configuration
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,22 +11,24 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,6 +58,7 @@ import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.db.SearchHistoryDB
 import dev.aaa1115910.bv.tv.activities.search.SearchResultActivity
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
+import dev.aaa1115910.bv.tv.component.search.GlassPanel
 import dev.aaa1115910.bv.tv.component.search.SearchKeyword
 import dev.aaa1115910.bv.tv.component.search.SoftKeyboard
 import dev.aaa1115910.bv.ui.theme.BVTheme
@@ -136,63 +138,92 @@ private fun SearchInputScreenContent(
     onDeleteHistory: (SearchHistoryDB) -> Unit,
     onDeleteAllHistories: () -> Unit
 ) {
-    Scaffold(
-        modifier = modifier,
-        topBar = {
-            Box(
-                modifier = Modifier.padding(start = 48.dp, top = 24.dp, bottom = 8.dp, end = 48.dp)
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+    ) {
+        Column {
+            // 标题栏
+            Row(
+                modifier = Modifier
+                    .padding(start = 48.dp, top = 20.dp, bottom = 12.dp, end = 48.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Icon(
+                    modifier = Modifier.size(28.dp),
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null,
+                    tint = SearchTheme.accentPink
+                )
+                Text(
+                    text = stringResource(R.string.search_input_title),
+                    fontSize = 36.sp
+                )
+            }
+
+            // 三栏内容
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // 左栏: 搜索输入 + 键盘
+                GlassPanel(
+                    modifier = Modifier
+                        .weight(0.35f)
+                        .fillMaxHeight()
                 ) {
-                    Text(
-                        text = stringResource(R.string.search_input_title),
-                        fontSize = 48.sp
+                    SearchInput(
+                        modifier = Modifier.fillMaxSize(),
+                        firstButtonFocusRequester = defaultFocusRequester,
+                        searchKeyword = searchKeyword,
+                        onSearchKeywordChange = onSearchKeywordChange,
+                        onSearch = { onSearch(searchKeyword) },
+                        showProxyOptions = showProxyOptions,
+                        enableProxy = enableProxy,
+                        onEnableProxyChange = onEnableProxyChange
+                    )
+                }
+
+                // 中栏: 热词 / 搜索建议
+                GlassPanel(
+                    modifier = Modifier
+                        .weight(0.30f)
+                        .fillMaxHeight()
+                ) {
+                    if (searchKeyword.isEmpty()) {
+                        SearchHotwords(
+                            modifier = Modifier.fillMaxSize(),
+                            hotwords = hotwords,
+                            onSearch = onSearch
+                        )
+                    } else {
+                        SearchSuggestion(
+                            modifier = Modifier.fillMaxSize(),
+                            suggests = suggests,
+                            onSearch = onSearch
+                        )
+                    }
+                }
+
+                // 右栏: 搜索历史
+                GlassPanel(
+                    modifier = Modifier
+                        .weight(0.30f)
+                        .fillMaxHeight()
+                ) {
+                    SearchHistory(
+                        modifier = Modifier.fillMaxSize(),
+                        histories = histories,
+                        onSearch = onSearch,
+                        onDelete = onDeleteHistory,
+                        onDeleteAll = onDeleteAllHistories
                     )
                 }
             }
-        }
-    ) { innerPadding ->
-        Row(
-            modifier = Modifier
-                .padding(innerPadding)
-                .padding(vertical = 8.dp)
-                .padding(start = 24.dp)
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            SearchInput(
-                firstButtonFocusRequester = defaultFocusRequester,
-                searchKeyword = searchKeyword,
-                onSearchKeywordChange = onSearchKeywordChange,
-                onSearch = { onSearch(searchKeyword) },
-                showProxyOptions = showProxyOptions,
-                enableProxy = enableProxy,
-                onEnableProxyChange = onEnableProxyChange
-            )
-
-            if (searchKeyword.isEmpty()) {
-                SearchHotwords(
-                    hotwords = hotwords,
-                    onSearch = onSearch
-                )
-            } else {
-                SearchSuggestion(
-                    suggests = suggests,
-                    onSearch = onSearch
-                )
-            }
-
-            SearchHistory(
-                modifier = Modifier
-                    .padding(end = 10.dp),
-                histories = histories,
-                onSearch = onSearch,
-                onDelete = onDeleteHistory,
-                onDeleteAll = onDeleteAllHistories
-            )
         }
     }
 }
@@ -208,45 +239,58 @@ private fun SearchInput(
     enableProxy: Boolean,
     onEnableProxyChange: (Boolean) -> Unit
 ) {
-    Box(
+    Column(
         modifier = modifier
-            .width(280.dp)
-            .fillMaxHeight()
             .focusGroup(),
-        contentAlignment = Alignment.TopCenter
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            OutlinedTextField(
-                modifier = Modifier.width(258.dp),
-                value = searchKeyword,
-                onValueChange = onSearchKeywordChange,
-                maxLines = 1,
-                shape = MaterialTheme.shapes.medium,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch(searchKeyword) }),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.inverseSurface,
-                    cursorColor = MaterialTheme.colorScheme.inverseSurface
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = searchKeyword,
+            onValueChange = onSearchKeywordChange,
+            maxLines = 1,
+            shape = SearchTheme.searchFieldShape,
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
-            )
-            SoftKeyboard(
-                firstButtonFocusRequester = firstButtonFocusRequester,
-                showSearchWithProxy = showProxyOptions,
-                enableSearchWithProxy = enableProxy,
-                onClick = { onSearchKeywordChange(searchKeyword + it) },
-                onClear = { onSearchKeywordChange("") },
-                onDelete = {
-                    if (searchKeyword.isNotEmpty()) {
-                        onSearchKeywordChange(searchKeyword.dropLast(1))
+            },
+            trailingIcon = {
+                if (searchKeyword.isNotEmpty()) {
+                    IconButton(onClick = { onSearchKeywordChange("") }) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
                     }
-                },
-                onSearch = { onSearch(searchKeyword) },
-                onEnableSearchWithProxyChange = onEnableProxyChange
+                }
+            },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onSearch(searchKeyword) }),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = SearchTheme.accentPink,
+                unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                cursorColor = SearchTheme.accentPink
             )
-        }
+        )
+        SoftKeyboard(
+            firstButtonFocusRequester = firstButtonFocusRequester,
+            showSearchWithProxy = showProxyOptions,
+            enableSearchWithProxy = enableProxy,
+            onClick = { onSearchKeywordChange(searchKeyword + it) },
+            onClear = { onSearchKeywordChange("") },
+            onDelete = {
+                if (searchKeyword.isNotEmpty()) {
+                    onSearchKeywordChange(searchKeyword.dropLast(1))
+                }
+            },
+            onSearch = { onSearch(searchKeyword) },
+            onEnableSearchWithProxyChange = onEnableProxyChange
+        )
     }
 }
 
@@ -258,22 +302,28 @@ private fun SearchHotwords(
 ) {
     Column(
         modifier = modifier
-            .width(250.dp)
-            .fillMaxHeight()
             .focusGroup(),
     ) {
         Text(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
             text = stringResource(R.string.search_input_hotword),
-            style = MaterialTheme.typography.titleLarge
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
+        HorizontalDivider(
+            modifier = Modifier.padding(bottom = 4.dp),
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
         )
         LazyColumn(
-            modifier = Modifier,
-            contentPadding = PaddingValues(vertical = 4.dp)
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(vertical = 2.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             itemsIndexed(hotwords) { index, hotword ->
                 SearchKeyword(
                     modifier = Modifier,
+                    index = index + 1,
                     keyword = hotword.showName,
                     leadingIcon = hotword.icon ?: "",
                     onClick = { onSearch(hotword.showName) }
@@ -292,18 +342,23 @@ private fun SearchSuggestion(
 ) {
     Column(
         modifier = modifier
-            .width(250.dp)
-            .fillMaxHeight()
             .focusGroup(),
     ) {
         Text(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
             text = stringResource(R.string.search_input_suggest),
-            style = MaterialTheme.typography.titleLarge
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
+        HorizontalDivider(
+            modifier = Modifier.padding(bottom = 4.dp),
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
         )
         LazyColumn(
-            modifier = Modifier,
-            contentPadding = PaddingValues(vertical = 4.dp)
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(vertical = 2.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             itemsIndexed(suggests) { index, suggest ->
                 SearchKeyword(
@@ -332,8 +387,6 @@ private fun SearchHistory(
 
     Column(
         modifier = modifier
-            .width(250.dp)
-            .fillMaxHeight()
             .focusGroup(),
     ) {
         Row(
@@ -342,39 +395,56 @@ private fun SearchHistory(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
                 text = stringResource(R.string.search_input_history),
-                style = MaterialTheme.typography.titleLarge
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
             Row {
                 if (deleteMode) {
                     IconButton(
                         onClick = { showDeleteAllConfirmDialog = true },
                         colors = ButtonDefaults.colors(
-                            containerColor = MaterialTheme.colorScheme.surface,
+                            containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
                         )
                     ) {
-                        Icon(imageVector = Icons.Default.DeleteSweep, contentDescription = null)
+                        Icon(
+                            imageVector = Icons.Default.DeleteSweep,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
                 IconButton(
                     onClick = { deleteMode = !deleteMode },
                     colors = ButtonDefaults.colors(
-                        containerColor = MaterialTheme.colorScheme.surface,
+                        containerColor = if (deleteMode)
+                            MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
+                        else MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
                     )
                 ) {
                     if (deleteMode) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = null)
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
                     } else {
                         Icon(imageVector = Icons.Default.Delete, contentDescription = null)
                     }
                 }
             }
         }
+        HorizontalDivider(
+            modifier = Modifier.padding(bottom = 4.dp),
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+        )
 
         LazyColumn(
-            modifier = Modifier,
-            contentPadding = PaddingValues(vertical = 4.dp)
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(vertical = 2.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             itemsIndexed(histories) { index, searchHistory ->
                 SearchKeyword(
@@ -444,7 +514,7 @@ private fun SearchInputScreenContentPreview() {
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             )
             SearchInputScreenContent(
-                modifier = Modifier,
+                modifier = Modifier.weight(1f),
                 defaultFocusRequester = FocusRequester.Default,
                 searchKeyword = "测试",
                 onSearchKeywordChange = {},
