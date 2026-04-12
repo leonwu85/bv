@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -39,6 +40,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -114,6 +116,7 @@ fun CommentPanel(
     val focusRequester = remember { FocusRequester() }
     val loadingFocusRequester = remember { FocusRequester() }
     val sidebarFocusRequester = remember { FocusRequester() }
+    val commentFocusRequesters = remember { mutableMapOf<Long, FocusRequester>() }
     val density = LocalDensity.current
 
     val comments = remember { mutableStateListOf<Comment>() }
@@ -128,6 +131,7 @@ fun CommentPanel(
     var hasRequestedFocus by remember { mutableStateOf(false) }
     var wasSubCommentPanelShown by remember { mutableStateOf(false) }
     var selectedCommentIndex by remember { mutableStateOf(0) }
+    var selectedCommentRpid by remember { mutableStateOf<Long?>(null) }
     var focusedCommentIndex by remember { mutableStateOf(0) }
     var previewPictures by remember { mutableStateOf<List<Picture>>(emptyList()) }
     var previewPictureIndex by remember { mutableIntStateOf(0) }
@@ -282,6 +286,7 @@ fun CommentPanel(
             hasRequestedFocus = false
             wasSubCommentPanelShown = false
             focusOnLoadingSentinel = false
+            selectedCommentRpid = null
             // 重置边栏焦点状态，确保下次打开时焦点在评论列表
             focusOnSidebar = false
             scrollToCurrentEpisode = false
@@ -301,19 +306,40 @@ fun CommentPanel(
         hasRequestedFocus,
         shouldUseLoadingFocusSentinel,
         focusOnSidebar,
-        selectedCommentIndex
+        selectedCommentIndex,
+        selectedCommentRpid
     ) {
         if (show && !showSubCommentPanel) {
             val hasStableCommentTarget = comments.isNotEmpty() || error != null || !loading
 
             // 子评论浮窗刚关闭，需要恢复焦点到之前点击的评论
             if (wasSubCommentPanelShown && hasStableCommentTarget) {
+                var restoredFocusToComment = false
                 delay(300) // 等待动画完成
                 if (comments.isNotEmpty()) {
-                    listState.scrollToItem(selectedCommentIndex)
+                    val matchedIndex = selectedCommentRpid?.let { rpid ->
+                        comments.indexOfFirst { it.rpid == rpid }
+                    } ?: -1
+                    val targetIndex = (if (matchedIndex >= 0) matchedIndex else selectedCommentIndex)
+                        .coerceIn(0, comments.lastIndex)
+                    val targetCommentId = comments[targetIndex].rpid
+
+                    selectedCommentIndex = targetIndex
+                    focusedCommentIndex = targetIndex
+                    listState.scrollToItem(targetIndex)
+                    withFrameNanos { }
+                    withFrameNanos { }
+                    commentFocusRequesters[targetCommentId]?.let { targetFocusRequester ->
+                        targetFocusRequester.requestFocus(scope)
+                        delay(80)
+                        targetFocusRequester.requestFocus(scope)
+                        restoredFocusToComment = true
+                    }
                 }
-                delay(100)
-                requestCommentContentFocus()
+                if (!restoredFocusToComment) {
+                    delay(100)
+                    requestCommentContentFocus()
+                }
                 focusOnLoadingSentinel = false
                 hasRequestedFocus = true
                 wasSubCommentPanelShown = false
@@ -612,10 +638,20 @@ fun CommentPanel(
                                 items = comments,
                                 key = { _, it -> it.rpid }
                             ) { index, comment ->
+                                val itemFocusRequester = remember(comment.rpid) { FocusRequester() }
+                                DisposableEffect(comment.rpid, itemFocusRequester) {
+                                    commentFocusRequesters[comment.rpid] = itemFocusRequester
+                                    onDispose {
+                                        if (commentFocusRequesters[comment.rpid] === itemFocusRequester) {
+                                            commentFocusRequesters.remove(comment.rpid)
+                                        }
+                                    }
+                                }
                                 CommentItem(
                                     comment = comment,
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .focusRequester(itemFocusRequester)
                                         .onFocusChanged { focusState ->
                                             if (focusState.hasFocus) {
                                                 focusedCommentIndex = index
@@ -625,6 +661,7 @@ fun CommentPanel(
                                         // 只有有子评论时才能点击打开子评论浮窗
                                         if (comment.repliesCount > 0) {
                                             selectedCommentIndex = index
+                                            selectedCommentRpid = comment.rpid
                                             selectedRootComment = comment
                                             showSubCommentPanel = true
                                         }
