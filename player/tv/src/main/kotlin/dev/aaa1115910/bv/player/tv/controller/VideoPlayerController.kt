@@ -125,10 +125,12 @@ fun VideoPlayerController(
     onSubtitleBottomPadding: (Dp) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit,
     onLoadNextVideo: (Boolean) -> Unit,
+    onLoadPrevVideo: () -> Unit = {},
     openPlayListRequestToken: Long = 0L,
 
     onRequestFocus: () -> Unit,
     onShowComment: () -> Unit = {},
+    onShowDescription: () -> Unit = {},
     onTripleLike: () -> Unit = {},
     useTripleLikeOnLongPress: Boolean = false,
 
@@ -610,7 +612,10 @@ fun VideoPlayerController(
             },
             onSubtitleChange = onSubtitleChange,
             onLoadNextVideo = onLoadNextVideo,
-            onShowComment = onShowComment
+            onLoadPrevVideo = onLoadPrevVideo,
+            onShowComment = onShowComment,
+            onShowDescription = onShowDescription,
+            onTripleLike = onTripleLike
         )
         SeekController(
             show = showSeekController,
@@ -643,8 +648,7 @@ fun VideoPlayerController(
             onSubtitleSizeChange = onSubtitleSizeChange,
             onSubtitleBackgroundOpacityChange = onSubtitleBackgroundOpacityChange,
             onSubtitleBottomPadding = onSubtitleBottomPadding,
-            onPlayModeChange = onPlayModeChange,
-            onTripleLike = onTripleLike
+            onPlayModeChange = onPlayModeChange
         )
         // 缓存底部进度条显示条件，避免频繁计算
         val shouldShowBottomProgressBar by remember { 

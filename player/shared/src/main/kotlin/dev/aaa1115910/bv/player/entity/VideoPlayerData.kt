@@ -50,6 +50,7 @@ data class VideoPlayerVideoInfoData(
     val coin: Int = 0,
     val favorite: Int = 0,
     val upName: String = "",
+    val upAvatar: String = "",
     val pubTime: String = "",
     val fromSeason: Boolean = false,
     val isFollowingUp: Boolean = false,

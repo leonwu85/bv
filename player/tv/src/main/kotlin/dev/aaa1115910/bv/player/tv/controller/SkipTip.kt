@@ -7,10 +7,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CornerSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
@@ -20,6 +20,8 @@ import dev.aaa1115910.bv.player.entity.DefaultStartPosition
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerHistoryData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
+import dev.aaa1115910.bv.player.tv.component.PlayerAnimations
+import dev.aaa1115910.bv.player.tv.theme.PlayerColors
 import dev.aaa1115910.bv.util.formatHourMinSec
 
 // TODO 跳转历史记录
@@ -79,8 +81,8 @@ fun SkipTip(
 ) {
     AnimatedVisibility(
         visible = show,
-        enter = expandHorizontally(),
-        exit = shrinkHorizontally()
+        enter = PlayerAnimations.tipEnter,
+        exit = PlayerAnimations.tipExit
     ) {
         Box(
             modifier = modifier.fillMaxSize()
@@ -90,22 +92,19 @@ fun SkipTip(
                     .align(align)
                     .padding(bottom = 32.dp),
                 colors = SurfaceDefaults.colors(
-                    containerColor = Color.Black.copy(alpha = 0.6f)
+                    containerColor = PlayerColors.tipBackground
                 ),
                 shape = if (align == Alignment.BottomStart) {
-                    MaterialTheme.shapes.medium.copy(
-                        topStart = CornerSize(0.dp), bottomStart = CornerSize(0.dp)
-                    ) 
+                    RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp)
                 } else {
-                    MaterialTheme.shapes.medium.copy(
-                        topEnd = CornerSize(0.dp), bottomEnd = CornerSize(0.dp)
-                    )
+                    RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp)
                 }
             ) {
                 Text(
-                    modifier = Modifier.padding(8.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                     text = text,
-                    style = MaterialTheme.typography.titleLarge
+                    style = MaterialTheme.typography.titleMedium,
+                    color = PlayerColors.textPrimary
                 )
             }
         }

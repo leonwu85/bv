@@ -70,6 +70,7 @@ dependencies {
     implementation(androidx.core.ktx)
     implementation(libs.logging)
     implementation(libs.material)
+    implementation(libs.coil.compose)
     implementation(libs.qrcode)
     debugImplementation(androidx.compose.ui.test.manifest)
     debugImplementation(androidx.compose.ui.tooling)

@@ -110,6 +110,7 @@ fun BvPlayer(
     onClearBackToHistoryData: () -> Unit,
     onReloadDanmakuAfterSeek: (Long, Boolean) -> Unit = { _, _ -> },
     onLoadNextVideo: (Boolean) -> Unit,
+    onLoadPrevVideo: () -> Unit = {},
     onExit: () -> Unit,
     onLoadNewVideo: (VideoListItem) -> Unit,
     onResolutionChange: (Resolution, afterChange: suspend () -> Unit) -> Unit,
@@ -141,6 +142,7 @@ fun BvPlayer(
     onRefreshVideo: () -> Unit = {},
     onLiveRetry: () -> Unit = {},
     onShowComment: () -> Unit = {},
+    onShowDescription: () -> Unit = {},
     onTripleLike: () -> Unit = {},
     useTripleLikeOnLongPress: Boolean = false,
     isLive: Boolean = false,
@@ -1298,9 +1300,11 @@ fun BvPlayer(
                 onLoopPlayModeChange(it)
             },
             userActionContent = userActionContent,
+            onLoadPrevVideo = onLoadPrevVideo,
             onLoadNextVideo = onLoadNextVideo,
             openPlayListRequestToken = openPlayListRequestToken,
             onShowComment = onShowComment,
+            onShowDescription = onShowDescription,
             onTripleLike = onTripleLike,
             useTripleLikeOnLongPress = useTripleLikeOnLongPress,
 

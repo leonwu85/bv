@@ -1,13 +1,16 @@
 package dev.aaa1115910.bv.player.tv.controller
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -20,6 +23,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -51,16 +55,15 @@ fun VideoShot(
 
     var bitmap by remember { mutableStateOf(ImageBitmap(1, 1)) }
     var screenWidth by remember { mutableStateOf(0.dp) }
-    var coercedImageOffset by remember { mutableStateOf(0.dp) }
     var imageWidth by remember { mutableStateOf(0.dp) }
 
-    LaunchedEffect(position, imageWidth) {
-        delay(25)
-        // logger.fInfo { "update progress preview image offset at $position $imageWidth" }
-        val baseOffset = -imageWidth / 2
-        val imageOffset = baseOffset + screenWidth * (position.toFloat() / duration.toFloat())
-        coercedImageOffset =
+    // derivedStateOf: 仅在 position/imageWidth/screenWidth 变化时重算
+    val coercedImageOffset by remember {
+        derivedStateOf {
+            val baseOffset = -imageWidth / 2
+            val imageOffset = baseOffset + screenWidth * (position.toFloat() / duration.toFloat())
             imageOffset.coerceIn(0.dp + coercedOffset, screenWidth - imageWidth - coercedOffset)
+        }
     }
 
     LaunchedEffect(position) {
@@ -81,7 +84,9 @@ fun VideoShot(
         screenWidth = this.maxWidth
         VideoShotImage(
             modifier = Modifier
-                .offset(x = coercedImageOffset)
+                .graphicsLayer {
+                    translationX = with(density) { coercedImageOffset.toPx() }
+                }
                 .onSizeChanged {
                     imageWidth = with(density) { it.width.toDp() }
                 },
@@ -97,11 +102,14 @@ fun VideoShotImage(
 ) {
     val view = LocalView.current
 
+    val videoShotShape = RoundedCornerShape(8.dp)
+
     Image(
         modifier = modifier
             .height(100.dp)
-            .shadow(4.dp, MaterialTheme.shapes.medium)
-            .clip(MaterialTheme.shapes.medium)
+            .shadow(6.dp, videoShotShape)
+            .clip(videoShotShape)
+            .border(1.dp, Color.White.copy(alpha = 0.2f), videoShotShape)
             .drawBehind {
                 if (view.isInEditMode) {
                     drawLine(Color.White, Offset(center.x, 0f), Offset(center.x, size.height), 2f)

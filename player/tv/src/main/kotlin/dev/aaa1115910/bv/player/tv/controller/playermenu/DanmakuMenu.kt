@@ -1,7 +1,9 @@
 package dev.aaa1115910.bv.player.tv.controller.playermenu
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -35,6 +37,7 @@ import dev.aaa1115910.bv.player.tv.controller.playermenu.component.CheckBoxMenuL
 import dev.aaa1115910.bv.player.tv.controller.playermenu.component.MenuListItem
 import dev.aaa1115910.bv.player.tv.controller.playermenu.component.RadioMenuList
 import dev.aaa1115910.bv.player.tv.controller.playermenu.component.StepLessMenuItem
+import dev.aaa1115910.bv.player.tv.theme.PlayerColors
 import dev.aaa1115910.bv.util.ifElse
 import java.text.NumberFormat
 
@@ -196,6 +199,16 @@ fun DanmakuMenuList(
                     )
                 }
             }
+        }
+
+        // 竖线分隔
+        AnimatedVisibility(visible = focusState.focusState != MenuFocusState.MenuNav) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight(0.6f)
+                    .width(1.dp)
+                    .background(PlayerColors.menuGlassBorder)
+            )
         }
 
         LazyColumn(

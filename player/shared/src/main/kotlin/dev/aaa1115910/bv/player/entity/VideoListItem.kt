@@ -10,6 +10,8 @@ open class VideoListItemData(
     open val title: String,
     open val partTitle: String = "",
     open val index: Int,
+    open val cover: String? = null,
+    open val duration: Int = 0,
 ) : VideoListItem
 
 data class VideoListPart(
@@ -20,7 +22,8 @@ data class VideoListPart(
     override val title: String,
     override val partTitle: String = "",
     override val index: Int,
-) : VideoListItemData(aid, cid, epid, seasonId, title, partTitle, index)
+    override val duration: Int = 0,
+) : VideoListItemData(aid, cid, epid, seasonId, title, partTitle, index, duration = duration)
 
 data class VideoListUgcEpisode(
     override val aid: Long,
@@ -30,7 +33,11 @@ data class VideoListUgcEpisode(
     override val title: String,
     override val partTitle: String = "",
     override val index: Int,
-) : VideoListItemData(aid, cid, epid, seasonId, title, partTitle, index)
+    override val cover: String? = null,
+    override val duration: Int = 0,
+    val viewCount: Long = 0,
+    val danmakuCount: Int = 0,
+) : VideoListItemData(aid, cid, epid, seasonId, title, partTitle, index, cover, duration)
 
 data class VideoListUgcEpisodeTitle(
     val index: Int,
@@ -59,4 +66,8 @@ data class VideoListPgcEpisode(
     override val title: String,
     override val partTitle: String = "",
     override val index: Int,
-) : VideoListItemData(aid, cid, epid, seasonId, title, partTitle, index)
+    override val cover: String? = null,
+    override val duration: Int = 0,
+    val viewCount: Long = 0,
+    val danmakuCount: Int = 0,
+) : VideoListItemData(aid, cid, epid, seasonId, title, partTitle, index, cover, duration)

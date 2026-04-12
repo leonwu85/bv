@@ -140,6 +140,11 @@ fun VideoPlayerV3Screen(
     var showTripleLikeTip by remember { mutableStateOf(false) }
     var tripleLikeTipMessage by remember { mutableStateOf("") }
 
+    // 简介弹窗状态
+    var showDescriptionDialog by remember { mutableStateOf(false) }
+    var videoDescription by remember(currentAid) { mutableStateOf("") }
+    var descriptionLoaded by remember(currentAid) { mutableStateOf(false) }
+
     // 在线观看人数状态
     var onlineViewerCount by remember { mutableStateOf("") }
     var showOnlineViewerCountTip by remember { mutableStateOf(false) }
@@ -240,6 +245,7 @@ fun VideoPlayerV3Screen(
             coin = playerViewModel.coin,
             favorite = playerViewModel.favorite,
             upName = playerViewModel.upName,
+            upAvatar = playerViewModel.upFace,
             pubTime = playerViewModel.pubTime,
             fromSeason = playerViewModel.fromSeason,
             isFollowingUp = playerViewModel.isFollowingUp,
@@ -342,6 +348,42 @@ fun VideoPlayerV3Screen(
                 onSendHeartbeat = playerViewModel::uploadHistory,
                 onClearBackToHistoryData = { playerViewModel.lastPlayed = 0 },
                 onReloadDanmakuAfterSeek = playerViewModel::reloadDanmakuAfterSeek,
+                onLoadPrevVideo = {
+                    val currentIndex = playerViewModel.availableVideoList.indexOfFirst {
+                        when (it) {
+                            is VideoListItemData -> it.cid == playerViewModel.currentCid
+                            else -> false
+                        }
+                    }
+                    val prevEp =
+                        if (currentIndex > 0) {
+                            playerViewModel.availableVideoList
+                                .take(currentIndex)
+                                .lastOrNull { it is VideoListItemData } as? VideoListItemData
+                        } else null
+
+                    if (prevEp != null) {
+                        playerViewModel.title = prevEp.title
+                        playerViewModel.partTitle = prevEp.partTitle
+                        if (prevEp.seasonId == null && playerViewModel.currentAid != prevEp.aid) {
+                            VideoInfoActivity.actionStart(
+                                context = context,
+                                aid = prevEp.aid,
+                                cid = prevEp.cid,
+                                fromPlayer = true,
+                                audioOnlyMode = playerViewModel.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly
+                            )
+                        } else {
+                            playerViewModel.loadPlayUrl(
+                                avid = prevEp.aid,
+                                cid = prevEp.cid!!,
+                                epid = prevEp.epid,
+                                seasonId = prevEp.seasonId,
+                                continuePlayNext = true
+                            )
+                        }
+                    }
+                },
                 onLoadNextVideo = { immediate ->
                     if (playerViewModel.showRelatedVideos) {
                         logger.info { "Related videos is shown, skip auto action" }
@@ -381,22 +423,26 @@ fun VideoPlayerV3Screen(
                     // nextVideo 可以是分P/剧集(VideoListItemData) 或 推荐卡片(VideoCardData)
                     var nextVideo: Any? = null
 
-                    // 根据配置执行不同逻辑
-                    when (Prefs.playerLoadNextAction) {
-                        PlayerLoadNextAction.PlayRecommend -> {
-                            // 显示推荐视频列表（如果已经有数据）
-                            nextVideo = nextRelatedVideo
-                        }
+                    if (immediate) {
+                        // 用户主动点击下一集按钮，直接播放下一集，不受设置影响
+                        nextVideo = nextEp
+                    } else {
+                        // 自动播放结束，根据配置执行不同逻辑
+                        when (Prefs.playerLoadNextAction) {
+                            PlayerLoadNextAction.PlayRecommend -> {
+                                nextVideo = nextRelatedVideo
+                            }
 
-                        PlayerLoadNextAction.PlayNextPart -> {
-                            nextVideo = nextEp
-                        }
+                            PlayerLoadNextAction.PlayNextPart -> {
+                                nextVideo = nextEp
+                            }
 
-                        PlayerLoadNextAction.PlayNextPartOrRecommend -> {
-                            nextVideo = nextEp ?: nextRelatedVideo
-                        }
+                            PlayerLoadNextAction.PlayNextPartOrRecommend -> {
+                                nextVideo = nextEp ?: nextRelatedVideo
+                            }
 
-                        PlayerLoadNextAction.DoNothing -> {}
+                            PlayerLoadNextAction.DoNothing -> {}
+                        }
                     }
                     if (nextVideo != null) {
                         autoActionCountdownJob = scope.launch {
@@ -541,6 +587,31 @@ fun VideoPlayerV3Screen(
                     playerViewModel.retryLiveStream()
                 },
                 onShowComment = { showCommentPanel = true },
+                onShowDescription = {
+                    if (!descriptionLoaded) {
+                        scope.launch(Dispatchers.IO) {
+                            try {
+                                val response = BiliHttpApi.getVideoDetail(
+                                    av = playerViewModel.currentAid,
+                                    sessData = Prefs.accessToken
+                                )
+                                val desc = response.getResponseData().view.desc
+                                withContext(Dispatchers.Main) {
+                                    videoDescription = desc
+                                    descriptionLoaded = true
+                                    showDescriptionDialog = true
+                                }
+                            } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    videoDescription = "加载失败"
+                                    showDescriptionDialog = true
+                                }
+                            }
+                        }
+                    } else {
+                        showDescriptionDialog = true
+                    }
+                },
                 onResolutionChange = { resolutionCode, afterChange ->
                     scope.launch(Dispatchers.Default) {
                         playerViewModel.playQuality(resolutionCode)
@@ -703,145 +774,137 @@ fun VideoPlayerV3Screen(
                         val favFocus = focusMap["fav"]
                         val coinFocus = focusMap["coin"]
 
-                        Row(
-                            modifier = modifier
-                                .fillMaxWidth()
-                                .padding(start = 32.dp, bottom = 4.dp)
-                                .offset(y = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            LikeButton(
-                                modifier = Modifier
-                                    .height(26.dp)
-                                    .onFocusChanged { if (it.isFocused) onFocus("like") }
-                                    .then(likeFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                colors = ButtonDefaults.colors(
-                                    containerColor = Color.Transparent,
-                                    focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                                    focusedContentColor = MaterialTheme.colorScheme.onSurface
-                                ),
-                                border = ButtonDefaults.border(
-                                    border = Border(
-                                        border = BorderStroke(
-                                            width = 1.dp,
-                                            color = Color.Transparent
-                                        )
-                                    ),
-                                    focusedBorder = Border(
-                                        border = BorderStroke(
-                                            width = 1.dp,
-                                            color = Color.White.copy(alpha = 0.45f)
-                                        )
+                        LikeButton(
+                            modifier = Modifier
+                                .height(26.dp)
+                                .onFocusChanged { if (it.isFocused) onFocus("like") }
+                                .then(likeFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            colors = ButtonDefaults.colors(
+                                containerColor = Color.Transparent,
+                                focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                focusedContentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            border = ButtonDefaults.border(
+                                border = Border(
+                                    border = BorderStroke(
+                                        width = 1.dp,
+                                        color = Color.Transparent
                                     )
                                 ),
-                                // use shared state
-                                isLike = sharedActionState.liked,
-                                onToggleLike = {
-                                    val aid = playerViewModel.currentAid
-                                    scope.launch {
-                                        val flow = getStateFlow(aid, Prefs.uid)
-                                        val current = flow.value
-                                        if (current.liked) {
-                                            val success = VideoUserActionManager.delLike(aid, Prefs.uid)
-                                            if (!success) {
-                                                "点赞失败".toast(context)
-                                            }
-                                        } else {
-                                            val success = VideoUserActionManager.addLike(aid, Prefs.uid)
-                                            if (!success) {
-                                                "取消点赞失败".toast(context)
-                                            }
+                                focusedBorder = Border(
+                                    border = BorderStroke(
+                                        width = 1.dp,
+                                        color = Color.White.copy(alpha = 0.45f)
+                                    )
+                                )
+                            ),
+                            // use shared state
+                            isLike = sharedActionState.liked,
+                            onToggleLike = {
+                                val aid = playerViewModel.currentAid
+                                scope.launch {
+                                    val flow = getStateFlow(aid, Prefs.uid)
+                                    val current = flow.value
+                                    if (current.liked) {
+                                        val success = VideoUserActionManager.delLike(aid, Prefs.uid)
+                                        if (!success) {
+                                            "点赞失败".toast(context)
+                                        }
+                                    } else {
+                                        val success = VideoUserActionManager.addLike(aid, Prefs.uid)
+                                        if (!success) {
+                                            "取消点赞失败".toast(context)
                                         }
                                     }
                                 }
-                            )
-                            FavoriteButton(
-                                modifier = Modifier
-                                    .height(24.dp)
-                                    .onFocusChanged { if (it.isFocused) onFocus("fav") }
-                                    .then(favFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
-                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                                colors = ButtonDefaults.colors(
-                                    containerColor = Color.Transparent,
-                                    focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                                    focusedContentColor = MaterialTheme.colorScheme.onSurface
-                                ),
-                                border = ButtonDefaults.border(
-                                    border = Border(
-                                        border = BorderStroke(
-                                            width = 1.dp,
-                                            color = Color.Transparent
-                                        )
-                                    ),
-                                    focusedBorder = Border(
-                                        border = BorderStroke(
-                                            width = 1.dp,
-                                            color = Color.White.copy(alpha = 0.45f)
-                                        )
+                            }
+                        )
+                        FavoriteButton(
+                            modifier = Modifier
+                                .height(24.dp)
+                                .onFocusChanged { if (it.isFocused) onFocus("fav") }
+                                .then(favFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                            colors = ButtonDefaults.colors(
+                                containerColor = Color.Transparent,
+                                focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                focusedContentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            border = ButtonDefaults.border(
+                                border = Border(
+                                    border = BorderStroke(
+                                        width = 1.dp,
+                                        color = Color.Transparent
                                     )
                                 ),
-                                dialogContainerColor = Color.Black.copy(alpha = 0.5f),
-                                isFavorite = sharedActionState.favorited,
-                                // read shared state snapshot (UI will recompose when collectAsState in parent is implemented)
-                                userFavoriteFolders = sharedActionState.favoriteFolders,
-                                favoriteFolderIds = sharedActionState.favoriteFolderIds,
-                                onAddToDefaultFavoriteFolder = {
-                                    scope.launch {
-                                        val success = VideoUserActionManager.addToDefaultFavoriteFolder(playerViewModel.currentAid, Prefs.uid)
-                                        if (!success) {
-                                            "收藏操作失败".toast(context)
-                                        }
+                                focusedBorder = Border(
+                                    border = BorderStroke(
+                                        width = 1.dp,
+                                        color = Color.White.copy(alpha = 0.45f)
+                                    )
+                                )
+                            ),
+                            dialogContainerColor = Color.Black.copy(alpha = 0.5f),
+                            isFavorite = sharedActionState.favorited,
+                            // read shared state snapshot (UI will recompose when collectAsState in parent is implemented)
+                            userFavoriteFolders = sharedActionState.favoriteFolders,
+                            favoriteFolderIds = sharedActionState.favoriteFolderIds,
+                            onAddToDefaultFavoriteFolder = {
+                                scope.launch {
+                                    val success = VideoUserActionManager.addToDefaultFavoriteFolder(playerViewModel.currentAid, Prefs.uid)
+                                    if (!success) {
+                                        "收藏操作失败".toast(context)
                                     }
-                                },
-                                onUpdateFavoriteFolders = {
-                                    scope.launch {
-                                        val success = VideoUserActionManager.updateVideoFavoriteFolders(playerViewModel.currentAid, it, Prefs.uid)
-                                        if (!success) {
-                                            "收藏操作失败".toast(context)
-                                        }
+                                }
+                            },
+                            onUpdateFavoriteFolders = {
+                                scope.launch {
+                                    val success = VideoUserActionManager.updateVideoFavoriteFolders(playerViewModel.currentAid, it, Prefs.uid)
+                                    if (!success) {
+                                        "收藏操作失败".toast(context)
                                     }
-                                },
-                                onDialogVisibilityChanged = onPauseAutoHide
-                            )
-                            CoinButton(
-                                modifier = Modifier
-                                    .height(26.dp)
-                                    .onFocusChanged { if (it.isFocused) onFocus("coin") }
-                                    .then(coinFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                colors = ButtonDefaults.colors(
-                                    containerColor = Color.Transparent,
-                                    focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                                    focusedContentColor = MaterialTheme.colorScheme.onSurface
-                                ),
-                                border = ButtonDefaults.border(
-                                    border = Border(
-                                        border = BorderStroke(
-                                            width = 1.dp,
-                                            color = Color.Transparent
-                                        )
-                                    ),
-                                    focusedBorder = Border(
-                                        border = BorderStroke(
-                                            width = 1.dp,
-                                            color = Color.White.copy(alpha = 0.45f)
-                                        )
+                                }
+                            },
+                            onDialogVisibilityChanged = onPauseAutoHide
+                        )
+                        CoinButton(
+                            modifier = Modifier
+                                .height(26.dp)
+                                .onFocusChanged { if (it.isFocused) onFocus("coin") }
+                                .then(coinFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            colors = ButtonDefaults.colors(
+                                containerColor = Color.Transparent,
+                                focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                focusedContentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            border = ButtonDefaults.border(
+                                border = Border(
+                                    border = BorderStroke(
+                                        width = 1.dp,
+                                        color = Color.Transparent
                                     )
                                 ),
-                                isCoin = sharedActionState.coin,
-                                onAddCoin = {
-                                    scope.launch {
-                                        val success = VideoUserActionManager.addCoin(playerViewModel.currentAid, Prefs.uid)
-                                        withContext(Dispatchers.Main) {
-                                            if (!success) {
-                                                "投币失败".toast(context)
-                                            }
+                                focusedBorder = Border(
+                                    border = BorderStroke(
+                                        width = 1.dp,
+                                        color = Color.White.copy(alpha = 0.45f)
+                                    )
+                                )
+                            ),
+                            isCoin = sharedActionState.coin,
+                            onAddCoin = {
+                                scope.launch {
+                                    val success = VideoUserActionManager.addCoin(playerViewModel.currentAid, Prefs.uid)
+                                    withContext(Dispatchers.Main) {
+                                        if (!success) {
+                                            "投币失败".toast(context)
                                         }
                                     }
                                 }
-                            )
-                        }
+                            }
+                        )
                     }
                 }
             )
@@ -925,5 +988,12 @@ fun VideoPlayerV3Screen(
                 message = tripleLikeTipMessage
             )
         }
+
+        // 简介弹窗
+        VideoDescriptionDialog(
+            show = showDescriptionDialog,
+            onHideDialog = { showDescriptionDialog = false },
+            description = videoDescription
+        )
     }
 }

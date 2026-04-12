@@ -58,7 +58,6 @@ class SeasonViewModel(
             seasons.swapList(data.seasons)
             isFollowing = data.userStatus.follow
             lastPlayProgress = data.userStatus.progress
-            logger.fInfo { "Get season info success, seasonData: ${seasonData}" }
         }.onFailure {
             tip = it.localizedMessage ?: "未知错误"
             logger.fInfo { "Get season info failed: ${it.stackTraceToString()}" }

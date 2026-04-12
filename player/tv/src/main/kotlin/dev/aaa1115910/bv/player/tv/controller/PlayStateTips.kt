@@ -2,7 +2,12 @@ package dev.aaa1115910.bv.player.tv.controller
 
 import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material3.CircularProgressIndicator
@@ -37,6 +43,7 @@ import androidx.tv.material3.Text
 import androidx.tv.material3.darkColorScheme
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerPaymentData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
+import dev.aaa1115910.bv.player.tv.theme.PlayerColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -56,12 +63,18 @@ fun PlayStateTips(
     Box(
         modifier = modifier.fillMaxSize()
     ) {
-        if (!videoPlayerStateData.isPlaying && !videoPlayerStateData.isBuffering && !videoPlayerStateData.isError && canShowPause) {
-            PauseIcon(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(24.dp)
-            )
+        AnimatedVisibility(
+            visible = !videoPlayerStateData.isPlaying && !videoPlayerStateData.isBuffering && !videoPlayerStateData.isError && canShowPause,
+            enter = fadeIn() + scaleIn(initialScale = 0.8f),
+            exit = fadeOut() + scaleOut(targetScale = 0.8f)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                PauseIcon(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(24.dp)
+                )
+            }
         }
         if (videoPlayerStateData.isBuffering && !videoPlayerStateData.isError) {
             BufferingTip(
@@ -92,17 +105,17 @@ fun PauseIcon(
     Surface(
         modifier = modifier,
         colors = SurfaceDefaults.colors(
-            containerColor = Color.Black.copy(0.5f)
+            containerColor = PlayerColors.tipBackground
         ),
-        shape = MaterialTheme.shapes.medium
+        shape = RoundedCornerShape(12.dp)
     ) {
         Icon(
             modifier = Modifier
-                .padding(12.dp, 4.dp)
-                .size(50.dp),
+                .padding(12.dp, 8.dp)
+                .size(48.dp),
             imageVector = Icons.Rounded.Pause,
             contentDescription = null,
-            tint = Color.White
+            tint = PlayerColors.textPrimary
         )
     }
 }
@@ -112,30 +125,21 @@ fun BufferingTip(
     modifier: Modifier = Modifier,
     speed: String
 ) {
-    Surface(
-        modifier = modifier,
-        colors = SurfaceDefaults.colors(
-            containerColor = Color.Black.copy(0.5f)
-        ),
-        shape = MaterialTheme.shapes.medium
+    Column(
+        modifier = modifier.padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp, 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CircularProgressIndicator(
-                modifier = Modifier
-                    .size(36.dp)
-                    .padding(8.dp),
-                color = Color.White,
-                strokeWidth = 2.dp
-            )
-            Text(
-                modifier = Modifier,
-                text = "缓冲中...$speed",
-                fontSize = 24.sp
-            )
-        }
+        CircularProgressIndicator(
+            modifier = Modifier.size(48.dp),
+            color = PlayerColors.textPrimary,
+            strokeWidth = 3.dp
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "缓冲中...$speed",
+            color = PlayerColors.textPrimary,
+            style = MaterialTheme.typography.bodyLarge
+        )
     }
 }
 
@@ -147,21 +151,35 @@ fun PlayErrorTip(
     Surface(
         modifier = modifier,
         colors = SurfaceDefaults.colors(
-            containerColor = Color.Black.copy(0.5f)
+            containerColor = PlayerColors.tipBackground
         ),
-        shape = MaterialTheme.shapes.medium
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp, 8.dp),
+            modifier = Modifier.padding(24.dp, 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = "播放器正在抽风",
-                style = MaterialTheme.typography.titleLarge
+                style = MaterialTheme.typography.headlineSmall,
+                color = PlayerColors.textPrimary
             )
-            Text(text = " _(:з」∠)_")
+            Text(
+                text = " _(:з」∠)_",
+                color = PlayerColors.textSecondary
+            )
             Spacer(modifier = Modifier.height(12.dp))
-            Text(text = "错误信息：${exception.message}")
+            Text(
+                text = "错误信息：${exception.message}",
+                color = PlayerColors.textTertiary,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "按任意键重试",
+                color = PlayerColors.textSecondary,
+                style = MaterialTheme.typography.bodyMedium
+            )
         }
     }
 }
@@ -196,23 +214,31 @@ fun PaidRequireTip(
     Surface(
         modifier = modifier,
         colors = SurfaceDefaults.colors(
-            containerColor = Color.Black.copy(0.5f)
+            containerColor = PlayerColors.tipBackground
         ),
-        shape = MaterialTheme.shapes.medium
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp, 8.dp),
+            modifier = Modifier.padding(24.dp, 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = "请先购买影片",
-                style = MaterialTheme.typography.titleLarge
+                style = MaterialTheme.typography.headlineSmall,
+                color = PlayerColors.textPrimary
             )
-            // TODO 使用颜文字显示影片价格
-            Text(text = "(・∀・)つ㊿")
-            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "(・∀・)つ㊿",
+                color = PlayerColors.textSecondary
+            )
+            Spacer(modifier = Modifier.height(16.dp))
             AnimatedVisibility(visible = qrImage != null) {
-                Image(bitmap = qrImage!!, contentDescription = "EP$epid QR Code")
+                Image(
+                    modifier = Modifier
+                        .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp)),
+                    bitmap = qrImage!!,
+                    contentDescription = "EP$epid QR Code"
+                )
             }
         }
     }

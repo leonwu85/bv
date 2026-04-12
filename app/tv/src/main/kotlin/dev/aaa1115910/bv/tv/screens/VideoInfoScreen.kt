@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -170,6 +171,11 @@ import kotlin.math.max
 private val InteractiveBadgeColor = Color(0xFFFFD54F)
 private val ChargingBadgeColor = Color(0xFF00FFFF)
 private const val ChargingBadgeDefaultText = "充电专属"
+private val DiscoverTagTitleRegex = Regex("^发现\\s*《(.+?)》$")
+
+private fun formatVideoTagName(tagName: String): String {
+    return DiscoverTagTitleRegex.matchEntire(tagName)?.groupValues?.getOrNull(1) ?: tagName
+}
 
 @Composable
 fun VideoInfoScreen(
@@ -392,7 +398,11 @@ fun VideoInfoScreen(
                             cid = videoPage.cid,
                             title = if (sectionTitle == "正片") episode.title else sectionTitle,
                             partTitle = if (sectionTitle == "正片") "" else episode.title,
-                            index = epIndex
+                            index = epIndex,
+                            cover = episode.cover,
+                            duration = episode.duration,
+                            viewCount = episode.viewCount,
+                            danmakuCount = episode.danmakuCount,
                         )
                     )
                 }
@@ -411,6 +421,7 @@ fun VideoInfoScreen(
                             title = episode.title,
                             partTitle = videoPage.title,
                             index = pageIndex,
+                            duration = videoPage.duration,
                         )
                     )
                 }
@@ -912,7 +923,7 @@ fun VideoInfoScreen(
                                                 TagActivity.actionStart(
                                                     context = context,
                                                     tagId = tag.id,
-                                                    tagName = tag.name
+                                                    tagName = formatVideoTagName(tag.name)
                                                 )
                                             }
                                         )
@@ -965,6 +976,7 @@ fun VideoInfoScreen(
                                                         title = videoDetailViewModel.videoDetail!!.title,
                                                         partTitle = if (videoDetailViewModel.videoDetail!!.pages.size == 1) "" else videoPage.title,
                                                         index = index,
+                                                        duration = videoPage.duration,
                                                     )
                                                 }
                                             videoInfoRepository.videoList.clear()
@@ -1084,7 +1096,6 @@ fun VideoInfoScreen(
                                             val intrinsicHeight = drawable.intrinsicHeight
                                             if (intrinsicWidth > 0 && intrinsicHeight > 0) {
                                                 coverAspectRatio = intrinsicWidth.toFloat() / intrinsicHeight.toFloat()
-                                                println("Cover aspect ratio: $coverAspectRatio")
                                             }
                                         },
                                         onError = {
@@ -1410,6 +1421,7 @@ private fun VideoTagsRow(
     ) {
         itemsIndexed(items = tags, key = { _, tag -> tag.id }) { index, tag ->
             var hasFocus by remember(tag.id) { mutableStateOf(false) }
+            val displayTagName = remember(tag.name) { formatVideoTagName(tag.name) }
 
             Surface(
                 modifier = Modifier
@@ -1431,7 +1443,7 @@ private fun VideoTagsRow(
             ) {
                 Text(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                    text = tag.name,
+                    text = displayTagName,
                     style = MaterialTheme.typography.labelSmall,
                     color = if (hasFocus) Color.Black else Color.White.copy(alpha = 0.7f),
                     maxLines = 1,
@@ -1536,51 +1548,92 @@ fun VideoDescriptionDialog(
     }
 
     if (show) {
-        TvAlertDialog(
-            modifier = modifier
-                .fillMaxWidth(0.8f),
+        androidx.compose.ui.window.Dialog(
             onDismissRequest = { onHideDialog() },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-            title = {
-                Text(
-                    text = stringResource(R.string.video_info_description_title),
-                    color = Color.White
-                )
-            },
-            text = {
-                LazyColumn(
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = modifier
+                    .fillMaxWidth(0.6f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .border(
+                        width = 1.dp,
+                        color = Color.White.copy(alpha = 0.08f),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+            ) {
+                // 底层：深色玻璃背景
+                Box(
                     modifier = Modifier
-                        .heightIn(max = 320.dp)
-                        .focusable()
-                        .focusRequester(focusRequester)
-                        .onKeyEvent { event ->
-                            if (event.type == KeyEventType.KeyDown) {
-                                when (event.key) {
-                                    Key.DirectionUp -> {
-                                        scope.launch { state.animateScrollBy(-state.layoutInfo.viewportSize.height / 3f) }
-                                        true
-                                    }
+                        .matchParentSize()
+                        .background(Color.Black.copy(alpha = 0.4f))
+                )
+                // 中层：微带蓝紫色调
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(Color(0xFF1a1a2e).copy(alpha = 0.7f))
+                )
+                // 顶层：高光渐变
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.05f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
 
-                                    Key.DirectionDown -> {
-                                        scope.launch { state.animateScrollBy(state.layoutInfo.viewportSize.height / 3f) }
-                                        true
-                                    }
-
-                                    else -> false
-                                }
-                            } else {
-                                false
-                            }
-                        },
-                    state = state
+                Column(
+                    modifier = Modifier.padding(24.dp)
                 ) {
-                    item {
-                        Text(text = description)
+                    Text(
+                        text = stringResource(R.string.video_info_description_title),
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    LazyColumn(
+                        modifier = Modifier
+                            .heightIn(max = 320.dp)
+                            .focusable()
+                            .focusRequester(focusRequester)
+                            .onKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown) {
+                                    when (event.key) {
+                                        Key.DirectionUp -> {
+                                            scope.launch { state.animateScrollBy(-state.layoutInfo.viewportSize.height / 3f) }
+                                            true
+                                        }
+
+                                        Key.DirectionDown -> {
+                                            scope.launch { state.animateScrollBy(state.layoutInfo.viewportSize.height / 3f) }
+                                            true
+                                        }
+
+                                        else -> false
+                                    }
+                                } else {
+                                    false
+                                }
+                            },
+                        state = state
+                    ) {
+                        item {
+                            Text(
+                                text = description,
+                                color = Color.White.copy(alpha = 0.9f),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 }
-            },
-            confirmButton = {}
-        )
+            }
+        }
     }
 }
 
@@ -2100,7 +2153,7 @@ private fun UgcEpisodeButton(
                     chargingArcBadge = chargingArcBadge
                 )
 
-                if (playText.isNotEmpty() || danmakuText.isNotEmpty()) {
+                if (playText.isNotEmpty() || danmakuText.isNotEmpty() || durationText.isNotEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2119,40 +2172,70 @@ private fun UgcEpisodeButton(
                     Row(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
+                            .fillMaxWidth()
                             .padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        if (playText.isNotEmpty()) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_play_count),
-                                contentDescription = null,
-                                tint = Color.White
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text(
-                                text = playText,
-                                color = Color.White,
-                                fontSize = 10.sp,
-                                maxLines = 1
-                            )
+                        Row(
+                            modifier = Modifier
+                                .background(
+                                    Color.Black.copy(alpha = 0.7f),
+                                    RoundedCornerShape(4.dp)
+                                )
+                                .padding(horizontal = 6.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (playText.isNotEmpty()) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_play_count),
+                                    contentDescription = null,
+                                    tint = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = playText,
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    maxLines = 1
+                                )
+                            }
+
+                            if (danmakuText.isNotEmpty()) {
+                                if (playText.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_danmaku_count),
+                                    contentDescription = null,
+                                    tint = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = danmakuText,
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    maxLines = 1
+                                )
+                            }
                         }
 
-                        if (danmakuText.isNotEmpty()) {
-                            if (playText.isNotEmpty()) {
-                                Spacer(modifier = Modifier.width(8.dp))
+                        if (durationText.isNotEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        Color.Black.copy(alpha = 0.7f),
+                                        RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = durationText,
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    maxLines = 1
+                                )
                             }
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_danmaku_count),
-                                contentDescription = null,
-                                tint = Color.White
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text(
-                                text = danmakuText,
-                                color = Color.White,
-                                fontSize = 10.sp,
-                                maxLines = 1
-                            )
                         }
                     }
                 }
@@ -2169,26 +2252,6 @@ private fun UgcEpisodeButton(
                             imageVector = Icons.Rounded.PlayCircle,
                             contentDescription = null,
                             tint = Color.White.copy(alpha = 0.9f)
-                        )
-                    }
-                }
-
-                if (durationText.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(4.dp)
-                            .background(
-                                Color.Black.copy(alpha = 0.7f),
-                                RoundedCornerShape(4.dp)
-                            )
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = durationText,
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            maxLines = 1
                         )
                     }
                 }

@@ -3,16 +3,21 @@ package dev.aaa1115910.bv.player.tv.controller.playermenu.component
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.runtime.Composable
@@ -22,7 +27,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -32,6 +41,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import dev.aaa1115910.bv.player.tv.theme.PlayerColors
 
 @Composable
 fun MenuListItem(
@@ -44,6 +54,8 @@ fun MenuListItem(
     onFocus: () -> Unit = {},
     onClick: () -> Unit
 ) {
+    var isFocused by remember { mutableStateOf(false) }
+
     val itemWidth by animateDpAsState(
         targetValue = if (expanded) 200.dp else 66.dp,
         animationSpec = spring(
@@ -53,14 +65,95 @@ fun MenuListItem(
         label = "MenuListItem width [$text]"
     )
 
-    DenseListItem(
+    val contentOffset by animateDpAsState(
+        targetValue = if (isFocused) 4.dp else 0.dp,
+        label = "MenuListItem offset [$text]"
+    )
+
+    val itemAlpha by animateFloatAsState(
+        targetValue = if (isFocused || selected) 1f else 0.85f,
+        label = "MenuListItem alpha [$text]"
+    )
+
+    Box(
         modifier = modifier
             .width(itemWidth)
-            .onFocusChanged { if (it.hasFocus) onFocus() },
-        selected = selected,
-        onClick = onClick,
-        headlineContent = {
-            Box {
+            .clip(RoundedCornerShape(12.dp))
+    ) {
+        // 聚焦态渐变高亮背景
+        if (isFocused) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                PlayerColors.menuItemFocusedGradientStart,
+                                PlayerColors.menuItemFocusedGradientEnd
+                            )
+                        ),
+                        RoundedCornerShape(12.dp)
+                    )
+            )
+        } else if (selected) {
+            // 已选中但未聚焦：微弱背景提示
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Color.White.copy(alpha = 0.06f),
+                        RoundedCornerShape(12.dp)
+                    )
+            )
+        }
+
+        // 选中指示条 (左侧竖线 + 发光效果)
+        if (selected) {
+            // 发光层
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxHeight()
+                    .width(8.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                PlayerColors.menuItemIndicatorGlow,
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+            // 实体指示条
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxHeight(0.6f)
+                    .width(3.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                PlayerColors.menuItemIndicator,
+                                PlayerColors.menuItemIndicatorGlow
+                            )
+                        ),
+                        RoundedCornerShape(2.dp)
+                    )
+            )
+        }
+
+        DenseListItem(
+            modifier = Modifier
+                .fillMaxWidth()
+                .alpha(itemAlpha)
+                .onFocusChanged {
+                    isFocused = it.hasFocus
+                    if (it.hasFocus) onFocus()
+                },
+            selected = selected,
+            onClick = onClick,
+            headlineContent = {
+            Box(modifier = Modifier.offset(x = contentOffset)) {
                 Row(
                     modifier = Modifier
                         .padding(
@@ -109,9 +202,11 @@ fun MenuListItem(
             }
         },
         colors = ListItemDefaults.colors(
-            selectedContainerColor = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.4f),
+            selectedContainerColor = Color.Transparent,
+            focusedContainerColor = Color.Transparent,
         )
     )
+    } // close Box wrapper
 }
 
 @Preview

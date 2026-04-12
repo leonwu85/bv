@@ -1,11 +1,10 @@
 package dev.aaa1115910.bv.player.tv.controller
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -14,7 +13,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
@@ -22,6 +20,8 @@ import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorCategory
 import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment
+import dev.aaa1115910.bv.player.tv.component.PlayerAnimations
+import dev.aaa1115910.bv.player.tv.theme.PlayerColors
 import kotlinx.coroutines.delay
 
 /**
@@ -64,24 +64,24 @@ fun SponsorBlockTip(
 
     AnimatedVisibility(
         visible = show,
-        enter = expandHorizontally(),
-        exit = shrinkHorizontally()
+        enter = PlayerAnimations.tipEnter,
+        exit = PlayerAnimations.tipExit
     ) {
         Box(modifier = modifier.fillMaxSize()) {
             Surface(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(bottom = 64.dp),
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 48.dp),
                 colors = SurfaceDefaults.colors(
-                    containerColor = Color.Black.copy(alpha = 0.4f)
+                    containerColor = PlayerColors.tipBackground
                 ),
-                shape = MaterialTheme.shapes.medium
+                shape = RoundedCornerShape(24.dp)
             ) {
                 Text(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
                     text = "${categoryDisplayName}来袭，按确认键可跳过 (${remainingTime}s)",
                     style = MaterialTheme.typography.titleMedium,
-                    color = Color.White
+                    color = PlayerColors.textPrimary
                 )
             }
         }

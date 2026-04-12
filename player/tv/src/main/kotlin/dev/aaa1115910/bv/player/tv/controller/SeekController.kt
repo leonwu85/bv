@@ -2,8 +2,6 @@ package dev.aaa1115910.bv.player.tv.controller
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +26,8 @@ import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoShotData
 import dev.aaa1115910.bv.player.seekbar.SeekMoveState
 import dev.aaa1115910.bv.player.tv.VideoSeekBar
+import dev.aaa1115910.bv.player.tv.component.PlayerAnimations
+import dev.aaa1115910.bv.player.tv.theme.PlayerColors
 
 @Composable
 fun SeekController(
@@ -47,8 +47,8 @@ fun SeekController(
         AnimatedVisibility(
             modifier = Modifier.align(Alignment.BottomCenter),
             visible = show,
-            enter = expandVertically(),
-            exit = shrinkVertically(),
+            enter = PlayerAnimations.seekEnter,
+            exit = PlayerAnimations.seekExit,
             label = "SeekControllerVisible"
         ) {
             SeekController(
@@ -94,7 +94,7 @@ private fun SeekController(
                     Brush.verticalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color.Black.copy(alpha = 0.5f)
+                            PlayerColors.dialogBackground
                         )
                     )),
             verticalArrangement = Arrangement.Bottom

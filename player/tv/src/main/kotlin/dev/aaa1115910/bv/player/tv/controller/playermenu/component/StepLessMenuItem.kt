@@ -18,6 +18,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
+import dev.aaa1115910.bv.player.tv.theme.PlayerColors
 
 @Composable
 fun StepLessMenuItem(
@@ -45,7 +46,7 @@ fun StepLessMenuItem(
                 .padding(horizontal = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(imageVector = Icons.Rounded.ArrowDropUp, contentDescription = null)
+            Icon(imageVector = Icons.Rounded.ArrowDropUp, contentDescription = null, tint = PlayerColors.textTertiary)
             MenuListItem(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -76,7 +77,7 @@ fun StepLessMenuItem(
                 text = text,
                 selected = false
             ) { }
-            Icon(imageVector = Icons.Rounded.ArrowDropDown, contentDescription = null)
+            Icon(imageVector = Icons.Rounded.ArrowDropDown, contentDescription = null, tint = PlayerColors.textTertiary)
         }
     }
 }
@@ -107,7 +108,7 @@ fun StepLessMenuItem(
                 .padding(horizontal = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(imageVector = Icons.Rounded.ArrowDropUp, contentDescription = null)
+            Icon(imageVector = Icons.Rounded.ArrowDropUp, contentDescription = null, tint = PlayerColors.textTertiary)
             MenuListItem(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -138,7 +139,7 @@ fun StepLessMenuItem(
                 text = text,
                 selected = false
             ) { }
-            Icon(imageVector = Icons.Rounded.ArrowDropDown, contentDescription = null)
+            Icon(imageVector = Icons.Rounded.ArrowDropDown, contentDescription = null, tint = PlayerColors.textTertiary)
         }
     }
 }

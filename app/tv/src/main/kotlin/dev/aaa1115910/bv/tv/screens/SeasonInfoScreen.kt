@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -65,6 +67,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -144,6 +147,14 @@ private fun generateEpisodeTitle(
         }.getOrDefault(episode.title)
     } else {
         episode.title
+    }
+}
+
+private fun formatEpisodeStatCount(count: Long): String {
+    return when {
+        count <= 0L -> ""
+        count >= 10000L -> "${count / 10000}万"
+        else -> "$count"
     }
 }
 
@@ -247,7 +258,6 @@ fun SeasonInfoScreen(
 
     LaunchedEffect(seasonViewModel.seasonData) {
         seasonViewModel.seasonData?.let {
-            logger.fInfo { "season data change: ${seasonViewModel.seasonData}" }
             seasonViewModel.lastPlayProgress = it.userStatus.progress
             //请求默认焦点到播放按钮上
             delay(300)
@@ -457,6 +467,10 @@ fun SeasonInfoScreen(
                                             "第 ${episode.title.toInt()} 集"
                                         }.getOrDefault(episode.title) + " " + episode.longTitle,
                                         index = index,
+                                        cover = episode.cover,
+                                        duration = episode.duration,
+                                        viewCount = episode.viewCount,
+                                        danmakuCount = episode.danmakuCount,
                                     )
                                 }
                                 videoInfoRepository.videoList.clear()
@@ -491,6 +505,10 @@ fun SeasonInfoScreen(
                                                 "第 ${episode.title.toInt()} 集"
                                             }.getOrDefault(episode.title) + " " + episode.longTitle,
                                             index = index,
+                                            cover = episode.cover,
+                                            duration = episode.duration,
+                                            viewCount = episode.viewCount,
+                                            danmakuCount = episode.danmakuCount,
                                         )
                                     } ?: emptyList()
                                 videoInfoRepository.videoList.clear()
@@ -519,6 +537,10 @@ fun SeasonInfoScreen(
                                             "第 ${episode.title.toInt()} 集"
                                         }.getOrDefault(episode.title) + " " + episode.longTitle,
                                         index = index,
+                                        cover = episode.cover,
+                                        duration = episode.duration,
+                                        viewCount = episode.viewCount,
+                                        danmakuCount = episode.danmakuCount,
                                     )
                                 }
                                 videoInfoRepository.videoList.clear()
@@ -571,27 +593,68 @@ fun SeasonInfoScreen(
 
     // 简介弹窗
     if (showDescriptionDialog) {
-        TvAlertDialog(
-            title = { Text(text = seasonViewModel.seasonData?.title ?: "") },
+        androidx.compose.ui.window.Dialog(
             onDismissRequest = { showDescriptionDialog = false },
-            confirmButton = {},
-            text = {
-                val scrollState = rememberLazyListState()
-                LazyColumn(
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.6f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .border(
+                        width = 1.dp,
+                        color = Color.White.copy(alpha = 0.08f),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+            ) {
+                Box(
                     modifier = Modifier
-                        .size(600.dp, 400.dp),
-                    state = scrollState
-                ) {
-                    item {
-                        Text(
-                            text = seasonViewModel.seasonData?.description ?: "",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.9f)
+                        .matchParentSize()
+                        .background(Color.Black.copy(alpha = 0.4f))
+                )
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(Color(0xFF1a1a2e).copy(alpha = 0.7f))
+                )
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.05f),
+                                    Color.Transparent
+                                )
+                            )
                         )
+                )
+
+                Column(
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    Text(
+                        text = seasonViewModel.seasonData?.title ?: "",
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    val scrollState = rememberLazyListState()
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 400.dp),
+                        state = scrollState
+                    ) {
+                        item {
+                            Text(
+                                text = seasonViewModel.seasonData?.description ?: "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.9f)
+                            )
+                        }
                     }
                 }
             }
-        )
+        }
     }
 }
 
@@ -705,6 +768,8 @@ fun SeasonEpisodeButton(
     title: String,
     cover: String,
     duration: Int,
+    viewCount: Long = 0,
+    danmakuCount: Int = 0,
     played: Int = 0,
     isLastPlayed: Boolean = false,
     onClick: () -> Unit
@@ -723,6 +788,8 @@ fun SeasonEpisodeButton(
             "%d:%02d".format(min, sec)
         }
     }
+    val playCountText = remember(viewCount) { formatEpisodeStatCount(viewCount) }
+    val danmakuCountText = remember(danmakuCount) { formatEpisodeStatCount(danmakuCount.toLong()) }
 
     // 播放进度比例
     val progressFraction = remember(played, duration) {
@@ -781,23 +848,86 @@ fun SeasonEpisodeButton(
                     }
                 }
 
-                if (durationText.isNotEmpty()) {
-                    Box(
+                if (playCountText.isNotEmpty() || danmakuCountText.isNotEmpty() || durationText.isNotEmpty()) {
+                    Row(
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(4.dp)
-                            .background(
-                                Color.Black.copy(alpha = 0.7f),
-                                RoundedCornerShape(4.dp)
-                            )
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .padding(start = 6.dp, end = 6.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(
-                            text = durationText,
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            maxLines = 1
-                        )
+                        if (playCountText.isNotEmpty() || danmakuCountText.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier
+                                    .background(
+                                        Color.Black.copy(alpha = 0.7f),
+                                        RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (playCountText.isNotEmpty()) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        Icon(
+                                            modifier = Modifier.size(12.dp),
+                                            painter = painterResource(id = R.drawable.ic_play_count),
+                                            contentDescription = null,
+                                            tint = Color.White
+                                        )
+                                        Text(
+                                            text = playCountText,
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                                if (danmakuCountText.isNotEmpty()) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        Icon(
+                                            modifier = Modifier.size(12.dp),
+                                            painter = painterResource(id = R.drawable.ic_danmaku_count),
+                                            contentDescription = null,
+                                            tint = Color.White
+                                        )
+                                        Text(
+                                            text = danmakuCountText,
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            Spacer(modifier = Modifier)
+                        }
+
+                        if (durationText.isNotEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        Color.Black.copy(alpha = 0.7f),
+                                        RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = durationText,
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    maxLines = 1
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -966,6 +1096,8 @@ fun SeasonEpisodesDialog(
                                 },
                                 title = episodeTitle,
                                 cover = episode.cover,
+                                viewCount = episode.viewCount,
+                                danmakuCount = episode.danmakuCount,
                                 played = if (episode.id == lastPlayedId) lastPlayedTime else 0,
                                 isLastPlayed = episode.id == lastPlayedId,
                                 duration = episode.duration,
@@ -1082,6 +1214,8 @@ fun SeasonEpisodeRow(
                     },
                     title = episodeTitle,
                     cover = episode.cover,
+                    viewCount = episode.viewCount,
+                    danmakuCount = episode.danmakuCount,
                     played = if (episode.id == lastPlayedId) lastPlayedTime else 0,
                     isLastPlayed = episode.id == lastPlayedId,
                     duration = episode.duration,

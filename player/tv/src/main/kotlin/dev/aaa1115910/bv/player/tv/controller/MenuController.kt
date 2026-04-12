@@ -3,11 +3,16 @@ package dev.aaa1115910.bv.player.tv.controller
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
+import dev.aaa1115910.bv.player.tv.component.PlayerAnimations
+import dev.aaa1115910.bv.player.tv.theme.PlayerColors
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -22,8 +27,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -85,8 +92,7 @@ fun MenuController(
     onSubtitleSizeChange: (TextUnit) -> Unit,
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
     onSubtitleBottomPadding: (Dp) -> Unit,
-    onPlayModeChange: (PlayMode) -> Unit,
-    onTripleLike: () -> Unit = {}
+    onPlayModeChange: (PlayMode) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val defaultFocusRequester = remember { FocusRequester() }
@@ -97,8 +103,8 @@ fun MenuController(
     ) {
         AnimatedVisibility(
             visible = show,
-            enter = expandHorizontally(),
-            exit = shrinkHorizontally()
+            enter = PlayerAnimations.menuEnter,
+            exit = PlayerAnimations.menuExit
         ) {
             // 在动画内容中处理焦点请求
             LaunchedEffect(Unit) {
@@ -126,8 +132,7 @@ fun MenuController(
                 onSubtitleSizeChange = onSubtitleSizeChange,
                 onSubtitleBackgroundOpacityChange = onSubtitleBackgroundOpacityChange,
                 onSubtitleBottomPadding = onSubtitleBottomPadding,
-                onPlayModeChange = onPlayModeChange,
-                onTripleLike = onTripleLike
+                onPlayModeChange = onPlayModeChange
             )
         }
     }
@@ -157,19 +162,48 @@ fun MenuController(
     onSubtitleSizeChange: (TextUnit) -> Unit,
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
     onSubtitleBottomPadding: (Dp) -> Unit,
-    onPlayModeChange: (PlayMode) -> Unit,
-    onTripleLike: () -> Unit = {}
+    onPlayModeChange: (PlayMode) -> Unit
 ) {
     var selectedNavItem by remember { mutableStateOf(VideoPlayerMenuNavItem.Picture) }
     var focusState by remember { mutableStateOf(MenuFocusState.MenuNav) }
 
-    Surface(
+    // 伪毛玻璃容器
+    Box(
         modifier = modifier
-            .fillMaxHeight(),
-        colors = SurfaceDefaults.colors(
-            containerColor = Color.Black.copy(alpha = 0.5f)
-        )
+            .fillMaxHeight(0.85f)
+            .clip(RoundedCornerShape(20.dp))
+            .border(
+                width = 1.dp,
+                color = PlayerColors.menuGlassBorder,
+                shape = RoundedCornerShape(20.dp)
+            )
     ) {
+        // 底层：深色玻璃背景
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(PlayerColors.menuGlassOverlay)
+        )
+        // 中层：微带蓝紫色调
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(PlayerColors.menuGlassBackground)
+        )
+        // 顶层：高光渐变
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            PlayerColors.menuGlassHighlightStart,
+                            PlayerColors.menuGlassHighlightEnd
+                        )
+                    )
+                )
+        )
+
         CompositionLocalProvider(
             LocalMenuFocusStateData provides MenuFocusStateData(
                 focusState = focusState
@@ -202,34 +236,32 @@ fun MenuController(
                     onSubtitleSizeChange = onSubtitleSizeChange,
                     onSubtitleBackgroundOpacityChange = onSubtitleBackgroundOpacityChange,
                     onSubtitleBottomPadding = onSubtitleBottomPadding,
-                    onPlayModeChange = onPlayModeChange,
-                    onTripleLike = onTripleLike
+                    onPlayModeChange = onPlayModeChange
                 )
-                MenuNavList(
+                // 导航栏区域：稍深的半透明背景
+                Box(
                     modifier = Modifier
-                        .focusRequester(defaultFocusRequester)
-                        .onPreviewKeyEvent {
-                            when {
-                                it.type == KeyEventType.KeyUp && listOf(Key.Enter, Key.DirectionCenter).contains(it.key) -> {
-                                    // 如果选中的是一键三连，执行操作
-                                    if (selectedNavItem == VideoPlayerMenuNavItem.TripleLike) {
-                                        onTripleLike()
+                        .fillMaxHeight()
+                        .background(PlayerColors.menuNavBackground)
+                ) {
+                    MenuNavList(
+                        modifier = Modifier
+                            .focusRequester(defaultFocusRequester)
+                            .onPreviewKeyEvent {
+                                when {
+                                    it.type == KeyEventType.KeyUp -> {
+                                        return@onPreviewKeyEvent true
                                     }
-                                    return@onPreviewKeyEvent false
-                                }
 
-                                it.type == KeyEventType.KeyUp -> {
-                                    return@onPreviewKeyEvent true
+                                    it.key == Key.DirectionLeft -> focusState = MenuFocusState.Menu
                                 }
-
-                                it.key == Key.DirectionLeft -> focusState = MenuFocusState.Menu
-                            }
-                            false
-                        },
-                    selectedMenu = selectedNavItem,
-                    onSelectedChanged = { selectedNavItem = it },
-                    isFocusing = focusState == MenuFocusState.MenuNav
-                )
+                                false
+                            },
+                        selectedMenu = selectedNavItem,
+                        onSelectedChanged = { selectedNavItem = it },
+                        isFocusing = focusState == MenuFocusState.MenuNav
+                    )
+                }
             }
         }
     }
@@ -260,8 +292,7 @@ private fun MenuList(
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
     onSubtitleBottomPadding: (Dp) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit,
-    onFocusStateChange: (MenuFocusState) -> Unit,
-    onTripleLike: () -> Unit = {}
+    onFocusStateChange: (MenuFocusState) -> Unit
 ) {
     Box(
         modifier = modifier,
@@ -304,10 +335,6 @@ private fun MenuList(
                     onSubtitleBottomPadding = onSubtitleBottomPadding,
                     onFocusStateChange = onFocusStateChange
                 )
-            }
-
-            VideoPlayerMenuNavItem.TripleLike -> {
-                // 按确认键执行一键三连，右侧不显示内容
             }
 
 //            VideoPlayerMenuNavItem.Others -> {
@@ -458,8 +485,7 @@ fun MenuControllerPreview() {
                             currentSubtitleBackgroundOpacity = it
                         },
                         onSubtitleBottomPadding = { currentSubtitleBottomPadding = it },
-                        onPlayModeChange = { currentPlayMode = it },
-                        onTripleLike = {}
+                        onPlayModeChange = { currentPlayMode = it }
                     )
                 }
             }
