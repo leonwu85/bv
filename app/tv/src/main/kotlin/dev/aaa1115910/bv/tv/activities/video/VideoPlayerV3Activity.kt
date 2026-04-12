@@ -47,6 +47,8 @@ class VideoPlayerV3Activity : ComponentActivity() {
             roomId: Int,
             title: String,
             upName: String = "",
+            upFace: String = "",
+            upMid: Long = 0L,
             watchedNum: Int = 0
         ) {
             val runtime = Runtime.getRuntime()
@@ -70,6 +72,8 @@ class VideoPlayerV3Activity : ComponentActivity() {
                     putExtra("liveRoomId", roomId)
                     putExtra("title", title)
                     putExtra("upName", upName)
+                    putExtra("upFace", upFace)
+                    putExtra("upMid", upMid)
                     putExtra("liveWatchedNum", watchedNum)
                 }
             )
@@ -239,6 +243,8 @@ class VideoPlayerV3Activity : ComponentActivity() {
             val roomId = intent.getIntExtra("liveRoomId", 0)
             val title = intent.getStringExtra("title") ?: "Unknown Title"
             val upName = intent.getStringExtra("upName") ?: ""
+            val upFace = intent.getStringExtra("upFace") ?: ""
+            val upMid = intent.getLongExtra("upMid", 0)
             val watchedNum = intent.getIntExtra("liveWatchedNum", 0)
             
             logger.fInfo { "Launch live parameter: [roomId=$roomId, watchedNum=$watchedNum]" }
@@ -246,6 +252,8 @@ class VideoPlayerV3Activity : ComponentActivity() {
             playerViewModel.apply {
                 this.title = title
                 this.upName = upName
+                this.upFace = upFace
+                this.upId = upMid
                 this.isLive = true
                 this.liveRoomId = roomId
                 this.livePopularityText = if (watchedNum > 0) formatPopularity(watchedNum) else ""

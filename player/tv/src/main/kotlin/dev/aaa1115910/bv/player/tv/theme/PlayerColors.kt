@@ -34,8 +34,8 @@ object PlayerColors {
     )
     val controllerScrimBottom = listOf(
         Color.Transparent,
-        Color.Black.copy(alpha = 0.5f),
-        Color.Black.copy(alpha = 0.85f),
+        Color.Black.copy(alpha = 0.65f),
+        Color.Black.copy(alpha = 0.92f),
     )
 
     // ── 容器/面板背景 ──

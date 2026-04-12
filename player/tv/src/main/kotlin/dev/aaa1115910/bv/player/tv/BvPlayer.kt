@@ -145,6 +145,9 @@ fun BvPlayer(
     onShowDescription: () -> Unit = {},
     onTripleLike: () -> Unit = {},
     useTripleLikeOnLongPress: Boolean = false,
+    onToggleFollow: () -> Unit = {},
+    onReportLiveHistory: () -> Unit = {},
+    liveIncognitoMode: Boolean = false,
     isLive: Boolean = false,
     onLiveDanmakuPlayerReady: ((com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer) -> Unit)? = null,
 
@@ -1307,6 +1310,9 @@ fun BvPlayer(
             onShowDescription = onShowDescription,
             onTripleLike = onTripleLike,
             useTripleLikeOnLongPress = useTripleLikeOnLongPress,
+            onToggleFollow = onToggleFollow,
+            onReportLiveHistory = onReportLiveHistory,
+            liveIncognitoMode = liveIncognitoMode,
 
             // SponsorBlock 相关参数
             enableSponsorBlock = enableSponsorBlock,

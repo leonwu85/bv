@@ -143,6 +143,8 @@ fun SearchResultScreen(
                     roomId = resultItem.roomId,
                     title = resultItem.title.removeHtmlTags(),
                     upName = resultItem.uname,
+                    upFace = resultItem.uface,
+                    upMid = resultItem.uid,
                     watchedNum = resultItem.online
                 )
             }

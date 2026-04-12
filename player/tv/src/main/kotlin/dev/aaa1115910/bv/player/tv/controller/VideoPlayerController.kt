@@ -133,6 +133,9 @@ fun VideoPlayerController(
     onShowDescription: () -> Unit = {},
     onTripleLike: () -> Unit = {},
     useTripleLikeOnLongPress: Boolean = false,
+    onToggleFollow: () -> Unit = {},
+    onReportLiveHistory: () -> Unit = {},
+    liveIncognitoMode: Boolean = false,
 
     // SponsorBlock 相关参数
     enableSponsorBlock: Boolean = false,
@@ -352,6 +355,13 @@ fun VideoPlayerController(
                         }
 
                         logger.fInfo { "[${it.key}] short press" }
+                        if (videoPlayerConfigData.isLive) {
+                            // 直播模式：短按显示/隐藏控制面板，不暂停
+                            scope.launch(Dispatchers.Main) {
+                                showInfo = !showInfo
+                            }
+                            return@onPreviewKeyEvent true
+                        }
                         if (videoPlayer.isPlaying)
                             onPause()
                         else if (videoPlayer.currentPosition >= videoPlayer.duration) {
@@ -393,7 +403,13 @@ fun VideoPlayerController(
 
                     Key.DirectionDown -> {
                         if (it.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
-                        if (videoPlayerConfigData.isLive) return@onPreviewKeyEvent true
+                        if (videoPlayerConfigData.isLive) {
+                            // 直播模式：下键弹出底部控制面板
+                            scope.launch(Dispatchers.Main) {
+                                showInfo = true
+                            }
+                            return@onPreviewKeyEvent true
+                        }
                         logger.info { "[${it.key} press]" }
 
                         // 检查是否为连按两次（间隔小于300ms且上次按键时间不为0）
@@ -615,7 +631,10 @@ fun VideoPlayerController(
             onLoadPrevVideo = onLoadPrevVideo,
             onShowComment = onShowComment,
             onShowDescription = onShowDescription,
-            onTripleLike = onTripleLike
+            onTripleLike = onTripleLike,
+            onToggleFollow = onToggleFollow,
+            onReportLiveHistory = onReportLiveHistory,
+            liveIncognitoMode = liveIncognitoMode
         )
         SeekController(
             show = showSeekController,

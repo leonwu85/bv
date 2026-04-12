@@ -354,6 +354,8 @@ fun LiveContent(
                                         roomId = room.roomId,
                                         title = room.title,
                                         upName = room.uname,
+                                        upFace = room.face,
+                                        upMid = room.uid,
                                         watchedNum = 0
                                     )
                                 },
@@ -376,6 +378,8 @@ fun LiveContent(
                                         roomId = room.roomId,
                                         title = room.title,
                                         upName = room.uname,
+                                        upFace = room.face,
+                                        upMid = room.uid,
                                         watchedNum = room.watchedShow?.num ?: (room.online / 10)
                                     )
                                 },

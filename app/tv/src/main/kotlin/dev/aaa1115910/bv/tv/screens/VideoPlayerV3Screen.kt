@@ -96,16 +96,21 @@ import dev.aaa1115910.bv.util.formatHourMinSec
 import dev.aaa1115910.bv.util.swapList
 import dev.aaa1115910.bv.viewmodel.VideoPlayerV3ViewModel
 import dev.aaa1115910.biliapi.http.BiliHttpApi
+import dev.aaa1115910.biliapi.repositories.LiveRepository
+import dev.aaa1115910.biliapi.repositories.UserRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.getKoin
 
 @Composable
 fun VideoPlayerV3Screen(
     modifier: Modifier = Modifier,
     playerViewModel: VideoPlayerV3ViewModel = koinViewModel(),
+    userRepository: UserRepository = getKoin().get(),
+    liveRepository: LiveRepository = getKoin().get(),
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -120,9 +125,21 @@ fun VideoPlayerV3Screen(
     LaunchedEffect(followStateMap, playerViewModel.upId) {
         val currentUpId = playerViewModel.upId
         if (currentUpId > 0) {
-            FollowStateManager.getFollowState(currentUpId)?.let { following ->
-                if (playerViewModel.isFollowingUp != following) {
-                    playerViewModel.isFollowingUp = following
+            val cachedState = FollowStateManager.getFollowState(currentUpId)
+            if (cachedState != null) {
+                if (playerViewModel.isFollowingUp != cachedState) {
+                    playerViewModel.isFollowingUp = cachedState
+                }
+            } else {
+                // 缓存中无记录（直播等场景），从 API 查询
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        userRepository.checkIsFollowing(currentUpId, Prefs.apiType)
+                    }.getOrNull()
+                }
+                if (result != null) {
+                    FollowStateManager.updateFollowState(currentUpId, result)
+                    playerViewModel.isFollowingUp = result
                 }
             }
         }
@@ -725,6 +742,54 @@ fun VideoPlayerV3Screen(
                     }
                 },
                 useTripleLikeOnLongPress = Prefs.playerLongPressAction == PlayerLongPressAction.TripleLike,
+                onToggleFollow = {
+                    val upId = playerViewModel.upId
+                    if (upId > 0) {
+                        scope.launch(Dispatchers.IO) {
+                            val isCurrentlyFollowing = playerViewModel.isFollowingUp
+                            runCatching {
+                                if (isCurrentlyFollowing) {
+                                    userRepository.unfollowUser(
+                                        mid = upId,
+                                        preferApiType = Prefs.apiType
+                                    )
+                                } else {
+                                    userRepository.followUser(
+                                        mid = upId,
+                                        preferApiType = Prefs.apiType
+                                    )
+                                }
+                            }.onSuccess { success ->
+                                if (success) {
+                                    val newState = !isCurrentlyFollowing
+                                    FollowStateManager.updateFollowState(upId, newState)
+                                    withContext(Dispatchers.Main) {
+                                        playerViewModel.isFollowingUp = newState
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                liveIncognitoMode = Prefs.liveIncognitoMode,
+                onReportLiveHistory = {
+                    val roomId = playerViewModel.liveRoomId
+                    if (roomId > 0) {
+                        scope.launch(Dispatchers.IO) {
+                            runCatching {
+                                liveRepository.reportRoomEntryAction(roomId)
+                            }.onSuccess {
+                                withContext(Dispatchers.Main) {
+                                    "已上报历史".toast(context)
+                                }
+                            }.onFailure {
+                                withContext(Dispatchers.Main) {
+                                    "上报历史失败".toast(context)
+                                }
+                            }
+                        }
+                    }
+                },
                 isLive = playerViewModel.isLive,
                 onLiveDanmakuPlayerReady = { player ->
                     playerViewModel.setLivePlayer(player)

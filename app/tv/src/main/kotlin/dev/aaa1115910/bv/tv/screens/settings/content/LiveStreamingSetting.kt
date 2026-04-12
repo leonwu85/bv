@@ -36,7 +36,6 @@ fun LiveStreamingSetting(
     var defaultLiveQuality by remember { mutableStateOf(LiveQualityPreference.fromQn(Prefs.defaultLiveQn)) }
     var defaultLiveCodec by remember { mutableStateOf(Prefs.defaultLiveCodec) }
     var liveIncognitoMode by remember { mutableStateOf(Prefs.liveIncognitoMode) }
-    var showLiveInSidebar by remember { mutableStateOf(Prefs.showLiveInSidebar) }
     var showLiveDanmakuEmoji by remember { mutableStateOf(Prefs.showLiveDanmakuEmoji) }
     var showLivePopularity by remember { mutableStateOf(Prefs.showLivePopularity) }
 
@@ -56,17 +55,6 @@ fun LiveStreamingSetting(
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                item {
-                    SettingSwitchListItem(
-                        title = stringResource(R.string.settings_live_enable),
-                        supportText = stringResource(R.string.settings_live_enable_desc),
-                        checked = showLiveInSidebar,
-                        onCheckedChange = {
-                            showLiveInSidebar = it
-                            Prefs.showLiveInSidebar = it
-                        }
-                    )
-                }
                 item {
                     SettingSwitchListItem(
                         title = stringResource(R.string.settings_live_incognito_mode),

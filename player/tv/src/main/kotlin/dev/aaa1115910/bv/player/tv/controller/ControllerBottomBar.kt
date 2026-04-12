@@ -22,9 +22,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.PersonAdd
+import androidx.compose.material.icons.outlined.PersonRemove
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.KeyboardDoubleArrowDown
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Repeat
@@ -145,6 +148,9 @@ fun ControllerBottomBar(
     onShowComment: () -> Unit = {},
     onShowDescription: () -> Unit = {},
     onTripleLike: () -> Unit = {},
+    onToggleFollow: () -> Unit = {},
+    onReportLiveHistory: () -> Unit = {},
+    liveIncognitoMode: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
@@ -258,6 +264,44 @@ fun ControllerBottomBar(
         buttons.associate { it.id to FocusRequester() }.toMutableMap()
     }
 
+    // ── 直播专用按钮 ──
+    val liveButtons = remember(showDanmaku, isLive, isFollowingUp, liveIncognitoMode) {
+        if (!isLive) emptyList()
+        else buildList {
+            add(ControlButton(
+                id = "liveRefresh",
+                icon = Icons.Rounded.Refresh,
+                text = "刷新",
+                width = 80,
+                onClick = onRefreshVideo
+            ))
+            add(ControlButton(
+                id = "liveDanmaku",
+                painterId = danmakuIconId,
+                onClick = { if (showDanmaku) onHideDanmaku() else onOpenDanmaku() }
+            ))
+            if (liveIncognitoMode) {
+                add(ControlButton(
+                    id = "liveHistory",
+                    icon = Icons.Rounded.History,
+                    text = "上报历史",
+                    width = 110,
+                    onClick = onReportLiveHistory
+                ))
+            }
+            add(ControlButton(
+                id = "liveSettings",
+                icon = Icons.Outlined.Settings,
+                onClick = onOpenSetting,
+                scale = 0.9f
+            ))
+        }
+    }
+
+    val liveFocusRequesters = remember(liveButtons) {
+        liveButtons.associate { it.id to FocusRequester() }.toMutableMap()
+    }
+
     val userActionFocusRequesters = remember {
         mutableStateOf(
             mapOf(
@@ -293,7 +337,13 @@ fun ControllerBottomBar(
     }
 
     LaunchedEffect(show) {
-        if (show) seekbarFocusRequester.requestFocus()
+        if (show) {
+            if (isLive) {
+                liveFocusRequesters[liveButtons.firstOrNull()?.id]?.requestFocus()
+            } else {
+                seekbarFocusRequester.requestFocus()
+            }
+        }
     }
 
     fun cancelHideJob() {
@@ -340,8 +390,163 @@ fun ControllerBottomBar(
             style = MaterialTheme.typography.headlineSmall,
         )
 
-        // ── 统计信息 ──
-        if (upName.isNotEmpty()) {
+        if (isLive) {
+            // ══════════════ 直播专用布局 ══════════════
+
+            // ── UP主信息 + 关注按钮 ──
+            if (upName.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .padding(start = 32.dp, end = 32.dp, top = 8.dp)
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // UP主按钮
+                    Button(
+                        modifier = Modifier
+                            .height(30.dp)
+                            .onFocusChanged { if (it.isFocused) scheduleHideJob() },
+                        onClick = onOpenUpSpace,
+                        shape = ButtonDefaults.shape(shape = RoundedCornerShape(15.dp)),
+                        scale = ButtonDefaults.scale(focusedScale = 1.05f),
+                        contentPadding = PaddingValues(start = 0.dp, end = 10.dp, top = 0.dp, bottom = 0.dp),
+                        colors = ButtonDefaults.colors(
+                            containerColor = Color.Transparent,
+                            focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                            focusedContentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        border = ButtonDefaults.border(
+                            border = Border(border = BorderStroke(0.dp, Color.Transparent)),
+                            focusedBorder = Border(border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)))
+                        )
+                    ) {
+                        if (upAvatar.isNotEmpty()) {
+                            AsyncImage(
+                                modifier = Modifier.size(28.dp).clip(CircleShape),
+                                model = upAvatar,
+                                contentDescription = upName,
+                                contentScale = ContentScale.Crop
+                            )
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text(
+                            text = upName,
+                            color = PlayerColors.textPrimary,
+                            maxLines = 1,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    // 关注/取消关注按钮
+                    Button(
+                        modifier = Modifier
+                            .height(30.dp)
+                            .onFocusChanged { if (it.isFocused) scheduleHideJob() },
+                        onClick = onToggleFollow,
+                        shape = ButtonDefaults.shape(shape = RoundedCornerShape(15.dp)),
+                        scale = ButtonDefaults.scale(focusedScale = 1.05f),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        colors = ButtonDefaults.colors(
+                            containerColor = if (isFollowingUp) Color.White.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.15f),
+                            focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                            focusedContentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        border = ButtonDefaults.border(
+                            border = Border(border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))),
+                            focusedBorder = Border(border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)))
+                        )
+                    ) {
+                        Icon(
+                            modifier = Modifier.scale(0.7f),
+                            imageVector = if (isFollowingUp) Icons.Outlined.PersonRemove else Icons.Outlined.PersonAdd,
+                            contentDescription = null,
+                            tint = PlayerColors.textPrimary
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = if (isFollowingUp) "已关注" else "关注",
+                            color = PlayerColors.textPrimary,
+                            maxLines = 1,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // ── 直播功能按钮行 ──
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 32.dp, end = 32.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                liveButtons.forEach { button ->
+                    Button(
+                        modifier = Modifier
+                            .height(48.dp)
+                            .width(if (button.text != null) (button.width ?: 48).dp else 48.dp)
+                            .focusRequester(liveFocusRequesters[button.id] ?: FocusRequester())
+                            .onFocusChanged { if (it.isFocused) scheduleHideJob() },
+                        onClick = button.onClick,
+                        shape = ButtonDefaults.shape(shape = RoundedCornerShape(12.dp)),
+                        scale = ButtonDefaults.scale(focusedScale = 1.1f),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        colors = ButtonDefaults.colors(
+                            containerColor = PlayerColors.buttonDefault,
+                            focusedContainerColor = PlayerColors.buttonFocused
+                        ),
+                        border = ButtonDefaults.border(
+                            border = Border(border = BorderStroke(1.dp, PlayerColors.buttonDefault)),
+                            focusedBorder = Border(border = BorderStroke(1.5.dp, PlayerColors.buttonFocusedBorder))
+                        )
+                    ) {
+                        if (button.text != null && button.icon != null) {
+                            // 图标+文字按钮
+                            Icon(
+                                modifier = Modifier
+                                    .ifElse(button.scale != 1f, Modifier.scale(button.scale)),
+                                imageVector = button.icon,
+                                contentDescription = null,
+                                tint = button.tint
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = button.text,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = button.tint
+                            )
+                        } else if (button.painterId != null) {
+                            Icon(
+                                modifier = Modifier
+                                    .ifElse(button.scale != 1f, Modifier.scale(button.scale)),
+                                painter = painterResource(id = button.painterId),
+                                contentDescription = null,
+                                tint = button.tint
+                            )
+                        } else {
+                            button.icon?.let {
+                                Icon(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .ifElse(button.scale != 1f, Modifier.scale(button.scale)),
+                                    imageVector = it,
+                                    contentDescription = null,
+                                    tint = button.tint
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // ══════════════ 普通视频布局 ══════════════
+
+            // ── 统计信息 ──
+            if (upName.isNotEmpty()) {
             Row(
                 modifier = Modifier
                     .padding(start = 32.dp, end = 32.dp, top = 8.dp)
@@ -671,6 +876,7 @@ fun ControllerBottomBar(
                 color = PlayerColors.textPrimary
             )
         }
+        } // end else (non-live)
     }
 
     // ── 对话框 ──

@@ -67,6 +67,9 @@ fun ControllerVideoInfo(
     onShowComment: () -> Unit = {},
     onShowDescription: () -> Unit = {},
     onTripleLike: () -> Unit = {},
+    onToggleFollow: () -> Unit = {},
+    onReportLiveHistory: () -> Unit = {},
+    liveIncognitoMode: Boolean = false,
 ) {
     val videoPlayerClockState = LocalVideoPlayerClockState.current
     val videoPlayerSeekState = LocalVideoPlayerSeekState.current
@@ -151,7 +154,10 @@ fun ControllerVideoInfo(
                 onLoadPrevVideo = onLoadPrevVideo,
                 onShowComment = onShowComment,
                 onShowDescription = onShowDescription,
-                onTripleLike = onTripleLike
+                onTripleLike = onTripleLike,
+                onToggleFollow = onToggleFollow,
+                onReportLiveHistory = onReportLiveHistory,
+                liveIncognitoMode = liveIncognitoMode
             )
         }
     }
