@@ -94,8 +94,8 @@
     <string name="login_wait_for_confirm">请确认登录</string>
     <string name="login_wait_for_scan">请扫描二维码</string>
 
-    <string name="logout_dialog_confirm">gkd 别墨迹</string>
-    <string name="logout_dialog_dismiss">不，我不想</string>
+    <string name="logout_dialog_confirm">确定</string>
+    <string name="logout_dialog_dismiss">再想想</string>
     <string name="logout_dialog_text">是否登出账号 %1$s</string>
     <string name="logout_dialog_title">登出确认</string>
 
@@ -359,6 +359,12 @@
     <string name="main_settings_open_button">进入完整设置页</string>
     <string name="main_user_login_prompt">当前未登录，请先登录后查看用户页内容</string>
     <string name="main_user_login_subtitle">登录后即可查看历史、追番、收藏等常用入口</string>
+    <string name="main_user_welcome_title">欢迎使用 BV</string>
+    <string name="main_user_welcome_subtitle">登录后即可解锁全部功能</string>
+    <string name="main_user_feature_history">历史记录</string>
+    <string name="main_user_feature_following">追番追剧</string>
+    <string name="main_user_feature_favorite">我的收藏</string>
+    <string name="main_user_feature_later">稍后再看</string>
     <string name="title_activity_user_info">用户信息</string>
     <string name="title_activity_user_lock_settings">用户锁设置</string>
     <string name="title_activity_user_switch">用户切换</string>
