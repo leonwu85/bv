@@ -89,10 +89,7 @@ class BVApp : Application() {
 
     private fun initFirebase() {
         FirebaseUtil.init(applicationContext)
-        when (BuildConfig.BUILD_TYPE) {
-            "debug" -> {}
-            else -> FirebaseUtil.setCrashlyticsCollectionEnabled(Prefs.enableFirebaseCollection)
-        }
+        FirebaseUtil.setCrashlyticsCollectionEnabled(Prefs.enableFirebaseCollection)
     }
 
     private fun initApiConfig() {

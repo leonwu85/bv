@@ -10,13 +10,9 @@ plugins {
     alias(gradleLibs.plugins.compose.compiler)
     alias(gradleLibs.plugins.firebase.crashlytics)
     alias(gradleLibs.plugins.google.ksp)
-    alias(gradleLibs.plugins.google.services) apply false
+    alias(gradleLibs.plugins.google.services)
     alias(gradleLibs.plugins.kotlin.android)
     alias(gradleLibs.plugins.kotlin.serialization)
-}
-
-if (AppConfiguration.googleServicesAvailable) {
-    apply(plugin = gradleLibs.plugins.google.services.get().pluginId)
 }
 
 
