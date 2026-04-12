@@ -27,14 +27,18 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.tv.material3.Icon
 import androidx.tv.material3.ListItem
+import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.requestFocus
 import kotlin.math.round
+
+private val NumberItemShape = RoundedCornerShape(14.dp)
 
 @Composable
 fun SettingNumberListItem(
@@ -75,7 +79,8 @@ fun SettingNumberListItem(
         onClick = {
             showDialog = true
         },
-        selected = hasFocus
+        selected = hasFocus,
+        shape = ListItemDefaults.shape(shape = NumberItemShape)
     )
 
     NumberDialog(

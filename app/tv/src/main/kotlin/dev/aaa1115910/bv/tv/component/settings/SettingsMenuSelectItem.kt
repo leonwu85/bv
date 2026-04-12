@@ -12,12 +12,17 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ListItem
+import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.RadioButton
 import androidx.tv.material3.RadioButtonDefaults
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.ui.theme.BVTheme
+
+private val SelectItemShape = RoundedCornerShape(14.dp)
 
 @Composable
 fun SettingsMenuSelectItem(
@@ -44,7 +49,8 @@ fun SettingsMenuSelectItem(
             )
         },
         onClick = onClick,
-        selected = selected
+        selected = selected,
+        shape = ListItemDefaults.shape(shape = SelectItemShape)
     )
 }
 

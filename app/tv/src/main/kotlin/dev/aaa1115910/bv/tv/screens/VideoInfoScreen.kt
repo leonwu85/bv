@@ -125,6 +125,7 @@ import dev.aaa1115910.bv.player.entity.VideoListPart
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisode
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisodeTitle
 import dev.aaa1115910.bv.repository.VideoInfoRepository
+import dev.aaa1115910.bv.tv.activities.search.SearchResultActivity
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.TagActivity
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
@@ -171,10 +172,15 @@ import kotlin.math.max
 private val InteractiveBadgeColor = Color(0xFFFFD54F)
 private val ChargingBadgeColor = Color(0xFF00FFFF)
 private const val ChargingBadgeDefaultText = "充电专属"
+private const val SupportedClickableTagType = "old_channel"
 private val DiscoverTagTitleRegex = Regex("^发现\\s*《(.+?)》$")
 
+private fun extractDiscoverTagKeyword(tagName: String): String? {
+    return DiscoverTagTitleRegex.matchEntire(tagName)?.groupValues?.getOrNull(1)
+}
+
 private fun formatVideoTagName(tagName: String): String {
-    return DiscoverTagTitleRegex.matchEntire(tagName)?.groupValues?.getOrNull(1) ?: tagName
+    return extractDiscoverTagKeyword(tagName) ?: tagName
 }
 
 @Composable
@@ -920,11 +926,24 @@ fun VideoInfoScreen(
                                         VideoTagsRow(
                                             tags = videoDetail.tags,
                                             onClickTag = { tag ->
-                                                TagActivity.actionStart(
-                                                    context = context,
-                                                    tagId = tag.id,
-                                                    tagName = formatVideoTagName(tag.name)
-                                                )
+                                                if (tag.tagType != SupportedClickableTagType) {
+                                                    "该标签类型(${tag.tagType})暂不支持跳转".toast(context)
+                                                } else {
+                                                    val searchKeyword = extractDiscoverTagKeyword(tag.name)
+                                                    if (searchKeyword != null) {
+                                                        SearchResultActivity.actionStart(
+                                                            context = context,
+                                                            keyword = searchKeyword,
+                                                            enableProxy = false
+                                                        )
+                                                    } else {
+                                                        TagActivity.actionStart(
+                                                            context = context,
+                                                            tagId = tag.id,
+                                                            tagName = formatVideoTagName(tag.name)
+                                                        )
+                                                    }
+                                                }
                                             }
                                         )
                                     }

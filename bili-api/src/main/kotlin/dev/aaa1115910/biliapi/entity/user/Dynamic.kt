@@ -512,7 +512,7 @@ data class DynamicItem(
                     title = null,
                     text = desc?.text
                         ?: opus?.summary?.text
-                        ?: "empty text",
+                        ?: "",
                     images = (moduleDynamic.major?.draw?.items?.map(Picture::fromPicture)
                         ?: opus?.pics?.map(Picture::fromPicture))
                         ?.distinctBy { it.url }

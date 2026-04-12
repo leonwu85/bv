@@ -272,14 +272,14 @@
     <string name="settings_ui_grid_columns_5">5列</string>
     <string name="settings_ui_home_nav_items_title">首页导航项</string>
     <string name="settings_ui_home_nav_items_text">设置首页顶部导航项的显示顺序和隐藏状态</string>
-    <string name="settings_ui_home_nav_items_hint">使用左右键移动顺序，按确认键切换显示/隐藏（默认标签不可隐藏）</string>
+    <string name="settings_ui_home_nav_items_hint">使用左右键移动顺序，按确认键切换显示/隐藏，长按确认键设为默认（默认项不可隐藏）</string>
     <string name="settings_ui_ugc_nav_items_title">UGC 导航项</string>
     <string name="settings_ui_ugc_nav_items_text">设置 UGC 页面分区的显示顺序和隐藏状态</string>
     <string name="settings_ui_ugc_nav_items_hint">使用左右键移动顺序，按确认键切换显示/隐藏（至少保留一个分区显示）</string>
     <string name="settings_ui_ugc_nav_items_keep_one">至少保留一个 UGC 分区显示</string>
     <string name="settings_ui_drawer_nav_items_title">左侧导航项</string>
     <string name="settings_ui_drawer_nav_items_text">设置左侧导航业务项的显示顺序和隐藏状态（用户固定顶部，设置固定底部）</string>
-    <string name="settings_ui_drawer_nav_items_hint">使用左右键移动顺序，按确认键切换显示/隐藏，长按确认键设为默认（默认项不可隐藏；初始默认是主页）</string>
+    <string name="settings_ui_drawer_nav_items_hint">使用左右键移动顺序，按确认键切换显示/隐藏，长按确认键设为默认（默认项不可隐藏；初始默认是首页）</string>
     <string name="settings_ui_main_animation_title">主界面切换动画</string>
     <string name="settings_ui_main_animation_text">关闭后禁用主界面页面切换动画，并缩短导航焦点等待时间</string>
     <string name="settings_ui_home_nav_default_tag">默认</string>

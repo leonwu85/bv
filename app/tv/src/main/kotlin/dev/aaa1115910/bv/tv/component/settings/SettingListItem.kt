@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -17,9 +18,12 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ListItem
+import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.RadioButton
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
+
+private val SettingItemShape = RoundedCornerShape(14.dp)
 
 @Composable
 fun SettingListItem(
@@ -38,7 +42,8 @@ fun SettingListItem(
         supportingContent = { Text(text = supportText) },
         trailingContent = { if (valueText?.isNotEmpty() == true) Text(text = valueText) },
         onClick = onClick,
-        selected = false
+        selected = false,
+        shape = ListItemDefaults.shape(shape = SettingItemShape)
     )
 }
 
@@ -97,6 +102,7 @@ fun <T> SelectionDialog(
             modifier = modifier,
             onDismissRequest = { onHideDialog() },
             title = { if (title.isNotEmpty()) Text(text = title) },
+            shape = RoundedCornerShape(28.dp),
             text = {
                 Column(
                     modifier = Modifier

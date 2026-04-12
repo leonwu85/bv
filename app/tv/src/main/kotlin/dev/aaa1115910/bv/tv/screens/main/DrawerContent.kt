@@ -1,5 +1,7 @@
 package dev.aaa1115910.bv.tv.screens.main
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
@@ -200,6 +202,11 @@ fun DrawerContent(
                         contentScale = ContentScale.FillBounds
                     )
                 } else {
+                    val userIconTint by animateColorAsState(
+                        targetValue = if (isNavigationFocused && drawerFocusedItem == DrawerItem.User) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.inverseSurface,
+                        animationSpec = tween(150),
+                        label = "user icon tint"
+                    )
                     Icon(
                         modifier = Modifier
                             .size(46.dp)
@@ -215,7 +222,7 @@ fun DrawerContent(
                             .clip(CircleShape),
                         imageVector = DrawerItem.User.displayIcon,
                         contentDescription = null,
-                        tint = if (isNavigationFocused && drawerFocusedItem == DrawerItem.User) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.inverseSurface
+                        tint = userIconTint
                     )
                 }
             },
@@ -281,10 +288,15 @@ fun DrawerContent(
                             indicatorColor = if (isContentFocused) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.inverseSurface
                         ),
                         icon = {
+                            val iconTint by animateColorAsState(
+                                targetValue = if (isNavigationFocused && drawerFocusedItem == item) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.inverseSurface,
+                                animationSpec = tween(150),
+                                label = "drawer icon tint"
+                            )
                             Icon(
                                 imageVector = item.displayIcon,
                                 contentDescription = null,
-                                tint = if (isNavigationFocused && drawerFocusedItem == item) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.inverseSurface
+                                tint = iconTint
                             )
                         },
                         label = {
@@ -324,10 +336,15 @@ fun DrawerContent(
                 indicatorColor = if (isContentFocused) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.inverseSurface
             ),
             icon = {
+                val settingsIconTint by animateColorAsState(
+                    targetValue = if (isNavigationFocused && drawerFocusedItem == DrawerItem.Settings) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.inverseSurface,
+                    animationSpec = tween(150),
+                    label = "settings icon tint"
+                )
                 Icon(
                     imageVector = DrawerItem.Settings.displayIcon,
                     contentDescription = null,
-                    tint = if (isNavigationFocused && drawerFocusedItem == DrawerItem.Settings) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.inverseSurface
+                    tint = settingsIconTint
                 )
             },
             label = {

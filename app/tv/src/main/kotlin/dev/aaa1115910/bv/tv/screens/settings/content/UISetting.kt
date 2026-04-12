@@ -64,7 +64,6 @@ import dev.aaa1115910.bv.tv.component.HomeTopNavItem
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
 import dev.aaa1115910.bv.tv.util.NavItemConfig
 import dev.aaa1115910.bv.tv.util.parseDrawerItemsOrderToConfig
-import dev.aaa1115910.bv.tv.util.moveNavItemToFirstAndUnhide
 import dev.aaa1115910.bv.tv.util.parseNavItemsOrderToConfig
 import dev.aaa1115910.bv.tv.util.parseUgcNavItemsOrderToConfig
 import dev.aaa1115910.bv.ui.theme.BVTheme
@@ -81,7 +80,6 @@ fun UISetting(
 
     var showDensityDialog by remember { mutableStateOf(false) }
     var showThemeTypeDialog by remember { mutableStateOf(false) }
-    var showDefaultHomeTabDialog by remember { mutableStateOf(false) }
     var showGridColumnsDialog by remember { mutableStateOf(false) }
     var showHomeNavItemsDialog by remember { mutableStateOf(false) }
     var showUgcNavItemsDialog by remember { mutableStateOf(false) }
@@ -94,7 +92,6 @@ fun UISetting(
     val themeType by Prefs.themeTypeFlow.collectAsState(Prefs.themeType)
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
     val showOnlineViewerCount by Prefs.showOnlineViewerCountFlow.collectAsState(Prefs.showOnlineViewerCount)
-    var defaultHomeTab by remember { mutableStateOf(HomeTopNavItem.entries.getOrElse(Prefs.defaultHomeTab) { HomeTopNavItem.Recommend }) }
     var gridColumns by remember { mutableStateOf(Prefs.gridColumns) }
     var dynamicPageStyle by remember { mutableStateOf(Prefs.dynamicPageStyle) }
     var dynamicDefaultTab by remember { mutableStateOf(Prefs.dynamicDefaultTab) }
@@ -129,14 +126,6 @@ fun UISetting(
                         supportText = stringResource(R.string.settings_ui_theme_type_text),
                         valueText = themeType.getDisplayName(context),
                         onClick = { showThemeTypeDialog = true }
-                    )
-                }
-                item {
-                    SettingListItem(
-                        title = stringResource(R.string.settings_ui_default_home_tab_title),
-                        supportText = stringResource(R.string.settings_ui_default_home_tab_text),
-                        valueText = defaultHomeTab.getDisplayName(context),
-                        onClick = { showDefaultHomeTabDialog = true }
                     )
                 }
                 item {
@@ -236,21 +225,6 @@ fun UISetting(
         onThemeTypeChange = { Prefs.themeType = it }
     )
 
-    DefaultHomeTabDialog(
-        show = showDefaultHomeTabDialog,
-        onHideDialog = { showDefaultHomeTabDialog = false },
-        defaultHomeTab = defaultHomeTab,
-        onDefaultHomeTabChange = {
-            defaultHomeTab = it
-            Prefs.defaultHomeTab = it.ordinal
-
-            // 更新排序配置：将新的默认标签移到第一位，并取消隐藏
-            val currentOrder = Prefs.homeNavItemsOrder
-            val updatedOrder = moveNavItemToFirstAndUnhide(currentOrder, it.ordinal)
-            Prefs.homeNavItemsOrder = updatedOrder
-        }
-    )
-
     GridColumnsDialog(
         show = showGridColumnsDialog,
         onHideDialog = { showGridColumnsDialog = false },
@@ -315,7 +289,7 @@ fun UISetting(
 }
 
 @Composable
-private fun UIDensityDialog(
+fun UIDensityDialog(
     modifier: Modifier = Modifier,
     show: Boolean,
     onHideDialog: () -> Unit,
@@ -445,43 +419,6 @@ private fun ThemeTypeDialogPreview() {
 }
 
 @Composable
-fun DefaultHomeTabDialog(
-    modifier: Modifier = Modifier,
-    show: Boolean,
-    onHideDialog: () -> Unit,
-    defaultHomeTab: HomeTopNavItem,
-    onDefaultHomeTabChange: (HomeTopNavItem) -> Unit
-) {
-    if (show) {
-        TvAlertDialog(
-            modifier = modifier,
-            onDismissRequest = { onHideDialog() },
-            title = { Text(text = stringResource(R.string.settings_ui_default_home_tab_title)) },
-            text = {
-                Column {
-                    HomeTopNavItem.entries.forEach {
-                        ListItem(
-                            selected = defaultHomeTab == it,
-                            onClick = { onDefaultHomeTabChange(it) },
-                            headlineContent = {
-                                Text(text = it.getDisplayName(LocalContext.current))
-                            },
-                            trailingContent = {
-                                RadioButton(
-                                    selected = defaultHomeTab == it,
-                                    onClick = null
-                                )
-                            }
-                        )
-                    }
-                }
-            },
-            confirmButton = {}
-        )
-    }
-}
-
-@Composable
 fun GridColumnsDialog(
     modifier: Modifier = Modifier,
     show: Boolean,
@@ -525,7 +462,7 @@ fun GridColumnsDialog(
 }
 
 @Composable
-private fun HomeNavItemsEditDialog(
+fun HomeNavItemsEditDialog(
     modifier: Modifier = Modifier,
     show: Boolean,
     onHideDialog: () -> Unit,
@@ -544,6 +481,7 @@ private fun HomeNavItemsEditDialog(
 
     // 当前配置状态
     var navConfigs by remember { mutableStateOf(initialConfigs) }
+    var defaultHomeTabOrdinal by remember { mutableIntStateOf(Prefs.defaultHomeTab) }
 
     // 当前选中的索引
     var selectedIndex by remember { mutableIntStateOf(0) }
@@ -565,7 +503,7 @@ private fun HomeNavItemsEditDialog(
         modifier = modifier,
         onDismissRequest = {
             // 关闭时自动保存
-            saveNavConfigs(navConfigs)
+            saveNavConfigs(navConfigs, defaultHomeTabOrdinal)
             onHideDialog()
         },
         title = { Text(text = stringResource(R.string.settings_ui_home_nav_items_title)) },
@@ -579,7 +517,7 @@ private fun HomeNavItemsEditDialog(
                             when (it.key) {
                                 Key.Back -> {
                                     // 返回键：关闭弹框并保存
-                                    saveNavConfigs(navConfigs)
+                                    saveNavConfigs(navConfigs, defaultHomeTabOrdinal)
                                     onHideDialog()
                                     true
                                 }
@@ -621,7 +559,6 @@ private fun HomeNavItemsEditDialog(
                                 Key.Enter, Key.DirectionCenter -> {
                                     // 确认键：切换隐藏状态（除了默认首页标签）
                                     val config = navConfigs[selectedIndex]
-                                    val defaultHomeTabOrdinal = Prefs.defaultHomeTab
                                     if (config.ordinal != defaultHomeTabOrdinal) {
                                         navConfigs = navConfigs.toMutableList().apply {
                                             this[selectedIndex] = config.copy(hidden = !config.hidden)
@@ -647,7 +584,7 @@ private fun HomeNavItemsEditDialog(
                     val navItem = HomeTopNavItem.entries.getOrNull(config.ordinal)
                     if (navItem != null) {
                         val isSelected = index == selectedIndex
-                        val isDefaultHomeTab = config.ordinal == Prefs.defaultHomeTab
+                        val isDefaultHomeTab = config.ordinal == defaultHomeTabOrdinal
 
                         NavItemEditRow(
                             navItem = navItem,
@@ -655,6 +592,13 @@ private fun HomeNavItemsEditDialog(
                             selected = isSelected,
                             isDefaultHomeTab = isDefaultHomeTab,
                             onFocus = { selectedIndex = index },
+                            onLongClick = {
+                                defaultHomeTabOrdinal = config.ordinal
+                                navConfigs = navConfigs.toMutableList().apply {
+                                    this[index] = config.copy(hidden = false)
+                                }
+                                Prefs.defaultHomeTab = config.ordinal
+                            },
                             focusRequester = focusRequesters[index]
                         )
                     }
@@ -666,7 +610,7 @@ private fun HomeNavItemsEditDialog(
 }
 
 @Composable
-private fun DrawerNavItemsEditDialog(
+fun DrawerNavItemsEditDialog(
     modifier: Modifier = Modifier,
     show: Boolean,
     onHideDialog: () -> Unit,
@@ -795,7 +739,7 @@ private fun DrawerNavItemsEditDialog(
 }
 
 @Composable
-private fun UgcNavItemsEditDialog(
+fun UgcNavItemsEditDialog(
     modifier: Modifier = Modifier,
     show: Boolean,
     onHideDialog: () -> Unit,
@@ -943,13 +887,15 @@ private fun NavItemEditRow(
     selected: Boolean,
     isDefaultHomeTab: Boolean,
     onFocus: () -> Unit,
+    onLongClick: () -> Unit,
     focusRequester: FocusRequester
 ) {
     val context = LocalContext.current
 
     ListItem(
         selected = selected,
-        onClick = { /* 点击由父组件处理 */ },
+        onClick = { },
+        onLongClick = onLongClick,
         modifier = Modifier
             .focusRequester(focusRequester)
             .onFocusChanged { if (it.hasFocus) onFocus() },
@@ -1104,17 +1050,36 @@ private fun DrawerItemEditRow(
  * 保存导航项配置到 Prefs
  * 默认标签强制不隐藏
  */
-private fun saveNavConfigs(navConfigs: List<NavItemConfig>) {
-    val defaultTabOrdinal = Prefs.defaultHomeTab
-    val finalOrderString = navConfigs.joinToString(",") { config ->
-        val shouldHide = if (config.ordinal == defaultTabOrdinal) {
-            false  // 默认标签强制不隐藏
+private fun saveNavConfigs(navConfigs: List<NavItemConfig>, defaultHomeTabOrdinal: Int) {
+    val effectiveDefaultOrdinal = HomeTopNavItem.entries
+        .getOrNull(defaultHomeTabOrdinal)
+        ?.ordinal
+        ?: HomeTopNavItem.Recommend.ordinal
+
+    val normalizedConfigs = navConfigs.map { config ->
+        if (config.ordinal == effectiveDefaultOrdinal) {
+            config.copy(hidden = false)
         } else {
-            config.hidden
+            config
         }
-        if (shouldHide) "-${config.ordinal}" else "${config.ordinal}"
+    }.let { configs ->
+        if (configs.any { !it.hidden }) {
+            configs
+        } else {
+            configs.map { config ->
+                if (config.ordinal == effectiveDefaultOrdinal) {
+                    config.copy(hidden = false)
+                } else {
+                    config
+                }
+            }
+        }
     }
-    Prefs.homeNavItemsOrder = finalOrderString
+
+    Prefs.homeNavItemsOrder = normalizedConfigs.joinToString(",") { config ->
+        if (config.hidden) "-${config.ordinal}" else "${config.ordinal}"
+    }
+    Prefs.defaultHomeTab = effectiveDefaultOrdinal
 }
 
 /**

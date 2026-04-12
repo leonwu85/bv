@@ -842,7 +842,7 @@ private fun DynamicDrawContent(draw: DynamicItem.DynamicDrawModule?) {
             }
         }
         // 文字
-        if (draw.text.isNotBlank() && draw.text != "empty text") {
+        if (draw.text.isNotBlank()) {
             Text(
                 text = draw.text,
                 style = MaterialTheme.typography.bodyMedium,
@@ -984,9 +984,11 @@ private fun DynamicForwardContent(
                             )
                         }
                         DynamicType.Draw -> orig.draw?.let {
-                            val drawTitle = it.title
+                            val summaryText = it.text.ifBlank {
+                                it.title?.takeIf(String::isNotBlank) ?: "原动态"
+                            }
                             Text(
-                                text = it.text.ifBlank { drawTitle ?: "图文动态" },
+                                text = summaryText,
                                 style = MaterialTheme.typography.bodySmall,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
