@@ -31,7 +31,6 @@ fun RadioMenuList(
     LazyColumn(
         modifier = modifier
             .onPreviewKeyEvent {
-                println(it)
                 if (it.type == KeyEventType.KeyUp) {
                     if (listOf(Key.Enter, Key.DirectionCenter).contains(it.key)) {
                         return@onPreviewKeyEvent false
@@ -53,10 +52,7 @@ fun RadioMenuList(
                     .ifElse(selected == index, Modifier.focusRequester(focusRequester)),
                 text = item,
                 selected = selected == index,
-                onClick = {
-                    println("Click menu: $item ($index)")
-                    onSelectedChanged(index)
-                }
+                onClick = { onSelectedChanged(index) }
             )
         }
     }

@@ -30,13 +30,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -72,6 +72,7 @@ import dev.aaa1115910.bv.util.swapList
 fun MenuController(
     modifier: Modifier = Modifier,
     show: Boolean,
+    onInteraction: () -> Unit = {},
     onResolutionChange: (Resolution) -> Unit = {},
     onCodecChange: (VideoCodec) -> Unit = {},
     onAspectRatioChange: (VideoAspectRatio) -> Unit,
@@ -98,7 +99,14 @@ fun MenuController(
     val defaultFocusRequester = remember { FocusRequester() }
 
     Box(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent {
+                if (show && it.type == KeyEventType.KeyDown) {
+                    onInteraction()
+                }
+                false
+            },
         contentAlignment = Alignment.CenterEnd
     ) {
         AnimatedVisibility(
@@ -164,8 +172,10 @@ fun MenuController(
     onSubtitleBottomPadding: (Dp) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit
 ) {
-    var selectedNavItem by remember { mutableStateOf(VideoPlayerMenuNavItem.Picture) }
+    var focusedNavItem by remember { mutableStateOf(VideoPlayerMenuNavItem.Picture) }
+    var activeNavItem by remember { mutableStateOf(VideoPlayerMenuNavItem.Picture) }
     var focusState by remember { mutableStateOf(MenuFocusState.MenuNav) }
+    val displayNavItem = if (focusState == MenuFocusState.MenuNav) focusedNavItem else activeNavItem
 
     // 伪毛玻璃容器
     Box(
@@ -214,7 +224,7 @@ fun MenuController(
                 horizontalArrangement = Arrangement.End
             ) {
                 MenuList(
-                    selectedNavMenu = selectedNavItem,
+                    selectedNavMenu = displayNavItem,
                     onResolutionChange = onResolutionChange,
                     onCodecChange = onCodecChange,
                     onPlaySpeedChange = onPlaySpeedChange,
@@ -231,7 +241,12 @@ fun MenuController(
                     onDanmakuMergeChange = onDanmakuMergeChange,
                     onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
                     isLive = isLive,
-                    onFocusStateChange = { focusState = it },
+                    onFocusStateChange = {
+                        if (it == MenuFocusState.MenuNav) {
+                            focusedNavItem = activeNavItem
+                        }
+                        focusState = it
+                    },
                     onSubtitleChange = onSubtitleChange,
                     onSubtitleSizeChange = onSubtitleSizeChange,
                     onSubtitleBackgroundOpacityChange = onSubtitleBackgroundOpacityChange,
@@ -253,12 +268,15 @@ fun MenuController(
                                         return@onPreviewKeyEvent true
                                     }
 
-                                    it.key == Key.DirectionLeft -> focusState = MenuFocusState.Menu
+                                    it.key == Key.DirectionLeft -> {
+                                        activeNavItem = focusedNavItem
+                                        focusState = MenuFocusState.Menu
+                                    }
                                 }
                                 false
                             },
-                        selectedMenu = selectedNavItem,
-                        onSelectedChanged = { selectedNavItem = it },
+                        selectedMenu = displayNavItem,
+                        onSelectedChanged = { focusedNavItem = it },
                         isFocusing = focusState == MenuFocusState.MenuNav
                     )
                 }

@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.player.tv.controller.playermenu
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,7 +65,8 @@ fun ClosedCaptionMenuList(
         val menuItemsModifier = Modifier
             .width(216.dp)
             .padding(horizontal = 8.dp)
-        AnimatedVisibility(visible = focusState.focusState != MenuFocusState.MenuNav) {
+        val showDetailPane = focusState.focusState != MenuFocusState.MenuNav
+        if (showDetailPane) {
             when (selectedClosedCaptionMenuItem) {
                 VideoPlayerClosedCaptionMenuItem.Switch -> RadioMenuList(
                     modifier = menuItemsModifier,
@@ -115,7 +115,7 @@ fun ClosedCaptionMenuList(
         }
 
         // 竖线分隔
-        AnimatedVisibility(visible = focusState.focusState != MenuFocusState.MenuNav) {
+        if (showDetailPane) {
             Box(
                 modifier = Modifier
                     .fillMaxHeight(0.6f)

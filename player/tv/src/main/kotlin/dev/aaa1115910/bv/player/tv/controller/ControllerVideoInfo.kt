@@ -15,6 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -38,6 +41,7 @@ fun ControllerVideoInfo(
     modifier: Modifier = Modifier,
     show: Boolean,
     playSpeed: Float = 1f,
+    onInteraction: () -> Unit = {},
     onHideInfo: () -> Unit,
     onPlay: () -> Unit,
     onPause: () -> Unit,
@@ -79,7 +83,14 @@ fun ControllerVideoInfo(
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
 
     Box(
-        modifier = modifier.fillMaxSize()
+        modifier = modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent {
+                if (show && it.type == KeyEventType.KeyDown) {
+                    onInteraction()
+                }
+                false
+            }
     ) {
         AnimatedVisibility(
             modifier = Modifier.align(Alignment.TopEnd),

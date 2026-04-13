@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.player.tv.controller.playermenu
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -55,7 +54,8 @@ fun OthersMenuList(
         val menuItemsModifier = Modifier
             .width(216.dp)
             .padding(horizontal = 8.dp)
-        AnimatedVisibility(visible = focusState.focusState != MenuFocusState.MenuNav) {
+        val showDetailPane = focusState.focusState != MenuFocusState.MenuNav
+        if (showDetailPane) {
             when (selectedOthersMenuItem) {
                 VideoPlayerOthersMenuItem.PlayMode -> RadioMenuList(
                     modifier = menuItemsModifier,

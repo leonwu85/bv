@@ -1,12 +1,8 @@
 package dev.aaa1115910.bv.player.tv.controller.playermenu.component
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,15 +61,8 @@ fun MenuListItem(
         label = "MenuListItem width [$text]"
     )
 
-    val contentOffset by animateDpAsState(
-        targetValue = if (isFocused) 4.dp else 0.dp,
-        label = "MenuListItem offset [$text]"
-    )
-
-    val itemAlpha by animateFloatAsState(
-        targetValue = if (isFocused || selected) 1f else 0.85f,
-        label = "MenuListItem alpha [$text]"
-    )
+    val contentOffset = if (isFocused) 4.dp else 0.dp
+    val itemAlpha = if (isFocused || selected) 1f else 0.85f
 
     Box(
         modifier = modifier
@@ -162,12 +151,7 @@ fun MenuListItem(
                         ),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    AnimatedVisibility(
-                        visible = expanded,
-                        label = "MenuListItem text [$text]",
-                        enter = fadeIn(),
-                        exit = fadeOut()
-                    ) {
+                    if (expanded) {
                         Text(
                             modifier = Modifier.fillMaxWidth(),
                             text = text,
@@ -182,12 +166,7 @@ fun MenuListItem(
                         .fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    AnimatedVisibility(
-                        visible = !expanded,
-                        label = "MenuListItem icon [$text]",
-                        enter = fadeIn(),
-                        exit = fadeOut()
-                    ) {
+                    if (!expanded) {
                         if (icon == null) {
                             Box(modifier = Modifier.size(32.dp))
                         } else {

@@ -244,6 +244,7 @@ fun BvPlayer(
     var defaultAspectRatio by remember { mutableFloatStateOf(16 / 9f) }
     var lastHeartbeatPosition by remember { mutableLongStateOf(0L) }
     var showInfoProvider: () -> Boolean by remember { mutableStateOf({ false }) }
+    var controllerInteractionProvider: () -> Boolean by remember { mutableStateOf({ false }) }
 
     val clockState = remember { VideoPlayerClockState() }
 
@@ -430,6 +431,7 @@ fun BvPlayer(
                 isDanmakuMaskDisposed ||
                 expectedGeneration != danmakuMaskGeneration ||
                 expectedVideoCid != currentVideoCid ||
+                controllerInteractionProvider() ||
                 bitmap.isRecycled
             ) {
                 return@update
@@ -440,6 +442,7 @@ fun BvPlayer(
                     isDanmakuMaskDisposed ||
                     expectedGeneration != danmakuMaskGeneration ||
                     expectedVideoCid != currentVideoCid ||
+                    controllerInteractionProvider() ||
                     bitmap.isRecycled
                 ) {
                     return@withContext
@@ -902,7 +905,13 @@ fun BvPlayer(
         while (true) {
             if (isDanmakuMaskDisposed) break
 
-            if (!currentIsLive && currentDanmakuMasks.isNotEmpty() && currentIsPlaying && currentDanmakuMaskEnabled) {
+            if (
+                !currentIsLive &&
+                currentDanmakuMasks.isNotEmpty() &&
+                currentIsPlaying &&
+                currentDanmakuMaskEnabled &&
+                !controllerInteractionProvider()
+            ) {
                 val position = runCatching { videoPlayer.currentPosition }.getOrElse {
                     logger.warn(it) { "Read currentPosition for danmaku mask failed" }
                     -1L
@@ -1073,6 +1082,7 @@ fun BvPlayer(
             showRelatedVideos = videoPlayerConfigData.showRelatedVideos,
             onToggleRelatedVideos = onToggleRelatedVideos,
             registerShowInfoProvider = { provider -> showInfoProvider = provider },
+            registerControllerInteractionProvider = { provider -> controllerInteractionProvider = provider },
 
             onPlay = { videoPlayer.start() },
             onPause = {

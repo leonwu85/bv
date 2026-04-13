@@ -68,6 +68,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private const val CONTROLLER_INTERACTION_COOLDOWN_MS = 450L
+
 @Composable
 fun VideoPlayerController(
     modifier: Modifier = Modifier,
@@ -80,6 +82,7 @@ fun VideoPlayerController(
     showRelatedVideos: Boolean = false,
     onToggleRelatedVideos: (Boolean) -> Unit,
     registerShowInfoProvider: ((() -> Boolean) -> Unit) = {},
+    registerControllerInteractionProvider: ((() -> Boolean) -> Unit) = {},
 
     //player events
     onPlay: () -> Unit,
@@ -161,6 +164,7 @@ fun VideoPlayerController(
     var showSeekController by remember { mutableStateOf(false) }
     var showInfo by remember { mutableStateOf(false) }
     val showClickableControllers by remember { derivedStateOf { showInfo || showListController || showMenuController } }
+    var controllerInteractionDeadline by remember { mutableLongStateOf(0L) }
 
     var lastPressBack by remember { mutableLongStateOf(0L) }
     var lastPressDown by remember { mutableLongStateOf(0L) }
@@ -186,6 +190,13 @@ fun VideoPlayerController(
         if (!showSeekController) goTime = videoPlayerSeekState.position
         showSeekController = true
         showInfo = false
+    }
+
+    val markControllerInteraction: (Long) -> Unit = { cooldownMs ->
+        val deadline = System.currentTimeMillis() + cooldownMs
+        if (deadline > controllerInteractionDeadline) {
+            controllerInteractionDeadline = deadline
+        }
     }
 
     val resetAutoSeekConfirmTimer = {
@@ -239,8 +250,24 @@ fun VideoPlayerController(
         logger.info { "onTimeBack: [current=${videoPlayer.currentPosition}, goTime=$goTime]" }
     }
 
-    // 对外暴露 showInfo
-    LaunchedEffect(Unit) { registerShowInfoProvider { showInfo } }
+    // 对外暴露控制层状态
+    LaunchedEffect(Unit) {
+        registerShowInfoProvider { showInfo }
+        registerControllerInteractionProvider {
+            System.currentTimeMillis() < controllerInteractionDeadline
+        }
+    }
+    LaunchedEffect(showInfo, showMenuController, showSeekController, showRelatedVideos) {
+        if (
+            showInfo ||
+            showMenuController ||
+            showSeekController ||
+            showRelatedVideos ||
+            controllerInteractionDeadline != 0L
+        ) {
+            markControllerInteraction(CONTROLLER_INTERACTION_COOLDOWN_MS)
+        }
+    }
     LaunchedEffect(openPlayListRequestToken) {
         if (openPlayListRequestToken != 0L) {
             showInfo = false
@@ -562,6 +589,7 @@ fun VideoPlayerController(
         ControllerVideoInfo(
             show = showInfo,
             playSpeed = videoPlayer.speed,
+            onInteraction = { markControllerInteraction(CONTROLLER_INTERACTION_COOLDOWN_MS) },
             onHideInfo = { showInfo = false },
             onPlay = {
                 if (videoPlayer.currentPosition >= videoPlayer.duration) {
@@ -647,6 +675,7 @@ fun VideoPlayerController(
         )
         MenuController(
             show = showMenuController,
+            onInteraction = { markControllerInteraction(CONTROLLER_INTERACTION_COOLDOWN_MS) },
             onResolutionChange = onResolutionChange,
             onCodecChange = onCodecChange,
             onAspectRatioChange = onAspectRatioChange,

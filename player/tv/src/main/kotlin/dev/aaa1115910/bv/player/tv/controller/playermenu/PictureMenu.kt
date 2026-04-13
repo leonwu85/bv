@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.player.tv.controller.playermenu
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -85,7 +84,8 @@ fun PictureMenuList(
         val menuItemsModifier = Modifier
             .width(216.dp)
             .padding(horizontal = 8.dp)
-        AnimatedVisibility(visible = focusState.focusState != MenuFocusState.MenuNav) {
+        val showDetailPane = focusState.focusState != MenuFocusState.MenuNav
+        if (showDetailPane) {
             when (selectedPictureMenuItem) {
                 VideoPlayerPictureMenuItem.Resolution -> if (videoPlayerConfigData.isLive && videoPlayerConfigData.availableLiveQualities.isNotEmpty()) {
                     val liveQualities = videoPlayerConfigData.availableLiveQualities
@@ -117,18 +117,13 @@ fun PictureMenuList(
 
                 VideoPlayerPictureMenuItem.Codec -> {
                     if (videoPlayerConfigData.isLive) {
-                        // 直播模式：显示 HLS/FLV/AVC 选项
-                        println("PictureMenu: isLive=true, availableLiveCodecs=${videoPlayerConfigData.availableLiveCodecs}, currentLiveCodec=${videoPlayerConfigData.currentLiveCodec}")
                         RadioMenuList(
                             modifier = menuItemsModifier,
                             items = videoPlayerConfigData.availableLiveCodecs
                                 .map { it.getDisplayName(context) },
                             selected = videoPlayerConfigData.availableLiveCodecs
                                 .indexOf(videoPlayerConfigData.currentLiveCodec),
-                            onSelectedChanged = {
-                                println("PictureMenu: onSelectedChanged called with index=$it")
-                                onLiveCodecChange(videoPlayerConfigData.availableLiveCodecs[it])
-                            },
+                            onSelectedChanged = { onLiveCodecChange(videoPlayerConfigData.availableLiveCodecs[it]) },
                             onFocusBackToParent = {
                                 onFocusStateChange(MenuFocusState.Menu)
                                 parentMenuFocusRequester.requestFocus()
@@ -199,7 +194,7 @@ fun PictureMenuList(
         }
 
         // 竖线分隔
-        AnimatedVisibility(visible = focusState.focusState != MenuFocusState.MenuNav) {
+        if (showDetailPane) {
             Box(
                 modifier = Modifier
                     .fillMaxHeight(0.6f)

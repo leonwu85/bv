@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -90,6 +91,11 @@ import kotlin.math.roundToInt
 
 private fun formatSpeed(speed: Float): String {
     return "${(speed * 100).roundToInt() / 100f}x"
+}
+
+private class ControllerBottomBarAutoHideState {
+    var hideVideoInfoJob: Job? = null
+    var pauseAutoHide: Boolean = false
 }
 
 @Composable
@@ -163,8 +169,7 @@ fun ControllerBottomBar(
     val showPrevVideoBtn = currentIndex > 0
     val showNextVideoBtn = currentIndex in 0 until videoList.size - 1
 
-    var hideVideoInfoJob by remember { mutableStateOf<Job?>(null) }
-    var pauseAutoHide by remember { mutableStateOf(false) }
+    val autoHideState = remember { ControllerBottomBarAutoHideState() }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showRotationDialog by remember { mutableStateOf(false) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
@@ -347,22 +352,31 @@ fun ControllerBottomBar(
     }
 
     fun cancelHideJob() {
-        hideVideoInfoJob?.cancel()
-        hideVideoInfoJob = null
+        autoHideState.hideVideoInfoJob?.cancel()
+        autoHideState.hideVideoInfoJob = null
     }
 
     fun scheduleHideJob() {
         cancelHideJob()
-        if (show && !showSpeedDialog && !showRotationDialog && !showSubtitleDialog && !pauseAutoHide) {
-            hideVideoInfoJob = scope.launch {
+        if (
+            show &&
+            !showSpeedDialog &&
+            !showRotationDialog &&
+            !showSubtitleDialog &&
+            !autoHideState.pauseAutoHide
+        ) {
+            autoHideState.hideVideoInfoJob = scope.launch {
                 delay(5000)
                 withContext(Dispatchers.Main) { onHideInfo() }
             }
         }
     }
 
-    LaunchedEffect(show, showSpeedDialog, showRotationDialog, showSubtitleDialog, pauseAutoHide) {
+    LaunchedEffect(show, showSpeedDialog, showRotationDialog, showSubtitleDialog) {
         scheduleHideJob()
+    }
+    DisposableEffect(Unit) {
+        onDispose { cancelHideJob() }
     }
 
     Column(
@@ -624,7 +638,7 @@ fun ControllerBottomBar(
                 userActionFocusRequesters.value,
                 { scheduleHideJob() },
                 { pause ->
-                    pauseAutoHide = pause
+                    autoHideState.pauseAutoHide = pause
                     if (pause) cancelHideJob() else scheduleHideJob()
                 }
             )

@@ -31,7 +31,6 @@ fun CheckBoxMenuList(
     LazyColumn(
         modifier = modifier
             .onPreviewKeyEvent {
-                println(it)
                 if (it.type == KeyEventType.KeyUp) {
                     if (listOf(Key.Enter, Key.DirectionCenter).contains(it.key)) {
                         return@onPreviewKeyEvent false
