@@ -822,8 +822,8 @@
     <string name="settings_player_seek_backward_step_title">视频快退时间间隔（秒）</string>
     <string name="settings_player_show_bottom_progress_bar_text">在播放器底部常驻显示迷你进度条</string>
     <string name="settings_player_show_bottom_progress_bar_title">显示迷你进度条</string>
-    <string name="settings_player_bottom_progress_bar_color_text">设置迷你进度条的颜色</string>
-    <string name="settings_player_bottom_progress_bar_color_title">迷你进度条颜色</string>
+    <string name="settings_player_bottom_progress_bar_color_text">设置进度条的颜色</string>
+    <string name="settings_player_bottom_progress_bar_color_title">进度条颜色</string>
     <string name="settings_player_bottom_progress_bar_color_purple">紫色</string>
     <string name="settings_player_bottom_progress_bar_color_black">黑色</string>
     <string name="settings_player_bottom_progress_bar_color_white">白色</string>

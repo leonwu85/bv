@@ -28,6 +28,14 @@ import androidx.tv.material3.OutlinedButtonDefaults
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.ui.theme.BVTheme
 
+private fun truncatePlayButtonText(text: String, maxChars: Int = 23): String {
+    return if (text.length > maxChars) {
+        text.take(maxChars - 3) + "..."
+    } else {
+        text
+    }
+}
+
 @Composable
 fun SeasonInfoButtons(
     modifier: Modifier = Modifier,
@@ -45,6 +53,12 @@ fun SeasonInfoButtons(
     onClickSeasonSelector: () -> Unit = {},
     onShowDescription: () -> Unit = {},
 ) {
+    val playButtonText = remember(lastPlayedIndex, lastPlayedTitle) {
+        truncatePlayButtonText(
+            text = if (lastPlayedIndex == -1) "开始播放" else lastPlayedTitle
+        )
+    }
+
     Row(
         modifier = modifier
             .padding(4.dp),
@@ -63,7 +77,7 @@ fun SeasonInfoButtons(
                         imageVector = Icons.Rounded.PlayArrow,
                         contentDescription = null
                     )
-                    Text(text = if (lastPlayedIndex == -1) "开始播放" else lastPlayedTitle)
+                    Text(text = playButtonText)
                 }
             }
         } else {

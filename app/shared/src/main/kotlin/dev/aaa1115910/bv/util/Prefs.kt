@@ -667,7 +667,7 @@ object PrefKeys {
     val prefDefaultDanmakuTypesKey = stringPreferencesKey("ddts")
     val prefDefaultDanmakuAreaKey = floatPreferencesKey("dda")
     val prefDefaultVideoCodecKey = intPreferencesKey("dvc")
-    val prefEnabledFirebaseCollectionKey = booleanPreferencesKey("efc")
+    val prefEnabledFirebaseCollectionKey = booleanPreferencesKey("efc_v2")
     val prefIncognitoModeKey = booleanPreferencesKey("im")
     val prefDefaultSubtitleFontSizeKey = intPreferencesKey("dsfs")
     val prefDefaultSubtitleBackgroundOpacityKey = floatPreferencesKey("dsbo")
@@ -759,7 +759,7 @@ object PrefKeys {
     val prefDefaultVideoCodecRequest =
         PreferenceRequest(prefDefaultVideoCodecKey, VideoCodec.HEVC.ordinal)
     val prefEnabledFirebaseCollectionRequest =
-        PreferenceRequest(prefEnabledFirebaseCollectionKey, false)
+        PreferenceRequest(prefEnabledFirebaseCollectionKey, true)
     val prefIncognitoModeRequest = PreferenceRequest(prefIncognitoModeKey, false)
     val prefDefaultSubtitleFontSizeRequest = PreferenceRequest(prefDefaultSubtitleFontSizeKey, 24)
     val prefDefaultSubtitleBackgroundOpacityRequest =

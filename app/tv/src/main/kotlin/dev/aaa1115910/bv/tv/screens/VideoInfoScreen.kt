@@ -1435,7 +1435,7 @@ private fun VideoTagsRow(
 
     LazyRow(
         modifier = modifier.focusRestorer(focusRequester),
-        contentPadding = PaddingValues(vertical = 2.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         itemsIndexed(items = tags, key = { _, tag -> tag.id }) { index, tag ->

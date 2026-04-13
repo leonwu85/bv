@@ -19,7 +19,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
@@ -41,6 +40,7 @@ fun VideoSeekBar(
     duration: Long,
     position: Long,
     bufferedPercentage: Int,
+    playedTrackBrush: Brush = PlayerColors.progressGradient,
     idleIcon: String = "",
     movingIcon: String = "",
     moveState: SeekMoveState = SeekMoveState.Idle,
@@ -52,6 +52,7 @@ fun VideoSeekBar(
         duration = duration,
         position = position,
         bufferedPercentage = bufferedPercentage,
+        playedTrackBrush = playedTrackBrush,
         useDefaultThumb = idleIcon.isBlank(),
         showPosition = showPosition,
         thumb = { thumbModifier ->
@@ -72,6 +73,7 @@ private fun VideoSeekBar(
     duration: Long,
     position: Long,
     bufferedPercentage: Int,
+    playedTrackBrush: Brush = PlayerColors.progressGradient,
     colors: SliderColors = SliderDefaults.colors(),
     useDefaultThumb: Boolean = false,
     showPosition: Boolean = false,
@@ -133,9 +135,7 @@ private fun VideoSeekBar(
 
                 // 已播放轨道 (渐变)
                 drawRoundRect(
-                    brush = Brush.horizontalGradient(
-                        colors = PlayerColors.progressGradientColors
-                    ),
+                    brush = playedTrackBrush,
                     topLeft = Offset.Zero,
                     size = Size(size.width * progressFraction, size.height),
                     cornerRadius = cornerRadius

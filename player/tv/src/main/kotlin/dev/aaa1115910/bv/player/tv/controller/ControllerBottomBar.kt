@@ -93,6 +93,15 @@ private fun formatSpeed(speed: Float): String {
     return "${(speed * 100).roundToInt() / 100f}x"
 }
 
+private fun controllerSeekBarPlayedTrackBrush(progressColor: Color): Brush {
+    return Brush.horizontalGradient(
+        listOf(
+            progressColor.copy(alpha = 1f),
+            PlayerColors.progressGradientColors.last()
+        )
+    )
+}
+
 private class ControllerBottomBarAutoHideState {
     var hideVideoInfoJob: Job? = null
     var pauseAutoHide: Boolean = false
@@ -104,6 +113,7 @@ fun ControllerBottomBar(
     onHideInfo: () -> Unit,
     modifier: Modifier = Modifier,
     playSpeed: Float = 1f,
+    bottomProgressBarColor: Color = PlayerColors.bottomProgressBar,
     rotation: VideoRotation,
     title: String,
     partTitle: String,
@@ -179,6 +189,9 @@ fun ControllerBottomBar(
     val subtitleIconId =
         if (currentSubtitleId > 0) R.drawable.ic_subtitle_on else R.drawable.ic_subtitle_off
     val hasSubtitles = availableSubtitleTracks.isNotEmpty()
+    val seekBarPlayedTrackBrush = remember(bottomProgressBarColor) {
+        controllerSeekBarPlayedTrackBrush(bottomProgressBarColor)
+    }
 
     // ── 核心按钮 ──
     val buttons = remember(
@@ -251,12 +264,6 @@ fun ControllerBottomBar(
                 selected = rotation != VideoRotation.Original
             ),
             ControlButton(
-                id = "related",
-                icon = Icons.Rounded.KeyboardDoubleArrowDown,
-                onClick = onOpenRelatedVideo,
-                visible = !fromSeason && !isLive
-            ),
-            ControlButton(
                 id = "settings",
                 icon = Icons.Outlined.Settings,
                 onClick = onOpenSetting,
@@ -315,7 +322,8 @@ fun ControllerBottomBar(
                 "coin" to FocusRequester(),
                 "tripleLike" to FocusRequester(),
                 "description" to FocusRequester(),
-                "playlist" to FocusRequester()
+                "playlist" to FocusRequester(),
+                "related" to FocusRequester()
             )
         )
     }
@@ -631,7 +639,7 @@ fun ControllerBottomBar(
             }
         }
 
-        // ── 用户操作(点赞/收藏/投币/简介/列表) ──
+        // ── 用户操作(点赞/收藏/投币/简介/列表/推荐) ──
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -768,6 +776,45 @@ fun ControllerBottomBar(
                     Spacer(Modifier.width(4.dp))
                     Text("列表", style = MaterialTheme.typography.bodySmall)
                 }
+
+                if (!fromSeason) {
+                    val relatedFocus = userActionFocusRequesters.value["related"]
+                    Button(
+                        modifier = Modifier
+                            .height(26.dp)
+                            .onFocusChanged { if (it.isFocused) scheduleHideJob() }
+                            .then(relatedFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
+                        onClick = onOpenRelatedVideo,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        colors = ButtonDefaults.colors(
+                            containerColor = Color.Transparent,
+                            focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                            focusedContentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        border = ButtonDefaults.border(
+                            border = Border(
+                                border = BorderStroke(
+                                    width = 1.dp,
+                                    color = Color.Transparent
+                                )
+                            ),
+                            focusedBorder = Border(
+                                border = BorderStroke(
+                                    width = 1.dp,
+                                    color = Color.White.copy(alpha = 0.45f)
+                                )
+                            )
+                        )
+                    ) {
+                        Icon(
+                            modifier = Modifier.scale(0.9f),
+                            imageVector = Icons.Rounded.KeyboardDoubleArrowDown,
+                            contentDescription = "推荐"
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("推荐", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
             }
         }
 
@@ -804,7 +851,8 @@ fun ControllerBottomBar(
             moveState = SeekMoveState.Idle,
             idleIcon = idleIcon,
             movingIcon = movingIcon,
-            isFocused = seekbarHasFocus
+            isFocused = seekbarHasFocus,
+            playedTrackBrush = seekBarPlayedTrackBrush
         )
 
         // ── Row 2: 功能按钮 ──
@@ -812,15 +860,7 @@ fun ControllerBottomBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 32.dp, end = 32.dp, bottom = 10.dp)
-                .focusProperties { up = seekbarFocusRequester }
-                .onPreviewKeyEvent { event ->
-                    if (event.type == KeyEventType.KeyDown) {
-                        if (!fromSeason && !isLive && event.key == Key.DirectionDown) {
-                            onOpenRelatedVideo()
-                        }
-                    }
-                    false
-                },
+                .focusProperties { up = seekbarFocusRequester },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {

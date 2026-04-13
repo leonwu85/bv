@@ -707,7 +707,7 @@ fun SeasonHeroSection(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(start = 48.dp, end = 48.dp, bottom = 24.dp)
-                .fillMaxWidth(0.55f),
+                .fillMaxWidth(1f),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // 标题

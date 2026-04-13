@@ -595,6 +595,7 @@ fun VideoPlayerController(
         ControllerVideoInfo(
             show = showInfo,
             playSpeed = videoPlayer.speed,
+            bottomProgressBarColor = bottomProgressBarColor,
             onInteraction = { markControllerInteraction(CONTROLLER_INTERACTION_COOLDOWN_MS) },
             onHideInfo = { showInfo = false },
             onPlay = {
