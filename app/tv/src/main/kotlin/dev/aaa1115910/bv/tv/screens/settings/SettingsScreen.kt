@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Block
@@ -85,9 +86,10 @@ import dev.aaa1115910.bv.util.requestFocus
 
 @Composable
 fun SettingsScreen(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    initialMenu: SettingsMenuNavItem = SettingsMenuNavItem.Player
 ) {
-    var currentMenu by remember { mutableStateOf(SettingsMenuNavItem.Player) }
+    var currentMenu by remember(initialMenu) { mutableStateOf(initialMenu) }
     var focusInNav by remember { mutableStateOf(false) }
     var focusInContent by remember { mutableStateOf(false) }
     val navFocusRequester = remember { FocusRequester() }
@@ -171,6 +173,8 @@ fun SettingsNav(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val initialMenu = remember { currentMenu }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialMenu.ordinal)
 
     LaunchedEffect(isFocusing) {
         if (isFocusing) focusRequester.requestFocus(scope)
@@ -184,6 +188,7 @@ fun SettingsNav(
         modifier = modifier
             .focusGroup()
             .focusRestorer(focusRequester),
+        state = listState,
         contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -192,7 +197,7 @@ fun SettingsNav(
                 .focusRequester(focusRequester)
                 .fillMaxWidth()
             else Modifier.fillMaxWidth()
-            item {
+            item(key = item.name) {
                 SettingsMenuButton(
                     modifier = buttonModifier,
                     text = item.getDisplayName(context),

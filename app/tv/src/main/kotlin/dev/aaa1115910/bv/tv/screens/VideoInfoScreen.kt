@@ -219,9 +219,11 @@ fun VideoInfoScreen(
     // 添加用于管理评论浮层的状态
     var showCommentPanel by remember { mutableStateOf(false) }
     val commentButtonFocusRequester = remember { FocusRequester() }
+    var shouldRestoreCommentButtonFocus by remember { mutableStateOf(false) }
 
     var showRelatedPanel by remember { mutableStateOf(false) }
     val relatedButtonFocusRequester = remember { FocusRequester() }
+    var shouldRestoreRelatedButtonFocus by remember { mutableStateOf(false) }
 
     var lastPlayedCid by remember { mutableLongStateOf(0) }
     var lastPlayedTime by remember { mutableIntStateOf(0) }
@@ -1307,8 +1309,11 @@ fun VideoInfoScreen(
 
     // 浮层关闭后，焦点返回评论按钮
     LaunchedEffect(showCommentPanel) {
-        if (!showCommentPanel) {
-            commentButtonFocusRequester.requestFocus()
+        if (showCommentPanel) {
+            shouldRestoreCommentButtonFocus = true
+        } else if (shouldRestoreCommentButtonFocus) {
+            commentButtonFocusRequester.requestFocus(scope)
+            shouldRestoreCommentButtonFocus = false
         }
     }
 
@@ -1330,8 +1335,11 @@ fun VideoInfoScreen(
 
     // 推荐面板关闭后，焦点返回推荐按钮
     LaunchedEffect(showRelatedPanel) {
-        if (!showRelatedPanel) {
-            relatedButtonFocusRequester.requestFocus()
+        if (showRelatedPanel) {
+            shouldRestoreRelatedButtonFocus = true
+        } else if (shouldRestoreRelatedButtonFocus) {
+            relatedButtonFocusRequester.requestFocus(scope)
+            shouldRestoreRelatedButtonFocus = false
         }
     }
 }

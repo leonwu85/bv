@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens.main
 
-import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,7 +34,7 @@ import dev.aaa1115910.bv.tv.activities.settings.SettingsActivity
 import dev.aaa1115910.bv.tv.component.settings.SettingListItem
 import dev.aaa1115910.bv.tv.component.settings.SettingListItemWithDialog
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
-import dev.aaa1115910.bv.tv.component.TvAlertDialog
+import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
 import dev.aaa1115910.bv.tv.screens.settings.content.DrawerNavItemsEditDialog
 import dev.aaa1115910.bv.tv.screens.settings.content.GridColumnsDialog
 import dev.aaa1115910.bv.tv.screens.settings.content.ThemeTypeDialog
@@ -68,7 +67,6 @@ fun SettingsContent(
     var showThemeTypeDialog by remember { mutableStateOf(false) }
     var showGridColumnsDialog by remember { mutableStateOf(false) }
     var showDrawerNavItemsDialog by remember { mutableStateOf(false) }
-    var showAboutDialog by remember { mutableStateOf(false) }
 
     BackHandler(enabled = contentHasFocus) {
         onRequestDrawerFocus()
@@ -200,14 +198,21 @@ fun SettingsContent(
                     title = stringResource(R.string.settings_item_about),
                     supportText = stringResource(R.string.settings_main_about_text),
                     valueText = currentVersion,
-                    onClick = { showAboutDialog = true }
+                    onClick = {
+                        context.startActivity(
+                            SettingsActivity.createIntent(
+                                context = context,
+                                initialMenu = SettingsMenuNavItem.About
+                            )
+                        )
+                    }
                 )
             }
             item {
                 Button(
                     modifier = Modifier.padding(top = 16.dp),
                     onClick = {
-                        context.startActivity(Intent(context, SettingsActivity::class.java))
+                        context.startActivity(SettingsActivity.createIntent(context))
                     }
                 ) {
                     Text(text = stringResource(R.string.main_settings_open_button))
@@ -243,20 +248,4 @@ fun SettingsContent(
         onHideDialog = { showDrawerNavItemsDialog = false },
         initialOrderString = Prefs.drawerItemsOrder
     )
-    if (showAboutDialog) {
-        TvAlertDialog(
-            onDismissRequest = { showAboutDialog = false },
-            title = { Text(text = stringResource(R.string.settings_item_about)) },
-            text = {
-                Text(
-                    text = stringResource(R.string.settings_version_current_version, currentVersion)
-                )
-            },
-            confirmButton = {
-                Button(onClick = { showAboutDialog = false }) {
-                    Text(text = stringResource(R.string.common_confirm))
-                }
-            }
-        )
-    }
 }
