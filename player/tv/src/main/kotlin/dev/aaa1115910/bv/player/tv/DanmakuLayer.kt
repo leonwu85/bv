@@ -99,6 +99,7 @@ fun DanmakuLayer(
         AkDanmakuPlayer(
             modifier = Modifier.fillMaxWidth().fillMaxHeight(),
             danmakuPlayer = player,
+            visible = handle.visible,
             isLiveMode = handle.isLiveMode,
             onLiveDanmakuPlayerReady = handle.onLiveDanmakuPlayerReady
         )

@@ -2342,6 +2342,10 @@ class VideoPlayerV3ViewModel(
             return
         }
 
+        if (!showDanmaku) {
+            return
+        }
+
         val danmakuItem = DanmakuItemData(
             danmakuId = System.currentTimeMillis(),
             position = 0L,

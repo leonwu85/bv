@@ -165,6 +165,7 @@ fun VideoPlayerV3Screen(
     // 在线观看人数状态
     var onlineViewerCount by remember { mutableStateOf("") }
     var showOnlineViewerCountTip by remember { mutableStateOf(false) }
+    var showLiveControlPanel by remember { mutableStateOf(false) }
 
     // 焦点管理
     val relatedVideosFocusRequester = remember { FocusRequester() }
@@ -176,6 +177,12 @@ fun VideoPlayerV3Screen(
             kotlin.runCatching {
                 relatedVideosFocusRequester.requestFocus()
             }
+        }
+    }
+
+    LaunchedEffect(playerViewModel.isLive) {
+        if (!playerViewModel.isLive) {
+            showLiveControlPanel = false
         }
     }
 
@@ -810,6 +817,9 @@ fun VideoPlayerV3Screen(
                     Prefs.isLoop = it
                     playerViewModel.isLoop = it
                 },
+                onInfoVisibilityChanged = { visible ->
+                    showLiveControlPanel = playerViewModel.isLive && visible
+                },
 
                 // SponsorBlock 相关参数
                 enableSponsorBlock = playerViewModel.enableSponsorBlock,
@@ -1042,7 +1052,7 @@ fun VideoPlayerV3Screen(
 
             // 直播人气 Tip（左下角常驻）
             LiveViewerCountTip(
-                show = playerViewModel.isLive && Prefs.showLivePopularity,
+                show = playerViewModel.isLive && Prefs.showLivePopularity && !showLiveControlPanel,
                 popularityText = playerViewModel.livePopularityText,
                 onlineCount = playerViewModel.liveOnlineCount
             )

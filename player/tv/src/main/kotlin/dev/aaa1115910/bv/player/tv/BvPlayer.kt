@@ -141,6 +141,7 @@ fun BvPlayer(
     onLoopPlayModeChange: (Boolean) -> Unit = {},
     onRefreshVideo: () -> Unit = {},
     onLiveRetry: () -> Unit = {},
+    onInfoVisibilityChanged: (Boolean) -> Unit = {},
     onShowComment: () -> Unit = {},
     onShowDescription: () -> Unit = {},
     onTripleLike: () -> Unit = {},
@@ -1083,6 +1084,7 @@ fun BvPlayer(
             onToggleRelatedVideos = onToggleRelatedVideos,
             registerShowInfoProvider = { provider -> showInfoProvider = provider },
             registerControllerInteractionProvider = { provider -> controllerInteractionProvider = provider },
+            onInfoVisibilityChanged = onInfoVisibilityChanged,
 
             onPlay = { videoPlayer.start() },
             onPause = {

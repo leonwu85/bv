@@ -27,11 +27,13 @@ import com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer
 @Composable
 fun AkDanmakuPlayer(
     modifier: Modifier = Modifier,
-    danmakuPlayer: DanmakuPlayer?
+    danmakuPlayer: DanmakuPlayer?,
+    visible: Boolean = true
 ) {
     AkDanmakuPlayer(
         modifier = modifier,
         danmakuPlayer = danmakuPlayer,
+        visible = visible,
         isLiveMode = false,
         onLiveDanmakuPlayerReady = null
     )
@@ -47,6 +49,7 @@ fun AkDanmakuPlayer(
 fun AkDanmakuPlayer(
     modifier: Modifier = Modifier,
     danmakuPlayer: DanmakuPlayer? = null,
+    visible: Boolean = true,
     isLiveMode: Boolean = false,
     onLiveDanmakuPlayerReady: ((LiveDanmakuPlayer) -> Unit)? = null
 ) {
@@ -86,7 +89,8 @@ fun AkDanmakuPlayer(
             factory = { ctx ->
                 DanmakuSurfaceView(ctx).apply {
                     setBackgroundColor(Color.TRANSPARENT)
-                    setZOrderOnTop(true)
+                    // 直播弹幕需要盖在视频 Surface 上，但不能压过 Compose 控制面板。
+                    setZOrderMediaOverlay(true)
                     holder?.setFormat(PixelFormat.TRANSLUCENT)
 
                     val player = LiveDanmakuPlayer(
@@ -98,6 +102,9 @@ fun AkDanmakuPlayer(
                     player.play()
                     android.util.Log.d("AkDanmakuPlayer", "LiveDanmakuPlayer created and started: $player")
                 }
+            },
+            update = { surfaceView ->
+                surfaceView.visibility = if (visible) View.VISIBLE else View.INVISIBLE
             }
         )
     } else {
@@ -120,6 +127,9 @@ fun AkDanmakuPlayer(
                         setDrawingCacheBackgroundColor(Color.TRANSPARENT)
                     }
                 }.also { danmakuView = it }
+            },
+            update = { view ->
+                view.visibility = if (visible) View.VISIBLE else View.INVISIBLE
             }
         )
     }

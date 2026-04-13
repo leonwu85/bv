@@ -83,6 +83,7 @@ fun VideoPlayerController(
     onToggleRelatedVideos: (Boolean) -> Unit,
     registerShowInfoProvider: ((() -> Boolean) -> Unit) = {},
     registerControllerInteractionProvider: ((() -> Boolean) -> Unit) = {},
+    onInfoVisibilityChanged: (Boolean) -> Unit = {},
 
     //player events
     onPlay: () -> Unit,
@@ -256,6 +257,9 @@ fun VideoPlayerController(
         registerControllerInteractionProvider {
             System.currentTimeMillis() < controllerInteractionDeadline
         }
+    }
+    LaunchedEffect(showInfo) {
+        onInfoVisibilityChanged(showInfo)
     }
     LaunchedEffect(showInfo, showMenuController, showSeekController, showRelatedVideos) {
         if (
@@ -538,6 +542,7 @@ fun VideoPlayerController(
 
                     Key.DirectionLeft -> {
                         if (it.type == KeyEventType.KeyUp) return@onPreviewKeyEvent true
+                        if (videoPlayerConfigData.isLive) return@onPreviewKeyEvent true
                         logger.info { "[${it.key} press]" }
                         openSeekController()
                         onTimeBack()
@@ -545,6 +550,7 @@ fun VideoPlayerController(
 
                     Key.DirectionRight -> {
                         if (it.type == KeyEventType.KeyUp) return@onPreviewKeyEvent true
+                        if (videoPlayerConfigData.isLive) return@onPreviewKeyEvent true
                         logger.info { "[${it.key} press]" }
                         openSeekController()
                         onTimeForward()

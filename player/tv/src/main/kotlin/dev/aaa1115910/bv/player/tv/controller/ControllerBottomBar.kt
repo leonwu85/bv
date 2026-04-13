@@ -519,28 +519,39 @@ fun ControllerBottomBar(
                         )
                     ) {
                         if (button.text != null && button.icon != null) {
-                            // 图标+文字按钮
-                            Icon(
-                                modifier = Modifier
-                                    .ifElse(button.scale != 1f, Modifier.scale(button.scale)),
-                                imageVector = button.icon,
-                                contentDescription = null,
-                                tint = button.tint
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = button.text,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = button.tint
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    modifier = Modifier
+                                        .ifElse(button.scale != 1f, Modifier.scale(button.scale)),
+                                    imageVector = button.icon,
+                                    contentDescription = null,
+                                    tint = button.tint
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = button.text,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = button.tint
+                                )
+                            }
                         } else if (button.painterId != null) {
-                            Icon(
-                                modifier = Modifier
-                                    .ifElse(button.scale != 1f, Modifier.scale(button.scale)),
-                                painter = painterResource(id = button.painterId),
-                                contentDescription = null,
-                                tint = button.tint
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    modifier = Modifier
+                                        .ifElse(button.scale != 1f, Modifier.scale(button.scale)),
+                                    painter = painterResource(id = button.painterId),
+                                    contentDescription = null,
+                                    tint = button.tint
+                                )
+                            }
                         } else {
                             button.icon?.let {
                                 Icon(
