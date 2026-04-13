@@ -1,6 +1,7 @@
 package dev.aaa1115910.bv.tv.screens.settings
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -88,7 +89,12 @@ fun SettingsScreen(
 ) {
     var currentMenu by remember { mutableStateOf(SettingsMenuNavItem.Player) }
     var focusInNav by remember { mutableStateOf(false) }
+    var focusInContent by remember { mutableStateOf(false) }
     val navFocusRequester = remember { FocusRequester() }
+
+    BackHandler(enabled = focusInContent) {
+        focusInNav = true
+    }
 
     Scaffold(
         modifier = modifier,
@@ -148,6 +154,7 @@ fun SettingsScreen(
                     .fillMaxSize()
                     .padding(top = 48.dp),
                 onBackNav = { focusInNav = true },
+                onContentFocusChanged = { focusInContent = it },
                 currentMenu = currentMenu
             )
         }
@@ -223,6 +230,7 @@ enum class SettingsMenuNavItem(
 fun SettingContent(
     modifier: Modifier = Modifier,
     onBackNav: () -> Unit,
+    onContentFocusChanged: (Boolean) -> Unit = {},
     currentMenu: SettingsMenuNavItem
 ) {
     Box(
@@ -233,7 +241,8 @@ fun SettingContent(
             modifier = Modifier.fillMaxSize(),
             onFocusBackMenuList = {
                 onBackNav()
-            }
+            },
+            onContentFocusChanged = onContentFocusChanged
         ) {
             AnimatedContent(
                 targetState = currentMenu,
@@ -359,12 +368,16 @@ fun SettingsMenuButtonPreview() {
 fun SettingsDetail(
     modifier: Modifier = Modifier,
     onFocusBackMenuList: () -> Unit,
+    onContentFocusChanged: (Boolean) -> Unit = {},
     content: @Composable () -> Unit
 ) {
     Box(
         modifier = modifier
             .fillMaxSize()
             .focusGroup()
+            .onFocusChanged {
+                onContentFocusChanged(it.hasFocus)
+            }
             .onPreviewKeyEvent {
                 val result = it.key.nativeKeyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT
                 if (result) onFocusBackMenuList()

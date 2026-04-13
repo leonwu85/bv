@@ -26,19 +26,20 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Button
-import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.R
-import dev.aaa1115910.bv.entity.ThemeType
+import dev.aaa1115910.bv.player.entity.PlayerLoadNextAction
+import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.tv.activities.settings.SettingsActivity
 import dev.aaa1115910.bv.tv.component.settings.SettingListItem
+import dev.aaa1115910.bv.tv.component.settings.SettingListItemWithDialog
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
+import dev.aaa1115910.bv.tv.component.TvAlertDialog
+import dev.aaa1115910.bv.tv.screens.settings.content.DrawerNavItemsEditDialog
 import dev.aaa1115910.bv.tv.screens.settings.content.GridColumnsDialog
 import dev.aaa1115910.bv.tv.screens.settings.content.ThemeTypeDialog
 import dev.aaa1115910.bv.tv.screens.settings.content.UIDensityDialog
-import dev.aaa1115910.bv.tv.screens.settings.content.HomeNavItemsEditDialog
-import dev.aaa1115910.bv.tv.screens.settings.content.UgcNavItemsEditDialog
-import dev.aaa1115910.bv.tv.screens.settings.content.DrawerNavItemsEditDialog
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.isDpadLeft
 import dev.aaa1115910.bv.util.isKeyDown
@@ -51,20 +52,23 @@ fun SettingsContent(
 ) {
     val context = LocalContext.current
     var contentHasFocus by remember { mutableStateOf(false) }
+    val currentVersion = remember { "${BuildConfig.VERSION_NAME}.${BuildConfig.BUILD_TYPE}" }
 
     // UI setting states
     val density by Prefs.densityFlow.collectAsState(context.resources.displayMetrics.widthPixels / 960f)
     val themeType by Prefs.themeTypeFlow.collectAsState(Prefs.themeType)
-    val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
     var gridColumns by remember { mutableStateOf(Prefs.gridColumns) }
+    var defaultResolution by remember { mutableStateOf(Prefs.defaultQuality) }
+    var showBottomProgressBar by remember { mutableStateOf(Prefs.playerShowBottomProgressBar) }
+    var loadNextAction by remember { mutableStateOf(Prefs.playerLoadNextAction) }
+    var enableSponsorBlock by remember { mutableStateOf(Prefs.enableSponsorBlock) }
 
     // Dialog states
     var showDensityDialog by remember { mutableStateOf(false) }
     var showThemeTypeDialog by remember { mutableStateOf(false) }
     var showGridColumnsDialog by remember { mutableStateOf(false) }
-    var showHomeNavItemsDialog by remember { mutableStateOf(false) }
-    var showUgcNavItemsDialog by remember { mutableStateOf(false) }
     var showDrawerNavItemsDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
 
     BackHandler(enabled = contentHasFocus) {
         onRequestDrawerFocus()
@@ -84,11 +88,11 @@ fun SettingsContent(
             },
         topBar = {
             Box(
-                modifier = Modifier.padding(start = 48.dp, top = 24.dp, bottom = 8.dp)
+                modifier = Modifier.padding(start = 48.dp, top = 12.dp, bottom = 4.dp)
             ) {
                 Text(
                     text = stringResource(R.string.title_activity_settings),
-                    fontSize = 48.sp
+                    fontSize = 24.sp
                 )
             }
         }
@@ -139,28 +143,64 @@ fun SettingsContent(
                 )
             }
             item {
-                SettingListItem(
+                SettingListItemWithDialog(
                     modifier = Modifier.fillMaxWidth(),
-                    title = stringResource(R.string.settings_ui_home_nav_items_title),
-                    supportText = stringResource(R.string.settings_ui_home_nav_items_text),
-                    onClick = { showHomeNavItemsDialog = true }
-                )
-            }
-            item {
-                SettingListItem(
-                    modifier = Modifier.fillMaxWidth(),
-                    title = stringResource(R.string.settings_ui_ugc_nav_items_title),
-                    supportText = stringResource(R.string.settings_ui_ugc_nav_items_text),
-                    onClick = { showUgcNavItemsDialog = true }
+                    title = stringResource(R.string.settings_item_resolution),
+                    supportText = stringResource(R.string.settings_main_default_resolution_text),
+                    options = Resolution.entries.reversed(),
+                    getDisplayName = { item, ctx -> item.getDisplayName(ctx) },
+                    value = defaultResolution,
+                    onValueChange = {
+                        defaultResolution = it
+                        Prefs.defaultQuality = it
+                    }
                 )
             }
             item {
                 SettingSwitchListItem(
                     modifier = Modifier.fillMaxWidth(),
-                    title = stringResource(R.string.settings_ui_main_animation_title),
-                    supportText = stringResource(R.string.settings_ui_main_animation_text),
-                    checked = enableMainUiAnimation,
-                    onCheckedChange = { Prefs.enableMainUiAnimation = it }
+                    title = stringResource(R.string.settings_player_show_bottom_progress_bar_title),
+                    supportText = stringResource(R.string.settings_player_show_bottom_progress_bar_text),
+                    checked = showBottomProgressBar,
+                    onCheckedChange = {
+                        showBottomProgressBar = it
+                        Prefs.playerShowBottomProgressBar = it
+                    }
+                )
+            }
+            item {
+                SettingListItemWithDialog(
+                    modifier = Modifier.fillMaxWidth(),
+                    title = stringResource(R.string.settings_player_load_next_action_title),
+                    supportText = stringResource(R.string.settings_player_load_next_action_text),
+                    options = PlayerLoadNextAction.entries,
+                    getDisplayName = { item, ctx -> item.displayName(ctx) },
+                    value = loadNextAction,
+                    onValueChange = {
+                        loadNextAction = it
+                        Prefs.playerLoadNextAction = it
+                    }
+                )
+            }
+            item {
+                SettingSwitchListItem(
+                    modifier = Modifier.fillMaxWidth(),
+                    title = stringResource(R.string.settings_main_enable_sponsor_block_title),
+                    supportText = stringResource(R.string.settings_main_enable_sponsor_block_text),
+                    checked = enableSponsorBlock,
+                    onCheckedChange = {
+                        enableSponsorBlock = it
+                        Prefs.enableSponsorBlock = it
+                    }
+                )
+            }
+            item {
+                SettingListItem(
+                    modifier = Modifier.fillMaxWidth(),
+                    title = stringResource(R.string.settings_item_about),
+                    supportText = stringResource(R.string.settings_main_about_text),
+                    valueText = currentVersion,
+                    onClick = { showAboutDialog = true }
                 )
             }
             item {
@@ -198,19 +238,25 @@ fun SettingsContent(
             Prefs.gridColumns = it
         }
     )
-    HomeNavItemsEditDialog(
-        show = showHomeNavItemsDialog,
-        onHideDialog = { showHomeNavItemsDialog = false },
-        initialOrderString = Prefs.homeNavItemsOrder
-    )
-    UgcNavItemsEditDialog(
-        show = showUgcNavItemsDialog,
-        onHideDialog = { showUgcNavItemsDialog = false },
-        initialOrderString = Prefs.ugcNavItemsOrder
-    )
     DrawerNavItemsEditDialog(
         show = showDrawerNavItemsDialog,
         onHideDialog = { showDrawerNavItemsDialog = false },
         initialOrderString = Prefs.drawerItemsOrder
     )
+    if (showAboutDialog) {
+        TvAlertDialog(
+            onDismissRequest = { showAboutDialog = false },
+            title = { Text(text = stringResource(R.string.settings_item_about)) },
+            text = {
+                Text(
+                    text = stringResource(R.string.settings_version_current_version, currentVersion)
+                )
+            },
+            confirmButton = {
+                Button(onClick = { showAboutDialog = false }) {
+                    Text(text = stringResource(R.string.common_confirm))
+                }
+            }
+        )
+    }
 }

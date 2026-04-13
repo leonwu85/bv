@@ -224,10 +224,14 @@
     <string name="settings_item_other">更多设置</string>
     <string name="settings_item_player_type">播放器内核</string>
     <string name="settings_item_resolution">默认分辨率</string>
+    <string name="settings_main_default_resolution_text">设置视频播放默认使用的清晰度</string>
     <string name="settings_item_storage">存储管理</string>
     <string name="settings_item_ui">界面设置</string>
     <string name="settings_item_player">播放设置</string>
     <string name="settings_item_sponsor_block">广告助手</string>
+    <string name="settings_main_enable_sponsor_block_title">启用广告助手</string>
+    <string name="settings_main_enable_sponsor_block_text">由「小电视空降助手」提供支持，开启后可在视频中提示或跳过广告片段</string>
+    <string name="settings_main_about_text">查看当前版本</string>
     <string name="settings_sponsor_block_skip_mode_title">跳过方式</string>
     <string name="settings_sponsor_block_skip_mode_text">选择如何跳过广告片段</string>
     <string name="settings_sponsor_block_skip_mode_manual">手动</string>
