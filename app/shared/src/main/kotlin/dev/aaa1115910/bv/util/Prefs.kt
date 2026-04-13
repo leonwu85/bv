@@ -15,7 +15,6 @@ import de.schnettler.datastore.manager.PreferenceRequest
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.http.util.generateBuvid
 import dev.aaa1115910.bv.BVApp
-import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.entity.LiveQualityPreference
 import dev.aaa1115910.bv.entity.PlayerType
 import dev.aaa1115910.bv.entity.ThemeType
@@ -332,10 +331,6 @@ object Prefs {
     var density: Float
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDensityRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDensityKey, value) }
-
-    var updateAlpha: Boolean
-        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefAlphaRequest).first() }
-        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefAlphaKey, value) }
 
     var accessToken: String
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefAccessTokenRequest).first() }
@@ -677,7 +672,6 @@ object PrefKeys {
     val prefBuvid3Key = stringPreferencesKey("random_buvid3")
     val prefPlayerTypeKey = intPreferencesKey("pt")
     val prefDensityKey = floatPreferencesKey("density")
-    val prefAlphaKey = booleanPreferencesKey("alpha")
     val prefAccessTokenKey = stringPreferencesKey("access_token")
     val prefRefreshTokenKey = stringPreferencesKey("refresh_token")
     val prefApiTypeKey = intPreferencesKey("api_type")
@@ -776,9 +770,6 @@ object PrefKeys {
             runCatching { BVApp.context.resources.displayMetrics.widthPixels / 960f }
                 .getOrDefault(2f)
         )
-
-    @Suppress("KotlinConstantConditions")
-    val prefAlphaRequest = PreferenceRequest(prefAlphaKey, BuildConfig.BUILD_TYPE == "alpha")
     val prefAccessTokenRequest = PreferenceRequest(prefAccessTokenKey, "")
     val prefRefreshTokenRequest = PreferenceRequest(prefRefreshTokenKey, "")
     val prefApiTypeRequest = PreferenceRequest(prefApiTypeKey, 0)

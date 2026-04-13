@@ -36,7 +36,6 @@ fun OtherSetting(
     val context = LocalContext.current
 
     var showFps by remember { mutableStateOf(Prefs.showFps) }
-    var updateAlpha by remember { mutableStateOf(Prefs.updateAlpha) }
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -74,17 +73,6 @@ fun OtherSetting(
                     onCheckedChange = {
                         showFps = it
                         Prefs.showFps = it
-                    }
-                )
-            }
-            item {
-                SettingSwitchListItem(
-                    title = stringResource(R.string.settings_other_alpha_title),
-                    supportText = stringResource(R.string.settings_other_alpha_text),
-                    checked = updateAlpha,
-                    onCheckedChange = {
-                        updateAlpha = it
-                        Prefs.updateAlpha = it
                     }
                 )
             }

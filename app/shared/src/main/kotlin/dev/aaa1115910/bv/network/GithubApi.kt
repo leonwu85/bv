@@ -2,7 +2,6 @@ package dev.aaa1115910.bv.network
 
 import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.network.entity.Release
-import dev.aaa1115910.bv.util.Prefs
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
 import io.ktor.client.content.ProgressListener
@@ -42,7 +41,7 @@ object GithubApi {
         prettyPrint = true
     }
     private val isDebug get() = BuildConfig.DEBUG
-    private val isAlpha get() = Prefs.updateAlpha
+    private val isAlpha get() = BuildConfig.BUILD_TYPE == "alpha"
     private val logger = KotlinLogging.logger("GithubApi")
 
     init {
