@@ -685,12 +685,18 @@ fun VideoInfoScreen(
                 add(context.getString(R.string.video_info_argue_tip_vertical_screen))
             }
             if (videoDetailViewModel.videoDetail?.isChargingArc == true) {
+                val chargingArcStatus = when (videoDetailViewModel.videoDetail?.isUpowerPlay) {
+                    true -> context.getString(R.string.video_info_argue_tip_charging_arc_charged)
+                    false -> context.getString(R.string.video_info_argue_tip_charging_arc_not_charged)
+                    null -> ""
+                }
                 add(
                     context.getString(
                         R.string.video_info_argue_tip_charging_arc,
                         videoDetailViewModel.videoDetail?.chargingArcBadge
                             .takeUnless { it.isNullOrBlank() }
-                            ?: ChargingBadgeDefaultText
+                            ?: ChargingBadgeDefaultText,
+                        chargingArcStatus
                     )
                 )
             }

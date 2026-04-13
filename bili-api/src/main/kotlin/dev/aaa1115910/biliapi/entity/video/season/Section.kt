@@ -6,11 +6,21 @@ data class Section(
     val episodes: List<Episode>
 ) {
     companion object {
-        fun fromSection(section: dev.aaa1115910.biliapi.http.entity.video.UgcSeason.Section) =
+        fun fromSection(
+            section: dev.aaa1115910.biliapi.http.entity.video.UgcSeason.Section,
+            ugcSeasonIsChargingArc: Boolean = false,
+            ugcSeasonChargingArcBadge: String = ""
+        ) =
             Section(
                 id = section.id,
                 title = section.title,
-                episodes = section.episodes.map { Episode.fromEpisode(it) }
+                episodes = section.episodes.map {
+                    Episode.fromEpisode(
+                        episode = it,
+                        ugcSeasonIsChargingArc = ugcSeasonIsChargingArc,
+                        ugcSeasonChargingArcBadge = ugcSeasonChargingArcBadge
+                    )
+                }
             )
 
         fun fromSection(section: bilibili.app.view.v1.Section) = Section(

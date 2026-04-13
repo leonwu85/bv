@@ -34,8 +34,16 @@ data class Episode(
     val isChargingArc: Boolean = false,
     val chargingArcBadge: String = "",
     val dimension: Dimension?,
-    val pages: List<VideoPage>
+    val pages: List<VideoPage>,
+    val badge: String = "",
+    val badgeInfo: BadgeInfo? = null
 ) {
+    data class BadgeInfo(
+        val bgColor: String,
+        val bgColorNight: String,
+        val text: String
+    )
+
     companion object {
         fun fromEpisode(episode: bilibili.app.view.v1.Episode) = Episode(
             id = episode.id.toInt(),
@@ -55,7 +63,11 @@ data class Episode(
             pages = episode.pagesList.map { VideoPage.fromPage(it) }
         )
 
-        fun fromEpisode(episode: dev.aaa1115910.biliapi.http.entity.video.UgcSeason.Section.Episode) =
+        fun fromEpisode(
+            episode: dev.aaa1115910.biliapi.http.entity.video.UgcSeason.Section.Episode,
+            ugcSeasonIsChargingArc: Boolean = false,
+            ugcSeasonChargingArcBadge: String = ""
+        ) =
             Episode(
                 id = episode.id,
                 aid = episode.aid,
@@ -68,8 +80,9 @@ data class Episode(
                 viewCount = episode.arc.stat.view,
                 danmakuCount = episode.arc.stat.danmaku,
                 isInteractive = episode.arc.rights.isSteinGate == 1,
-                isChargingArc = episode.arc.isChargeableSeason,
+                isChargingArc = ugcSeasonIsChargingArc || episode.arc.isChargeableSeason,
                 chargingArcBadge = when {
+                    ugcSeasonIsChargingArc -> ugcSeasonChargingArcBadge.ifBlank { "充电专属" }
                     !episode.arc.isChargeableSeason -> ""
                     episode.arc.rights.payFreeWatch == 1 -> "限时免费"
                     else -> "充电专属"
@@ -98,7 +111,13 @@ data class Episode(
                 ""
             },
             dimension = episode.dimension?.let { Dimension.fromDimension(it) },
-            pages = emptyList()
+            pages = emptyList(),
+            badge = episode.badge,
+            badgeInfo = BadgeInfo(
+                bgColor = episode.badgeInfo.bgColor,
+                bgColorNight = episode.badgeInfo.bgColorNight,
+                text = episode.badgeInfo.text
+            )
         )
     }
 }

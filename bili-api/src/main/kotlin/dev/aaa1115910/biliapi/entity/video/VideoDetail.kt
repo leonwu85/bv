@@ -9,6 +9,19 @@ import dev.aaa1115910.biliapi.http.entity.video.isInteractiveVideo
 import dev.aaa1115910.biliapi.http.entity.video.VideoStat
 import java.util.Date
 
+internal fun upowerBadgeText(isUpowerExclusive: Boolean): String {
+    if (!isUpowerExclusive) return ""
+    return "充电专属"
+}
+
+internal fun upowerPlayState(
+    isUpowerExclusive: Boolean,
+    isUpowerPlay: Boolean
+): Boolean? {
+    if (!isUpowerExclusive) return null
+    return isUpowerPlay
+}
+
 data class VideoDetail(
     val bvid: String,
     val aid: Long,
@@ -33,7 +46,8 @@ data class VideoDetail(
     var history: History,
     var playerIcon: PlayerIcon? = null,
     var isChargingArc: Boolean = false,
-    var chargingArcBadge: String = ""
+    var chargingArcBadge: String = "",
+    val isUpowerPlay: Boolean? = null
 ) {
     companion object {
         fun fromViewReply(viewReply: ViewReply): VideoDetail {
@@ -99,33 +113,45 @@ data class VideoDetail(
         }
 
         fun fromVideoDetail(videoDetail: dev.aaa1115910.biliapi.http.entity.video.VideoDetail) =
-            VideoDetail(
-                bvid = videoDetail.view.bvid,
-                aid = videoDetail.view.aid,
-                cid = videoDetail.view.cid,
-                cover = videoDetail.view.pic,
-                title = videoDetail.view.title,
-                publishDate = Date(videoDetail.view.pubdate * 1000L),
-                description = videoDetail.view.desc,
-                stat = Stat.fromVideoStat(videoDetail.view.stat),
-                author = Author.fromVideoOwner(videoDetail.view.owner),
-                pages = videoDetail.view.pages.map { VideoPage.fromVideoPage(it) },
-                ugcSeason = videoDetail.view.ugcSeason?.let { UgcSeason.fromUgcSeason(it) },
-                relatedVideos = videoDetail.related?.map { RelatedVideo.fromRelate(it) }
-                    ?: emptyList(),
-                redirectToEp = videoDetail.view.redirectUrl?.contains("ep") ?: false,
-                epid = videoDetail.view.redirectUrl?.split("ep", "?")?.get(1)?.toInt(),
-                argueTip = videoDetail.view.stat.argueMsg.takeIf { it.isNotEmpty() },
-                tags = videoDetail.tags.map { Tag.fromTag(it) },
-                isInteractive = videoDetail.view.isInteractiveVideo,
-                userActions = UserActions(),
-                history = History(0, 0),
-                playerIcon = null,
-                isChargingArc = videoDetail.view.isUpowerExclusive,
-                chargingArcBadge = if (videoDetail.view.isUpowerExclusive) {
-                    if (videoDetail.view.isUpowerPlay) "限时免费" else "充电专属"
-                } else ""
-            )
+            run {
+                val chargingArcBadge = upowerBadgeText(videoDetail.view.isUpowerExclusive)
+
+                VideoDetail(
+                    bvid = videoDetail.view.bvid,
+                    aid = videoDetail.view.aid,
+                    cid = videoDetail.view.cid,
+                    cover = videoDetail.view.pic,
+                    title = videoDetail.view.title,
+                    publishDate = Date(videoDetail.view.pubdate * 1000L),
+                    description = videoDetail.view.desc,
+                    stat = Stat.fromVideoStat(videoDetail.view.stat),
+                    author = Author.fromVideoOwner(videoDetail.view.owner),
+                    pages = videoDetail.view.pages.map { VideoPage.fromVideoPage(it) },
+                    ugcSeason = videoDetail.view.ugcSeason?.let {
+                        UgcSeason.fromUgcSeason(
+                            ugcSeason = it,
+                            ugcSeasonIsChargingArc = videoDetail.view.isUpowerExclusive,
+                            ugcSeasonChargingArcBadge = chargingArcBadge
+                        )
+                    },
+                    relatedVideos = videoDetail.related?.map { RelatedVideo.fromRelate(it) }
+                        ?: emptyList(),
+                    redirectToEp = videoDetail.view.redirectUrl?.contains("ep") ?: false,
+                    epid = videoDetail.view.redirectUrl?.split("ep", "?")?.get(1)?.toInt(),
+                    argueTip = videoDetail.view.stat.argueMsg.takeIf { it.isNotEmpty() },
+                    tags = videoDetail.tags.map { Tag.fromTag(it) },
+                    isInteractive = videoDetail.view.isInteractiveVideo,
+                    userActions = UserActions(),
+                    history = History(0, 0),
+                    playerIcon = null,
+                    isChargingArc = videoDetail.view.isUpowerExclusive,
+                    chargingArcBadge = chargingArcBadge,
+                    isUpowerPlay = upowerPlayState(
+                        isUpowerExclusive = videoDetail.view.isUpowerExclusive,
+                        isUpowerPlay = videoDetail.view.isUpowerPlay
+                    )
+                )
+            }
     }
 
     data class Stat(

@@ -16,12 +16,22 @@ data class UgcSeason(
             sections = ugcSeason.sectionsList.map { Section.fromSection(it) }
         )
 
-        fun fromUgcSeason(ugcSeason: dev.aaa1115910.biliapi.http.entity.video.UgcSeason) =
+        fun fromUgcSeason(
+            ugcSeason: dev.aaa1115910.biliapi.http.entity.video.UgcSeason,
+            ugcSeasonIsChargingArc: Boolean = false,
+            ugcSeasonChargingArcBadge: String = ""
+        ) =
             UgcSeason(
                 id = ugcSeason.id,
                 title = ugcSeason.title,
                 cover = ugcSeason.cover,
-                sections = ugcSeason.sections.map { Section.fromSection(it) }
+                sections = ugcSeason.sections.map {
+                    Section.fromSection(
+                        section = it,
+                        ugcSeasonIsChargingArc = ugcSeasonIsChargingArc,
+                        ugcSeasonChargingArcBadge = ugcSeasonChargingArcBadge
+                    )
+                }
             )
     }
 }

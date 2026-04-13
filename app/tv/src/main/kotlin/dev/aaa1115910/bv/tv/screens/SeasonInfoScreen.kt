@@ -2,6 +2,7 @@ package dev.aaa1115910.bv.tv.screens
 
 import android.app.Activity
 import android.content.res.Configuration
+import android.graphics.Color as AndroidColor
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
@@ -10,6 +11,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -156,6 +159,13 @@ private fun formatEpisodeStatCount(count: Long): String {
         count >= 10000L -> "${count / 10000}万"
         else -> "$count"
     }
+}
+
+private fun parseEpisodeBadgeColor(color: String?, fallback: Color): Color {
+    if (color.isNullOrBlank()) return fallback
+    return runCatching {
+        Color(AndroidColor.parseColor(color))
+    }.getOrDefault(fallback)
 }
 
 @Composable
@@ -768,6 +778,8 @@ fun SeasonEpisodeButton(
     title: String,
     cover: String,
     duration: Int,
+    badge: String = "",
+    badgeInfo: Episode.BadgeInfo? = null,
     viewCount: Long = 0,
     danmakuCount: Int = 0,
     played: Int = 0,
@@ -777,6 +789,7 @@ fun SeasonEpisodeButton(
     val isPreview = LocalInspectionMode.current
     val lastPlayedColor = Color(0xFFE39B17)
     val focusedColor = Color(0xFFF1CD8B)
+    val useDarkBadgeColor = isSystemInDarkTheme()
 
     // 格式化时长显示
     val durationText = remember(duration) {
@@ -790,6 +803,17 @@ fun SeasonEpisodeButton(
     }
     val playCountText = remember(viewCount) { formatEpisodeStatCount(viewCount) }
     val danmakuCountText = remember(danmakuCount) { formatEpisodeStatCount(danmakuCount.toLong()) }
+    val topRightBadgeText = remember(badge, badgeInfo) {
+        badgeInfo?.text?.takeIf { it.isNotBlank() } ?: badge.takeIf { it.isNotBlank() }
+    }
+    val topRightBadgeBackground = remember(badgeInfo, useDarkBadgeColor) {
+        parseEpisodeBadgeColor(
+            color = badgeInfo?.let {
+                if (useDarkBadgeColor) it.bgColorNight else it.bgColor
+            },
+            fallback = Color.Black.copy(alpha = 0.7f)
+        )
+    }
 
     // 播放进度比例
     val progressFraction = remember(played, duration) {
@@ -831,6 +855,25 @@ fun SeasonEpisodeButton(
                     contentDescription = null,
                     contentScale = ContentScale.Crop
                 )
+
+                if (!topRightBadgeText.isNullOrEmpty()) {
+                    Text(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .widthIn(max = 150.dp)
+                            .background(
+                                color = topRightBadgeBackground,
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                        text = topRightBadgeText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
                 if (isLastPlayed) {
                     Box(
@@ -1096,6 +1139,8 @@ fun SeasonEpisodesDialog(
                                 },
                                 title = episodeTitle,
                                 cover = episode.cover,
+                                badge = episode.badge,
+                                badgeInfo = episode.badgeInfo,
                                 viewCount = episode.viewCount,
                                 danmakuCount = episode.danmakuCount,
                                 played = if (episode.id == lastPlayedId) lastPlayedTime else 0,
@@ -1214,6 +1259,8 @@ fun SeasonEpisodeRow(
                     },
                     title = episodeTitle,
                     cover = episode.cover,
+                    badge = episode.badge,
+                    badgeInfo = episode.badgeInfo,
                     viewCount = episode.viewCount,
                     danmakuCount = episode.danmakuCount,
                     played = if (episode.id == lastPlayedId) lastPlayedTime else 0,
