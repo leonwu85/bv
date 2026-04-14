@@ -1345,6 +1345,7 @@ fun BvPlayer(
             DanmakuLayerSideEffects(
                 danmakuLayerHandle = danmakuLayerHandle,
                 visible = videoPlayerConfigData.showDanmaku,
+                isPlaying = isPlaying,
                 maskFrame = currentDanmakuMaskFrame.takeIf { videoPlayerConfigData.currentDanmakuMask },
                 maskBitmap = currentDanmakuMaskBitmap.takeIf { videoPlayerConfigData.currentDanmakuMask },
                 videoAspectRatio = aspectRatioValue
@@ -1404,15 +1405,17 @@ fun BvPlayer(
 private fun DanmakuLayerSideEffects(
     danmakuLayerHandle: DanmakuLayerHandle,
     visible: Boolean,
+    isPlaying: Boolean,
     maskFrame: DanmakuMaskFrame?,
     maskBitmap: Bitmap?,
     videoAspectRatio: Float,
 ) {
-    LaunchedEffect(visible, maskFrame, maskBitmap, videoAspectRatio) {
+    LaunchedEffect(visible, isPlaying, maskFrame, maskBitmap, videoAspectRatio) {
         danmakuLayerHandle.update(
             mask = maskFrame,
             bitmap = maskBitmap,
             visible = visible,
+            isPlaying = isPlaying,
             videoAspectRatio = videoAspectRatio,
         )
     }

@@ -52,6 +52,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -94,12 +95,7 @@ private fun formatSpeed(speed: Float): String {
 }
 
 private fun controllerSeekBarPlayedTrackBrush(progressColor: Color): Brush {
-    return Brush.horizontalGradient(
-        listOf(
-            progressColor.copy(alpha = 1f),
-            PlayerColors.progressGradientColors.last()
-        )
-    )
+    return SolidColor(progressColor)
 }
 
 private class ControllerBottomBarAutoHideState {

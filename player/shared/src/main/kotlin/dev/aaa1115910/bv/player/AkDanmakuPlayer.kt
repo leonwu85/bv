@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -20,6 +21,7 @@ import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import com.kuaishou.akdanmaku.ui.DanmakuSurfaceView
 import com.kuaishou.akdanmaku.ui.DanmakuView
 import com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer
+import com.kuaishou.akdanmaku.ui.VideoDanmakuSurfaceView
 
 /**
  * 普通弹幕播放器组件
@@ -28,12 +30,14 @@ import com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer
 fun AkDanmakuPlayer(
     modifier: Modifier = Modifier,
     danmakuPlayer: DanmakuPlayer?,
-    visible: Boolean = true
+    visible: Boolean = true,
+    isPlaying: Boolean = false
 ) {
     AkDanmakuPlayer(
         modifier = modifier,
         danmakuPlayer = danmakuPlayer,
         visible = visible,
+        isPlaying = isPlaying,
         isLiveMode = false,
         onLiveDanmakuPlayerReady = null
     )
@@ -50,11 +54,14 @@ fun AkDanmakuPlayer(
     modifier: Modifier = Modifier,
     danmakuPlayer: DanmakuPlayer? = null,
     visible: Boolean = true,
+    isPlaying: Boolean = false,
     isLiveMode: Boolean = false,
+    useVideoDanmakuSurfaceView: Boolean = false,
     onLiveDanmakuPlayerReady: ((LiveDanmakuPlayer) -> Unit)? = null
 ) {
     val context = LocalContext.current
     var danmakuView: DanmakuView? by remember { mutableStateOf(null) }
+    var videoDanmakuSurfaceView: VideoDanmakuSurfaceView? by remember { mutableStateOf(null) }
     var liveDanmakuPlayer: LiveDanmakuPlayer? by remember { mutableStateOf(null) }
 
     DisposableEffect(danmakuPlayer, isLiveMode) {
@@ -67,10 +74,41 @@ fun AkDanmakuPlayer(
         }
     }
 
-    LaunchedEffect(danmakuView, danmakuPlayer) {
+    LaunchedEffect(
+        danmakuView,
+        videoDanmakuSurfaceView,
+        danmakuPlayer,
+        isLiveMode,
+        useVideoDanmakuSurfaceView
+    ) {
         if (!isLiveMode) {
-            danmakuView?.let { view ->
-                danmakuPlayer?.bindView(view)
+            if (useVideoDanmakuSurfaceView) {
+                videoDanmakuSurfaceView?.let { surfaceView ->
+                    danmakuPlayer?.bindSurfaceView(surfaceView)
+                }
+            } else {
+                danmakuView?.let { view ->
+                    danmakuPlayer?.bindView(view)
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(
+        videoDanmakuSurfaceView,
+        danmakuPlayer,
+        visible,
+        isPlaying,
+        isLiveMode,
+        useVideoDanmakuSurfaceView
+    ) {
+        if (!isLiveMode && useVideoDanmakuSurfaceView) {
+            videoDanmakuSurfaceView?.let { surfaceView ->
+                if (visible && isPlaying) {
+                    surfaceView.play()
+                } else {
+                    surfaceView.pause()
+                }
             }
         }
     }
@@ -108,29 +146,51 @@ fun AkDanmakuPlayer(
             }
         )
     } else {
-        AndroidView(
-            modifier = modifier,
-            factory = { ctx ->
-                DanmakuView(ctx).apply {
-                    setBackgroundColor(Color.TRANSPARENT)
-
-                    setWillNotDraw(false)
-
-                    // 硬件加速层，减少弹幕绘制的 CPU 开销
-                    setLayerType(View.LAYER_TYPE_HARDWARE, null)
-
-                    // 兼容性优化：对于旧版本Android使用绘制缓存
-                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-                        @Suppress("DEPRECATION")
-                        isDrawingCacheEnabled = true
-                        @Suppress("DEPRECATION")
-                        setDrawingCacheBackgroundColor(Color.TRANSPARENT)
+        if (useVideoDanmakuSurfaceView) {
+            key(danmakuPlayer) {
+                AndroidView(
+                    modifier = modifier,
+                    factory = { ctx ->
+                        VideoDanmakuSurfaceView(ctx).apply {
+                            setBackgroundColor(Color.TRANSPARENT)
+                            setZOrderMediaOverlay(true)
+                            holder?.setFormat(PixelFormat.TRANSLUCENT)
+                            danmakuView = null
+                            videoDanmakuSurfaceView = this
+                        }
+                    },
+                    update = { surfaceView ->
+                        surfaceView.visibility = if (visible) View.VISIBLE else View.INVISIBLE
                     }
-                }.also { danmakuView = it }
-            },
-            update = { view ->
-                view.visibility = if (visible) View.VISIBLE else View.INVISIBLE
+                )
             }
-        )
+        } else {
+            AndroidView(
+                modifier = modifier,
+                factory = { ctx ->
+                    DanmakuView(ctx).apply {
+                        setBackgroundColor(Color.TRANSPARENT)
+
+                        setWillNotDraw(false)
+
+                        // 硬件加速层，减少弹幕绘制的 CPU 开销
+                        setLayerType(View.LAYER_TYPE_HARDWARE, null)
+
+                        // 兼容性优化：对于旧版本Android使用绘制缓存
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+                            @Suppress("DEPRECATION")
+                            isDrawingCacheEnabled = true
+                            @Suppress("DEPRECATION")
+                            setDrawingCacheBackgroundColor(Color.TRANSPARENT)
+                        }
+                        videoDanmakuSurfaceView = null
+                        danmakuView = this
+                    }
+                },
+                update = { view ->
+                    view.visibility = if (visible) View.VISIBLE else View.INVISIBLE
+                }
+            )
+        }
     }
 }

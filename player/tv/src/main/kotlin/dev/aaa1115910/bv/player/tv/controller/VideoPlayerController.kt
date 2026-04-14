@@ -674,7 +674,8 @@ fun VideoPlayerController(
         SeekController(
             show = showSeekController,
             goTime = goTime,
-            moveState = moveState
+            moveState = moveState,
+            bottomProgressBarColor = bottomProgressBarColor
         )
         VideoListController(
             show = showListController,
