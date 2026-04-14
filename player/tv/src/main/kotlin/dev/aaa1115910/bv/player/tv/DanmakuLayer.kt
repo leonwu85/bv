@@ -45,6 +45,10 @@ class DanmakuLayerHandle(
     var visible by mutableStateOf(true)
         private set
 
+    // 视频当前是否处于播放中，用于同步 SurfaceView 弹幕恢复状态
+    var isPlaying by mutableStateOf(false)
+        private set
+
     // 视频宽高比，用于计算蒙版的正确覆盖区域
     var videoAspectRatio: Float by mutableStateOf(0f)
         private set
@@ -69,12 +73,14 @@ class DanmakuLayerHandle(
         mask: DanmakuMaskFrame? = maskFrame,
         bitmap: Bitmap? = maskBitmap,
         visible: Boolean? = null,
-        videoAspectRatio: Float? = null
+        videoAspectRatio: Float? = null,
+        isPlaying: Boolean? = null
     ) {
         if (maskFrame !== mask) maskFrame = mask
         if (maskBitmap !== bitmap) maskBitmap = bitmap
         visible?.let { if (this.visible != it) this.visible = it }
         videoAspectRatio?.let { if (this.videoAspectRatio != it) this.videoAspectRatio = it }
+        isPlaying?.let { if (this.isPlaying != it) this.isPlaying = it }
     }
 }
 
@@ -84,9 +90,10 @@ fun DanmakuLayer(
     handle: DanmakuLayerHandle,
 ) {
     val player = handle.danmakuPlayer
+    val useVideoDanmakuSurfaceView = !handle.isLiveMode
 
     // 使用预渲染的 Bitmap
-    val maskModifier = if (handle.maskBitmap != null && handle.videoAspectRatio > 0f) {
+    val maskModifier = if (!useVideoDanmakuSurfaceView && handle.maskBitmap != null && handle.videoAspectRatio > 0f) {
         Modifier.danmakuMaskBitmap(handle.maskBitmap, handle.videoAspectRatio)
     } else Modifier
 
@@ -100,7 +107,11 @@ fun DanmakuLayer(
             modifier = Modifier.fillMaxWidth().fillMaxHeight(),
             danmakuPlayer = player,
             visible = handle.visible,
+            isPlaying = handle.isPlaying,
+            maskBitmap = handle.maskBitmap,
+            videoAspectRatio = handle.videoAspectRatio,
             isLiveMode = handle.isLiveMode,
+            useVideoDanmakuSurfaceView = useVideoDanmakuSurfaceView,
             onLiveDanmakuPlayerReady = handle.onLiveDanmakuPlayerReady
         )
     }

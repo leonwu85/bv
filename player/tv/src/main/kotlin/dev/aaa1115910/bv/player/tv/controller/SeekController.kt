@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
@@ -35,6 +36,7 @@ fun SeekController(
     show: Boolean,
     goTime: Long,
     moveState: SeekMoveState,
+    bottomProgressBarColor: Color = PlayerColors.bottomProgressBar,
 ) {
     val videoPlayerVideoShotData = LocalVideoPlayerVideoShotData.current
     val videoPlayerSeekState = LocalVideoPlayerSeekState.current
@@ -57,7 +59,8 @@ fun SeekController(
                 moveState = moveState,
                 idleIcon = videoPlayerSeekThumbData.idleIcon,
                 movingIcon = videoPlayerSeekThumbData.movingIcon,
-                videoShot = videoPlayerVideoShotData.videoShot
+                videoShot = videoPlayerVideoShotData.videoShot,
+                bottomProgressBarColor = bottomProgressBarColor
             )
         }
     }
@@ -71,7 +74,8 @@ private fun SeekController(
     moveState: SeekMoveState,
     idleIcon: String,
     movingIcon: String,
-    videoShot: VideoShot? = null
+    videoShot: VideoShot? = null,
+    bottomProgressBarColor: Color = PlayerColors.bottomProgressBar
 ) {
     Column(
         modifier = modifier,
@@ -110,7 +114,8 @@ private fun SeekController(
                 moveState = moveState,
                 idleIcon = idleIcon,
                 movingIcon = movingIcon,
-                showPosition = true
+                showPosition = true,
+                playedTrackBrush = SolidColor(bottomProgressBarColor)
             )
         }
     }
@@ -135,7 +140,8 @@ private fun VideoProgressSeekPreview(@PreviewParameter(VideoProgressProvider::cl
                 imageWidth = 0,
                 imageHeight = 0,
                 images = emptyList()
-            )
+            ),
+            bottomProgressBarColor = PlayerColors.bottomProgressBar
         )
     }
 }
