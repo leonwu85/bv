@@ -89,6 +89,7 @@ import androidx.tv.material3.Glow
 import androidx.tv.material3.Icon
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
@@ -96,8 +97,10 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import dev.aaa1115910.biliapi.entity.video.season.Episode
 import dev.aaa1115910.biliapi.entity.video.season.PgcSeason
+import dev.aaa1115910.biliapi.entity.video.season.SeasonDetail
 import dev.aaa1115910.biliapi.entity.video.season.Section
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.component.QrImage
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.player.entity.VideoListPgcEpisode
 import dev.aaa1115910.bv.repository.VideoInfoRepository
@@ -168,6 +171,41 @@ private fun parseEpisodeBadgeColor(color: String?, fallback: Color): Color {
     }.getOrDefault(fallback)
 }
 
+private const val SeasonVipRequiredStatus = 13
+private const val SeasonPaidRequiredStatus = 8
+private const val VipOpenUrl = "https://account.bilibili.com/big"
+
+private enum class SeasonQrDialogType {
+    OpenVip,
+    Pay
+}
+
+private data class SeasonAccessState(
+    val showOpenVipButton: Boolean = false,
+    val showPayButton: Boolean = false,
+    val payUrl: String = ""
+)
+
+private fun resolveSeasonAccessState(
+    seasonData: SeasonDetail,
+    lastPlayedEpId: Int?
+): SeasonAccessState {
+    val positiveEpisodes = seasonData.episodes
+    val payEpisode = positiveEpisodes.firstOrNull {
+        it.id == lastPlayedEpId && it.status == SeasonPaidRequiredStatus && it.shortLink.isNotBlank()
+    } ?: positiveEpisodes.firstOrNull {
+        it.status == SeasonPaidRequiredStatus && it.shortLink.isNotBlank()
+    }
+
+    return SeasonAccessState(
+        showOpenVipButton = !seasonData.userStatus.isVip && positiveEpisodes.any {
+            it.status == SeasonVipRequiredStatus
+        },
+        showPayButton = !seasonData.userStatus.pay && payEpisode != null,
+        payUrl = payEpisode?.shortLink.orEmpty()
+    )
+}
+
 @Composable
 fun SeasonInfoScreen(
     modifier: Modifier = Modifier,
@@ -184,8 +222,11 @@ fun SeasonInfoScreen(
     var showSeasonSelector by remember { mutableStateOf(false) }
     var showCommentPanel by remember { mutableStateOf(false) }
     var showDescriptionDialog by remember { mutableStateOf(false) }
+    var showAccessQrDialog by remember { mutableStateOf<SeasonQrDialogType?>(null) }
     val playButtonFocusRequester = remember { FocusRequester() }
     val commentButtonFocusRequester = remember { FocusRequester() }
+    val vipButtonFocusRequester = remember { FocusRequester() }
+    val payButtonFocusRequester = remember { FocusRequester() }
 
     val onClickVideo: (avid: Long, cid: Long, epid: Int, episodeTitle: String, startTime: Int) -> Unit =
         { avid, cid, epid, episodeTitle, startTime ->
@@ -296,6 +337,25 @@ fun SeasonInfoScreen(
         }
     }
 
+    val seasonAccessState = seasonViewModel.seasonData?.let { seasonData ->
+        remember(seasonData, seasonViewModel.lastPlayProgress?.lastEpId) {
+            resolveSeasonAccessState(
+                seasonData = seasonData,
+                lastPlayedEpId = seasonViewModel.lastPlayProgress?.lastEpId
+            )
+        }
+    }
+
+    val hideAccessQrDialog = {
+        val dialogType = showAccessQrDialog
+        showAccessQrDialog = null
+        when (dialogType) {
+            SeasonQrDialogType.OpenVip -> vipButtonFocusRequester.requestFocus(scope)
+            SeasonQrDialogType.Pay -> payButtonFocusRequester.requestFocus(scope)
+            null -> Unit
+        }
+    }
+
     if (seasonViewModel.seasonData == null) {
         Box(
             modifier = Modifier
@@ -313,6 +373,7 @@ fun SeasonInfoScreen(
         }
     } else {
         val seasonData = seasonViewModel.seasonData!!
+        val accessState = seasonAccessState ?: SeasonAccessState()
 
         val heroBackgroundCover = remember(seasonData, seasonViewModel.lastPlayProgress) {
             seasonData.seasons.find { it.seasonId == seasonData.seasonId }?.horizontalCover
@@ -393,6 +454,8 @@ fun SeasonInfoScreen(
                     SeasonHeroSection(
                         playButtonFocusRequester = playButtonFocusRequester,
                         commentButtonFocusRequester = commentButtonFocusRequester,
+                        vipButtonFocusRequester = vipButtonFocusRequester,
+                        payButtonFocusRequester = payButtonFocusRequester,
                         backgroundCover = heroBackgroundCover,
                         title = seasonData.title,
                         styles = seasonData.styles,
@@ -408,6 +471,8 @@ fun SeasonInfoScreen(
                         publishDate = seasonData.publish.publishDate,
                         hasMultipleSeasons = seasonData.seasons.size > 1,
                         seasonCount = seasonData.seasons.size,
+                        showOpenVipButton = accessState.showOpenVipButton,
+                        showPayButton = accessState.showPayButton,
                         onPlay = {
                             logger.fInfo { "Click play button" }
                             var playAid = -1L
@@ -490,6 +555,8 @@ fun SeasonInfoScreen(
                         onClickFollow = onClickFollow,
                         onClickSeasonSelector = onClickCover,
                         onShowComment = onShowComment,
+                        onOpenVip = { showAccessQrDialog = SeasonQrDialogType.OpenVip },
+                        onPay = { showAccessQrDialog = SeasonQrDialogType.Pay },
                         onShowDescription = { showDescriptionDialog = true }
                     )
                 }
@@ -601,6 +668,32 @@ fun SeasonInfoScreen(
         }
     )
 
+    if (showAccessQrDialog != null && seasonAccessState != null) {
+        when (showAccessQrDialog) {
+            SeasonQrDialogType.OpenVip -> {
+                SeasonAccessQrDialog(
+                    title = "开通会员",
+                    description = "手机扫码前往开通会员",
+                    qrContent = VipOpenUrl,
+                    onDismissRequest = hideAccessQrDialog
+                )
+            }
+
+            SeasonQrDialogType.Pay -> {
+                seasonAccessState.payUrl.takeIf { it.isNotBlank() }?.let { payUrl ->
+                    SeasonAccessQrDialog(
+                        title = "前往付费",
+                        description = "手机扫码前往影片页面付费",
+                        qrContent = payUrl,
+                        onDismissRequest = hideAccessQrDialog
+                    )
+                }
+            }
+
+            null -> Unit
+        }
+    }
+
     // 简介弹窗
     if (showDescriptionDialog) {
         androidx.compose.ui.window.Dialog(
@@ -676,6 +769,8 @@ fun SeasonHeroSection(
     modifier: Modifier = Modifier,
     playButtonFocusRequester: FocusRequester,
     commentButtonFocusRequester: FocusRequester = remember { FocusRequester() },
+    vipButtonFocusRequester: FocusRequester = remember { FocusRequester() },
+    payButtonFocusRequester: FocusRequester = remember { FocusRequester() },
     backgroundCover: String,
     title: String,
     styles: List<String> = emptyList(),
@@ -688,7 +783,11 @@ fun SeasonHeroSection(
     publishDate: String,
     hasMultipleSeasons: Boolean = false,
     seasonCount: Int = 0,
+    showOpenVipButton: Boolean = false,
+    showPayButton: Boolean = false,
     onPlay: () -> Unit,
+    onOpenVip: () -> Unit = {},
+    onPay: () -> Unit = {},
     onClickFollow: (follow: Boolean) -> Unit,
     onClickSeasonSelector: () -> Unit = {},
     onShowComment: () -> Unit = {},
@@ -753,12 +852,18 @@ fun SeasonHeroSection(
 
             SeasonInfoButtons(
                 focusRequester = playButtonFocusRequester,
+                openVipButtonFocusRequester = vipButtonFocusRequester,
+                payButtonFocusRequester = payButtonFocusRequester,
                 lastPlayedIndex = lastPlayedIndex,
                 lastPlayedTitle = lastPlayedTitle,
                 following = following,
                 isPublished = isPublished,
                 publishDate = publishDate,
+                showOpenVipButton = showOpenVipButton,
+                showPayButton = showPayButton,
                 onPlay = onPlay,
+                onOpenVip = onOpenVip,
+                onPay = onPay,
                 onClickFollow = onClickFollow,
                 onShowComment = onShowComment,
                 commentButtonFocusRequester = commentButtonFocusRequester,
@@ -768,6 +873,58 @@ fun SeasonHeroSection(
             )
         }
     }
+}
+
+@Composable
+private fun SeasonAccessQrDialog(
+    title: String,
+    description: String,
+    qrContent: String,
+    onDismissRequest: () -> Unit
+) {
+    TvAlertDialog(
+        modifier = Modifier.widthIn(min = 760.dp, max = 860.dp),
+        // title = {
+        //     Text(text = title)
+        // },
+        text = {
+            Row(
+                modifier = Modifier.padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                QrImage(
+                    modifier = Modifier.size(220.dp),
+                    content = qrContent,
+                    borderWidth = 20.dp,
+                    showLoadingWhenContentChanged = false
+                )
+                Column(
+                    modifier = Modifier.widthIn(max = 340.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "请使用哔哩哔哩手机客户端扫码",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.7f)
+                    )
+                }
+            }
+        },
+        onDismissRequest = onDismissRequest,
+        confirmButton = {
+            OutlinedButton(onClick = onDismissRequest) {
+                Text(text = "关闭")
+            }
+        },
+        containerColor = Color(0xFF111111).copy(alpha = 0.96f),
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    )
 }
 
 

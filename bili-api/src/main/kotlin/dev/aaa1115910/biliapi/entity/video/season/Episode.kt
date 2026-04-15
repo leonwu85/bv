@@ -36,7 +36,9 @@ data class Episode(
     val dimension: Dimension?,
     val pages: List<VideoPage>,
     val badge: String = "",
-    val badgeInfo: BadgeInfo? = null
+    val badgeInfo: BadgeInfo? = null,
+    val status: Int = 0,
+    val shortLink: String = ""
 ) {
     data class BadgeInfo(
         val bgColor: String,
@@ -117,7 +119,9 @@ data class Episode(
                 bgColor = episode.badgeInfo.bgColor,
                 bgColorNight = episode.badgeInfo.bgColorNight,
                 text = episode.badgeInfo.text
-            )
+            ),
+            status = episode.status,
+            shortLink = episode.shortLink
         )
     }
 }

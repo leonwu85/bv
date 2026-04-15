@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.Icon
 import androidx.tv.material3.IconButton
+import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.OutlinedButtonDefaults
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.ui.theme.BVTheme
@@ -40,12 +41,18 @@ private fun truncatePlayButtonText(text: String, maxChars: Int = 23): String {
 fun SeasonInfoButtons(
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester = remember { FocusRequester() },
+    openVipButtonFocusRequester: FocusRequester = remember { FocusRequester() },
+    payButtonFocusRequester: FocusRequester = remember { FocusRequester() },
     lastPlayedIndex: Int,
     lastPlayedTitle: String = "",
     following: Boolean,
     isPublished: Boolean,
     publishDate: String,
+    showOpenVipButton: Boolean = false,
+    showPayButton: Boolean = false,
     onPlay: () -> Unit,
+    onOpenVip: () -> Unit = {},
+    onPay: () -> Unit = {},
     onClickFollow: (follow: Boolean) -> Unit,
     onShowComment: () -> Unit = {},
     commentButtonFocusRequester: FocusRequester = remember { FocusRequester() },
@@ -83,6 +90,22 @@ fun SeasonInfoButtons(
         } else {
             Button(onClick = {}) {
                 Text(text = publishDate)
+            }
+        }
+        if (showOpenVipButton) {
+            OutlinedButton(
+                modifier = Modifier.focusRequester(openVipButtonFocusRequester),
+                onClick = onOpenVip
+            ) {
+                Text(text = "开通会员")
+            }
+        }
+        if (showPayButton) {
+            OutlinedButton(
+                modifier = Modifier.focusRequester(payButtonFocusRequester),
+                onClick = onPay
+            ) {
+                Text(text = "前往付费")
             }
         }
         FollowSeasonButton(
@@ -175,7 +198,11 @@ fun SeasonInfoButtonsPreview() {
             following = false,
             isPublished = true,
             publishDate = "2021-10-01",
+            showOpenVipButton = true,
+            showPayButton = true,
             onPlay = {},
+            onOpenVip = {},
+            onPay = {},
             onClickFollow = {},
             onShowComment = {},
             seasonCount = 3,

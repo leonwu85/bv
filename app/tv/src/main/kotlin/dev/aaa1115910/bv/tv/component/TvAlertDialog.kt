@@ -52,7 +52,7 @@ fun TvAlertDialog(
             ) {
                 text?.invoke()
             }
-        }).takeIf { title != null },
+        }).takeIf { text != null },
         shape = shape,
         containerColor = containerColor,
         iconContentColor = iconContentColor,

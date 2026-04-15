@@ -97,7 +97,8 @@ data class SeasonDetail(
     data class UserStatus(
         val follow: Boolean,
         val pay: Boolean,
-        val progress: Progress? = null
+        val progress: Progress? = null,
+        val isVip: Boolean = false
     ) {
         companion object {
             fun fromUserStatus(userStatus: WebSeasonData.UserStatus): UserStatus {
@@ -110,7 +111,8 @@ data class SeasonDetail(
                             lastEpIndex = it.lastEpIndex,
                             lastTime = it.lastTime
                         )
-                    }
+                    },
+                    isVip = userStatus.vipInfo?.let { it.status == 1 && it.type > 0 } == true
                 )
             }
 
@@ -124,7 +126,8 @@ data class SeasonDetail(
                             lastEpIndex = it.lastEpIndex,
                             lastTime = it.lastTime
                         )
-                    }
+                    },
+                    isVip = userStatus.vip == 1
                 )
             }
         }
