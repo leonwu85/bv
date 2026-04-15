@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -102,6 +103,7 @@ import androidx.tv.material3.IconButton
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButtonDefaults
+import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Tab
@@ -119,6 +121,7 @@ import dev.aaa1115910.biliapi.entity.video.season.Episode
 import dev.aaa1115910.biliapi.http.BiliPlusHttpApi
 import dev.aaa1115910.biliapi.repositories.UserRepository
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.component.QrImage
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.player.entity.VideoListItem
 import dev.aaa1115910.bv.player.entity.VideoListPart
@@ -172,6 +175,7 @@ import kotlin.math.max
 private val InteractiveBadgeColor = Color(0xFFFFD54F)
 private val ChargingBadgeColor = Color(0xFF00FFFF)
 private const val ChargingBadgeDefaultText = "充电专属"
+private const val ChargingUrlPrefix = "https://www.bilibili.com/h5/upower/index?mid="
 private const val SupportedClickableTagType = "old_channel"
 private val DiscoverTagTitleRegex = Regex("^发现\\s*《(.+?)》$")
 
@@ -215,6 +219,8 @@ fun VideoInfoScreen(
 
     // 添加用于管理简介对话框的状态
     var showDescriptionDialog by remember { mutableStateOf(false) }
+    var showChargingQrDialog by remember { mutableStateOf(false) }
+    val chargeButtonFocusRequester = remember { FocusRequester() }
 
     // 添加用于管理评论浮层的状态
     var showCommentPanel by remember { mutableStateOf(false) }
@@ -248,6 +254,22 @@ fun VideoInfoScreen(
                 lastPlayedCid = lastPlayedCid,
                 intentAid = intentAid
             ) ?: false
+        }
+    }
+
+    val chargingQrContent = remember(videoDetailViewModel.videoDetail?.author?.mid) {
+        videoDetailViewModel.videoDetail?.author?.mid
+            ?.takeIf { it > 0L }
+            ?.let { "$ChargingUrlPrefix$it" }
+            .orEmpty()
+    }
+    val showChargeButton = videoDetailViewModel.videoDetail?.isChargingArc == true &&
+            videoDetailViewModel.videoDetail?.isUpowerPlay == false &&
+            chargingQrContent.isNotBlank()
+    val hideChargingQrDialog = {
+        showChargingQrDialog = false
+        if (showChargeButton) {
+            chargeButtonFocusRequester.requestFocus(scope)
         }
     }
 
@@ -961,10 +983,12 @@ fun VideoInfoScreen(
                                     // 按钮行
                                     VideoInfoButtons(
                                     playButtonFocusRequester = playButtonFocusRequester,
+                                    chargeButtonFocusRequester = chargeButtonFocusRequester,
                                     commentButtonFocusRequester = commentButtonFocusRequester,
                                     relatedButtonFocusRequester = relatedButtonFocusRequester,
                                     lastPlayedTime = lastPlayedTime,
                                     isLogin = Prefs.isLogin,
+                                    showChargeButton = showChargeButton,
                                     onPlay = {
                                         logger.fInfo { "Click play button" }
                                         var title = ""
@@ -1040,6 +1064,7 @@ fun VideoInfoScreen(
                                             audioOnlyMode = audioOnlyMode
                                         )
                                     },
+                                    onCharge = { showChargingQrDialog = true },
                                     isLike = liked,
                                     onAddLike = {
                                         scope.launch {
@@ -1271,6 +1296,13 @@ fun VideoInfoScreen(
                 }
             }
         }
+    }
+
+    if (showChargingQrDialog && chargingQrContent.isNotBlank()) {
+        VideoChargingQrDialog(
+            qrContent = chargingQrContent,
+            onDismissRequest = hideChargingQrDialog
+        )
     }
 
     VideoDescriptionDialog(
@@ -1668,6 +1700,53 @@ fun VideoDescriptionDialog(
             }
         }
     }
+}
+
+@Composable
+private fun VideoChargingQrDialog(
+    qrContent: String,
+    onDismissRequest: () -> Unit
+) {
+    TvAlertDialog(
+        modifier = Modifier.widthIn(min = 760.dp, max = 860.dp),
+        text = {
+            Row(
+                modifier = Modifier.padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                QrImage(
+                    modifier = Modifier.size(220.dp),
+                    content = qrContent,
+                    borderWidth = 20.dp,
+                    showLoadingWhenContentChanged = false
+                )
+                Column(
+                    modifier = Modifier.widthIn(max = 340.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "手机扫码前往充电页面",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "请使用哔哩哔哩手机客户端扫码",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.7f)
+                    )
+                }
+            }
+        },
+        onDismissRequest = onDismissRequest,
+        confirmButton = {
+            OutlinedButton(onClick = onDismissRequest) {
+                Text(text = "关闭")
+            }
+        },
+        containerColor = Color(0xFF111111).copy(alpha = 0.96f),
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    )
 }
 
 @Composable

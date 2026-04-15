@@ -27,6 +27,7 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.IconButton
+import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.OutlinedButtonDefaults
 import androidx.tv.material3.Text
 import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
@@ -38,11 +39,14 @@ import dev.aaa1115910.bv.util.formatHourMinSec
 fun VideoInfoButtons(
     modifier: Modifier = Modifier,
     playButtonFocusRequester: FocusRequester = remember { FocusRequester() },
+    chargeButtonFocusRequester: FocusRequester = remember { FocusRequester() },
     commentButtonFocusRequester: FocusRequester = remember { FocusRequester() },
     relatedButtonFocusRequester: FocusRequester = remember { FocusRequester() },
     lastPlayedTime: Int = 0,
     isLogin: Boolean,
     onPlay: () -> Unit,
+    showChargeButton: Boolean = false,
+    onCharge: () -> Unit = {},
     // like
     isLike: Boolean,
     onAddLike: () -> Unit = {},
@@ -98,6 +102,18 @@ fun VideoInfoButtons(
                         stringResource(R.string.video_info_play)
                     }
                 )
+            }
+        }
+
+        if (showChargeButton) {
+            OutlinedButton(
+                modifier = Modifier.focusRequester(chargeButtonFocusRequester),
+                onClick = onCharge,
+                colors = outlinedColors,
+                border = outlinedBorder,
+                contentPadding = outlinedContentPadding
+            ) {
+                Text(text = "前往充电")
             }
         }
 
