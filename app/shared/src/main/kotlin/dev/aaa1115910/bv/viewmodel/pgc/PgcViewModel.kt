@@ -15,6 +15,7 @@ import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.util.addWithMainContext
 import dev.aaa1115910.bv.util.addAllWithMainContext
+import dev.aaa1115910.bv.util.fError
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.fWarn
 import dev.aaa1115910.bv.util.toast
@@ -115,10 +116,7 @@ abstract class PgcViewModel(
             carouselItems.addAllWithMainContext(carouselData.items)
             logger.debug { "carouselItems: $carouselItems" }
         }.onFailure {
-            logger.fInfo { "Update $pgcType carousel failed: ${it.stackTraceToString()}" }
-            withContext(Dispatchers.Main) {
-                "加载 $pgcType 轮播图失败: ${it.message}".toast(BVApp.context)
-            }
+            logger.fError { "Update $pgcType carousel failed: ${it.stackTraceToString()}" }
         }
     }
 

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="title_activity_anime_timeline">番剧放送时间表</string>
+    <string name="title_activity_guochuang_timeline">国创放送时间表</string>
     <string name="title_activity_favorite">个人收藏</string>
     <string name="title_activity_follow">已关注</string>
     <string name="title_activity_following_season">正在追</string>

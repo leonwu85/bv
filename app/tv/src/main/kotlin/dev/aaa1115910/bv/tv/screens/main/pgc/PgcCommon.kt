@@ -3,7 +3,6 @@ package dev.aaa1115910.bv.tv.screens.main.pgc
 import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -24,9 +23,12 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -46,6 +48,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
@@ -76,13 +79,14 @@ fun PgcScaffold(
     lazyListState: LazyListState,
     pgcViewModel: PgcViewModel,
     pgcType: PgcType,
-    featureButtons: (@Composable () -> Unit)? = null
+    featureButtons: (@Composable (vertical: Boolean) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val carouselFocusRequester = remember { FocusRequester() }
 
     val carouselItems = pgcViewModel.carouselItems
     val pgcFeeds = pgcViewModel.feedItems
+    val hasCarousel = carouselItems.isNotEmpty()
 
     ProvideListBringIntoViewSpec {
         LazyColumn(
@@ -91,40 +95,45 @@ fun PgcScaffold(
             state = lazyListState
         ) {
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    PgcCarousel(
-                        modifier = Modifier
-                            .width(880.dp)
-                            .padding(32.dp, 0.dp)
-                            .focusRequester(carouselFocusRequester),
-                        data = carouselItems,
-                        onClick = { item ->
-                            SeasonInfoActivity.actionStart(
-                                context = context,
-                                epId = item.episodeId,
-                                seasonId = item.seasonId,
-                                proxyArea = ProxyArea.checkProxyArea(item.title)
-                            )
-                        }
-                    )
-                }
-            }
-            if (featureButtons != null) {
-                item {
-                    featureButtons()
-                }
-            } else {
-                item {
-                    Spacer(
+                if (hasCarousel) {
+                    // Banner 有数据：左侧 Banner + 右侧纵向按钮
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(24.dp)
-                    )
+                            .padding(horizontal = 32.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        PgcCarousel(
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusRequester(carouselFocusRequester),
+                            data = carouselItems,
+                            onClick = { item ->
+                                SeasonInfoActivity.actionStart(
+                                    context = context,
+                                    epId = item.episodeId,
+                                    seasonId = item.seasonId,
+                                    proxyArea = ProxyArea.checkProxyArea(item.title)
+                                )
+                            }
+                        )
+                        if (featureButtons != null) {
+                            Box(modifier = Modifier.width(200.dp)) {
+                                featureButtons(true)
+                            }
+                        }
+                    }
+                } else {
+                    // Banner 为空：按钮横向占满全宽
+                    if (featureButtons != null) {
+                        featureButtons(false)
+                    } else {
+                        Spacer(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(24.dp)
+                        )
+                    }
                 }
             }
             itemsIndexed(items = pgcFeeds) { index, feedListItem ->
@@ -336,6 +345,19 @@ fun PgcFeedRankRowPreview() {
 @Composable
 fun PgcFeatureButtons(
     modifier: Modifier = Modifier,
+    buttons: List<Triple<String, Any, () -> Unit>>,
+    vertical: Boolean = false
+) {
+    if (vertical) {
+        PgcFeatureButtonsVertical(modifier = modifier, buttons = buttons)
+    } else {
+        PgcFeatureButtonsHorizontal(modifier = modifier, buttons = buttons)
+    }
+}
+
+@Composable
+private fun PgcFeatureButtonsHorizontal(
+    modifier: Modifier = Modifier,
     buttons: List<Triple<String, Any, () -> Unit>>
 ) {
     val buttonWidth = 185.dp
@@ -369,6 +391,43 @@ fun PgcFeatureButtons(
     }
 }
 
+@Composable
+private fun PgcFeatureButtonsVertical(
+    modifier: Modifier = Modifier,
+    buttons: List<Triple<String, Any, () -> Unit>>
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(240.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+    ) {
+        buttons.forEach { (title, icon, onClick) ->
+            when (icon) {
+                is ImageVector -> PgcFeatureButton(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    title = title,
+                    icon = icon,
+                    onClick = { onClick.invoke() }
+                )
+
+                is Painter -> PgcFeatureButton(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    title = title,
+                    icon = icon,
+                    onClick = { onClick.invoke() }
+                )
+
+                else -> {}
+            }
+        }
+    }
+}
+
 
 @Composable
 fun PgcFeatureButton(
@@ -377,30 +436,44 @@ fun PgcFeatureButton(
     icon: ImageVector,
     onClick: () -> Unit
 ) {
+    var hasFocus by remember { mutableStateOf(false) }
+
     Surface(
-        modifier = modifier,
+        modifier = modifier
+            .onFocusChanged { hasFocus = it.hasFocus },
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
-            pressedContainerColor = MaterialTheme.colorScheme.inverseSurface
+            containerColor = Color.White.copy(alpha = 0.12f),
+            focusedContainerColor = Color.White,
+            pressedContainerColor = Color.White
         ),
-        shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
+        scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1.05f),
+        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(6.dp)),
+        border = ClickableSurfaceDefaults.border(
+            border = Border.None,
+            focusedBorder = Border.None,
+            pressedBorder = Border.None
+        ),
         onClick = onClick
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(imageVector = icon, contentDescription = null)
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge
-                )
-            }
+            Icon(
+                modifier = Modifier.size(18.dp),
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (hasFocus) Color.Black else Color.White.copy(alpha = 0.7f)
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                color = if (hasFocus) Color.Black else Color.White.copy(alpha = 0.7f)
+            )
         }
     }
 }
@@ -412,34 +485,44 @@ fun PgcFeatureButton(
     icon: Painter,
     onClick: () -> Unit
 ) {
+    var hasFocus by remember { mutableStateOf(false) }
+
     Surface(
-        modifier = modifier,
+        modifier = modifier
+            .onFocusChanged { hasFocus = it.hasFocus },
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
-            pressedContainerColor = MaterialTheme.colorScheme.inverseSurface
+            containerColor = Color.White.copy(alpha = 0.12f),
+            focusedContainerColor = Color.White,
+            pressedContainerColor = Color.White
         ),
-        shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
+        scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1.05f),
+        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(6.dp)),
+        border = ClickableSurfaceDefaults.border(
+            border = Border.None,
+            focusedBorder = Border.None,
+            pressedBorder = Border.None
+        ),
         onClick = onClick
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    modifier = Modifier.size(24.dp),
-                    painter = icon,
-                    contentDescription = null
-                )
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge
-                )
-            }
+            Icon(
+                modifier = Modifier.size(18.dp),
+                painter = icon,
+                contentDescription = null,
+                tint = if (hasFocus) Color.Black else Color.White.copy(alpha = 0.7f)
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                color = if (hasFocus) Color.Black else Color.White.copy(alpha = 0.7f)
+            )
         }
     }
 }

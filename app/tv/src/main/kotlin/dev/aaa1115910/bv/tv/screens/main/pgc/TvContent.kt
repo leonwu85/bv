@@ -34,9 +34,10 @@ fun TvContent(
         lazyListState = lazyListState,
         pgcViewModel = pgcViewModel,
         pgcType = PgcType.Tv,
-        featureButtons = {
+        featureButtons = { vertical ->
             TvFeatureButtons(
-                modifier = Modifier.padding(vertical = 12.dp),
+                modifier = if (vertical) Modifier else Modifier.padding(vertical = 12.dp),
+                vertical = vertical,
                 onOpenIndex = onOpenIndex
             )
         }
@@ -46,6 +47,7 @@ fun TvContent(
 @Composable
 private fun TvFeatureButtons(
     modifier: Modifier = Modifier,
+    vertical: Boolean = false,
     onOpenIndex: () -> Unit
 ) {
     val buttons = listOf(
@@ -72,7 +74,8 @@ private fun TvFeatureButtons(
     )
     PgcFeatureButtons(
         modifier = modifier,
-        buttons = buttons
+        buttons = buttons,
+        vertical = vertical
     )
 }
 

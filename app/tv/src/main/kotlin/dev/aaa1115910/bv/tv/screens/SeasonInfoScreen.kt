@@ -851,7 +851,7 @@ fun SeasonEpisodeButton(
             ) {
                 AsyncImage(
                     modifier = Modifier.fillMaxSize(),
-                    model = cover.resizedImageUrl(ImageSize.Cover),
+                    model = cover.resizedImageUrl(ImageSize.TvEpisodeCover),
                     contentDescription = null,
                     contentScale = ContentScale.Crop
                 )

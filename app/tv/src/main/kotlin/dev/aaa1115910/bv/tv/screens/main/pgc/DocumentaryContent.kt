@@ -34,9 +34,10 @@ fun DocumentaryContent(
         lazyListState = lazyListState,
         pgcViewModel = pgcViewModel,
         pgcType = PgcType.Documentary,
-        featureButtons = {
+        featureButtons = { vertical ->
             DocumentaryFeatureButtons(
-                modifier = Modifier.padding(vertical = 12.dp),
+                modifier = if (vertical) Modifier else Modifier.padding(vertical = 12.dp),
+                vertical = vertical,
                 onOpenIndex = onOpenIndex
             )
         }
@@ -46,6 +47,7 @@ fun DocumentaryContent(
 @Composable
 private fun DocumentaryFeatureButtons(
     modifier: Modifier = Modifier,
+    vertical: Boolean = false,
     onOpenIndex: () -> Unit
 ) {
     val buttons = listOf(
@@ -72,7 +74,8 @@ private fun DocumentaryFeatureButtons(
     )
     PgcFeatureButtons(
         modifier = modifier,
-        buttons = buttons
+        buttons = buttons,
+        vertical = vertical
     )
 }
 

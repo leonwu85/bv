@@ -1,9 +1,11 @@
 package dev.aaa1115910.bv.tv.screens.main.pgc
 
+import android.content.Intent
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.List
+import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.QuestionMark
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -14,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import dev.aaa1115910.biliapi.entity.pgc.PgcType
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.tv.activities.pgc.PgcIndexActivity
+import dev.aaa1115910.bv.tv.activities.pgc.guochuang.GuoChuangTimelineActivity
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.viewmodel.pgc.PgcGuoChuangViewModel
 import org.koin.androidx.compose.koinViewModel
@@ -26,6 +29,9 @@ fun GuoChuangContent(
 ) {
     val context = LocalContext.current
 
+    val onOpenTimeline: () -> Unit = {
+        context.startActivity(Intent(context, GuoChuangTimelineActivity::class.java))
+    }
     val onOpenIndex: () -> Unit = {
         PgcIndexActivity.actionStart(context = context, pgcType = PgcType.GuoChuang)
     }
@@ -34,9 +40,11 @@ fun GuoChuangContent(
         lazyListState = lazyListState,
         pgcViewModel = pgcViewModel,
         pgcType = PgcType.GuoChuang,
-        featureButtons = {
+        featureButtons = { vertical ->
             GuoChuangFeatureButtons(
-                modifier = Modifier.padding(vertical = 12.dp),
+                modifier = if (vertical) Modifier else Modifier.padding(vertical = 12.dp),
+                vertical = vertical,
+                onOpenTimeline = onOpenTimeline,
                 onOpenIndex = onOpenIndex
             )
         }
@@ -46,9 +54,16 @@ fun GuoChuangContent(
 @Composable
 private fun GuoChuangFeatureButtons(
     modifier: Modifier = Modifier,
+    vertical: Boolean = false,
+    onOpenTimeline: () -> Unit,
     onOpenIndex: () -> Unit
 ) {
     val buttons = listOf(
+        Triple(
+            stringResource(R.string.anime_home_button_timeline),
+            Icons.Rounded.Alarm,
+            onOpenTimeline
+        ),
         Triple(
             stringResource(R.string.anime_home_button_index),
             Icons.AutoMirrored.Rounded.List,
@@ -63,16 +78,12 @@ private fun GuoChuangFeatureButtons(
             stringResource(R.string.pgc_home_button_unknown),
             Icons.Rounded.QuestionMark,
             showPlaceholderToast
-        ),
-        Triple(
-            stringResource(R.string.pgc_home_button_unknown),
-            Icons.Rounded.QuestionMark,
-            showPlaceholderToast
         )
     )
     PgcFeatureButtons(
         modifier = modifier,
-        buttons = buttons
+        buttons = buttons,
+        vertical = vertical
     )
 }
 
@@ -82,6 +93,7 @@ private fun GuoChuangFeatureButtonsPreview() {
     BVTheme {
         GuoChuangFeatureButtons(
             modifier = Modifier,
+            onOpenTimeline = {},
             onOpenIndex = {},
         )
     }

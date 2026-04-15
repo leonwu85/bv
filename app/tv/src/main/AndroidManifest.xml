@@ -78,6 +78,12 @@
             android:label="@string/title_activity_anime_timeline"
             android:theme="@style/Theme.BV.TV" />
         <activity
+            android:name=".activities.pgc.guochuang.GuoChuangTimelineActivity"
+            android:enableOnBackInvokedCallback="false"
+            android:exported="false"
+            android:label="@string/title_activity_guochuang_timeline"
+            android:theme="@style/Theme.BV.TV" />
+        <activity
             android:name=".activities.search.SearchResultActivity"
             android:enableOnBackInvokedCallback="false"
             android:exported="false"

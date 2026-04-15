@@ -34,9 +34,10 @@ fun VarietyContent(
         lazyListState = lazyListState,
         pgcViewModel = pgcViewModel,
         pgcType = PgcType.Variety,
-        featureButtons = {
+        featureButtons = { vertical ->
             VarietyFeatureButtons(
-                modifier = Modifier.padding(vertical = 12.dp),
+                modifier = if (vertical) Modifier else Modifier.padding(vertical = 12.dp),
+                vertical = vertical,
                 onOpenIndex = onOpenIndex
             )
         }
@@ -46,6 +47,7 @@ fun VarietyContent(
 @Composable
 private fun VarietyFeatureButtons(
     modifier: Modifier = Modifier,
+    vertical: Boolean = false,
     onOpenIndex: () -> Unit
 ) {
     val buttons = listOf(
@@ -72,7 +74,8 @@ private fun VarietyFeatureButtons(
     )
     PgcFeatureButtons(
         modifier = modifier,
-        buttons = buttons
+        buttons = buttons,
+        vertical = vertical
     )
 }
 

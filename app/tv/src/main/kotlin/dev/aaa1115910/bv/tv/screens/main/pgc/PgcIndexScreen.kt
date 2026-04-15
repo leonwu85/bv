@@ -1,7 +1,11 @@
 package dev.aaa1115910.bv.tv.screens.main.pgc
 
 import android.app.Activity
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +18,11 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Scaffold
+import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -26,20 +34,41 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Icon
+import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
+import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import dev.aaa1115910.biliapi.entity.pgc.PgcType
+import dev.aaa1115910.biliapi.entity.pgc.index.Area
+import dev.aaa1115910.biliapi.entity.pgc.index.Copyright
+import dev.aaa1115910.biliapi.entity.pgc.index.IndexOrder
+import dev.aaa1115910.biliapi.entity.pgc.index.IndexOrderType
+import dev.aaa1115910.biliapi.entity.pgc.index.IsFinish
+import dev.aaa1115910.biliapi.entity.pgc.index.Producer
+import dev.aaa1115910.biliapi.entity.pgc.index.ReleaseDate
+import dev.aaa1115910.biliapi.entity.pgc.index.SeasonMonth
+import dev.aaa1115910.biliapi.entity.pgc.index.SeasonStatus
+import dev.aaa1115910.biliapi.entity.pgc.index.SeasonVersion
+import dev.aaa1115910.biliapi.entity.pgc.index.SpokenLanguage
+import dev.aaa1115910.biliapi.entity.pgc.index.Style
+import dev.aaa1115910.biliapi.entity.pgc.index.Year
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.tv.component.pgc.IndexFilter
 import dev.aaa1115910.bv.tv.component.videocard.SeasonCard
 import dev.aaa1115910.bv.entity.carddata.SeasonCardData
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
+import dev.aaa1115910.bv.tv.screens.search.SearchTheme
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.getDisplayName
@@ -65,13 +94,66 @@ fun PgcIndexScreen(
         }
     }
     val titleFontSize by animateFloatAsState(
-        targetValue = if (showLargeTitle) 48f else 24f,
+        targetValue = if (showLargeTitle) 36f else 20f,
         label = "title font size"
     )
 
     val pgcItems = pgcIndexViewModel.indexResultItems
     val noMore = pgcIndexViewModel.noMore
     var showFilter by remember { mutableStateOf(false) }
+    val defaultOrder = remember(pgcIndexViewModel.pgcType) {
+        IndexOrder.getList(pgcIndexViewModel.pgcType).firstOrNull() ?: IndexOrder.FollowCount
+    }
+    val activeFilterTags = buildList {
+        if (pgcIndexViewModel.indexOrder != defaultOrder) {
+            add(pgcIndexViewModel.indexOrder.getDisplayName(context))
+        }
+        if (pgcIndexViewModel.indexOrderType != IndexOrderType.Desc) {
+            add(pgcIndexViewModel.indexOrderType.getDisplayName(context))
+        }
+        if (pgcIndexViewModel.seasonVersion != SeasonVersion.All) {
+            add(pgcIndexViewModel.seasonVersion.getDisplayName(context))
+        }
+        if (pgcIndexViewModel.spokenLanguage != SpokenLanguage.All) {
+            add(pgcIndexViewModel.spokenLanguage.getDisplayName(context))
+        }
+        if (pgcIndexViewModel.area != Area.All) {
+            add(pgcIndexViewModel.area.getDisplayName(context))
+        }
+        if (pgcIndexViewModel.isFinish != IsFinish.All) {
+            add(pgcIndexViewModel.isFinish.getDisplayName(context))
+        }
+        if (pgcIndexViewModel.copyright != Copyright.All) {
+            add(pgcIndexViewModel.copyright.getDisplayName(context))
+        }
+        if (pgcIndexViewModel.seasonStatus != SeasonStatus.All) {
+            add(pgcIndexViewModel.seasonStatus.getDisplayName(context))
+        }
+        if (pgcIndexViewModel.seasonMonth != SeasonMonth.All) {
+            add(pgcIndexViewModel.seasonMonth.getDisplayName(context))
+        }
+        if (pgcIndexViewModel.producer != Producer.All) {
+            add(pgcIndexViewModel.producer.getDisplayName(context))
+        }
+        if (pgcIndexViewModel.year != Year.All) {
+            add(pgcIndexViewModel.year.getDisplayName(context))
+        }
+        if (pgcIndexViewModel.releaseDate != ReleaseDate.All) {
+            add(pgcIndexViewModel.releaseDate.getDisplayName(context))
+        }
+        if (pgcIndexViewModel.style != Style.All) {
+            add(pgcIndexViewModel.style.getDisplayName(context))
+        }
+    }
+    val visibleActiveFilterTags = if (activeFilterTags.size > 4) {
+        buildList {
+            addAll(activeFilterTags.take(4))
+            add("另有 ${activeFilterTags.size - 4} 项")
+        }
+    } else {
+        activeFilterTags
+    }
+    val hasActiveFilter = activeFilterTags.isNotEmpty()
 
     val onLongClickSeason = {
         showFilter = true
@@ -117,12 +199,12 @@ fun PgcIndexScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            Box(
-                modifier = Modifier.padding(start = 48.dp, top = 24.dp, bottom = 8.dp, end = 48.dp)
+            Column(
+                modifier = Modifier.padding(start = 48.dp, top = 12.dp, bottom = 4.dp, end = 48.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Bottom,
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
@@ -130,10 +212,35 @@ fun PgcIndexScreen(
                                 " - " + pgcIndexViewModel.pgcType.getDisplayName(context),
                         fontSize = titleFontSize.sp,
                     )
-                    Text(
-                        text = stringResource(R.string.filter_dialog_open_tip),
-                        color = Color.White.copy(alpha = 0.6f)
-                    )
+                    Box {
+                        IndexFilterPill(
+                            text = stringResource(R.string.filter_dialog_title),
+                            hasActiveFilter = hasActiveFilter,
+                            onClick = { showFilter = true }
+                        )
+                        if (hasActiveFilter) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 4.dp, end = 4.dp)
+                                    .clip(CircleShape)
+                                    .background(SearchTheme.accentPink)
+                                    .padding(3.dp)
+                            )
+                        }
+                    }
+                }
+                if (visibleActiveFilterTags.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
+                    ) {
+                        visibleActiveFilterTags.forEach { filterTag ->
+                            IndexActiveFilterTag(text = filterTag)
+                        }
+                    }
                 }
             }
         }
@@ -221,4 +328,79 @@ fun PgcIndexScreen(
         onReleaseDateChange = { pgcIndexViewModel.releaseDate = it },
         onStyleChange = { pgcIndexViewModel.style = it }
     )
+}
+
+@Composable
+private fun IndexFilterPill(
+    text: String,
+    hasActiveFilter: Boolean,
+    onClick: () -> Unit
+) {
+    var hasFocus by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (hasFocus) 1.1f else 1f,
+        animationSpec = tween(150),
+        label = "index filter pill scale"
+    )
+    val bgColor by animateColorAsState(
+        targetValue = if (hasFocus) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
+        animationSpec = tween(200),
+        label = "index filter pill bg"
+    )
+
+    Surface(
+        modifier = Modifier
+            .scale(scale)
+            .onFocusChanged { hasFocus = it.hasFocus },
+        onClick = onClick,
+        shape = ClickableSurfaceDefaults.shape(SearchTheme.pillShape),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = bgColor,
+            focusedContainerColor = bgColor,
+            pressedContainerColor = bgColor
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.FilterAlt,
+                contentDescription = null,
+                tint = if (hasActiveFilter) SearchTheme.accentPink
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            Text(
+                text = text,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun IndexActiveFilterTag(text: String) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(SearchTheme.accentPink.copy(alpha = 0.15f))
+            .border(1.dp, SearchTheme.accentPink.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 10.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(SearchTheme.accentPink)
+                .padding(2.dp)
+        )
+        Text(
+            text = text,
+            fontSize = 12.sp,
+            color = SearchTheme.accentPink
+        )
+    }
 }

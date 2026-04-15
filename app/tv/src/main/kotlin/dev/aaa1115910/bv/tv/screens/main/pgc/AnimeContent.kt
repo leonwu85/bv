@@ -55,9 +55,10 @@ fun AnimeContent(
         lazyListState = lazyListState,
         pgcViewModel = pgcViewModel,
         pgcType = PgcType.Anime,
-        featureButtons = {
+        featureButtons = { vertical ->
             AnimeFeatureButtons(
-                modifier = Modifier.padding(vertical = 12.dp),
+                modifier = if (vertical) Modifier else Modifier.padding(vertical = 12.dp),
+                vertical = vertical,
                 onOpenTimeline = onOpenTimeline,
                 onOpenFollowing = onOpenFollowing,
                 onOpenIndex = onOpenIndex,
@@ -70,6 +71,7 @@ fun AnimeContent(
 @Composable
 private fun AnimeFeatureButtons(
     modifier: Modifier = Modifier,
+    vertical: Boolean = false,
     onOpenTimeline: () -> Unit,
     onOpenFollowing: () -> Unit,
     onOpenIndex: () -> Unit,
@@ -99,7 +101,8 @@ private fun AnimeFeatureButtons(
     )
     PgcFeatureButtons(
         modifier = modifier,
-        buttons = buttons
+        buttons = buttons,
+        vertical = vertical
     )
 }
 

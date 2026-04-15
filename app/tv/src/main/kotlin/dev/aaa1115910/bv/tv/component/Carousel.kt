@@ -149,15 +149,23 @@ fun Carousel(
                     itemCount == 0 -> false
                     it.type == KeyEventType.KeyUp -> false
                     it.key == Key.DirectionLeft -> {
-                        isMovingBackward = true
-                        currentIndex = (currentIndex - 1 + itemCount) % itemCount
-                        true
+                        if (currentIndex == 0) {
+                            false
+                        } else {
+                            isMovingBackward = true
+                            currentIndex = (currentIndex - 1 + itemCount) % itemCount
+                            true
+                        }
                     }
 
                     it.key == Key.DirectionRight -> {
-                        isMovingBackward = false
-                        currentIndex = (currentIndex + 1) % itemCount
-                        true
+                        if (currentIndex == itemCount - 1) {
+                            false
+                        } else {
+                            isMovingBackward = false
+                            currentIndex = (currentIndex + 1) % itemCount
+                            true
+                        }
                     }
 
                     else -> false
