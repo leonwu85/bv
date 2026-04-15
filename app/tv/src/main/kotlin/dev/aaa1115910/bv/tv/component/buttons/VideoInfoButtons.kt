@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -68,20 +69,24 @@ fun VideoInfoButtons(
     val outlinedColors = OutlinedButtonDefaults.colors()
     val outlinedBorder = OutlinedButtonDefaults.border()
     val outlinedContentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+    val playButtonContentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
 
     FlowRow(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // 播放按钮（主按钮，填充色）
         Button(
             onClick = onPlay,
-            modifier = Modifier.focusRequester(playButtonFocusRequester)
+            modifier = Modifier
+                .focusRequester(playButtonFocusRequester)
+                .padding(end = 6.dp),
+            contentPadding = playButtonContentPadding
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(0.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Icon(
                     modifier = Modifier.size(20.dp),

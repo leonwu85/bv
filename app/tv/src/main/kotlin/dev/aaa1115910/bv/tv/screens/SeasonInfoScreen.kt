@@ -11,6 +11,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,8 +45,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.ViewModule
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -53,6 +57,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -104,6 +109,7 @@ import dev.aaa1115910.bv.repository.VideoInfoRepository
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.component.CommentPanel
 import dev.aaa1115910.bv.tv.component.LoadingTip
+import dev.aaa1115910.bv.tv.component.screenBackgroundGradient
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.component.buttons.SeasonInfoButtons
 import dev.aaa1115910.bv.tv.util.launchPlayerActivity
@@ -113,6 +119,7 @@ import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.focusedScale
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.onBackPressed
+import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.requestFocus
 import dev.aaa1115910.bv.util.resizedImageUrl
 import dev.aaa1115910.bv.util.swapList
@@ -168,6 +175,7 @@ private fun parseEpisodeBadgeColor(color: String?, fallback: Color): Color {
     }.getOrDefault(fallback)
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SeasonInfoScreen(
     modifier: Modifier = Modifier,
@@ -184,8 +192,33 @@ fun SeasonInfoScreen(
     var showSeasonSelector by remember { mutableStateOf(false) }
     var showCommentPanel by remember { mutableStateOf(false) }
     var showDescriptionDialog by remember { mutableStateOf(false) }
+    val showDetailPageBackgroundImage by Prefs.showDetailPageBackgroundImageFlow.collectAsState(
+        Prefs.showDetailPageBackgroundImage
+    )
     val playButtonFocusRequester = remember { FocusRequester() }
     val commentButtonFocusRequester = remember { FocusRequester() }
+    var suppressPlayButtonBringIntoView by remember { mutableStateOf(false) }
+    val defaultBringIntoViewSpec = LocalBringIntoViewSpec.current
+    val focusUndetachedBringIntoViewSpec = remember {
+        object : BringIntoViewSpec {
+            override fun calculateScrollDistance(
+                offset: Float,
+                size: Float,
+                containerSize: Float
+            ): Float = 0f
+        }
+    }
+
+    suspend fun requestPlayButtonFocusWithoutScrolling() {
+        suppressPlayButtonBringIntoView = true
+        try {
+            withFrameNanos { }
+            playButtonFocusRequester.requestFocus(scope)
+            delay(80)
+        } finally {
+            suppressPlayButtonBringIntoView = false
+        }
+    }
 
     val onClickVideo: (avid: Long, cid: Long, epid: Int, episodeTitle: String, startTime: Int) -> Unit =
         { avid, cid, epid, episodeTitle, startTime ->
@@ -271,7 +304,7 @@ fun SeasonInfoScreen(
             seasonViewModel.lastPlayProgress = it.userStatus.progress
             //请求默认焦点到播放按钮上
             delay(300)
-            playButtonFocusRequester.requestFocus(scope)
+            requestPlayButtonFocusWithoutScrolling()
         }
     }
 
@@ -327,184 +360,156 @@ fun SeasonInfoScreen(
                 ?: seasonData.cover
         }
 
-        // 背景图加载动画
-        val bgLoaded = remember { mutableStateOf(false) }
-        val bgAnimatedAlpha by animateFloatAsState(
-            targetValue = if (bgLoaded.value) 1f else 0f,
-            animationSpec = tween(durationMillis = 600),
-            label = "hero bg alpha"
-        )
-
         Box(
             modifier = modifier
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            AsyncImage(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(LocalConfiguration.current.screenHeightDp.dp * 0.6f),
-                model = heroBackgroundCover,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                alpha = bgAnimatedAlpha,
-                onSuccess = { bgLoaded.value = true },
-                onError = { bgLoaded.value = false }
-            )
+            if (showDetailPageBackgroundImage) {
+                val bgLoaded = remember(heroBackgroundCover) { mutableStateOf(false) }
+                val bgAnimatedAlpha by animateFloatAsState(
+                    targetValue = if (bgLoaded.value) 1f else 0f,
+                    animationSpec = tween(durationMillis = 600),
+                    label = "hero bg alpha"
+                )
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(LocalConfiguration.current.screenHeightDp.dp * 0.6f)
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.9f),
-                                Color.Black.copy(alpha = 0.7f),
-                                Color.Transparent
-                            ),
-                            startX = 0f,
-                            endX = Float.MAX_VALUE * 0.5f
-                        )
-                    )
-            )
+                AsyncImage(
+                    modifier = Modifier
+                        .fillMaxSize(),
+                    model = heroBackgroundCover,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    alpha = bgAnimatedAlpha,
+                    onSuccess = { bgLoaded.value = true },
+                    onError = { bgLoaded.value = false }
+                )
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(LocalConfiguration.current.screenHeightDp.dp * 0.6f * 0.4f)
-                    .align(Alignment.TopStart)
-                    .padding(top = LocalConfiguration.current.screenHeightDp.dp * 0.6f * 0.6f)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.8f),
-                                Color.Black
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.9f),
+                                    Color.Black.copy(alpha = 0.7f),
+                                    Color.Transparent
+                                ),
+                                startX = 0f,
+                                endX = Float.MAX_VALUE * 0.5f
                             )
                         )
-                    )
-            )
+                )
 
-            LazyColumn(
-                modifier = Modifier.fillMaxSize()
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colorStops = arrayOf(
+                                    0f to Color.Transparent,
+                                    0.52f to Color.Transparent,
+                                    0.74f to Color.Black.copy(alpha = 0.82f),
+                                    1f to Color.Black
+                                )
+                            )
+                        )
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(screenBackgroundGradient())
+                )
+            }
+
+            CompositionLocalProvider(
+                LocalBringIntoViewSpec provides if (suppressPlayButtonBringIntoView) {
+                    focusUndetachedBringIntoViewSpec
+                } else {
+                    defaultBringIntoViewSpec
+                }
             ) {
-                item {
-                    SeasonHeroSection(
-                        playButtonFocusRequester = playButtonFocusRequester,
-                        commentButtonFocusRequester = commentButtonFocusRequester,
-                        backgroundCover = heroBackgroundCover,
-                        title = seasonData.title,
-                        styles = seasonData.styles,
-                        newEpDesc = seasonData.newEpDesc,
-                        description = seasonData.description,
-                        lastPlayedIndex = seasonViewModel.lastPlayProgress?.lastEpId ?: -1,
-                        lastPlayedTitle = generateEpisodeTitle(
-                            seasonData.episodes.find { it.id == seasonViewModel.lastPlayProgress?.lastEpId },
-                            seasonData.title
-                        ),
-                        following = seasonViewModel.isFollowing,
-                        isPublished = seasonData.publish.isPublished,
-                        publishDate = seasonData.publish.publishDate,
-                        hasMultipleSeasons = seasonData.seasons.size > 1,
-                        seasonCount = seasonData.seasons.size,
-                        onPlay = {
-                            logger.fInfo { "Click play button" }
-                            var playAid = -1L
-                            var playCid = -1L
-                            val playEpid: Int
-                            var episodeList: List<Episode> = emptyList()
-                            if (seasonViewModel.lastPlayProgress == null) {
-                                logger.fInfo { "Didn't find any play record" }
-                                playAid = seasonViewModel.seasonData?.episodes?.first()?.aid ?: -1
-                                playCid = seasonViewModel.seasonData?.episodes?.first()?.cid ?: -1
-                                playEpid = seasonViewModel.seasonData?.episodes?.first()?.id ?: -1
-                                if (playCid == -1L) {
-                                    R.string.season_no_feature_film.toast(context)
-                                } else {
-                                    episodeList =
-                                        seasonViewModel.seasonData?.episodes ?: emptyList()
-                                }
-                            } else {
-                                logger.fInfo { "Find play record: ${seasonViewModel.lastPlayProgress}" }
-                                playEpid = seasonViewModel.lastPlayProgress!!.lastEpId
-                                seasonViewModel.seasonData?.episodes?.forEach {
-                                    if (it.id == playEpid) {
-                                        playAid = it.aid
-                                        playCid = it.cid
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    item {
+                        SeasonHeroSection(
+                            playButtonFocusRequester = playButtonFocusRequester,
+                            commentButtonFocusRequester = commentButtonFocusRequester,
+                            backgroundCover = heroBackgroundCover,
+                            title = seasonData.title,
+                            styles = seasonData.styles,
+                            newEpDesc = seasonData.newEpDesc,
+                            description = seasonData.description,
+                            lastPlayedIndex = seasonViewModel.lastPlayProgress?.lastEpId ?: -1,
+                            lastPlayedTitle = generateEpisodeTitle(
+                                seasonData.episodes.find { it.id == seasonViewModel.lastPlayProgress?.lastEpId },
+                                seasonData.title
+                            ),
+                            following = seasonViewModel.isFollowing,
+                            isPublished = seasonData.publish.isPublished,
+                            publishDate = seasonData.publish.publishDate,
+                            hasMultipleSeasons = seasonData.seasons.size > 1,
+                            seasonCount = seasonData.seasons.size,
+                            onPlay = {
+                                logger.fInfo { "Click play button" }
+                                var playAid = -1L
+                                var playCid = -1L
+                                val playEpid: Int
+                                var episodeList: List<Episode> = emptyList()
+                                if (seasonViewModel.lastPlayProgress == null) {
+                                    logger.fInfo { "Didn't find any play record" }
+                                    playAid = seasonViewModel.seasonData?.episodes?.first()?.aid ?: -1
+                                    playCid = seasonViewModel.seasonData?.episodes?.first()?.cid ?: -1
+                                    playEpid = seasonViewModel.seasonData?.episodes?.first()?.id ?: -1
+                                    if (playCid == -1L) {
+                                        R.string.season_no_feature_film.toast(context)
+                                    } else {
                                         episodeList =
                                             seasonViewModel.seasonData?.episodes ?: emptyList()
                                     }
-                                }
-                                if (playCid == -1L) {
-                                    seasonViewModel.seasonData?.sections?.forEach { section ->
-                                        section.episodes.forEach {
-                                            if (it.id == playEpid) {
-                                                playAid = it.aid
-                                                playCid = it.cid
-                                                episodeList = section.episodes
+                                } else {
+                                    logger.fInfo { "Find play record: ${seasonViewModel.lastPlayProgress}" }
+                                    playEpid = seasonViewModel.lastPlayProgress!!.lastEpId
+                                    seasonViewModel.seasonData?.episodes?.forEach {
+                                        if (it.id == playEpid) {
+                                            playAid = it.aid
+                                            playCid = it.cid
+                                            episodeList =
+                                                seasonViewModel.seasonData?.episodes ?: emptyList()
+                                        }
+                                    }
+                                    if (playCid == -1L) {
+                                        seasonViewModel.seasonData?.sections?.forEach { section ->
+                                            section.episodes.forEach {
+                                                if (it.id == playEpid) {
+                                                    playAid = it.aid
+                                                    playCid = it.cid
+                                                    episodeList = section.episodes
+                                                }
                                             }
                                         }
                                     }
+                                    if (playCid == -1L) {
+                                        logger.fInfo { "Can't find cid" }
+                                        "无法判断最后播放的剧集".toast(context)
+                                    }
                                 }
-                                if (playCid == -1L) {
-                                    logger.fInfo { "Can't find cid" }
-                                    "无法判断最后播放的剧集".toast(context)
-                                }
-                            }
 
-                            logger.fInfo { "Play aid: $playAid, cid: $playCid" }
-                            val lastEpId = seasonViewModel.lastPlayProgress?.lastEpId
-                            val ep = seasonViewModel.seasonData?.episodes?.find { it.id == lastEpId }
-                                ?: seasonViewModel.seasonData?.episodes?.find { it.cid == playCid }
-                            if (playCid != -1L) {
-                                onClickVideo(
-                                    playAid,
-                                    playCid,
-                                    playEpid,
-                                    generateEpisodeTitle(ep, seasonViewModel.seasonData!!.title),
-                                    seasonViewModel.lastPlayProgress?.lastTime ?: 0
-                                )
-
-                                val partVideoList = episodeList.mapIndexed { index, episode ->
-                                    VideoListPgcEpisode(
-                                        aid = episode.aid,
-                                        cid = episode.cid,
-                                        epid = episode.id,
-                                        seasonId = seasonViewModel.seasonData?.seasonId,
-                                        title = seasonViewModel.seasonData!!.title,
-                                        partTitle = runCatching {
-                                            "第 ${episode.title.toInt()} 集"
-                                        }.getOrDefault(episode.title) + " " + episode.longTitle,
-                                        index = index,
-                                        cover = episode.cover,
-                                        duration = episode.duration,
-                                        viewCount = episode.viewCount,
-                                        danmakuCount = episode.danmakuCount,
+                                logger.fInfo { "Play aid: $playAid, cid: $playCid" }
+                                val lastEpId = seasonViewModel.lastPlayProgress?.lastEpId
+                                val ep = seasonViewModel.seasonData?.episodes?.find { it.id == lastEpId }
+                                    ?: seasonViewModel.seasonData?.episodes?.find { it.cid == playCid }
+                                if (playCid != -1L) {
+                                    onClickVideo(
+                                        playAid,
+                                        playCid,
+                                        playEpid,
+                                        generateEpisodeTitle(ep, seasonViewModel.seasonData!!.title),
+                                        seasonViewModel.lastPlayProgress?.lastTime ?: 0
                                     )
-                                }
-                                videoInfoRepository.videoList.clear()
-                                videoInfoRepository.videoList.addAll(partVideoList)
-                            }
-                        },
-                        onClickFollow = onClickFollow,
-                        onClickSeasonSelector = onClickCover,
-                        onShowComment = onShowComment,
-                        onShowDescription = { showDescriptionDialog = true }
-                    )
-                }
-                if (seasonViewModel.seasonData?.episodes?.isNotEmpty() == true) {
-                    item {
-                        SeasonEpisodeRow(
-                            title = stringResource(R.string.season_feature_film),
-                            episodes = seasonViewModel.seasonData?.episodes ?: emptyList(),
-                            lastPlayedId = seasonViewModel.lastPlayProgress?.lastEpId ?: 0,
-                            lastPlayedTime = seasonViewModel.lastPlayProgress?.lastTime ?: 0,
-                            onClick = { avid, cid, epid, episodeTitle, startTime ->
-                                onClickVideo(avid, cid, epid, episodeTitle, startTime)
 
-                                val partVideoList =
-                                    seasonViewModel.seasonData?.episodes?.mapIndexed { index, episode ->
+                                    val partVideoList = episodeList.mapIndexed { index, episode ->
                                         VideoListPgcEpisode(
                                             aid = episode.aid,
                                             cid = episode.cid,
@@ -520,47 +525,86 @@ fun SeasonInfoScreen(
                                             viewCount = episode.viewCount,
                                             danmakuCount = episode.danmakuCount,
                                         )
-                                    } ?: emptyList()
-                                videoInfoRepository.videoList.clear()
-                                videoInfoRepository.videoList.addAll(partVideoList)
-                            }
-                        )
-                    }
-                }
-                seasonViewModel.seasonData?.sections?.forEach { section ->
-                    item {
-                        SeasonEpisodeRow(
-                            title = section.title,
-                            episodes = section.episodes,
-                            lastPlayedId = seasonViewModel.lastPlayProgress?.lastEpId ?: 0,
-                            lastPlayedTime = seasonViewModel.lastPlayProgress?.lastTime ?: 0,
-                            onClick = { avid, cid, epid, episodeTitle, startTime ->
-                                onClickVideo(avid, cid, epid, episodeTitle, startTime)
-
-                                val partVideoList = section.episodes.mapIndexed { index, episode ->
-                                    VideoListPgcEpisode(
-                                        aid = episode.aid,
-                                        cid = episode.cid,
-                                        epid = episode.id,
-                                        seasonId = seasonViewModel.seasonData?.seasonId,
-                                        title = runCatching {
-                                            "第 ${episode.title.toInt()} 集"
-                                        }.getOrDefault(episode.title) + " " + episode.longTitle,
-                                        index = index,
-                                        cover = episode.cover,
-                                        duration = episode.duration,
-                                        viewCount = episode.viewCount,
-                                        danmakuCount = episode.danmakuCount,
-                                    )
+                                    }
+                                    videoInfoRepository.videoList.clear()
+                                    videoInfoRepository.videoList.addAll(partVideoList)
                                 }
-                                videoInfoRepository.videoList.clear()
-                                videoInfoRepository.videoList.addAll(partVideoList)
-                            }
+                            },
+                            onClickFollow = onClickFollow,
+                            onClickSeasonSelector = onClickCover,
+                            onShowComment = onShowComment,
+                            onShowDescription = { showDescriptionDialog = true }
                         )
                     }
-                }
-                item {
-                    Spacer(modifier = Modifier.height(64.dp))
+                    if (seasonViewModel.seasonData?.episodes?.isNotEmpty() == true) {
+                        item {
+                            SeasonEpisodeRow(
+                                title = stringResource(R.string.season_feature_film),
+                                episodes = seasonViewModel.seasonData?.episodes ?: emptyList(),
+                                lastPlayedId = seasonViewModel.lastPlayProgress?.lastEpId ?: 0,
+                                lastPlayedTime = seasonViewModel.lastPlayProgress?.lastTime ?: 0,
+                                onClick = { avid, cid, epid, episodeTitle, startTime ->
+                                    onClickVideo(avid, cid, epid, episodeTitle, startTime)
+
+                                    val partVideoList =
+                                        seasonViewModel.seasonData?.episodes?.mapIndexed { index, episode ->
+                                            VideoListPgcEpisode(
+                                                aid = episode.aid,
+                                                cid = episode.cid,
+                                                epid = episode.id,
+                                                seasonId = seasonViewModel.seasonData?.seasonId,
+                                                title = seasonViewModel.seasonData!!.title,
+                                                partTitle = runCatching {
+                                                    "第 ${episode.title.toInt()} 集"
+                                                }.getOrDefault(episode.title) + " " + episode.longTitle,
+                                                index = index,
+                                                cover = episode.cover,
+                                                duration = episode.duration,
+                                                viewCount = episode.viewCount,
+                                                danmakuCount = episode.danmakuCount,
+                                            )
+                                        } ?: emptyList()
+                                    videoInfoRepository.videoList.clear()
+                                    videoInfoRepository.videoList.addAll(partVideoList)
+                                }
+                            )
+                        }
+                    }
+                    seasonViewModel.seasonData?.sections?.forEach { section ->
+                        item {
+                            SeasonEpisodeRow(
+                                title = section.title,
+                                episodes = section.episodes,
+                                lastPlayedId = seasonViewModel.lastPlayProgress?.lastEpId ?: 0,
+                                lastPlayedTime = seasonViewModel.lastPlayProgress?.lastTime ?: 0,
+                                onClick = { avid, cid, epid, episodeTitle, startTime ->
+                                    onClickVideo(avid, cid, epid, episodeTitle, startTime)
+
+                                    val partVideoList = section.episodes.mapIndexed { index, episode ->
+                                        VideoListPgcEpisode(
+                                            aid = episode.aid,
+                                            cid = episode.cid,
+                                            epid = episode.id,
+                                            seasonId = seasonViewModel.seasonData?.seasonId,
+                                            title = runCatching {
+                                                "第 ${episode.title.toInt()} 集"
+                                            }.getOrDefault(episode.title) + " " + episode.longTitle,
+                                            index = index,
+                                            cover = episode.cover,
+                                            duration = episode.duration,
+                                            viewCount = episode.viewCount,
+                                            danmakuCount = episode.danmakuCount,
+                                        )
+                                    }
+                                    videoInfoRepository.videoList.clear()
+                                    videoInfoRepository.videoList.addAll(partVideoList)
+                                }
+                            )
+                        }
+                    }
+                    item {
+                        Spacer(modifier = Modifier.height(64.dp))
+                    }
                 }
             }
         }
@@ -570,8 +614,10 @@ fun SeasonInfoScreen(
         show = showSeasonSelector,
         onHideSelector = {
             showSeasonSelector = false
-            runCatching {
-                playButtonFocusRequester.requestFocus(scope)
+            scope.launch {
+                runCatching {
+                    requestPlayButtonFocusWithoutScrolling()
+                }
             }
         },
         currentSeasonId = seasonViewModel.seasonId ?: 0,
@@ -711,7 +757,7 @@ fun SeasonHeroSection(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(screenHeight * 0.6f)
+            .height(screenHeight * 0.45f)
     ) {
         Column(
             modifier = Modifier

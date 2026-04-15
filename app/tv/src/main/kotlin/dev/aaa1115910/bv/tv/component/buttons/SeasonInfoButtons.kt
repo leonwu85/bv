@@ -1,10 +1,14 @@
 package dev.aaa1115910.bv.tv.component.buttons
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Favorite
@@ -19,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
@@ -28,14 +33,7 @@ import androidx.tv.material3.OutlinedButtonDefaults
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.ui.theme.BVTheme
 
-private fun truncatePlayButtonText(text: String, maxChars: Int = 23): String {
-    return if (text.length > maxChars) {
-        text.take(maxChars - 3) + "..."
-    } else {
-        text
-    }
-}
-
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SeasonInfoButtons(
     modifier: Modifier = Modifier,
@@ -54,30 +52,41 @@ fun SeasonInfoButtons(
     onShowDescription: () -> Unit = {},
 ) {
     val playButtonText = remember(lastPlayedIndex, lastPlayedTitle) {
-        truncatePlayButtonText(
-            text = if (lastPlayedIndex == -1) "开始播放" else lastPlayedTitle
-        )
+        if (lastPlayedIndex == -1) "开始播放" else lastPlayedTitle
     }
+    val playButtonContentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
 
-    Row(
+    FlowRow(
         modifier = modifier
             .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         if (isPublished) {
             Button(
                 onClick = onPlay,
-                modifier = Modifier.focusRequester(focusRequester)
+                modifier = Modifier
+                    .focusRequester(focusRequester)
+                    .padding(end = 6.dp)
+                    .widthIn(max = 300.dp)
+                ,
+                contentPadding = playButtonContentPadding
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(
                         modifier = Modifier.size(20.dp),
                         imageVector = Icons.Rounded.PlayArrow,
                         contentDescription = null
                     )
-                    Text(text = playButtonText)
+                    Text(
+                        modifier = Modifier.widthIn(max = 220.dp),
+                        text = playButtonText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         } else {
@@ -115,6 +124,7 @@ fun SeasonInfoButtons(
         if (seasonCount > 1) {
             Button(
                 onClick = onClickSeasonSelector,
+                modifier = Modifier.widthIn(max = 220.dp),
                 colors = OutlinedButtonDefaults.colors(),
                 border = OutlinedButtonDefaults.border()
             ) {
@@ -127,7 +137,11 @@ fun SeasonInfoButtons(
                         imageVector = Icons.Rounded.SwapHoriz,
                         contentDescription = null
                     )
-                    Text(text = "系列共 $seasonCount 部")
+                    Text(
+                        text = "系列共 $seasonCount 部",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }

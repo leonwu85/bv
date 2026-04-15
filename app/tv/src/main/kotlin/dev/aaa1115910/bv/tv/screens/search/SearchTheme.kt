@@ -5,7 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.MaterialTheme
+import dev.aaa1115910.bv.tv.component.screenBackgroundGradient
 
 /**
  * 搜索页面专用视觉常量
@@ -42,13 +42,5 @@ object SearchTheme {
  */
 @Composable
 fun searchBackgroundGradient(): Brush {
-    val surface = MaterialTheme.colorScheme.surface
-    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
-    return Brush.verticalGradient(
-        colors = listOf(
-            surfaceVariant,
-            surface,
-            surface
-        )
-    )
+    return screenBackgroundGradient()
 }

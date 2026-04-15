@@ -426,6 +426,28 @@ object Prefs {
     val enableMainUiAnimationFlow: Flow<Boolean>
         get() = dsm.getPreferenceFlow(PrefKeys.prefEnableMainUiAnimationRequest)
 
+    var collapseVideoInfoRelatedVideos: Boolean
+        get() = runBlocking {
+            dsm.getPreferenceFlow(PrefKeys.prefCollapseVideoInfoRelatedVideosRequest).first()
+        }
+        set(value) = runBlocking {
+            dsm.editPreference(PrefKeys.prefCollapseVideoInfoRelatedVideosKey, value)
+        }
+
+    val collapseVideoInfoRelatedVideosFlow: Flow<Boolean>
+        get() = dsm.getPreferenceFlow(PrefKeys.prefCollapseVideoInfoRelatedVideosRequest)
+
+    var showDetailPageBackgroundImage: Boolean
+        get() = runBlocking {
+            dsm.getPreferenceFlow(PrefKeys.prefShowDetailPageBackgroundImageRequest).first()
+        }
+        set(value) = runBlocking {
+            dsm.editPreference(PrefKeys.prefShowDetailPageBackgroundImageKey, value)
+        }
+
+    val showDetailPageBackgroundImageFlow: Flow<Boolean>
+        get() = dsm.getPreferenceFlow(PrefKeys.prefShowDetailPageBackgroundImageRequest)
+
 
     var portraitVideoFixMode: PortraitVideoFixMode
         get() = runBlocking {
@@ -690,6 +712,8 @@ object PrefKeys {
     val prefDefaultDrawerTabKey = intPreferencesKey("default_drawer_tab")
     val prefGridColumnsKey = intPreferencesKey("grid_columns")
     val prefEnableMainUiAnimationKey = booleanPreferencesKey("enable_main_ui_animation")
+    val prefCollapseVideoInfoRelatedVideosKey = booleanPreferencesKey("collapse_video_info_related_videos")
+    val prefShowDetailPageBackgroundImageKey = booleanPreferencesKey("show_detail_page_background_image")
     val prefPortraitVideoFixModeKey = intPreferencesKey("portrait_video_fix_mode")
     val prefPlayerShowDebugInfoKey = booleanPreferencesKey("player_show_debug_info")
     val prefPlayerExitWhenAllIsPlayedKey = booleanPreferencesKey("player_exit_when_all_is_played")
@@ -789,6 +813,8 @@ object PrefKeys {
     val prefDefaultDrawerTabRequest = PreferenceRequest(prefDefaultDrawerTabKey, 2)
     val prefGridColumnsRequest = PreferenceRequest(prefGridColumnsKey, 4)
     val prefEnableMainUiAnimationRequest = PreferenceRequest(prefEnableMainUiAnimationKey, false)
+    val prefCollapseVideoInfoRelatedVideosRequest = PreferenceRequest(prefCollapseVideoInfoRelatedVideosKey, true)
+    val prefShowDetailPageBackgroundImageRequest = PreferenceRequest(prefShowDetailPageBackgroundImageKey, true)
     val prefPortraitVideoFixModeRequest = PreferenceRequest(prefPortraitVideoFixModeKey, 0)
     val prefPlayerShowDebugInfoRequest = PreferenceRequest(prefPlayerShowDebugInfoKey, true)
     val prefPlayerExitWhenAllIsPlayedRequest = PreferenceRequest(prefPlayerExitWhenAllIsPlayedKey, true)
