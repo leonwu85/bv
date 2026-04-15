@@ -2,25 +2,16 @@ package dev.aaa1115910.bv.viewmodel.index
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import dev.aaa1115910.biliapi.entity.pgc.PgcItem
 import dev.aaa1115910.biliapi.entity.pgc.PgcType
-import dev.aaa1115910.biliapi.entity.pgc.index.Area
-import dev.aaa1115910.biliapi.entity.pgc.index.Copyright
-import dev.aaa1115910.biliapi.entity.pgc.index.IndexOrder
-import dev.aaa1115910.biliapi.entity.pgc.index.IndexOrderType
-import dev.aaa1115910.biliapi.entity.pgc.index.IsFinish
+import dev.aaa1115910.biliapi.entity.pgc.index.PGC_INDEX_ORDER_FIELD
 import dev.aaa1115910.biliapi.entity.pgc.index.PgcIndexData
-import dev.aaa1115910.biliapi.entity.pgc.index.Producer
-import dev.aaa1115910.biliapi.entity.pgc.index.ReleaseDate
-import dev.aaa1115910.biliapi.entity.pgc.index.SeasonMonth
-import dev.aaa1115910.biliapi.entity.pgc.index.SeasonStatus
-import dev.aaa1115910.biliapi.entity.pgc.index.SeasonVersion
-import dev.aaa1115910.biliapi.entity.pgc.index.SpokenLanguage
-import dev.aaa1115910.biliapi.entity.pgc.index.Style
-import dev.aaa1115910.biliapi.entity.pgc.index.Year
+import dev.aaa1115910.biliapi.entity.pgc.index.PgcIndexOption
+import dev.aaa1115910.biliapi.entity.pgc.index.PgcIndexSection
 import dev.aaa1115910.biliapi.repositories.PgcRepository
 import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.util.addAllWithMainContext
@@ -47,26 +38,64 @@ class PgcIndexViewModel(
 
     var pgcType by mutableStateOf(PgcType.Anime)
 
-    var indexOrder by mutableStateOf(IndexOrder.FollowCount)
-    var indexOrderType by mutableStateOf(IndexOrderType.Desc)
-    var seasonVersion by mutableStateOf(SeasonVersion.All)
-    var spokenLanguage by mutableStateOf(SpokenLanguage.All)
-    var area by mutableStateOf(Area.All)
-    var isFinish by mutableStateOf(IsFinish.All)
-    var copyright by mutableStateOf(Copyright.All)
-    var seasonStatus by mutableStateOf(SeasonStatus.All)
-    var seasonMonth by mutableStateOf(SeasonMonth.All)
-    var producer by mutableStateOf(Producer.All)
-    var year by mutableStateOf(Year.All)
-    var releaseDate by mutableStateOf(ReleaseDate.All)
-    var style by mutableStateOf(Style.All)
+    var filterSections by mutableStateOf<List<PgcIndexSection>>(emptyList())
+    val selectedFilters = mutableStateMapOf<String, PgcIndexOption>()
 
-    fun changePgcType(pgcType: PgcType) {
+    val isFilterReady get() = filterSections.isNotEmpty()
+
+    val activeFilterTags: List<String>
+        get() = filterSections.mapNotNull { section ->
+            val selectedOption = selectedFilters[section.field] ?: return@mapNotNull null
+            val defaultOption = section.options.firstOrNull() ?: return@mapNotNull null
+            selectedOption.takeIf { it.keyword != defaultOption.keyword }?.name
+        }
+
+    val filterSignature: String
+        get() = filterSections.joinToString("&") { section ->
+            val selectedOption = selectedFilters[section.field]
+            "${section.field}=${selectedOption?.keyword.orEmpty()}:${selectedOption?.sort.orEmpty()}"
+        }
+
+    suspend fun changePgcType(pgcType: PgcType) {
         this.pgcType = pgcType
-        indexOrder = IndexOrder.getList(pgcType).first()
+        clearData()
+        filterSections = emptyList()
+        selectedFilters.clear()
+
+        runCatching {
+            pgcRepository.getPgcIndexCondition(pgcType)
+        }.onSuccess { conditionData ->
+            val sections = conditionData.buildSections()
+            filterSections = sections
+            sections.forEach { section ->
+                section.options.firstOrNull()?.let { option ->
+                    selectedFilters[section.field] = option
+                }
+            }
+        }.onFailure {
+            logger.fError { "Load $pgcType index conditions failed: ${it.stackTraceToString()}" }
+            withContext(Dispatchers.Main) {
+                "加载 $pgcType 筛选条件失败: ${it.localizedMessage}".toast(BVApp.context)
+            }
+        }
+    }
+
+    fun updateFilter(option: PgcIndexOption) {
+        val currentOption = selectedFilters[option.field]
+        if (currentOption == option) return
+        selectedFilters[option.field] = option
+    }
+
+    fun resetFilters() {
+        filterSections.forEach { section ->
+            section.options.firstOrNull()?.let { option ->
+                selectedFilters[section.field] = option
+            }
+        }
     }
 
     suspend fun loadMore() {
+        if (!isFilterReady) return
         if (!updating) loadData()
     }
 
@@ -77,21 +106,16 @@ class PgcIndexViewModel(
             return
         }
         runCatching {
+            val selectedOrder = selectedFilters[PGC_INDEX_ORDER_FIELD]
+                ?: error("PGC index order is not initialized")
             val result = pgcRepository.getPgcIndex(
                 pgcType = pgcType,
-                indexOrder = indexOrder,
-                indexOrderType = indexOrderType,
-                seasonVersion = seasonVersion,
-                spokenLanguage = spokenLanguage,
-                area = area,
-                isFinish = isFinish,
-                copyright = copyright,
-                seasonStatus = seasonStatus,
-                seasonMonth = seasonMonth,
-                producer = producer,
-                year = year,
-                releaseDate = releaseDate,
-                style = style,
+                order = selectedOrder.keyword,
+                sort = selectedOrder.sort ?: "0",
+                filters = selectedFilters.values
+                    .asSequence()
+                    .filter { it.field != PGC_INDEX_ORDER_FIELD }
+                    .associate { it.field to it.keyword },
                 page = nextPage
             )
             indexResultItems.addAllWithMainContext(result.list)

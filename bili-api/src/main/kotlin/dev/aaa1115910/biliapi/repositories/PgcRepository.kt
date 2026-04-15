@@ -8,6 +8,7 @@ import dev.aaa1115910.biliapi.entity.pgc.index.Copyright
 import dev.aaa1115910.biliapi.entity.pgc.index.IndexOrder
 import dev.aaa1115910.biliapi.entity.pgc.index.IndexOrderType
 import dev.aaa1115910.biliapi.entity.pgc.index.IsFinish
+import dev.aaa1115910.biliapi.entity.pgc.index.PgcIndexConditionData
 import dev.aaa1115910.biliapi.entity.pgc.index.PgcIndexData
 import dev.aaa1115910.biliapi.entity.pgc.index.Producer
 import dev.aaa1115910.biliapi.entity.pgc.index.ReleaseDate
@@ -18,6 +19,7 @@ import dev.aaa1115910.biliapi.entity.pgc.index.SpokenLanguage
 import dev.aaa1115910.biliapi.entity.pgc.index.Style
 import dev.aaa1115910.biliapi.entity.pgc.index.Year
 import dev.aaa1115910.biliapi.http.BiliHttpApi
+import dev.aaa1115910.biliapi.http.SeasonIndexType
 import org.koin.core.annotation.Single
 
 @Single
@@ -69,6 +71,34 @@ class PgcRepository {
             items = indexData.list,
             ranks = emptyList()
         )
+    }
+
+    suspend fun getPgcIndexCondition(pgcType: PgcType): PgcIndexConditionData {
+        return BiliHttpApi.seasonIndexCondition(
+            seasonIndexType = pgcType.toSeasonIndexType(),
+            type = 0
+        ).getResponseData()
+    }
+
+    suspend fun getPgcIndex(
+        pgcType: PgcType,
+        order: String,
+        sort: String,
+        filters: Map<String, String>,
+        page: PgcIndexData.PgcIndexPage,
+    ): PgcIndexData {
+        val data = PgcIndexData.fromIndexResultData(
+            BiliHttpApi.seasonIndexDynamicResult(
+                seasonIndexType = pgcType.toSeasonIndexType(),
+                order = order,
+                sort = sort,
+                filters = filters,
+                page = page.nextPage,
+                pagesize = page.pageSize,
+                type = 0
+            ).getResponseData()
+        )
+        return data
     }
 
     suspend fun getPgcIndex(
@@ -165,4 +195,13 @@ class PgcRepository {
         )
         return data
     }
+}
+
+private fun PgcType.toSeasonIndexType() = when (this) {
+    PgcType.Anime -> SeasonIndexType.Anime
+    PgcType.GuoChuang -> SeasonIndexType.Guochuang
+    PgcType.Movie -> SeasonIndexType.Movie
+    PgcType.Documentary -> SeasonIndexType.Documentary
+    PgcType.Tv -> SeasonIndexType.Tv
+    PgcType.Variety -> SeasonIndexType.Variety
 }

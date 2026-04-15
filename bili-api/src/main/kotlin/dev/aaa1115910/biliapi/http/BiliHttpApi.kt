@@ -19,6 +19,7 @@ import dev.aaa1115910.biliapi.http.entity.index.IndexResultData
 import dev.aaa1115910.biliapi.http.entity.pgc.PgcFeedData
 import dev.aaa1115910.biliapi.http.entity.pgc.PgcFeedV3Data
 import dev.aaa1115910.biliapi.http.entity.pgc.PgcWebInitialStateData
+import dev.aaa1115910.biliapi.entity.pgc.index.PgcIndexConditionData
 import dev.aaa1115910.biliapi.http.entity.region.RegionBanner
 import dev.aaa1115910.biliapi.http.entity.region.RegionDynamic
 import dev.aaa1115910.biliapi.http.entity.region.RegionDynamicList
@@ -1899,6 +1900,35 @@ object BiliHttpApi {
         parameter("season_type", seasonIndexType.id)
         pagesize?.let { parameter("pagesize", it) }
         type?.let { parameter("type", it) }
+    }.body()
+
+    suspend fun seasonIndexCondition(
+        seasonIndexType: SeasonIndexType,
+        type: Int = 0
+    ): BiliResponse<PgcIndexConditionData> = client.get("/pgc/season/index/condition") {
+        parameter("season_type", seasonIndexType.id)
+        parameter("type", type)
+    }.body()
+
+    suspend fun seasonIndexDynamicResult(
+        seasonIndexType: SeasonIndexType,
+        order: String,
+        sort: String,
+        filters: Map<String, String>,
+        page: Int = 1,
+        pagesize: Int = 20,
+        type: Int = 0
+    ): BiliResponse<IndexResultData> = client.get("/pgc/season/index/result") {
+        parameter("st", seasonIndexType.id)
+        parameter("order", order)
+        parameter("sort", sort)
+        filters.forEach { (field, keyword) ->
+            parameter(field, keyword)
+        }
+        parameter("season_type", seasonIndexType.id)
+        parameter("page", page)
+        parameter("pagesize", pagesize)
+        parameter("type", type)
     }.body()
 
     suspend fun seasonIndexAnimeResult(

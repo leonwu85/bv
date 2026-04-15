@@ -49,19 +49,6 @@ import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import dev.aaa1115910.biliapi.entity.pgc.PgcType
-import dev.aaa1115910.biliapi.entity.pgc.index.Area
-import dev.aaa1115910.biliapi.entity.pgc.index.Copyright
-import dev.aaa1115910.biliapi.entity.pgc.index.IndexOrder
-import dev.aaa1115910.biliapi.entity.pgc.index.IndexOrderType
-import dev.aaa1115910.biliapi.entity.pgc.index.IsFinish
-import dev.aaa1115910.biliapi.entity.pgc.index.Producer
-import dev.aaa1115910.biliapi.entity.pgc.index.ReleaseDate
-import dev.aaa1115910.biliapi.entity.pgc.index.SeasonMonth
-import dev.aaa1115910.biliapi.entity.pgc.index.SeasonStatus
-import dev.aaa1115910.biliapi.entity.pgc.index.SeasonVersion
-import dev.aaa1115910.biliapi.entity.pgc.index.SpokenLanguage
-import dev.aaa1115910.biliapi.entity.pgc.index.Style
-import dev.aaa1115910.biliapi.entity.pgc.index.Year
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.tv.component.pgc.IndexFilter
 import dev.aaa1115910.bv.tv.component.videocard.SeasonCard
@@ -101,50 +88,11 @@ fun PgcIndexScreen(
     val pgcItems = pgcIndexViewModel.indexResultItems
     val noMore = pgcIndexViewModel.noMore
     var showFilter by remember { mutableStateOf(false) }
-    val defaultOrder = remember(pgcIndexViewModel.pgcType) {
-        IndexOrder.getList(pgcIndexViewModel.pgcType).firstOrNull() ?: IndexOrder.FollowCount
-    }
-    val activeFilterTags = buildList {
-        if (pgcIndexViewModel.indexOrder != defaultOrder) {
-            add(pgcIndexViewModel.indexOrder.getDisplayName(context))
-        }
-        if (pgcIndexViewModel.indexOrderType != IndexOrderType.Desc) {
-            add(pgcIndexViewModel.indexOrderType.getDisplayName(context))
-        }
-        if (pgcIndexViewModel.seasonVersion != SeasonVersion.All) {
-            add(pgcIndexViewModel.seasonVersion.getDisplayName(context))
-        }
-        if (pgcIndexViewModel.spokenLanguage != SpokenLanguage.All) {
-            add(pgcIndexViewModel.spokenLanguage.getDisplayName(context))
-        }
-        if (pgcIndexViewModel.area != Area.All) {
-            add(pgcIndexViewModel.area.getDisplayName(context))
-        }
-        if (pgcIndexViewModel.isFinish != IsFinish.All) {
-            add(pgcIndexViewModel.isFinish.getDisplayName(context))
-        }
-        if (pgcIndexViewModel.copyright != Copyright.All) {
-            add(pgcIndexViewModel.copyright.getDisplayName(context))
-        }
-        if (pgcIndexViewModel.seasonStatus != SeasonStatus.All) {
-            add(pgcIndexViewModel.seasonStatus.getDisplayName(context))
-        }
-        if (pgcIndexViewModel.seasonMonth != SeasonMonth.All) {
-            add(pgcIndexViewModel.seasonMonth.getDisplayName(context))
-        }
-        if (pgcIndexViewModel.producer != Producer.All) {
-            add(pgcIndexViewModel.producer.getDisplayName(context))
-        }
-        if (pgcIndexViewModel.year != Year.All) {
-            add(pgcIndexViewModel.year.getDisplayName(context))
-        }
-        if (pgcIndexViewModel.releaseDate != ReleaseDate.All) {
-            add(pgcIndexViewModel.releaseDate.getDisplayName(context))
-        }
-        if (pgcIndexViewModel.style != Style.All) {
-            add(pgcIndexViewModel.style.getDisplayName(context))
-        }
-    }
+    val filterReady by remember { derivedStateOf { pgcIndexViewModel.isFilterReady } }
+    val activeFilterTags by remember { derivedStateOf { pgcIndexViewModel.activeFilterTags } }
+    val filterSignature by remember { derivedStateOf { pgcIndexViewModel.filterSignature } }
+    val filterSections = pgcIndexViewModel.filterSections
+    val selectedFilters = pgcIndexViewModel.selectedFilters
     val visibleActiveFilterTags = if (activeFilterTags.size > 4) {
         buildList {
             addAll(activeFilterTags.take(4))
@@ -156,7 +104,9 @@ fun PgcIndexScreen(
     val hasActiveFilter = activeFilterTags.isNotEmpty()
 
     val onLongClickSeason = {
-        showFilter = true
+        if (filterReady) {
+            showFilter = true
+        }
     }
 
     val reloadData = {
@@ -175,24 +125,10 @@ fun PgcIndexScreen(
         }.getOrDefault(PgcType.Anime)
         logger.fInfo { "index pgcType: $pgcType" }
         pgcIndexViewModel.changePgcType(pgcType)
-        reloadData()
     }
 
-    LaunchedEffect(
-        pgcIndexViewModel.indexOrder,
-        pgcIndexViewModel.indexOrderType,
-        pgcIndexViewModel.seasonVersion,
-        pgcIndexViewModel.spokenLanguage,
-        pgcIndexViewModel.area,
-        pgcIndexViewModel.isFinish,
-        pgcIndexViewModel.copyright,
-        pgcIndexViewModel.seasonStatus,
-        pgcIndexViewModel.seasonMonth,
-        pgcIndexViewModel.producer,
-        pgcIndexViewModel.year,
-        pgcIndexViewModel.releaseDate,
-        pgcIndexViewModel.style,
-    ) {
+    LaunchedEffect(filterReady, filterSignature) {
+        if (!filterReady) return@LaunchedEffect
         reloadData()
     }
 
@@ -286,7 +222,7 @@ fun PgcIndexScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(text = stringResource(R.string.no_data))
-                                OutlinedButton(onClick = { showFilter = true }) {
+                                OutlinedButton(onClick = onLongClickSeason) {
                                     Text(text = stringResource(R.string.filter_dialog_open_tip_click))
                                 }
                             }
@@ -299,34 +235,12 @@ fun PgcIndexScreen(
 
     IndexFilter(
         type = pgcIndexViewModel.pgcType,
-        show = showFilter,
+        show = showFilter && filterReady,
         onDismissRequest = { showFilter = false },
-        order = pgcIndexViewModel.indexOrder,
-        orderType = pgcIndexViewModel.indexOrderType,
-        seasonVersion = pgcIndexViewModel.seasonVersion,
-        spokenLanguage = pgcIndexViewModel.spokenLanguage,
-        area = pgcIndexViewModel.area,
-        isFinish = pgcIndexViewModel.isFinish,
-        copyright = pgcIndexViewModel.copyright,
-        seasonStatus = pgcIndexViewModel.seasonStatus,
-        seasonMonth = pgcIndexViewModel.seasonMonth,
-        producer = pgcIndexViewModel.producer,
-        year = pgcIndexViewModel.year,
-        releaseDate = pgcIndexViewModel.releaseDate,
-        style = pgcIndexViewModel.style,
-        onOrderChange = { pgcIndexViewModel.indexOrder = it },
-        onOrderTypeChange = { pgcIndexViewModel.indexOrderType = it },
-        onSeasonVersionChange = { pgcIndexViewModel.seasonVersion = it },
-        onSpokenLanguageChange = { pgcIndexViewModel.spokenLanguage = it },
-        onAreaChange = { pgcIndexViewModel.area = it },
-        onIsFinishChange = { pgcIndexViewModel.isFinish = it },
-        onCopyrightChange = { pgcIndexViewModel.copyright = it },
-        onSeasonStatusChange = { pgcIndexViewModel.seasonStatus = it },
-        onSeasonMonthChange = { pgcIndexViewModel.seasonMonth = it },
-        onProducerChange = { pgcIndexViewModel.producer = it },
-        onYearChange = { pgcIndexViewModel.year = it },
-        onReleaseDateChange = { pgcIndexViewModel.releaseDate = it },
-        onStyleChange = { pgcIndexViewModel.style = it }
+        sections = filterSections,
+        selectedFilters = selectedFilters,
+        onFilterChange = { pgcIndexViewModel.updateFilter(it) },
+        onResetFilters = { pgcIndexViewModel.resetFilters() }
     )
 }
 
