@@ -1,0 +1,95 @@
+name: Manual Signed Release Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BV_APPLICATION_ID: dev.aaa1115910.bv3
+
+jobs:
+  build-release:
+    name: Build Signed Release APK
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: 'true'
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Validate required secrets
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          SIGNING_PROPERTIES: ${{ secrets.SIGNING_PROPERTIES }}
+          SIGN_KEY: ${{ secrets.SIGN_KEY }}
+        run: |
+          set -euo pipefail
+          [[ -n "$GOOGLE_SERVICES_JSON" ]] || { echo "Missing GOOGLE_SERVICES_JSON secret"; exit 1; }
+          [[ -n "$SIGNING_PROPERTIES" ]] || { echo "Missing SIGNING_PROPERTIES secret"; exit 1; }
+          [[ -n "$SIGN_KEY" ]] || { echo "Missing SIGN_KEY secret"; exit 1; }
+
+      - name: Write google-services.json
+        env:
+          DATA: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$DATA" > app/google-services.json
+
+      - name: Add signing properties
+        env:
+          SIGNING_PROPERTIES: ${{ secrets.SIGNING_PROPERTIES }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$SIGNING_PROPERTIES" | base64 -D > signing.properties
+
+      - name: Add keystore
+        env:
+          SIGN_KEY: ${{ secrets.SIGN_KEY }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$SIGN_KEY" | base64 -D > key.jks
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build signed release APK
+        env:
+          BV_APPLICATION_ID: ${{ env.BV_APPLICATION_ID }}
+        run: |
+          set -euo pipefail
+          ./gradlew assembleDefaultRelease
+
+      - name: Read release apk output metadata
+        id: apk-meta-release
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: app/build/outputs/apk/default/release/output-metadata.json
+
+      - name: Parse apk info
+        run: |
+          echo "release_info_version_code=${{ fromJson(steps.apk-meta-release.outputs.content).elements[0].versionCode }}" >> $GITHUB_ENV
+          echo "release_info_version_name=${{ fromJson(steps.apk-meta-release.outputs.content).elements[0].versionName }}" >> $GITHUB_ENV
+
+      - name: Archive release build mappings
+        uses: actions/upload-artifact@v4
+        with:
+          name: Release build mappings
+          path: app/build/outputs/mapping/defaultRelease
+          if-no-files-found: error
+
+      - name: Archive signed release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Signed release APK (bv3)
+          path: app/build/outputs/apk/default/release/BV_${{ env.release_info_version_code }}_${{ env.release_info_version_name }}_default_universal.apk
+          if-no-files-found: error

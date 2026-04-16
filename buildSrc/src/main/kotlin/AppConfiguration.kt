@@ -2,7 +2,9 @@ import java.io.File
 
 object AppConfiguration {
     const val appId = "dev.aaa1115910.bv"
-    const val applicationId = "dev.aaa1115910.bv2"
+    private const val defaultApplicationId = "dev.aaa1115910.bv2"
+    private const val applicationIdSystemProperty = "bv.applicationId"
+    private const val applicationIdEnvName = "BV_APPLICATION_ID"
     const val compileSdk = 36
     const val minSdk = 23
     const val targetSdk = 36
@@ -24,6 +26,9 @@ object AppConfiguration {
         "$major.$minor.$patch${".$hotFix".takeIf { hotFix != 0 } ?: ""}" +
                 ".r${versionCode}.${gitShortRevision}"
     }
+    val applicationId: String by lazy {
+        resolveApplicationId()
+    }
     val versionCode: Int by lazy { gitCommitCount }
     const val libVLCVersion = "3.6.5"
     var googleServicesAvailable = true
@@ -37,11 +42,25 @@ object AppConfiguration {
     private fun initConfigurations() {
         val googleServicesJsonPath = "$projectDir/app/google-services.json"
         val googleServicesJsonFile = File(googleServicesJsonPath)
+        val expectedPackageNames = listOf(
+            appId,
+            applicationId,
+            "$applicationId.r8test",
+            "$applicationId.debug"
+        )
         googleServicesAvailable =
             googleServicesJsonFile.exists() && googleServicesJsonFile.readText().let {
-                it.contains(applicationId) && it.contains("$applicationId.r8test") && it.contains("$applicationId.debug")
+                expectedPackageNames.all(it::contains)
             }
+        println("Application ID: $applicationId")
         println("Google Services available: $googleServicesAvailable")
+    }
+
+    private fun resolveApplicationId(): String {
+        return listOf(
+            System.getProperty(applicationIdSystemProperty),
+            System.getenv(applicationIdEnvName)
+        ).firstOrNull { !it.isNullOrBlank() }?.trim() ?: defaultApplicationId
     }
 }
 
