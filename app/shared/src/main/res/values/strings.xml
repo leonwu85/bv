@@ -285,6 +285,10 @@
     <string name="settings_ui_drawer_nav_items_hint">使用左右键移动顺序，按确认键切换显示/隐藏，长按确认键设为默认（默认项不可隐藏；初始默认是首页）</string>
     <string name="settings_ui_main_animation_title">主界面切换动画</string>
     <string name="settings_ui_main_animation_text">关闭后禁用主界面页面切换动画，并缩短导航焦点等待时间</string>
+    <string name="settings_ui_collapse_video_info_related_title">折叠详情页推荐视频</string>
+    <string name="settings_ui_collapse_video_info_related_text">关闭后在详情页底部直接显示推荐视频列表</string>
+    <string name="settings_ui_detail_background_title">详情页显示背景图片</string>
+    <string name="settings_ui_detail_background_text">关闭后使用渐变深色背景</string>
     <string name="settings_ui_home_nav_default_tag">默认</string>
     <string name="settings_ui_home_nav_visible">显示</string>
     <string name="settings_ui_home_nav_hidden">隐藏</string>

@@ -91,6 +91,12 @@ fun UISetting(
     val density by Prefs.densityFlow.collectAsState(context.resources.displayMetrics.widthPixels / 960f)
     val themeType by Prefs.themeTypeFlow.collectAsState(Prefs.themeType)
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
+    val collapseVideoInfoRelatedVideos by Prefs.collapseVideoInfoRelatedVideosFlow.collectAsState(
+        Prefs.collapseVideoInfoRelatedVideos
+    )
+    val showDetailPageBackgroundImage by Prefs.showDetailPageBackgroundImageFlow.collectAsState(
+        Prefs.showDetailPageBackgroundImage
+    )
     val showOnlineViewerCount by Prefs.showOnlineViewerCountFlow.collectAsState(Prefs.showOnlineViewerCount)
     var gridColumns by remember { mutableStateOf(Prefs.gridColumns) }
     var dynamicPageStyle by remember { mutableStateOf(Prefs.dynamicPageStyle) }
@@ -163,6 +169,22 @@ fun UISetting(
                         supportText = stringResource(R.string.settings_ui_main_animation_text),
                         checked = enableMainUiAnimation,
                         onCheckedChange = { Prefs.enableMainUiAnimation = it }
+                    )
+                }
+                item {
+                    SettingSwitchListItem(
+                        title = stringResource(R.string.settings_ui_collapse_video_info_related_title),
+                        supportText = stringResource(R.string.settings_ui_collapse_video_info_related_text),
+                        checked = collapseVideoInfoRelatedVideos,
+                        onCheckedChange = { Prefs.collapseVideoInfoRelatedVideos = it }
+                    )
+                }
+                item {
+                    SettingSwitchListItem(
+                        title = stringResource(R.string.settings_ui_detail_background_title),
+                        supportText = stringResource(R.string.settings_ui_detail_background_text),
+                        checked = showDetailPageBackgroundImage,
+                        onCheckedChange = { Prefs.showDetailPageBackgroundImage = it }
                     )
                 }
                 item {
