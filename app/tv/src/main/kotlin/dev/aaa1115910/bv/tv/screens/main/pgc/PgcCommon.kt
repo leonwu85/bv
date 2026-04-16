@@ -346,19 +346,29 @@ fun PgcFeedRankRowPreview() {
 fun PgcFeatureButtons(
     modifier: Modifier = Modifier,
     buttons: List<Triple<String, Any, () -> Unit>>,
+    firstButtonFocusRequester: FocusRequester? = null,
     vertical: Boolean = false
 ) {
     if (vertical) {
-        PgcFeatureButtonsVertical(modifier = modifier, buttons = buttons)
+        PgcFeatureButtonsVertical(
+            modifier = modifier,
+            buttons = buttons,
+            firstButtonFocusRequester = firstButtonFocusRequester
+        )
     } else {
-        PgcFeatureButtonsHorizontal(modifier = modifier, buttons = buttons)
+        PgcFeatureButtonsHorizontal(
+            modifier = modifier,
+            buttons = buttons,
+            firstButtonFocusRequester = firstButtonFocusRequester
+        )
     }
 }
 
 @Composable
 private fun PgcFeatureButtonsHorizontal(
     modifier: Modifier = Modifier,
-    buttons: List<Triple<String, Any, () -> Unit>>
+    buttons: List<Triple<String, Any, () -> Unit>>,
+    firstButtonFocusRequester: FocusRequester? = null
 ) {
     val buttonWidth = 185.dp
 
@@ -369,17 +379,27 @@ private fun PgcFeatureButtonsHorizontal(
         horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
         contentPadding = PaddingValues(horizontal = 32.dp)
     ) {
-        items(items = buttons) { (title, icon, onClick) ->
+        itemsIndexed(items = buttons) { index, (title, icon, onClick) ->
+            val buttonModifier = Modifier
+                .width(buttonWidth)
+                .then(
+                    if (index == 0 && firstButtonFocusRequester != null) {
+                        Modifier.focusRequester(firstButtonFocusRequester)
+                    } else {
+                        Modifier
+                    }
+                )
+
             when (icon) {
                 is ImageVector -> PgcFeatureButton(
-                    modifier = Modifier.width(buttonWidth),
+                    modifier = buttonModifier,
                     title = title,
                     icon = icon,
                     onClick = { onClick.invoke() }
                 )
 
                 is Painter -> PgcFeatureButton(
-                    modifier = Modifier.width(buttonWidth),
+                    modifier = buttonModifier,
                     title = title,
                     icon = icon,
                     onClick = { onClick.invoke() }
@@ -394,7 +414,8 @@ private fun PgcFeatureButtonsHorizontal(
 @Composable
 private fun PgcFeatureButtonsVertical(
     modifier: Modifier = Modifier,
-    buttons: List<Triple<String, Any, () -> Unit>>
+    buttons: List<Triple<String, Any, () -> Unit>>,
+    firstButtonFocusRequester: FocusRequester? = null
 ) {
     Column(
         modifier = modifier
@@ -402,21 +423,28 @@ private fun PgcFeatureButtonsVertical(
             .height(240.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
     ) {
-        buttons.forEach { (title, icon, onClick) ->
+        buttons.forEachIndexed { index, (title, icon, onClick) ->
+            val buttonModifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .then(
+                    if (index == 0 && firstButtonFocusRequester != null) {
+                        Modifier.focusRequester(firstButtonFocusRequester)
+                    } else {
+                        Modifier
+                    }
+                )
+
             when (icon) {
                 is ImageVector -> PgcFeatureButton(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
+                    modifier = buttonModifier,
                     title = title,
                     icon = icon,
                     onClick = { onClick.invoke() }
                 )
 
                 is Painter -> PgcFeatureButton(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
+                    modifier = buttonModifier,
                     title = title,
                     icon = icon,
                     onClick = { onClick.invoke() }

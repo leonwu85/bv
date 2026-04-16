@@ -73,10 +73,25 @@ fun PgcContent(
     val tvState = rememberLazyListState()
     val varietyState = rememberLazyListState()
 
+    val animeButtonFocusRequester = remember { FocusRequester() }
+    val guoChuangButtonFocusRequester = remember { FocusRequester() }
+    val movieButtonFocusRequester = remember { FocusRequester() }
+    val documentaryButtonFocusRequester = remember { FocusRequester() }
+    val tvButtonFocusRequester = remember { FocusRequester() }
+    val varietyButtonFocusRequester = remember { FocusRequester() }
+
     var focusLayer by remember { mutableStateOf<PgcFocusLayer?>(null) }
 
     val selectedTab = PgcTopNavItem.entries.getOrElse(selectedTabOrdinal) { PgcTopNavItem.Anime }
     val currentViewModel = rememberPgcViewModel(selectedTab)
+    val currentButtonFocusRequester = when (selectedTab) {
+        PgcTopNavItem.Anime -> animeButtonFocusRequester
+        PgcTopNavItem.GuoChuang -> guoChuangButtonFocusRequester
+        PgcTopNavItem.Movie -> movieButtonFocusRequester
+        PgcTopNavItem.Documentary -> documentaryButtonFocusRequester
+        PgcTopNavItem.Tv -> tvButtonFocusRequester
+        PgcTopNavItem.Variety -> varietyButtonFocusRequester
+    }
 
     LaunchedEffect(selectedTab) {
         if (selectedTab.ordinal != selectedTabOrdinal) {
@@ -157,6 +172,10 @@ fun PgcContent(
                 onLeftKeyEvent = {
                     // 顶部栏最左侧按左键时，跳转到左侧导航栏
                     onRequestDrawerFocus()
+                },
+                onDownKeyEvent = {
+                    currentButtonFocusRequester.requestFocus(scope)
+                    true
                 }
             )
         }
@@ -192,12 +211,30 @@ fun PgcContent(
                 }
             ) { screen ->
                 when (screen) {
-                    PgcTopNavItem.Anime -> AnimeContent(lazyListState = animeState)
-                    PgcTopNavItem.GuoChuang -> GuoChuangContent(lazyListState = guoChuangState)
-                    PgcTopNavItem.Movie -> MovieContent(lazyListState = movieState)
-                    PgcTopNavItem.Documentary -> DocumentaryContent(lazyListState = documentaryState)
-                    PgcTopNavItem.Tv -> TvContent(lazyListState = tvState)
-                    PgcTopNavItem.Variety -> VarietyContent(lazyListState = varietyState)
+                    PgcTopNavItem.Anime -> AnimeContent(
+                        lazyListState = animeState,
+                        firstButtonFocusRequester = animeButtonFocusRequester
+                    )
+                    PgcTopNavItem.GuoChuang -> GuoChuangContent(
+                        lazyListState = guoChuangState,
+                        firstButtonFocusRequester = guoChuangButtonFocusRequester
+                    )
+                    PgcTopNavItem.Movie -> MovieContent(
+                        lazyListState = movieState,
+                        firstButtonFocusRequester = movieButtonFocusRequester
+                    )
+                    PgcTopNavItem.Documentary -> DocumentaryContent(
+                        lazyListState = documentaryState,
+                        firstButtonFocusRequester = documentaryButtonFocusRequester
+                    )
+                    PgcTopNavItem.Tv -> TvContent(
+                        lazyListState = tvState,
+                        firstButtonFocusRequester = tvButtonFocusRequester
+                    )
+                    PgcTopNavItem.Variety -> VarietyContent(
+                        lazyListState = varietyState,
+                        firstButtonFocusRequester = varietyButtonFocusRequester
+                    )
                 }
             }
         }

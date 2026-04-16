@@ -9,6 +9,7 @@ import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.QuestionMark
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -25,6 +26,7 @@ import org.koin.androidx.compose.koinViewModel
 fun GuoChuangContent(
     modifier: Modifier = Modifier,
     lazyListState: LazyListState,
+    firstButtonFocusRequester: FocusRequester? = null,
     pgcViewModel: PgcGuoChuangViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
@@ -44,6 +46,7 @@ fun GuoChuangContent(
             GuoChuangFeatureButtons(
                 modifier = if (vertical) Modifier else Modifier.padding(vertical = 12.dp),
                 vertical = vertical,
+                firstButtonFocusRequester = firstButtonFocusRequester,
                 onOpenTimeline = onOpenTimeline,
                 onOpenIndex = onOpenIndex
             )
@@ -55,6 +58,7 @@ fun GuoChuangContent(
 private fun GuoChuangFeatureButtons(
     modifier: Modifier = Modifier,
     vertical: Boolean = false,
+    firstButtonFocusRequester: FocusRequester? = null,
     onOpenTimeline: () -> Unit,
     onOpenIndex: () -> Unit
 ) {
@@ -83,6 +87,7 @@ private fun GuoChuangFeatureButtons(
     PgcFeatureButtons(
         modifier = modifier,
         buttons = buttons,
+        firstButtonFocusRequester = firstButtonFocusRequester,
         vertical = vertical
     )
 }

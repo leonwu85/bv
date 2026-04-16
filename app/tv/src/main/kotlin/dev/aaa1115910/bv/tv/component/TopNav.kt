@@ -52,7 +52,8 @@ fun TopNav(
     onFocusedChanged: (TopNavItem) -> Unit = {},
     onSelectedChanged: (TopNavItem) -> Unit = {},
     onClick: (TopNavItem) -> Unit = {},
-    onLeftKeyEvent: () -> Unit = {}
+    onLeftKeyEvent: () -> Unit = {},
+    onDownKeyEvent: (() -> Boolean)? = null
 ) {
     if (items.isEmpty()) return
 
@@ -113,7 +114,12 @@ fun TopNav(
                             return@onPreviewKeyEvent true
                         }
                         if (it.key == Key.DirectionDown) {
-                            return@onPreviewKeyEvent !canMoveFocusDown
+                            if (!canMoveFocusDown) {
+                                return@onPreviewKeyEvent true
+                            }
+                            if (onDownKeyEvent?.invoke() == true) {
+                                return@onPreviewKeyEvent true
+                            }
                         }
                     }
                     false

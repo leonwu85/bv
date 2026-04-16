@@ -7,6 +7,7 @@ import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.rounded.QuestionMark
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -22,6 +23,7 @@ import org.koin.androidx.compose.koinViewModel
 fun VarietyContent(
     modifier: Modifier = Modifier,
     lazyListState: LazyListState,
+    firstButtonFocusRequester: FocusRequester? = null,
     pgcViewModel: PgcVarietyViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
@@ -38,6 +40,7 @@ fun VarietyContent(
             VarietyFeatureButtons(
                 modifier = if (vertical) Modifier else Modifier.padding(vertical = 12.dp),
                 vertical = vertical,
+                firstButtonFocusRequester = firstButtonFocusRequester,
                 onOpenIndex = onOpenIndex
             )
         }
@@ -48,6 +51,7 @@ fun VarietyContent(
 private fun VarietyFeatureButtons(
     modifier: Modifier = Modifier,
     vertical: Boolean = false,
+    firstButtonFocusRequester: FocusRequester? = null,
     onOpenIndex: () -> Unit
 ) {
     val buttons = listOf(
@@ -75,6 +79,7 @@ private fun VarietyFeatureButtons(
     PgcFeatureButtons(
         modifier = modifier,
         buttons = buttons,
+        firstButtonFocusRequester = firstButtonFocusRequester,
         vertical = vertical
     )
 }
