@@ -145,6 +145,8 @@ fun VideoPlayerController(
     enableSponsorBlock: Boolean = false,
     sponsorSegments: List<dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment> = emptyList(),
     showSponsorBlockTip: Boolean = false,
+    showAutoSkipSponsorTip: Boolean = false,
+    autoSkipSponsorSeconds: Int = 0,
     currentSponsorSegment: dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment? = null,
     onSkipSponsorSegment: () -> Unit = {},
     onDismissSponsorBlockTip: () -> Unit = {},
@@ -588,6 +590,10 @@ fun VideoPlayerController(
             segment = currentSponsorSegment,
             onSkip = onSkipSponsorSegment,
             onDismiss = onDismissSponsorBlockTip
+        )
+        AutoSkipSponsorTip(
+            show = showAutoSkipSponsorTip && !showClickableControllers,
+            skippedSeconds = autoSkipSponsorSeconds
         )
         PlayStateTips(
             canShowPause = !showInfo && !showSeekController

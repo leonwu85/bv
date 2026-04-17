@@ -76,6 +76,7 @@
     <string name="video_player_audio_only_button">音频</string>
     <string name="video_player_audio_only_button_active">音频中</string>
     <string name="video_player_audio_only_tip">当前处于音频模式</string>
+    <string name="video_player_auto_skip_sponsor_tip">已为您自动跳过恰饭广告 %1$d 秒</string>
     <string name="video_rotation_original">原始</string>
     <string name="video_rotation_90">90°</string>
     <string name="video_rotation_negative_90">-90°</string>

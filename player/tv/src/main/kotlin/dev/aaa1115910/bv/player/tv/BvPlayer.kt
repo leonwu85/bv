@@ -13,6 +13,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -84,6 +85,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
+import kotlin.math.roundToInt
 
 private const val DANMAKU_MASK_BITMAP_CACHE_MAX_BYTES = 64 * 1024 * 1024
 
@@ -284,6 +286,9 @@ fun BvPlayer(
     var showSkipEdTip by remember { mutableStateOf(false) }
     var skipOpTipText by remember { mutableStateOf("即将跳过片头") }
     var skipEdTipText by remember { mutableStateOf("即将跳过片尾") }
+    var showAutoSkipSponsorTip by remember { mutableStateOf(false) }
+    var autoSkipSponsorSeconds by remember { mutableIntStateOf(0) }
+    var autoSkipSponsorTipToken by remember { mutableLongStateOf(0L) }
     var processedClipIndices by remember { mutableStateOf(setOf<Int>()) }
     var processedSponsorSegments by remember { mutableStateOf(setOf<SponsorSegment>()) }
 
@@ -325,6 +330,13 @@ fun BvPlayer(
 
     LaunchedEffect(sponsorSegments) {
         processedSponsorSegments = emptySet()
+    }
+
+    LaunchedEffect(autoSkipSponsorTipToken) {
+        if (autoSkipSponsorTipToken == 0L) return@LaunchedEffect
+        showAutoSkipSponsorTip = true
+        delay(3_000)
+        showAutoSkipSponsorTip = false
     }
 
     val syncProcessedSponsorSegmentsForPosition: (Long) -> Unit = { targetPosition ->
@@ -875,7 +887,8 @@ fun BvPlayer(
                             "SponsorBlock segment matched at ${pos}ms, range=${segment.startTime}-${segment.endTime}, mode=$currentSponsorBlockSkipMode, firstHit=true"
                         }
                         if (currentSponsorBlockSkipMode == SponsorBlockSkipMode.Auto) {
-                            // 自动
+                            autoSkipSponsorSeconds = (segment.duration / 1000.0).roundToInt().coerceAtLeast(1)
+                            autoSkipSponsorTipToken++
                             currentOnSkipSponsorSegment(segment)
                         } else {
                             // 手动
@@ -1330,6 +1343,8 @@ fun BvPlayer(
             enableSponsorBlock = enableSponsorBlock,
             sponsorSegments = sponsorSegments,
             showSponsorBlockTip = showSponsorBlockTip,
+            showAutoSkipSponsorTip = showAutoSkipSponsorTip,
+            autoSkipSponsorSeconds = autoSkipSponsorSeconds,
             currentSponsorSegment = currentSponsorSegment,
             onSkipSponsorSegment = {
                 logger.info { "Skip sponsor segment" }
