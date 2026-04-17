@@ -8,21 +8,20 @@ androidsvg = "1.4"
 coil = "2.7.0"
 firebase-bom = "34.12.0"
 geetest-sensebot = "4.4.4"
-grpc = "1.78.0"
+grpc = "1.80.0"
 grpc-kotlin = "1.5.0"
 jsoup = "1.22.1"
-koin = "4.1.1"
-koin-annotations = "2.3.1"
-koin-compose = "4.1.1"
+koin = "4.2.1"
+koin-compose = "4.2.1"
 kotlinx-coroutines = "1.10.2"
-kotlinx-serialization = "1.10.0"
-ktor = "3.3.3" # 3.4.0 又改了，等以后处理
+kotlinx-serialization = "1.11.0"
+ktor = "3.4.2"
 ktor-jsoup = "2.3.0"
 logging = "7.0.14"
 lottie = "6.7.1"
 material = "1.13.0"
 material-symbols-compose = "1.0.1"
-protobuf = "4.33.4"
+protobuf = "4.34.1"
 qrcode = "4.5.0"
 rememberPreference = "1.1.1"
 slf4j-android-mvysny = "2.0.13"
@@ -78,10 +77,9 @@ jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 # https://insert-koin.io
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
 koin-android = { module = "io.insert-koin:koin-android", version.ref = "koin" }
-koin-annotations = { module = "io.insert-koin:koin-annotations", version.ref = "koin-annotations" }
+koin-annotations = { module = "io.insert-koin:koin-annotations", version.ref = "koin" }
 koin-compose = { module = "io.insert-koin:koin-androidx-compose", version.ref = "koin-compose" }
 koin-compose-navigation = { module = "io.insert-koin:koin-androidx-compose-navigation", version.ref = "koin-compose" }
-koin-ksp-compiler = { module = "io.insert-koin:koin-ksp-compiler", version.ref = "koin-annotations" }
 
 # https://kotlinlang.org/docs/jvm-test-using-junit.html
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test" }

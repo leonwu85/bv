@@ -1,7 +1,8 @@
 [versions]
 agp = "8.13.2"
 firebase-crashlytics = "3.0.7"
-gms = "4.4.3"
+gms = "4.4.4"
+koin-compiler = "0.6.2"
 kotlin = "2.3.20"
 ksp = "2.2.21-2.0.4"
 protobuf = "0.9.6"
@@ -20,6 +21,9 @@ firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "
 
 # https://github.com/google/ksp
 google-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+
+# https://insert-koin.io
+koin-compiler = { id = "io.insert-koin.compiler.plugin", version.ref = "koin-compiler" }
 
 # https://developers.google.com/android/guides/google-services-plugin
 google-services = { id = "com.google.gms.google-services", version.ref = "gms" }

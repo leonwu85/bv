@@ -34,12 +34,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
-import org.koin.core.KoinApplication
+import org.koin.core.KoinApplication as KoinRuntimeApplication
 import org.koin.core.annotation.ComponentScan
+import org.koin.core.annotation.Configuration
+import org.koin.core.annotation.KoinApplication
 import org.koin.core.annotation.Module
-import org.koin.core.context.startKoin
 import org.koin.core.logger.Level
-import org.koin.ksp.generated.module
+import org.koin.plugin.module.dsl.startKoin
 import org.slf4j.impl.HandroidLoggerAdapter
 
 class BVApp : Application() {
@@ -47,7 +48,7 @@ class BVApp : Application() {
         @SuppressLint("StaticFieldLeak")
         lateinit var context: Context
         lateinit var dataStoreManager: DataStoreManager
-        lateinit var koinApplication: KoinApplication
+        lateinit var koinApplication: KoinRuntimeApplication
         var instance: BVApp? = null
 
         fun getAppDatabase(context: Context = this.context) = AppDatabase.getDatabase(context)
@@ -62,10 +63,9 @@ class BVApp : Application() {
             R.string.blacklist_user_toast.toast(context)
             return
         }
-        koinApplication = startKoin {
+        koinApplication = startKoin<BVKoinApp> {
             androidLogger(if (BuildConfig.DEBUG) Level.ERROR else Level.NONE)
             androidContext(this@BVApp)
-            modules(AppModule().module)
         }
         initCoil()
         initFirebase()
@@ -176,6 +176,10 @@ class BVApp : Application() {
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "Settings")
 
-@Module(includes = [BiliApiModule::class])
+@Module
+@Configuration
 @ComponentScan
 class AppModule
+
+@KoinApplication
+class BVKoinApp
