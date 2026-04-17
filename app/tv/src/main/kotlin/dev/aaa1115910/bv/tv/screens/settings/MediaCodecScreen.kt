@@ -60,11 +60,6 @@ import java.util.Locale
 fun MediaCodecScreen(
     modifier: Modifier = Modifier
 ) {
-    LaunchedEffect(Unit) {
-        val list = CodecUtil.parseCodecs()
-        println(list)
-    }
-
     val showLargeTitle by remember { derivedStateOf { true } }
     val titleFontSize by animateFloatAsState(
         targetValue = if (showLargeTitle) 48f else 24f,
@@ -79,7 +74,7 @@ fun MediaCodecScreen(
     LaunchedEffect(Unit) {
         val list = CodecUtil.parseCodecs().filter { it.type == CodecType.Decoder }
         decoderList.swapList(list)
-        currentCodecInfoData = list[0]
+        currentCodecInfoData = list.firstOrNull()
     }
 
     Scaffold(
@@ -146,11 +141,11 @@ fun MediaCodecListItems(
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(isFocusing) {
-        if (isFocusing) focusRequester.requestFocus(scope)
+        if (isFocusing && codecInfoDataList.isNotEmpty()) focusRequester.requestFocus(scope)
     }
 
     LaunchedEffect(codecInfoDataList) {
-        focusRequester.requestFocus(scope)
+        if (codecInfoDataList.isNotEmpty()) focusRequester.requestFocus(scope)
     }
 
     LazyColumn(
@@ -352,7 +347,7 @@ fun MediaCodecDetails(
             modifier = modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Text("Empty")
+            Text(text = stringResource(R.string.codec_list_empty))
         }
     }
 }

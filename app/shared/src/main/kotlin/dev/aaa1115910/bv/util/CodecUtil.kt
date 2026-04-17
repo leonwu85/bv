@@ -11,7 +11,7 @@ object CodecUtil {
     fun parseCodecs(): List<CodecInfoData> {
         return MediaCodecList(MediaCodecList.ALL_CODECS)
             .codecInfos.toList()
-            .map { CodecInfoData.fromCodecInfo(it) }
+            .mapNotNull { CodecInfoData.fromCodecInfo(it) }
     }
 }
 
@@ -31,8 +31,10 @@ data class CodecInfoData(
     val achievableFrameRates: List<SupportedFrameRate>
 ) {
     companion object {
-        fun fromCodecInfo(codecInfo: MediaCodecInfo): CodecInfoData {
-            val capabilities = codecInfo.getCapabilitiesForType(codecInfo.supportedTypes.first())
+        fun fromCodecInfo(codecInfo: MediaCodecInfo): CodecInfoData? {
+            val supportedType = codecInfo.supportedTypes.firstOrNull() ?: return null
+            val capabilities = runCatching { codecInfo.getCapabilitiesForType(supportedType) }.getOrNull()
+                ?: return null
             return CodecInfoData(
                 name = codecInfo.name,
                 mimeType = capabilities.mimeType,
@@ -42,13 +44,13 @@ data class CodecInfoData(
                 maxSupportedInstances = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
                     capabilities.maxSupportedInstances else null,
                 colorFormats = capabilities.colorFormats.toList(),
-                audioBitrateRange = runCatching { with(capabilities.audioCapabilities.bitrateRange) { lower..upper } }.getOrNull(),
-                videoBitrateRange = runCatching { with(capabilities.videoCapabilities.bitrateRange) { lower..upper } }.getOrNull(),
-                videoFrame = runCatching { with(capabilities.videoCapabilities.supportedFrameRates) { lower..upper } }.getOrNull(),
-                supportedFrameRates = runCatching { codecInfo.getSupportedFrameRates() }
+                audioBitrateRange = capabilities.audioCapabilities?.bitrateRange?.let { it.lower..it.upper },
+                videoBitrateRange = capabilities.videoCapabilities?.bitrateRange?.let { it.lower..it.upper },
+                videoFrame = capabilities.videoCapabilities?.supportedFrameRates?.let { it.lower..it.upper },
+                supportedFrameRates = runCatching { codecInfo.getSupportedFrameRates(supportedType) }
                     .getOrDefault(emptyList()),
                 achievableFrameRates = runCatching {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) codecInfo.getAchievableFrameRates() else emptyList()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) codecInfo.getAchievableFrameRates(supportedType) else emptyList()
                 }.getOrDefault(emptyList())
             )
         }
@@ -140,11 +142,10 @@ data class SupportedFrameRate(
     val unsupported: Boolean
 )
 
-private fun MediaCodecInfo.getSupportedFrameRates(): List<SupportedFrameRate> {
+private fun MediaCodecInfo.getSupportedFrameRates(supportedType: String): List<SupportedFrameRate> {
     return resolutions.map { (width, height) ->
         val frameRates = runCatching {
-            val videoCapabilities = getCapabilitiesForType(supportedTypes.first()).videoCapabilities
-            videoCapabilities.getSupportedFrameRatesFor(width, height)
+            getCapabilitiesForType(supportedType).videoCapabilities?.getSupportedFrameRatesFor(width, height)
         }.getOrNull()
         SupportedFrameRate(
             resolution = width to height,
@@ -155,11 +156,10 @@ private fun MediaCodecInfo.getSupportedFrameRates(): List<SupportedFrameRate> {
 }
 
 @RequiresApi(Build.VERSION_CODES.M)
-private fun MediaCodecInfo.getAchievableFrameRates(): List<SupportedFrameRate> {
+private fun MediaCodecInfo.getAchievableFrameRates(supportedType: String): List<SupportedFrameRate> {
     return resolutions.map { (width, height) ->
         val frameRates = runCatching {
-            val videoCapabilities = getCapabilitiesForType(supportedTypes.first()).videoCapabilities
-            videoCapabilities.getAchievableFrameRatesFor(width, height)
+            getCapabilitiesForType(supportedType).videoCapabilities?.getAchievableFrameRatesFor(width, height)
         }.getOrNull()
         SupportedFrameRate(
             resolution = width to height,

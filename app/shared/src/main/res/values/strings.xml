@@ -29,6 +29,7 @@
     <string name="codec_detail_video_resolution_480p">480P</string>
     <string name="codec_detail_video_resolution_720p">720P</string>
     <string name="codec_detail_video_resolution_unknown">Unknown</string>
+    <string name="codec_list_empty">未找到可用解码器</string>
 
     <string name="common_cancel">取消</string>
     <string name="common_confirm">确定</string>
