@@ -13,12 +13,7 @@ import androidx.compose.ui.unit.dp
 import dev.aaa1115910.bv.tv.screens.search.SearchTheme
 
 /**
- * 毛玻璃面板 — 三层叠加实现 glassmorphism 效果
- *
- * Layer 1: 深色半透明覆盖
- * Layer 2: 蓝紫色调玻璃背景
- * Layer 3: 顶部白色高光渐变
- * Border:  白色半透明边框
+ * 毛玻璃面板，按当前明暗主题切换深浅玻璃配色。
  */
 @Composable
 fun GlassPanel(
@@ -26,41 +21,40 @@ fun GlassPanel(
     contentPadding: Modifier = Modifier.padding(12.dp),
     content: @Composable BoxScope.() -> Unit
 ) {
+    val borderColor = SearchTheme.glassBorderColor()
+    val overlayColor = SearchTheme.glassOverlayColor()
+    val backgroundColor = SearchTheme.glassBackgroundColor()
+    val highlightBrush = Brush.verticalGradient(
+        colors = listOf(
+            SearchTheme.glassHighlightStartColor(),
+            SearchTheme.glassHighlightEndColor()
+        )
+    )
+
     Box(
         modifier = modifier
             .clip(SearchTheme.panelShape)
             .border(
                 width = 1.dp,
-                color = SearchTheme.glassBorder,
+                color = borderColor,
                 shape = SearchTheme.panelShape
             )
     ) {
-        // Layer 1: 深色覆盖
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .background(SearchTheme.glassOverlay)
+                .background(overlayColor)
         )
-        // Layer 2: 蓝紫玻璃背景
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .background(SearchTheme.glassBackground)
+                .background(backgroundColor)
         )
-        // Layer 3: 顶部高光
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            SearchTheme.glassHighlightStart,
-                            SearchTheme.glassHighlightEnd
-                        )
-                    )
-                )
+                .background(highlightBrush)
         )
-        // Content
         Box(
             modifier = contentPadding,
             content = content

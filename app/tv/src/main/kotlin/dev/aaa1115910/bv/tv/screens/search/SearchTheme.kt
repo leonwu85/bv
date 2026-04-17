@@ -4,20 +4,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.MaterialTheme
 import dev.aaa1115910.bv.tv.component.screenBackgroundGradient
 
 /**
  * 搜索页面专用视觉常量
  */
 object SearchTheme {
-    // ── 毛玻璃面板 ──
-    val glassBackground = Color(0xFF1a1a2e).copy(alpha = 0.7f)
-    val glassOverlay = Color.Black.copy(alpha = 0.4f)
-    val glassBorder = Color.White.copy(alpha = 0.08f)
-    val glassHighlightStart = Color.White.copy(alpha = 0.05f)
-    val glassHighlightEnd = Color.Transparent
-
     // ── 渐变强调色 ──
     val accentPink = Color(0xFFFB7299)
     val accentPurple = Color(0xFFBD26B8)
@@ -35,6 +30,56 @@ object SearchTheme {
 
     // ── 焦点指示器 ──
     val focusIndicatorWidth = 2.dp
+
+    @Composable
+    private fun useDarkGlass(): Boolean {
+        return MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    }
+
+    @Composable
+    fun glassBackgroundColor(): Color {
+        return if (useDarkGlass()) {
+            Color(0xFF1A1A2E).copy(alpha = 0.72f)
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+        }
+    }
+
+    @Composable
+    fun glassOverlayColor(): Color {
+        return if (useDarkGlass()) {
+            Color.Black.copy(alpha = 0.4f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
+        }
+    }
+
+    @Composable
+    fun glassBorderColor(): Color {
+        return if (useDarkGlass()) {
+            Color.White.copy(alpha = 0.08f)
+        } else {
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+        }
+    }
+
+    @Composable
+    fun glassHighlightStartColor(): Color {
+        return if (useDarkGlass()) {
+            Color.White.copy(alpha = 0.05f)
+        } else {
+            Color.White.copy(alpha = 0.72f)
+        }
+    }
+
+    @Composable
+    fun glassHighlightEndColor(): Color {
+        return if (useDarkGlass()) {
+            Color.Transparent
+        } else {
+            Color.White.copy(alpha = 0.14f)
+        }
+    }
 }
 
 /**
