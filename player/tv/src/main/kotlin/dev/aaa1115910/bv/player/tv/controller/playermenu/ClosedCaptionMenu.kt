@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +50,10 @@ fun ClosedCaptionMenuList(
     onSubtitleSizeChange: (TextUnit) -> Unit,
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
     onSubtitleBottomPadding: (Dp) -> Unit,
+    onSecondarySubtitleChange: (Subtitle) -> Unit,
+    onSecondarySubtitleSizeChange: (TextUnit) -> Unit,
+    onSecondarySubtitleBackgroundOpacityChange: (Float) -> Unit,
+    onSecondarySubtitleBottomPadding: (Dp) -> Unit,
     onFocusStateChange: (MenuFocusState) -> Unit
 ) {
     val context = LocalContext.current
@@ -57,6 +62,19 @@ fun ClosedCaptionMenuList(
     val parentMenuFocusRequester = remember { FocusRequester() }
     val parentMenuPositionFocusRequester = remember { FocusRequester() }
     var selectedClosedCaptionMenuItem by remember { mutableStateOf(VideoPlayerClosedCaptionMenuItem.Switch) }
+    val secondarySubtitleTracks = videoPlayerConfigData.availableSubtitleTracks.filter {
+        it.id == -1L || it.id != videoPlayerConfigData.currentSubtitleId
+    }
+    val visibleMenuItems = VideoPlayerClosedCaptionMenuItem.entries.filter {
+        videoPlayerConfigData.currentSubtitleId != -1L || !it.isSecondary
+    }
+
+    LaunchedEffect(visibleMenuItems) {
+        if (selectedClosedCaptionMenuItem !in visibleMenuItems) {
+            selectedClosedCaptionMenuItem = visibleMenuItems.firstOrNull()
+                ?: VideoPlayerClosedCaptionMenuItem.Switch
+        }
+    }
 
     Row(
         modifier = modifier.fillMaxHeight(),
@@ -111,6 +129,50 @@ fun ClosedCaptionMenuList(
                     onValueChange = { onSubtitleBottomPadding(it.dp) },
                     onFocusBackToParent = { onFocusStateChange(MenuFocusState.Menu) }
                 )
+
+                VideoPlayerClosedCaptionMenuItem.SecondarySwitch -> RadioMenuList(
+                    modifier = menuItemsModifier,
+                    items = secondarySubtitleTracks.map { it.langDoc },
+                    selected = secondarySubtitleTracks
+                        .indexOfFirst { it.id == videoPlayerConfigData.currentSecondarySubtitleId },
+                    onSelectedChanged = { onSecondarySubtitleChange(secondarySubtitleTracks[it]) },
+                    onFocusBackToParent = {
+                        onFocusStateChange(MenuFocusState.Menu)
+                        parentMenuFocusRequester.requestFocus()
+                    },
+                )
+
+                VideoPlayerClosedCaptionMenuItem.SecondarySize -> StepLessMenuItem(
+                    modifier = menuItemsModifier,
+                    value = videoPlayerConfigData.currentSecondarySubtitleFontSize.value.toInt(),
+                    step = 1,
+                    range = 12..48,
+                    text = "${videoPlayerConfigData.currentSecondarySubtitleFontSize.value.toInt()} SP",
+                    onValueChange = { onSecondarySubtitleSizeChange(it.sp) },
+                    onFocusBackToParent = { onFocusStateChange(MenuFocusState.Menu) }
+                )
+
+                VideoPlayerClosedCaptionMenuItem.SecondaryOpacity -> StepLessMenuItem(
+                    modifier = menuItemsModifier,
+                    value = videoPlayerConfigData.currentSecondarySubtitleBackgroundOpacity,
+                    step = 0.01f,
+                    range = 0f..1f,
+                    text = NumberFormat.getPercentInstance()
+                        .apply { maximumFractionDigits = 0 }
+                        .format(videoPlayerConfigData.currentSecondarySubtitleBackgroundOpacity),
+                    onValueChange = onSecondarySubtitleBackgroundOpacityChange,
+                    onFocusBackToParent = { onFocusStateChange(MenuFocusState.Menu) }
+                )
+
+                VideoPlayerClosedCaptionMenuItem.SecondaryPadding -> StepLessMenuItem(
+                    modifier = menuItemsModifier,
+                    value = videoPlayerConfigData.currentSecondarySubtitleBottomPadding.value.toInt(),
+                    step = 1,
+                    range = 0..48,
+                    text = "${videoPlayerConfigData.currentSecondarySubtitleBottomPadding.value.toInt()} DP",
+                    onValueChange = { onSecondarySubtitleBottomPadding(it.dp) },
+                    onFocusBackToParent = { onFocusStateChange(MenuFocusState.Menu) }
+                )
             }
         }
 
@@ -146,7 +208,10 @@ fun ClosedCaptionMenuList(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(8.dp)
         ) {
-            itemsIndexed(VideoPlayerClosedCaptionMenuItem.entries) { index, item ->
+            itemsIndexed(
+                items = visibleMenuItems,
+                key = { _, item -> item.name }
+            ) { index, item ->
                 MenuListItem(
                     modifier = Modifier
                         .ifElse(

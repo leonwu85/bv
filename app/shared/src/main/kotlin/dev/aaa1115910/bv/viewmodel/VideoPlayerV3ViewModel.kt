@@ -83,6 +83,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -102,6 +103,11 @@ class VideoPlayerV3ViewModel(
     private val liveRepository: LiveRepository,
 ) : ViewModel() {
     private val logger = KotlinLogging.logger { }
+
+    private enum class SubtitleSlot(val logPrefix: String, val debugName: String) {
+        Primary("", "primary"),
+        Secondary("副", "secondary")
+    }
 
     var videoPlayer: AbstractVideoPlayer? by mutableStateOf(null)
     var danmakuPlayer: DanmakuPlayer? by mutableStateOf(null)
@@ -148,6 +154,7 @@ class VideoPlayerV3ViewModel(
 
         // 清除可能未被GC回收的资源
         currentSubtitleData.clear()
+        currentSecondarySubtitleData.clear()
         clearDanmakuSliceState()
     }
 
@@ -218,6 +225,14 @@ class VideoPlayerV3ViewModel(
     var currentSubtitleFontSize by mutableStateOf(Prefs.defaultSubtitleFontSize)
     var currentSubtitleBackgroundOpacity by mutableFloatStateOf(Prefs.defaultSubtitleBackgroundOpacity)
     var currentSubtitleBottomPadding by mutableStateOf(Prefs.defaultSubtitleBottomPadding)
+    var currentSecondarySubtitleId by mutableLongStateOf(-1L)
+    var currentSecondarySubtitleData = mutableStateListOf<SubtitleItem>()
+    var currentSecondarySubtitleType by mutableStateOf(SubtitleType.CC)
+    var currentSecondarySubtitleFontSize by mutableStateOf(Prefs.defaultSecondarySubtitleFontSize)
+    var currentSecondarySubtitleBackgroundOpacity by mutableFloatStateOf(Prefs.defaultSecondarySubtitleBackgroundOpacity)
+    var currentSecondarySubtitleBottomPadding by mutableStateOf(Prefs.defaultSecondarySubtitleBottomPadding)
+    private var currentPrimarySubtitleLoadToken = 0L
+    private var currentSecondarySubtitleLoadToken = 0L
 
     var currentPlayMode by mutableStateOf(Prefs.defaultPlayMode)
 
@@ -1466,9 +1481,77 @@ class VideoPlayerV3ViewModel(
         currentSponsorSegment = null
     }
 
+    private fun nextSubtitleLoadToken(slot: SubtitleSlot): Long {
+        return when (slot) {
+            SubtitleSlot.Primary -> {
+                currentPrimarySubtitleLoadToken += 1
+                currentPrimarySubtitleLoadToken
+            }
+
+            SubtitleSlot.Secondary -> {
+                currentSecondarySubtitleLoadToken += 1
+                currentSecondarySubtitleLoadToken
+            }
+        }
+    }
+
+    private fun invalidateSubtitleLoad(slot: SubtitleSlot) {
+        when (slot) {
+            SubtitleSlot.Primary -> currentPrimarySubtitleLoadToken += 1
+            SubtitleSlot.Secondary -> currentSecondarySubtitleLoadToken += 1
+        }
+    }
+
+    private fun isCurrentSubtitleLoad(slot: SubtitleSlot, token: Long): Boolean {
+        return when (slot) {
+            SubtitleSlot.Primary -> currentPrimarySubtitleLoadToken == token
+            SubtitleSlot.Secondary -> currentSecondarySubtitleLoadToken == token
+        }
+    }
+
+    private fun clearSubtitleState(slot: SubtitleSlot, invalidateRequest: Boolean = false) {
+        if (invalidateRequest) {
+            invalidateSubtitleLoad(slot)
+        }
+        when (slot) {
+            SubtitleSlot.Primary -> {
+                currentSubtitleId = -1L
+                currentSubtitleType = SubtitleType.CC
+                currentSubtitleData.clear()
+            }
+
+            SubtitleSlot.Secondary -> {
+                currentSecondarySubtitleId = -1L
+                currentSecondarySubtitleType = SubtitleType.CC
+                currentSecondarySubtitleData.clear()
+            }
+        }
+    }
+
+    private fun applySubtitleState(
+        slot: SubtitleSlot,
+        id: Long,
+        type: SubtitleType,
+        subtitleData: List<SubtitleItem>
+    ) {
+        when (slot) {
+            SubtitleSlot.Primary -> {
+                currentSubtitleId = id
+                currentSubtitleType = type
+                currentSubtitleData.swapList(subtitleData)
+            }
+
+            SubtitleSlot.Secondary -> {
+                currentSecondarySubtitleId = id
+                currentSecondarySubtitleType = type
+                currentSecondarySubtitleData.swapList(subtitleData)
+            }
+        }
+    }
+
     private suspend fun updateSubtitle() {
-        currentSubtitleId = -1
-        currentSubtitleData.clear()
+        clearSubtitleState(SubtitleSlot.Primary, invalidateRequest = true)
+        clearSubtitleState(SubtitleSlot.Secondary, invalidateRequest = true)
 
         runCatching {
             val subtitleData = videoPlayRepository.getSubtitle(
@@ -1594,40 +1677,78 @@ class VideoPlayerV3ViewModel(
     }
 
     fun loadSubtitle(id: Long) {
+        loadSubtitle(SubtitleSlot.Primary, id)
+    }
+
+    fun loadSecondarySubtitle(id: Long) {
+        loadSubtitle(SubtitleSlot.Secondary, id)
+    }
+
+    private fun loadSubtitle(slot: SubtitleSlot, id: Long) {
+        val requestToken = nextSubtitleLoadToken(slot)
         viewModelScope.launch(Dispatchers.IO) {
             if (id == -1L) {
                 withContext(Dispatchers.Main) {
-                    currentSubtitleData.clear()
-                    currentSubtitleId = -1
-                    currentSubtitleType = SubtitleType.CC
+                    if (!isCurrentSubtitleLoad(slot, requestToken)) {
+                        return@withContext
+                    }
+                    clearSubtitleState(slot)
+                    if (slot == SubtitleSlot.Primary) {
+                        clearSubtitleState(SubtitleSlot.Secondary, invalidateRequest = true)
+                    }
                 }
                 return@launch
             }
             var subtitleName = ""
-            runCatching {
-                val subtitle = availableSubtitle.find { it.id == id } ?: return@runCatching
+            try {
+                val subtitle = availableSubtitle.find { it.id == id }
+                    ?: throw IllegalArgumentException("Subtitle $id not found")
                 subtitleName = subtitle.langDoc
                 val isAI = subtitle.type == SubtitleType.AI
-                logger.info { "Subtitle url: ${subtitle.url}, isAI: $isAI" }
+                logger.info { "Load ${slot.debugName} subtitle url: ${subtitle.url}, isAI: $isAI" }
+                if (slot == SubtitleSlot.Secondary && currentSubtitleId == id) {
+                    withContext(Dispatchers.Main) {
+                        if (!isCurrentSubtitleLoad(slot, requestToken)) {
+                            return@withContext
+                        }
+                        clearSubtitleState(SubtitleSlot.Secondary)
+                    }
+                    return@launch
+                }
                 val client = HttpClient(OkHttp)
-                val responseText = client.get(subtitle.url).bodyAsText()
+                val responseText = try {
+                    client.get(subtitle.url).bodyAsText()
+                } finally {
+                    client.close()
+                }
+                currentCoroutineContext().ensureActive()
                 val subtitleData = SubtitleParser.fromBccString(responseText, isAI)
+                currentCoroutineContext().ensureActive()
                 withContext(Dispatchers.Main) {
-                    currentSubtitleId = id
-                    currentSubtitleType = subtitle.type
-                    currentSubtitleData.swapList(subtitleData)
+                    if (!isCurrentSubtitleLoad(slot, requestToken)) {
+                        return@withContext
+                    }
+                    applySubtitleState(slot, id, subtitle.type, subtitleData)
+                    if (slot == SubtitleSlot.Primary && currentSecondarySubtitleId == id) {
+                        clearSubtitleState(SubtitleSlot.Secondary, invalidateRequest = true)
+                    }
                 }
-            }.onFailure {
+                logger.fInfo { "Load ${slot.debugName} subtitle $subtitleName success" }
+                addLogs("加载${slot.logPrefix}字幕 $subtitleName 成功，数量: ${subtitleData.size}")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    currentSubtitleData.clear()
-                    currentSubtitleId = -1
-                    currentSubtitleType = SubtitleType.CC
+                    if (!isCurrentSubtitleLoad(slot, requestToken)) {
+                        return@withContext
+                    }
+                    clearSubtitleState(slot)
+                    if (slot == SubtitleSlot.Primary) {
+                        clearSubtitleState(SubtitleSlot.Secondary, invalidateRequest = true)
+                    }
                 }
-                logger.fInfo { "Load subtitle failed: ${it.stackTraceToString()}" }
-                addLogs("加载字幕 $subtitleName 失败: ${it.localizedMessage}")
-            }.onSuccess {
-                logger.fInfo { "Load subtitle $subtitleName success" }
-                addLogs("加载字幕 $subtitleName 成功，数量: ${currentSubtitleData.size}")
+                logger.fInfo { "Load ${slot.debugName} subtitle failed: ${e.stackTraceToString()}" }
+                addLogs("加载${slot.logPrefix}字幕 $subtitleName 失败: ${e.localizedMessage}")
             }
         }
     }

@@ -317,6 +317,11 @@ fun VideoPlayerV3Screen(
             currentSubtitleFontSize = playerViewModel.currentSubtitleFontSize,
             currentSubtitleBackgroundOpacity = playerViewModel.currentSubtitleBackgroundOpacity,
             currentSubtitleBottomPadding = playerViewModel.currentSubtitleBottomPadding,
+            currentSecondarySubtitleId = playerViewModel.currentSecondarySubtitleId,
+            currentSecondarySubtitleData = playerViewModel.currentSecondarySubtitleData,
+            currentSecondarySubtitleFontSize = playerViewModel.currentSecondarySubtitleFontSize,
+            currentSecondarySubtitleBackgroundOpacity = playerViewModel.currentSecondarySubtitleBackgroundOpacity,
+            currentSecondarySubtitleBottomPadding = playerViewModel.currentSecondarySubtitleBottomPadding,
             currentPlayMode = playerViewModel.currentPlayMode,
             incognitoMode = Prefs.incognitoMode,
             isLoop = playerViewModel.isLoop,
@@ -734,6 +739,21 @@ fun VideoPlayerV3Screen(
                 onSubtitleBottomPadding = { padding ->
                     Prefs.defaultSubtitleBottomPadding = padding
                     playerViewModel.currentSubtitleBottomPadding = padding
+                },
+                onSecondarySubtitleChange = { subtitle ->
+                    playerViewModel.loadSecondarySubtitle(subtitle.id)
+                },
+                onSecondarySubtitleSizeChange = { size ->
+                    Prefs.defaultSecondarySubtitleFontSize = size
+                    playerViewModel.currentSecondarySubtitleFontSize = size
+                },
+                onSecondarySubtitleBackgroundOpacityChange = { opacity ->
+                    Prefs.defaultSecondarySubtitleBackgroundOpacity = opacity
+                    playerViewModel.currentSecondarySubtitleBackgroundOpacity = opacity
+                },
+                onSecondarySubtitleBottomPadding = { padding ->
+                    Prefs.defaultSecondarySubtitleBottomPadding = padding
+                    playerViewModel.currentSecondarySubtitleBottomPadding = padding
                 },
                 onPlayModeChange = { playMode ->
                     Prefs.defaultPlayMode = playMode

@@ -261,6 +261,32 @@ object Prefs {
             )
         }
 
+    var defaultSecondarySubtitleFontSize: TextUnit
+        get() = runBlocking {
+            dsm.getPreferenceFlow(PrefKeys.prefDefaultSecondarySubtitleFontSizeRequest).first().sp
+        }
+        set(value) = runBlocking {
+            dsm.editPreference(PrefKeys.prefDefaultSecondarySubtitleFontSizeKey, value.value.roundToInt())
+        }
+
+    var defaultSecondarySubtitleBackgroundOpacity: Float
+        get() = runBlocking {
+            dsm.getPreferenceFlow(PrefKeys.prefDefaultSecondarySubtitleBackgroundOpacityRequest).first()
+        }
+        set(value) = runBlocking {
+            dsm.editPreference(PrefKeys.prefDefaultSecondarySubtitleBackgroundOpacityKey, value)
+        }
+
+    var defaultSecondarySubtitleBottomPadding: Dp
+        get() = runBlocking {
+            dsm.getPreferenceFlow(PrefKeys.prefDefaultSecondarySubtitleBottomPaddingRequest).first().dp
+        }
+        set(value) = runBlocking {
+            dsm.editPreference(
+                PrefKeys.prefDefaultSecondarySubtitleBottomPaddingKey, value.value.roundToInt()
+            )
+        }
+
     var showFps: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowFpsRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowFpsKey, value) }
@@ -689,6 +715,9 @@ object PrefKeys {
     val prefDefaultSubtitleFontSizeKey = intPreferencesKey("dsfs")
     val prefDefaultSubtitleBackgroundOpacityKey = floatPreferencesKey("dsbo")
     val prefDefaultSubtitleBottomPaddingKey = intPreferencesKey("dsbp")
+    val prefDefaultSecondarySubtitleFontSizeKey = intPreferencesKey("dssfs")
+    val prefDefaultSecondarySubtitleBackgroundOpacityKey = floatPreferencesKey("dssbo")
+    val prefDefaultSecondarySubtitleBottomPaddingKey = intPreferencesKey("dssbp")
     val prefShowFpsKey = booleanPreferencesKey("sf")
     val prefBuvidKey = stringPreferencesKey("random_buvid")
     val prefBuvid3Key = stringPreferencesKey("random_buvid3")
@@ -784,6 +813,12 @@ object PrefKeys {
         PreferenceRequest(prefDefaultSubtitleBackgroundOpacityKey, 0.4f)
     val prefDefaultSubtitleBottomPaddingRequest =
         PreferenceRequest(prefDefaultSubtitleBottomPaddingKey, 12)
+    val prefDefaultSecondarySubtitleFontSizeRequest =
+        PreferenceRequest(prefDefaultSecondarySubtitleFontSizeKey, 24)
+    val prefDefaultSecondarySubtitleBackgroundOpacityRequest =
+        PreferenceRequest(prefDefaultSecondarySubtitleBackgroundOpacityKey, 0.4f)
+    val prefDefaultSecondarySubtitleBottomPaddingRequest =
+        PreferenceRequest(prefDefaultSecondarySubtitleBottomPaddingKey, 12)
     val prefShowFpsRequest = PreferenceRequest(prefShowFpsKey, false)
     val prefBuvidRequest = PreferenceRequest(prefBuvidKey, "")
     val prefBuvid3Request = PreferenceRequest(prefBuvid3Key, "")

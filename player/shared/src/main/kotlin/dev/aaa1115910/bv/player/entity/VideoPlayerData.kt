@@ -126,11 +126,16 @@ data class VideoPlayerConfigData(
     val currentDanmakuFilterLevel: Int = 1,      // 视频弹幕过滤等级 (1-10)
     val currentDanmakuMergeEnabled: Boolean = false,
     val currentLiveDanmakuFilterLevel: Int = 0,  // 直播弹幕过滤等级 (0-60)
-    val currentSubtitleId: Long = 0,
+    val currentSubtitleId: Long = -1,
     val currentSubtitleData: List<SubtitleItem> = emptyList(),
     val currentSubtitleFontSize: TextUnit = 24.sp,
     val currentSubtitleBackgroundOpacity: Float = 0.4f,
     val currentSubtitleBottomPadding: Dp = 12.dp,
+    val currentSecondarySubtitleId: Long = -1,
+    val currentSecondarySubtitleData: List<SubtitleItem> = emptyList(),
+    val currentSecondarySubtitleFontSize: TextUnit = 24.sp,
+    val currentSecondarySubtitleBackgroundOpacity: Float = 0.4f,
+    val currentSecondarySubtitleBottomPadding: Dp = 12.dp,
     val currentPlayMode: PlayMode = PlayMode.Sequential,
     val incognitoMode: Boolean = false,
     var isLoop: Boolean = false,

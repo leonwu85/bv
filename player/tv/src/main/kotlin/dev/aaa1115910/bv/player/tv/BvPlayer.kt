@@ -135,6 +135,10 @@ fun BvPlayer(
     onSubtitleSizeChange: (TextUnit) -> Unit,
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
     onSubtitleBottomPadding: (Dp) -> Unit,
+    onSecondarySubtitleChange: (Subtitle) -> Unit,
+    onSecondarySubtitleSizeChange: (TextUnit) -> Unit,
+    onSecondarySubtitleBackgroundOpacityChange: (Float) -> Unit,
+    onSecondarySubtitleBottomPadding: (Dp) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit,
     onToggleRelatedVideos: (Boolean) -> Unit = {},
     autoOpenPlayListOnVideoEnd: Boolean = false,
@@ -1295,6 +1299,21 @@ fun BvPlayer(
             onSubtitleBottomPadding = { padding ->
                 logger.info { "On subtitle bottom padding change: $padding" }
                 onSubtitleBottomPadding(padding)
+            },
+            onSecondarySubtitleChange = { subtitle ->
+                onSecondarySubtitleChange(subtitle)
+            },
+            onSecondarySubtitleSizeChange = { size ->
+                logger.info { "On secondary subtitle font size change: $size" }
+                onSecondarySubtitleSizeChange(size)
+            },
+            onSecondarySubtitleBackgroundOpacityChange = { opacity ->
+                logger.info { "On secondary subtitle background opacity change: $opacity" }
+                onSecondarySubtitleBackgroundOpacityChange(opacity)
+            },
+            onSecondarySubtitleBottomPadding = { padding ->
+                logger.info { "On secondary subtitle bottom padding change: $padding" }
+                onSecondarySubtitleBottomPadding(padding)
             },
             onPlayModeChange = { playMode ->
                 logger.info { "On play mode change: $playMode" }
