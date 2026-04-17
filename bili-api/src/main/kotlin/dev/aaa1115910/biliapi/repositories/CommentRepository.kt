@@ -6,6 +6,7 @@ import bilibili.main.community.reply.v1.detailListReq
 import bilibili.main.community.reply.v1.mainListReq
 import bilibili.pagination.feedPagination
 import dev.aaa1115910.biliapi.entity.ApiType
+import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentPage
 import dev.aaa1115910.biliapi.entity.reply.CommentRepliesData
 import dev.aaa1115910.biliapi.entity.reply.CommentReplyPage
@@ -113,5 +114,23 @@ class CommentRepository(
                 return CommentRepliesData.fromCommentReplyList(appReplies)
             }
         }
+    }
+
+    suspend fun translateReply(comment: Comment): Comment? {
+        if (!comment.canTranslate) return null
+        return runCatching {
+            val response = replyStub?.translateReply(
+                bilibili.main.community.reply.v1.TranslateReplyReq.newBuilder()
+                    .setType(comment.type)
+                    .setOid(comment.oid)
+                    .addRpids(comment.rpid)
+                    .build()
+            ) ?: throw IllegalStateException("Reply stub is not initialized")
+            val translatedReply = response.translatedRepliesMap[comment.rpid] ?: return@runCatching null
+            Comment.withTranslatedReply(comment, translatedReply)
+                .takeIf { it.hasTranslatedContent }
+        }.onFailure {
+            handleGrpcException(it)
+        }.getOrThrow()
     }
 }

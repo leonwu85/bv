@@ -81,6 +81,7 @@ import dev.aaa1115910.bv.util.isDpadLeft
 import dev.aaa1115910.bv.util.isKeyDown
 import dev.aaa1115910.bv.util.onBackPressed
 import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.toast
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.getKoin
@@ -118,8 +119,10 @@ fun CommentPanel(
     val sidebarFocusRequester = remember { FocusRequester() }
     val commentFocusRequesters = remember { mutableMapOf<Long, FocusRequester>() }
     val density = LocalDensity.current
+    val context = LocalContext.current
 
     val comments = remember { mutableStateListOf<Comment>() }
+    val translatingCommentIds = remember { mutableStateListOf<Long>() }
     var loading by remember { mutableStateOf(false) }
     var currentPage by remember { mutableStateOf(CommentPage()) }
     var hasNext by remember { mutableStateOf(true) }
@@ -214,6 +217,42 @@ fun CommentPanel(
             previewPictures = pictures
             previewPictureIndex = index.coerceIn(0, pictures.lastIndex)
             showImagePreview = true
+        }
+    }
+
+    fun updateComment(updatedComment: Comment) {
+        val commentIndex = comments.indexOfFirst { it.rpid == updatedComment.rpid }
+        if (commentIndex >= 0) {
+            comments[commentIndex] = updatedComment
+        }
+        if (selectedRootComment?.rpid == updatedComment.rpid) {
+            selectedRootComment = updatedComment
+        }
+    }
+
+    fun toggleCommentTranslation(comment: Comment) {
+        if (translatingCommentIds.contains(comment.rpid)) return
+        when {
+            comment.showTranslation -> updateComment(comment.copy(showTranslation = false))
+            comment.hasTranslatedContent -> updateComment(comment.copy(showTranslation = true))
+            !comment.canTranslate -> Unit
+            else -> {
+                scope.launch {
+                    translatingCommentIds.add(comment.rpid)
+                    try {
+                        val translatedComment = commentRepository.translateReply(comment)
+                        if (translatedComment?.hasTranslatedContent == true) {
+                            updateComment(translatedComment)
+                        } else {
+                            "翻译结果为空".toast(context)
+                        }
+                    } catch (e: Exception) {
+                        "翻译失败: ${e.message ?: "未知错误"}".toast(context)
+                    } finally {
+                        translatingCommentIds.remove(comment.rpid)
+                    }
+                }
+            }
         }
     }
 
@@ -649,6 +688,7 @@ fun CommentPanel(
                                 }
                                 CommentItem(
                                     comment = comment,
+                                    isTranslating = translatingCommentIds.contains(comment.rpid),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .focusRequester(itemFocusRequester)
@@ -668,6 +708,9 @@ fun CommentPanel(
                                     },
                                     onLongClick = {
                                         showCommentImagePreview(comment.pictures, 0)
+                                    },
+                                    onTranslateToggle = {
+                                        toggleCommentTranslation(comment)
                                     }
                                 )
                             }

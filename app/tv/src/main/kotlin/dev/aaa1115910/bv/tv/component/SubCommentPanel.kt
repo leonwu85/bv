@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
@@ -60,6 +61,7 @@ import dev.aaa1115910.bv.util.isDpadDown
 import dev.aaa1115910.bv.util.isKeyDown
 import dev.aaa1115910.bv.util.onBackPressed
 import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.toast
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.getKoin
@@ -86,8 +88,10 @@ fun SubCommentPanel(
     val listState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
     val density = LocalDensity.current
+    val context = LocalContext.current
 
     val replies = remember { mutableStateListOf<Comment>() }
+    val translatingReplyIds = remember { mutableStateListOf<Long>() }
     var focusedCommentIndex by remember { mutableStateOf(0) }
     var loading by remember { mutableStateOf(false) }
     var currentPage by remember { mutableStateOf(CommentReplyPage()) }
@@ -102,6 +106,39 @@ fun SubCommentPanel(
             previewPictures = pictures
             previewPictureIndex = index.coerceIn(0, pictures.lastIndex)
             showImagePreview = true
+        }
+    }
+
+    fun updateReply(updatedReply: Comment) {
+        val replyIndex = replies.indexOfFirst { it.rpid == updatedReply.rpid }
+        if (replyIndex >= 0) {
+            replies[replyIndex] = updatedReply
+        }
+    }
+
+    fun toggleReplyTranslation(reply: Comment) {
+        if (translatingReplyIds.contains(reply.rpid)) return
+        when {
+            reply.showTranslation -> updateReply(reply.copy(showTranslation = false))
+            reply.hasTranslatedContent -> updateReply(reply.copy(showTranslation = true))
+            !reply.canTranslate -> Unit
+            else -> {
+                scope.launch {
+                    translatingReplyIds.add(reply.rpid)
+                    try {
+                        val translatedReply = commentRepository.translateReply(reply)
+                        if (translatedReply?.hasTranslatedContent == true) {
+                            updateReply(translatedReply)
+                        } else {
+                            "翻译结果为空".toast(context)
+                        }
+                    } catch (e: Exception) {
+                        "翻译失败: ${e.message ?: "未知错误"}".toast(context)
+                    } finally {
+                        translatingReplyIds.remove(reply.rpid)
+                    }
+                }
+            }
         }
     }
 
@@ -315,6 +352,7 @@ fun SubCommentPanel(
                             ) { index, reply ->
                                 SubCommentItem(
                                     comment = reply,
+                                    isTranslating = translatingReplyIds.contains(reply.rpid),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .onFocusChanged { focusState ->
@@ -324,6 +362,9 @@ fun SubCommentPanel(
                                         },
                                     onLongClick = {
                                         showCommentImagePreview(reply.pictures, 0)
+                                    },
+                                    onTranslateToggle = {
+                                        toggleReplyTranslation(reply)
                                     }
                                 )
                             }

@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -43,6 +44,8 @@ import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.EmoteSize
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.focusedBorder
+import dev.aaa1115910.bv.util.isDpadRight
+import dev.aaa1115910.bv.util.isKeyDown
 
 /**
  * 评论列表项组件
@@ -56,12 +59,27 @@ fun CommentItem(
     comment: Comment,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
+    onTranslateToggle: (() -> Unit)? = null,
+    isTranslating: Boolean = false
 ) {
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .focusedBorder(MaterialTheme.shapes.small),
+            .focusedBorder(MaterialTheme.shapes.small)
+            .onPreviewKeyEvent { event ->
+                if (
+                    onTranslateToggle != null &&
+                    event.isKeyDown() &&
+                    event.isDpadRight() &&
+                    (comment.canTranslate || comment.hasTranslatedContent || isTranslating)
+                ) {
+                    onTranslateToggle()
+                    true
+                } else {
+                    false
+                }
+            },
         onClick = onClick,
         onLongClick = onLongClick,
         colors = ClickableSurfaceDefaults.colors(
@@ -80,7 +98,10 @@ fun CommentItem(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // 主评论
-            CommentMainContent(comment = comment)
+            CommentMainContent(
+                comment = comment,
+                isTranslating = isTranslating
+            )
 
             // 回复数量提示
             if (comment.replies.isNotEmpty()) {
@@ -100,7 +121,8 @@ fun CommentItem(
  */
 @Composable
 private fun CommentMainContent(
-    comment: Comment
+    comment: Comment,
+    isTranslating: Boolean
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -132,8 +154,8 @@ private fun CommentMainContent(
 
             // 评论内容（支持表情）
             CommentContent(
-                content = comment.content,
-                emotes = comment.emotes,
+                content = comment.displayContent,
+                emotes = comment.displayEmotes,
                 modifier = Modifier.padding(top = 4.dp)
             )
 
@@ -143,6 +165,12 @@ private fun CommentMainContent(
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
+
+            TranslationHint(
+                comment = comment,
+                isTranslating = isTranslating,
+                modifier = Modifier.padding(top = 2.dp)
+            )
 
             // 底部信息：时间和点赞数
             Row(
@@ -231,6 +259,35 @@ fun CommentContent(
         color = Color.White,
         maxLines = maxLines,
         overflow = overflow
+    )
+}
+
+@Composable
+internal fun TranslationHint(
+    comment: Comment,
+    modifier: Modifier = Modifier,
+    isTranslating: Boolean = false,
+    interactive: Boolean = true
+) {
+    val text = when {
+        isTranslating -> "翻译中..."
+        interactive && comment.showTranslation -> "右键看原文"
+        interactive && (comment.canTranslate || comment.hasTranslatedContent) -> "右键翻译"
+        !interactive && comment.showTranslation -> "译文"
+        else -> return
+    }
+    val useTranslationActionColor = interactive &&
+        (comment.showTranslation || comment.canTranslate || comment.hasTranslatedContent)
+    val color = when {
+        isTranslating -> MaterialTheme.colorScheme.primary
+        useTranslationActionColor -> MaterialTheme.colorScheme.primary
+        else -> Color.White.copy(alpha = 0.6f)
+    }
+    Text(
+        text = text,
+        modifier = modifier,
+        style = MaterialTheme.typography.bodySmall,
+        color = color
     )
 }
 

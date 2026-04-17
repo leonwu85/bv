@@ -22,8 +22,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,13 +51,28 @@ import kotlinx.coroutines.launch
 fun SubCommentItem(
     comment: Comment,
     modifier: Modifier = Modifier,
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
+    onTranslateToggle: (() -> Unit)? = null,
+    isTranslating: Boolean = false
 ) {
     // 子评论有焦点边框，但不响应点击
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .focusedBorder(MaterialTheme.shapes.small),
+            .focusedBorder(MaterialTheme.shapes.small)
+            .onPreviewKeyEvent { event ->
+                if (
+                    onTranslateToggle != null &&
+                    event.isKeyDown() &&
+                    event.isDpadRight() &&
+                    (comment.canTranslate || comment.hasTranslatedContent || isTranslating)
+                ) {
+                    onTranslateToggle()
+                    true
+                } else {
+                    false
+                }
+            },
         onClick = { /* 空回调，不执行任何操作 */ },
         onLongClick = onLongClick,
         colors = ClickableSurfaceDefaults.colors(
@@ -101,13 +114,18 @@ fun SubCommentItem(
 
                 // 评论内容（支持富文本表情）
                 CommentContent(
-                    content = comment.content,
-                    emotes = comment.emotes
+                    content = comment.displayContent,
+                    emotes = comment.displayEmotes
                 )
 
                 if (comment.pictures.isNotEmpty()) {
                     CommentPictures(pictures = comment.pictures)
                 }
+
+                TranslationHint(
+                    comment = comment,
+                    isTranslating = isTranslating
+                )
 
                 // 底部信息
                 Row(
@@ -218,10 +236,15 @@ fun SubCommentRootItem(
 
                     // 评论内容（支持富文本表情，最多3行）
                     CommentContent(
-                        content = comment.content,
-                        emotes = comment.emotes,
+                        content = comment.displayContent,
+                        emotes = comment.displayEmotes,
                         maxLines = if (expanded) Int.MAX_VALUE else 3,
                         overflow = TextOverflow.Ellipsis
+                    )
+
+                    TranslationHint(
+                        comment = comment,
+                        interactive = false
                     )
 
                     if (expanded && comment.pictures.isNotEmpty()) {
