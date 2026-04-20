@@ -78,58 +78,63 @@ fun BottomSubtitle(
     val currentSubtitleItem = videoPlayerConfigData.currentSubtitleData.find { it.isShowing(time) }
     val currentSecondarySubtitleItem =
         videoPlayerConfigData.currentSecondarySubtitleData.find { it.isShowing(time) }
+    val secondarySubtitleEnabled = videoPlayerConfigData.currentSecondarySubtitleId != -1L
 
-    var primarySubtitleHeightPx by remember { mutableIntStateOf(0) }
-    val measuredPrimaryHeight = with(density) { primarySubtitleHeightPx.toDp() }
-    val estimatedPrimaryHeight = if (videoPlayerConfigData.currentSubtitleId != -1L) {
-        with(density) { videoPlayerConfigData.currentSubtitleFontSize.toDp() } + 24.dp
+    var secondarySubtitleHeightPx by remember { mutableIntStateOf(0) }
+    val measuredSecondaryHeight = with(density) { secondarySubtitleHeightPx.toDp() }
+    val estimatedSecondaryHeight = if (secondarySubtitleEnabled) {
+        with(density) { videoPlayerConfigData.currentSecondarySubtitleFontSize.toDp() } + 24.dp
     } else {
         0.dp
     }
-    val primaryOccupiedHeight = if (measuredPrimaryHeight > estimatedPrimaryHeight) {
-        measuredPrimaryHeight
+    val secondaryOccupiedHeight = if (measuredSecondaryHeight > estimatedSecondaryHeight) {
+        measuredSecondaryHeight
     } else {
-        estimatedPrimaryHeight
+        estimatedSecondaryHeight
     }
-    val secondaryBottomPadding: Dp =
-        videoPlayerConfigData.currentSubtitleBottomPadding +
-                primaryOccupiedHeight +
-                videoPlayerConfigData.currentSecondarySubtitleBottomPadding +
+    val primaryBottomPadding: Dp = if (secondarySubtitleEnabled) {
+        videoPlayerConfigData.currentSecondarySubtitleBottomPadding +
+                secondaryOccupiedHeight +
+                videoPlayerConfigData.currentSubtitleBottomPadding +
                 8.dp
+    } else {
+        videoPlayerConfigData.currentSubtitleBottomPadding
+    }
 
     Box(
         modifier = modifier.fillMaxSize()
     ) {
-        AnimatedVisibility(
-            visible = currentSecondarySubtitleItem?.content?.isNotEmpty() == true,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = secondaryBottomPadding)
-        ) {
-            SubtitleBubble(
-                text = currentSecondarySubtitleItem?.content.orEmpty(),
-                isAI = currentSecondarySubtitleItem?.isAI == true,
-                fontSize = videoPlayerConfigData.currentSecondarySubtitleFontSize,
-                backgroundOpacity = videoPlayerConfigData.currentSecondarySubtitleBackgroundOpacity
-            )
-        }
-
         AnimatedVisibility(
             visible = currentSubtitleItem?.content?.isNotEmpty() == true,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = videoPlayerConfigData.currentSubtitleBottomPadding)
+                .padding(bottom = primaryBottomPadding)
         ) {
             SubtitleBubble(
                 text = currentSubtitleItem?.content.orEmpty(),
                 isAI = currentSubtitleItem?.isAI == true,
                 fontSize = videoPlayerConfigData.currentSubtitleFontSize,
                 backgroundOpacity = videoPlayerConfigData.currentSubtitleBackgroundOpacity,
-                onHeightChanged = { primarySubtitleHeightPx = it }
+                onHeightChanged = {}
+            )
+        }
+
+        AnimatedVisibility(
+            visible = currentSecondarySubtitleItem?.content?.isNotEmpty() == true,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = videoPlayerConfigData.currentSecondarySubtitleBottomPadding)
+        ) {
+            SubtitleBubble(
+                text = currentSecondarySubtitleItem?.content.orEmpty(),
+                isAI = currentSecondarySubtitleItem?.isAI == true,
+                fontSize = videoPlayerConfigData.currentSecondarySubtitleFontSize,
+                backgroundOpacity = videoPlayerConfigData.currentSecondarySubtitleBackgroundOpacity,
+                onHeightChanged = { secondarySubtitleHeightPx = it }
             )
         }
     }

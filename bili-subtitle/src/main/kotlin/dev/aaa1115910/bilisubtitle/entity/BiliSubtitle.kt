@@ -32,7 +32,7 @@ data class BiliSubtitleItem(
     val from: Float,
     val to: Float,
     val sid: Int? = null,
-    val location: Int,
+    val location: Int? = null,
     val content: String,
     val music: Float? = null,
     val version: String? = null // 自动翻译字幕特有属性
