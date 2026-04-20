@@ -86,7 +86,7 @@ fun PlayStateTips(
         if (videoPlayerStateData.isError) {
             PlayErrorTip(
                 modifier = Modifier.align(Alignment.Center),
-                exception = videoPlayerStateData.exception!!
+                exception = videoPlayerStateData.exception
             )
         }
         if (videoPlayerPaymentData.needPay) {
@@ -146,7 +146,7 @@ fun BufferingTip(
 @Composable
 fun PlayErrorTip(
     modifier: Modifier = Modifier,
-    exception: Exception
+    exception: Exception?
 ) {
     Surface(
         modifier = modifier,
@@ -170,7 +170,7 @@ fun PlayErrorTip(
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "错误信息：${exception.message}",
+                text = "错误信息：${exception?.message ?: "未知错误"}",
                 color = PlayerColors.textTertiary,
                 style = MaterialTheme.typography.bodyMedium
             )

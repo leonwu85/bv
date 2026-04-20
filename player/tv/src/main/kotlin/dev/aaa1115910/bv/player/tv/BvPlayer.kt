@@ -640,7 +640,7 @@ fun BvPlayer(
             } else {
                 scope.launch(Dispatchers.Main) {
                     isError = true
-                    exception = error.cause as Exception?
+                    exception = (error.cause as? Exception) ?: error
                 }
             }
         }

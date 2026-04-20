@@ -203,7 +203,7 @@ fun BvPlayer(
         override fun onError(error: Exception) {
             println("onError: $error")
             isError = true
-            exception = error.cause as Exception?
+            exception = (error.cause as? Exception) ?: error
         }
 
         override fun onReady() {
