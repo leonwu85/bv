@@ -8,6 +8,9 @@ import androidx.lifecycle.ViewModel
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.video.VideoDetail
 import dev.aaa1115910.biliapi.repositories.VideoDetailRepository
+import dev.aaa1115910.bv.player.autoplay.toInteractivePlaybackContextOrNull
+import dev.aaa1115910.bv.player.autoplay.toRelatedVideoCardDataList
+import dev.aaa1115910.bv.player.autoplay.toVideoListForTargetCid
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.player.entity.VideoListItem
 import dev.aaa1115910.bv.player.entity.VideoListInteractiveNode
@@ -79,78 +82,20 @@ class VideoDetailViewModel(
 
     private suspend fun updateRelatedVideos() {
         logger.fInfo { "Start update relate video" }
-        val relateVideoCardDataList = videoDetail?.relatedVideos?.map {
-            VideoCardData(
-                avid = it.aid,
-                title = it.title,
-                cover = it.cover,
-                upName = it.author?.name ?: "",
-                time = it.duration * 1000L,
-                play = it.view,
-                danmaku = it.danmaku,
-                jumpToSeason = it.jumpToSeason,
-                epId = it.epid,
-                pubTime = it.pubTime,
-                upId = it.author?.mid ?: 0,
-                upFace = it.author?.face ?: "",
-                isChargingArc = it.isChargingArchive
-            )
-        } ?: emptyList()
+        val relateVideoCardDataList = videoDetail?.toRelatedVideoCardDataList() ?: emptyList()
         relatedVideos.swapListWithMainContext(relateVideoCardDataList)
         logger.fInfo { "Update ${relateVideoCardDataList.size} relate videos" }
     }
 
     private fun syncInteractivePlaybackContext() {
-        val detail = videoDetail
-        if (
-            detail != null &&
-            detail.isInteractive &&
-            detail.bvid.isNotBlank() &&
-            detail.interactiveGraphVersion != null
-        ) {
-            videoInfoRepository.updateInteractivePlaybackContext(
-                bvid = detail.bvid,
-                graphVersion = detail.interactiveGraphVersion,
-            )
-        } else {
-            videoInfoRepository.clearInteractivePlaybackContext()
-        }
+        videoInfoRepository.interactivePlaybackContext = videoDetail?.toInteractivePlaybackContextOrNull()
     }
 
     private fun updateVideoList(aid: Long) {
         syncInteractivePlaybackContext()
-        if (videoDetail?.interactiveNodes?.isNotEmpty() == true) {
-            val interactiveVideoList = videoDetail!!.interactiveNodes.mapIndexed { index, node ->
-                VideoListInteractiveNode(
-                    aid = aid,
-                    cid = node.cid,
-                    title = videoDetail!!.title,
-                    partTitle = node.title,
-                    index = index,
-                    nodeId = node.nodeId,
-                    edgeId = node.edgeId,
-                    startPos = node.startPos,
-                    isCurrent = node.isCurrent,
-                )
-            }
-            videoInfoRepository.videoList.clear()
-            videoInfoRepository.videoList.addAll(interactiveVideoList)
-        } else if (videoDetail?.ugcSeason != null) {
-            updateUgcSeasonSectionVideoList(0)
-        } else {
-            val partVideoList =
-                videoDetail!!.pages.mapIndexed { index, videoPage ->
-                    VideoListPart(
-                        aid = aid,
-                        cid = videoPage.cid,
-                        title = videoDetail!!.title,
-                        partTitle = videoPage.title,
-                        index = index,
-                    )
-                }
-            videoInfoRepository.videoList.clear()
-            videoInfoRepository.videoList.addAll(partVideoList)
-        }
+        val detail = videoDetail ?: return
+        videoInfoRepository.videoList.clear()
+        videoInfoRepository.videoList.addAll(detail.toVideoListForTargetCid(detail.cid))
     }
 
     fun updateUgcSeasonSectionVideoList(sectionIndex: Int) {

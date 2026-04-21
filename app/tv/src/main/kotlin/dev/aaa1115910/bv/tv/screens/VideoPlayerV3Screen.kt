@@ -45,6 +45,7 @@ import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
+import dev.aaa1115910.bv.player.autoplay.AutoPlayCandidate
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerDanmakuMasksData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerHistoryData
@@ -162,6 +163,10 @@ fun VideoPlayerV3Screen(
     var videoDescription by remember(currentAid) { mutableStateOf("") }
     var descriptionLoaded by remember(currentAid) { mutableStateOf(false) }
 
+    var selectedAutoPlayRelatedVideo by remember(playerViewModel.currentCid) {
+        mutableStateOf<VideoCardData?>(null)
+    }
+
     // 在线观看人数状态
     var onlineViewerCount by remember { mutableStateOf("") }
     var showOnlineViewerCountTip by remember { mutableStateOf(false) }
@@ -243,6 +248,75 @@ fun VideoPlayerV3Screen(
         (context as Activity).finish()
     }
 
+    fun findNextEpisode(): VideoListItemData? {
+        val currentIndex = playerViewModel.availableVideoList.indexOfFirst {
+            when (it) {
+                is VideoListItemData -> it.cid == playerViewModel.currentCid
+                else -> false
+            }
+        }
+        if (currentIndex < 0 || currentIndex + 1 >= playerViewModel.availableVideoList.size) return null
+
+        return playerViewModel.availableVideoList
+            .drop(currentIndex + 1)
+            .firstOrNull { it is VideoListItemData } as? VideoListItemData
+    }
+
+    fun findNextRelatedVideo(): VideoCardData? {
+        val candidates = playerViewModel.relatedVideos
+            .filter { related ->
+                !related.isChargingArc &&
+                    related.avid != playerViewModel.currentAid &&
+                    !PlayedAidsCache.hasPlayed(related.avid)
+            }
+            .take(10)
+
+        val selectedCandidate = selectedAutoPlayRelatedVideo?.takeIf { it in candidates }
+        if (selectedCandidate != null) return selectedCandidate
+
+        val nextCandidate = candidates.randomOrNull()
+        if (selectedAutoPlayRelatedVideo != nextCandidate) {
+            selectedAutoPlayRelatedVideo = nextCandidate
+        }
+        return nextCandidate
+    }
+
+    fun resolveNextAutoPlayVideo(immediate: Boolean): Any? {
+        val nextEp = findNextEpisode()
+        if (immediate) return nextEp
+
+        return when (Prefs.playerLoadNextAction) {
+            PlayerLoadNextAction.PlayRecommend -> findNextRelatedVideo()
+            PlayerLoadNextAction.PlayNextPart -> nextEp
+            PlayerLoadNextAction.PlayNextPartOrRecommend -> nextEp ?: findNextRelatedVideo()
+            PlayerLoadNextAction.DoNothing -> null
+        }
+    }
+
+    fun buildDirectAutoPlayCandidate(nextVideo: Any?): AutoPlayCandidate? {
+        if (playerViewModel.fromSeason) return null
+
+        return when (nextVideo) {
+            is VideoListItemData -> {
+                if (nextVideo.seasonId == null && playerViewModel.currentAid != nextVideo.aid) {
+                    AutoPlayCandidate.CrossVideoPart(nextVideo)
+                } else {
+                    null
+                }
+            }
+
+            is VideoCardData -> {
+                if (!nextVideo.jumpToSeason) {
+                    AutoPlayCandidate.RelatedVideo(nextVideo)
+                } else {
+                    null
+                }
+            }
+
+            else -> null
+        }
+    }
+
     // 处理back键，当推荐视频有焦点时隐藏推荐视频并将焦点返回到播放器
     BackHandler(enabled = playerViewModel.showRelatedVideos) {
         playerViewModel.showRelatedVideos = false
@@ -250,6 +324,23 @@ fun VideoPlayerV3Screen(
 
     BackHandler(enabled = playerViewModel.showInteractiveOptionDialog) {
         exitPlayer()
+    }
+
+    LaunchedEffect(
+        playerViewModel.currentCid,
+        playerViewModel.isInteractivePlayback,
+        playerViewModel.showRelatedVideos,
+        playerViewModel.availableVideoList.size,
+        playerViewModel.relatedVideos.size,
+        Prefs.playerLoadNextAction,
+    ) {
+        if (playerViewModel.isInteractivePlayback || playerViewModel.showRelatedVideos) {
+            playerViewModel.prepareAutoPlayTarget(null)
+            return@LaunchedEffect
+        }
+
+        val directCandidate = buildDirectAutoPlayCandidate(resolveNextAutoPlayVideo(immediate = false))
+        playerViewModel.prepareAutoPlayTarget(directCandidate)
     }
 
     CompositionLocalProvider(
@@ -377,6 +468,11 @@ fun VideoPlayerV3Screen(
                 onSendHeartbeat = playerViewModel::uploadHistory,
                 onClearBackToHistoryData = { playerViewModel.lastPlayed = 0 },
                 onReloadDanmakuAfterSeek = playerViewModel::reloadDanmakuAfterSeek,
+                onNearEnd = {
+                    if (playerViewModel.showRelatedVideos || playerViewModel.isInteractivePlayback) return@BvPlayer
+                    val directCandidate = buildDirectAutoPlayCandidate(resolveNextAutoPlayVideo(immediate = false))
+                    playerViewModel.prefetchPreparedAutoPlayTarget(directCandidate)
+                },
                 onLoadPrevVideo = {
                     val currentIndex = playerViewModel.availableVideoList.indexOfFirst {
                         when (it) {
@@ -424,55 +520,9 @@ fun VideoPlayerV3Screen(
                         return@BvPlayer
                     }
 
-                    // 找出下一个剧集/分P
-                    val currentIndex = playerViewModel.availableVideoList.indexOfFirst {
-                        when (it) {
-                            is VideoListItemData -> it.cid == playerViewModel.currentCid
-                            else -> false
-                        }
-                    }
-                    val nextEp =
-                        if (currentIndex >= 0 && currentIndex + 1 < playerViewModel.availableVideoList.size) {
-                            playerViewModel.availableVideoList
-                                .drop(currentIndex + 1)
-                                .firstOrNull { it is VideoListItemData } as? VideoListItemData
-                        } else null
-
                     // 标记当前稿件已播放
                     PlayedAidsCache.markPlayed(playerViewModel.currentAid)
-
-                    // 找出下一个推荐视频（非充电、非播放过的aid）
-                    // 需求：推荐视频需满足：1. 非充电稿件 2. 未在全局已播放缓存中出现
-                    // 使用 Application 级单例 PlayedAidsCache，退出播放的时候清空缓存，避免重复播放
-                    val candidates = playerViewModel.relatedVideos
-                        .filter { related -> !related.isChargingArc && !PlayedAidsCache.hasPlayed(related.avid) }
-                        .take(10)
-                    val nextRelatedVideo = if (candidates.isNotEmpty()) candidates.random() else null
-
-                    // nextVideo 可以是分P/剧集(VideoListItemData) 或 推荐卡片(VideoCardData)
-                    var nextVideo: Any? = null
-
-                    if (immediate) {
-                        // 用户主动点击下一集按钮，直接播放下一集，不受设置影响
-                        nextVideo = nextEp
-                    } else {
-                        // 自动播放结束，根据配置执行不同逻辑
-                        when (Prefs.playerLoadNextAction) {
-                            PlayerLoadNextAction.PlayRecommend -> {
-                                nextVideo = nextRelatedVideo
-                            }
-
-                            PlayerLoadNextAction.PlayNextPart -> {
-                                nextVideo = nextEp
-                            }
-
-                            PlayerLoadNextAction.PlayNextPartOrRecommend -> {
-                                nextVideo = nextEp ?: nextRelatedVideo
-                            }
-
-                            PlayerLoadNextAction.DoNothing -> {}
-                        }
-                    }
+                    val nextVideo = resolveNextAutoPlayVideo(immediate)
                     if (nextVideo != null) {
                         autoActionCountdownJob = scope.launch {
                             try {
@@ -487,6 +537,10 @@ fun VideoPlayerV3Screen(
                                     when (nextVideo) {
                                         is VideoListItemData -> {
                                             PlayedAidsCache.markPlayed(nextVideo.aid)
+                                            val directCandidate = buildDirectAutoPlayCandidate(nextVideo)
+                                            if (directCandidate != null && playerViewModel.consumePreparedAutoPlayTarget(directCandidate)) {
+                                                return@launch
+                                            }
                                             playerViewModel.title = nextVideo.title
                                             playerViewModel.partTitle = nextVideo.partTitle
                                             if (nextVideo.seasonId == null && playerViewModel.currentAid != nextVideo.aid) {
@@ -511,6 +565,10 @@ fun VideoPlayerV3Screen(
                                         is VideoCardData -> {
                                             // 推荐视频卡片：跳转到视频详情（再进入播放器）
                                             PlayedAidsCache.markPlayed(nextVideo.avid)
+                                            val directCandidate = buildDirectAutoPlayCandidate(nextVideo)
+                                            if (directCandidate != null && playerViewModel.consumePreparedAutoPlayTarget(directCandidate)) {
+                                                return@launch
+                                            }
                                             if (nextVideo.jumpToSeason) {
                                                 SeasonInfoActivity.actionStart(
                                                     context = context,

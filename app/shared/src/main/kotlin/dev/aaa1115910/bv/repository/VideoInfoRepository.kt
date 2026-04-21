@@ -15,6 +15,18 @@ class VideoInfoRepository {
     val relatedVideos = mutableListOf<VideoCardData>()
     var interactivePlaybackContext: InteractivePlaybackContext? = null
 
+    fun replacePlaybackContext(
+        videoList: List<VideoListItem>,
+        relatedVideos: List<VideoCardData>,
+        interactivePlaybackContext: InteractivePlaybackContext?,
+    ) {
+        this.videoList.clear()
+        this.videoList.addAll(videoList)
+        this.relatedVideos.clear()
+        this.relatedVideos.addAll(relatedVideos)
+        this.interactivePlaybackContext = interactivePlaybackContext
+    }
+
     fun updateInteractivePlaybackContext(bvid: String, graphVersion: Int?) {
         interactivePlaybackContext = if (bvid.isNotBlank() && graphVersion != null) {
             InteractivePlaybackContext(

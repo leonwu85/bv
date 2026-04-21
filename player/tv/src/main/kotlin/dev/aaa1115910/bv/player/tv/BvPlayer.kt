@@ -88,6 +88,7 @@ import java.util.Calendar
 import kotlin.math.roundToInt
 
 private const val DANMAKU_MASK_BITMAP_CACHE_MAX_BYTES = 64 * 1024 * 1024
+private const val AUTO_PLAY_PREPARE_WINDOW_MS = 15_000L
 
 private fun Bitmap.safeCacheSize(): Int = if (isRecycled) 0 else byteCount
 
@@ -111,6 +112,7 @@ fun BvPlayer(
     onSendHeartbeat: suspend (Int) -> Unit,
     onClearBackToHistoryData: () -> Unit,
     onReloadDanmakuAfterSeek: (Long, Boolean) -> Unit = { _, _ -> },
+    onNearEnd: () -> Unit = {},
     onLoadNextVideo: (Boolean) -> Unit,
     onLoadPrevVideo: () -> Unit = {},
     onExit: () -> Unit,
@@ -638,6 +640,10 @@ fun BvPlayer(
         }
     }
 
+    var hasTriggeredNearEndPreparation by remember(videoPlayerConfigData.currentVideoCid) {
+        mutableStateOf(false)
+    }
+
     val videoPlayerListener = object : VideoPlayerListener {
         override fun onError(error: Exception) {
             logger.info { "onError: $error" }
@@ -884,6 +890,16 @@ fun BvPlayer(
 
                 if (currentSkipPgcIntroOutro && currentClipInfoList.isNotEmpty() && isPlaying) {
                     checkSkipTask(pos)
+                }
+
+                val remainingMs = dur - pos
+                if (
+                    !hasTriggeredNearEndPreparation &&
+                    dur > 0L &&
+                    remainingMs in 1..AUTO_PLAY_PREPARE_WINDOW_MS
+                ) {
+                    hasTriggeredNearEndPreparation = true
+                    onNearEnd()
                 }
 
                 // SponsorBlock 片段检测

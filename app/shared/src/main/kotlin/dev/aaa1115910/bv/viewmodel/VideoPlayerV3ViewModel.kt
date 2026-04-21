@@ -38,6 +38,7 @@ import dev.aaa1115910.biliapi.http.entity.live.PopularityChangeEvent
 import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment
 import dev.aaa1115910.biliapi.http.SponsorBlockHttpApi
 import dev.aaa1115910.biliapi.repositories.LiveRepository
+import dev.aaa1115910.biliapi.repositories.VideoDetailRepository
 import dev.aaa1115910.biliapi.repositories.VideoPlayRepository
 import dev.aaa1115910.biliapi.util.AvBvConverter
 import dev.aaa1115910.biliapi.websocket.LiveDataWebSocket
@@ -46,6 +47,10 @@ import dev.aaa1115910.bilisubtitle.entity.SubtitleItem
 import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.entity.LiveQualityPreference
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
+import dev.aaa1115910.bv.player.autoplay.AutoPlayCandidate
+import dev.aaa1115910.bv.player.autoplay.PreparedAutoPlayTarget
+import dev.aaa1115910.bv.player.autoplay.PreparedAutoPlayTransitionContext
+import dev.aaa1115910.bv.player.autoplay.toPreparedAutoPlayTransitionContext
 import dev.aaa1115910.bv.player.renderer.OptimizedTextRenderer
 import dev.aaa1115910.bv.player.renderer.SimpleRenderer
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
@@ -93,6 +98,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.annotation.KoinViewModel
 import java.net.URI
 
@@ -100,6 +106,7 @@ import java.net.URI
 class VideoPlayerV3ViewModel(
     private val videoInfoRepository: VideoInfoRepository,
     private val videoPlayRepository: VideoPlayRepository,
+    private val videoDetailRepository: VideoDetailRepository,
     private val liveRepository: LiveRepository,
 ) : ViewModel() {
     private val logger = KotlinLogging.logger { }
@@ -118,6 +125,7 @@ class VideoPlayerV3ViewModel(
         super.onCleared()
         logger.fInfo { "VideoPlayerV3ViewModel onCleared" }
 
+        invalidatePreparedAutoPlayTarget()
         cancelVodPlayUrlAutoRefresh()
 
         // 清理直播重连任务
@@ -283,6 +291,12 @@ class VideoPlayerV3ViewModel(
     private var vodPlayUrlRefreshToken by mutableLongStateOf(0L)
     private var vodPlaybackSessionToken by mutableLongStateOf(0L)
 
+    // 自动连播提前准备
+    private var preparedAutoPlayTarget by mutableStateOf<PreparedAutoPlayTarget?>(null)
+    private var autoPlayPrepareJob: Job? = null
+    private var autoPlayPrefetchJob: Job? = null
+    private var autoPlayPrepareToken by mutableLongStateOf(0L)
+
     companion object {
         // 提前刷新的时间（毫秒），默认60秒
         private const val REFRESH_BEFORE_EXPIRY_MS = 60_000L
@@ -297,6 +311,8 @@ class VideoPlayerV3ViewModel(
         private const val DANMAKU_BATCH_SIZE = 600
         private const val DANMAKU_SLICE_SIZE = 2000
         private const val DANMAKU_SLICE_EMIT_DELAY_MS = 12L
+        private const val AUTO_PLAY_PREPARE_WAIT_MS = 1_200L
+        private const val PREPARED_AUTO_PLAY_PLAY_DATA_TTL_MS = 2 * 60_000L
     }
 
     // 直播人气值与高能观众
@@ -406,6 +422,125 @@ class VideoPlayerV3ViewModel(
         logger.fInfo { "LiveDanmakuPlayer set from Compose: $player" }
     }
 
+    fun prepareAutoPlayTarget(candidate: AutoPlayCandidate?) {
+        if (candidate == null || isLive) {
+            invalidatePreparedAutoPlayTarget()
+            return
+        }
+
+        val currentPreparedTarget = preparedAutoPlayTarget
+        if (currentPreparedTarget?.candidate == candidate) {
+            if (
+                !currentPreparedTarget.isSupported ||
+                currentPreparedTarget.transitionContext != null ||
+                autoPlayPrepareJob?.isActive == true
+            ) {
+                return
+            }
+        } else {
+            autoPlayPrefetchJob?.cancel()
+            autoPlayPrefetchJob = null
+        }
+
+        val reusablePreparedTarget = currentPreparedTarget?.takeIf {
+            it.candidate == candidate && hasFreshPreparedAutoPlayPlayData(it)
+        }
+
+        autoPlayPrepareJob?.cancel()
+        val prepareToken = ++autoPlayPrepareToken
+        preparedAutoPlayTarget = PreparedAutoPlayTarget(
+            candidate = candidate,
+            playData = reusablePreparedTarget?.playData,
+            playDataFetchedAtMs = reusablePreparedTarget?.playDataFetchedAtMs ?: 0L,
+        )
+
+        autoPlayPrepareJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val transitionContext = resolvePreparedAutoPlayTransitionContext(candidate) ?: run {
+                    markPreparedAutoPlayTargetUnsupported(candidate, prepareToken)
+                    return@launch
+                }
+
+                withContext(Dispatchers.Main) {
+                    if (!isPreparedAutoPlayCandidateActive(candidate, prepareToken)) return@withContext
+                    preparedAutoPlayTarget = preparedAutoPlayTarget?.copy(
+                        transitionContext = transitionContext,
+                        isSupported = true,
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.fWarn { "Prepare auto play target failed: ${e.stackTraceToString()}" }
+                markPreparedAutoPlayTargetUnsupported(candidate, prepareToken)
+            }
+        }
+    }
+
+    fun prefetchPreparedAutoPlayTarget(candidate: AutoPlayCandidate?) {
+        if (candidate == null || isLive) return
+
+        prepareAutoPlayTarget(candidate)
+
+        val currentPreparedTarget = preparedAutoPlayTarget
+        if (currentPreparedTarget?.candidate == candidate) {
+            if (!currentPreparedTarget.isSupported || hasFreshPreparedAutoPlayPlayData(currentPreparedTarget)) {
+                return
+            }
+        }
+        if (autoPlayPrefetchJob?.isActive == true && currentPreparedTarget?.candidate == candidate) return
+
+        autoPlayPrefetchJob?.cancel()
+        val prepareToken = autoPlayPrepareToken
+        autoPlayPrefetchJob = viewModelScope.launch(Dispatchers.IO) {
+            val transitionContext = awaitPreparedAutoPlayTransitionContext(candidate, prepareToken)
+                ?: return@launch
+            if (!isPreparedAutoPlayCandidateActive(candidate, prepareToken)) return@launch
+
+            try {
+                val playData = videoPlayRepository.getPlayData(
+                    aid = transitionContext.aid,
+                    cid = transitionContext.cid,
+                    preferApiType = Prefs.apiType,
+                )
+
+                withContext(Dispatchers.Main) {
+                    if (!isPreparedAutoPlayCandidateActive(candidate, prepareToken)) return@withContext
+                    preparedAutoPlayTarget = preparedAutoPlayTarget?.copy(
+                        playData = playData,
+                        playDataFetchedAtMs = System.currentTimeMillis(),
+                        isSupported = true,
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.fWarn { "Prefetch auto play target failed: ${e.stackTraceToString()}" }
+            }
+        }
+    }
+
+    suspend fun consumePreparedAutoPlayTarget(candidate: AutoPlayCandidate): Boolean {
+        if (isLive) return false
+
+        val prepareToken = autoPlayPrepareToken
+        val transitionContext = awaitPreparedAutoPlayTransitionContext(candidate, prepareToken)
+            ?: return false
+        val currentPreparedTarget = awaitPreparedAutoPlayTarget(candidate, prepareToken)
+        val preparedPlayData = currentPreparedTarget?.takeIf(::hasFreshPreparedAutoPlayPlayData)?.playData
+
+        applyPreparedAutoPlayTransitionContext(transitionContext)
+        loadPlayUrl(
+            avid = transitionContext.aid,
+            cid = transitionContext.cid,
+            epid = transitionContext.epid,
+            seasonId = transitionContext.seasonId,
+            continuePlayNext = true,
+            preparedPlayData = preparedPlayData,
+        )
+        return true
+    }
+
     fun loadPlayUrl(
         avid: Long,
         cid: Long,
@@ -413,6 +548,7 @@ class VideoPlayerV3ViewModel(
         seasonId: Int? = null,
         continuePlayNext: Boolean = false,
         initialSeekPositionMs: Long? = null,
+        preparedPlayData: PlayData? = null,
     ) {
         val playbackSessionToken = beginVodPlaybackSession()
         val videoChanged = currentAid != avid || currentCid != cid
@@ -421,6 +557,7 @@ class VideoPlayerV3ViewModel(
             lastPlayed = 0
         }
         if (videoChanged) {
+            invalidatePreparedAutoPlayTarget()
             resetResolvedDanmakuMask(clearMasks = true)
         }
         currentAid = avid
@@ -457,7 +594,8 @@ class VideoPlayerV3ViewModel(
                 preferApi = Prefs.apiType,
                 proxyArea = proxyArea,
                 initialSeekPositionMs = initialSeekPositionMs,
-                playbackSessionToken = playbackSessionToken
+                playbackSessionToken = playbackSessionToken,
+                preparedPlayData = preparedPlayData,
             )
             if (isInteractivePlayback && (!interactiveOptionsFromQuestions || interactiveOptions.isEmpty())) {
                 refreshInteractiveBranches(currentInteractiveEdgeId.takeIf { it > 0L })
@@ -490,8 +628,9 @@ class VideoPlayerV3ViewModel(
         targetAudio: Audio? = null,
         targetMediaMode: PlaybackMediaMode = currentPlaybackMediaMode,
         playbackSessionToken: Long = vodPlaybackSessionToken,
+        preparedPlayData: PlayData? = null,
     ): Boolean {
-        logger.fInfo { "Load play url: [av=$avid, cid=$cid, preferApi=$preferApi, proxyArea=$proxyArea]" }
+        logger.fInfo { "Load play url: [av=$avid, cid=$cid, preferApi=$preferApi, proxyArea=$proxyArea, usePreparedPlayData=${preparedPlayData != null}]" }
         withContext(Dispatchers.Main) {
             if (isVodPlaybackSessionActive(playbackSessionToken)) {
                 loadState = RequestState.Ready
@@ -500,7 +639,7 @@ class VideoPlayerV3ViewModel(
         logger.fInfo { "Set request state: ready" }
         logger.fInfo { "fromSeason: $fromSeason" }
         return try {
-            val playData = if (fromSeason) {
+            val playData = preparedPlayData ?: if (fromSeason) {
                 videoPlayRepository.getPgcPlayData(
                     aid = avid,
                     cid = cid,
@@ -1816,6 +1955,151 @@ class VideoPlayerV3ViewModel(
             logger.fInfo { "filtered official cdn urls: $filteredUrls" }
             return filteredUrls.random()
         }
+    }
+
+    private fun applyPreparedAutoPlayTransitionContext(transitionContext: PreparedAutoPlayTransitionContext) {
+        videoInfoRepository.replacePlaybackContext(
+            videoList = transitionContext.availableVideoList,
+            relatedVideos = transitionContext.relatedVideos,
+            interactivePlaybackContext = transitionContext.interactivePlaybackContext,
+        )
+        title = transitionContext.title
+        partTitle = transitionContext.partTitle
+        fromSeason = false
+        subType = 0
+        epid = transitionContext.epid ?: 0
+        seasonId = transitionContext.seasonId ?: 0
+        isVerticalVideo = transitionContext.isVerticalVideo
+        play = transitionContext.play
+        danmaku = transitionContext.danmaku
+        like = transitionContext.like
+        coin = transitionContext.coin
+        favorite = transitionContext.favorite
+        upName = transitionContext.upName
+        upId = transitionContext.upId
+        upFace = transitionContext.upFace
+        pubTime = transitionContext.pubTime
+        playerIconIdle = transitionContext.playerIconIdle
+        playerIconMoving = transitionContext.playerIconMoving
+        showRelatedVideos = false
+    }
+
+    private suspend fun resolvePreparedAutoPlayTransitionContext(
+        candidate: AutoPlayCandidate,
+    ): PreparedAutoPlayTransitionContext? {
+        val detail = when (candidate) {
+            is AutoPlayCandidate.CrossVideoPart -> videoDetailRepository.getVideoDetail(
+                aid = candidate.item.aid,
+                preferApiType = Prefs.apiType,
+                withUserActions = false,
+            )
+
+            is AutoPlayCandidate.RelatedVideo -> videoDetailRepository.getVideoDetail(
+                aid = candidate.video.avid,
+                preferApiType = Prefs.apiType,
+                withUserActions = false,
+            )
+        }
+
+        if (detail.redirectToEp || detail.isInteractive || detail.pages.isEmpty()) return null
+
+        val targetCid = when (candidate) {
+            is AutoPlayCandidate.CrossVideoPart -> candidate.item.cid ?: return null
+            is AutoPlayCandidate.RelatedVideo -> detail.pages.first().cid
+        }
+        val preferredPartTitle = when (candidate) {
+            is AutoPlayCandidate.CrossVideoPart -> candidate.item.partTitle.takeIf { it.isNotBlank() }
+            is AutoPlayCandidate.RelatedVideo -> null
+        }
+
+        return detail.toPreparedAutoPlayTransitionContext(
+            targetCid = targetCid,
+            preferredPartTitle = preferredPartTitle,
+        )
+    }
+
+    private suspend fun awaitPreparedAutoPlayTransitionContext(
+        candidate: AutoPlayCandidate,
+        prepareToken: Long,
+    ): PreparedAutoPlayTransitionContext? {
+        val currentPreparedTarget = preparedAutoPlayTarget
+        if (currentPreparedTarget?.candidate == candidate) {
+            if (!currentPreparedTarget.isSupported) return null
+            currentPreparedTarget.transitionContext?.let { return it }
+        }
+
+        val prepareJob = autoPlayPrepareJob
+        if (prepareJob != null && prepareJob.isActive && isPreparedAutoPlayCandidateActive(candidate, prepareToken)) {
+            withTimeoutOrNull(AUTO_PLAY_PREPARE_WAIT_MS) {
+                prepareJob.join()
+            }
+        }
+
+        val updatedPreparedTarget = preparedAutoPlayTarget
+        if (
+            !isPreparedAutoPlayCandidateActive(candidate, prepareToken) ||
+            updatedPreparedTarget?.candidate != candidate ||
+            !updatedPreparedTarget.isSupported
+        ) {
+            return null
+        }
+        return updatedPreparedTarget.transitionContext
+    }
+
+    private suspend fun awaitPreparedAutoPlayTarget(
+        candidate: AutoPlayCandidate,
+        prepareToken: Long,
+    ): PreparedAutoPlayTarget? {
+        val currentPreparedTarget = preparedAutoPlayTarget
+        if (currentPreparedTarget?.candidate == candidate) {
+            if (!currentPreparedTarget.isSupported || hasFreshPreparedAutoPlayPlayData(currentPreparedTarget)) {
+                return currentPreparedTarget
+            }
+        }
+
+        val prefetchJob = autoPlayPrefetchJob
+        if (prefetchJob != null && prefetchJob.isActive && isPreparedAutoPlayCandidateActive(candidate, prepareToken)) {
+            withTimeoutOrNull(AUTO_PLAY_PREPARE_WAIT_MS) {
+                prefetchJob.join()
+            }
+        }
+
+        val updatedPreparedTarget = preparedAutoPlayTarget
+        if (!isPreparedAutoPlayCandidateActive(candidate, prepareToken) || updatedPreparedTarget?.candidate != candidate) {
+            return null
+        }
+        return updatedPreparedTarget
+    }
+
+    private fun isPreparedAutoPlayCandidateActive(
+        candidate: AutoPlayCandidate,
+        prepareToken: Long,
+    ): Boolean {
+        return autoPlayPrepareToken == prepareToken && preparedAutoPlayTarget?.candidate == candidate
+    }
+
+    private fun hasFreshPreparedAutoPlayPlayData(target: PreparedAutoPlayTarget): Boolean {
+        if (target.playData == null || target.playDataFetchedAtMs <= 0L) return false
+        return System.currentTimeMillis() - target.playDataFetchedAtMs <= PREPARED_AUTO_PLAY_PLAY_DATA_TTL_MS
+    }
+
+    private suspend fun markPreparedAutoPlayTargetUnsupported(
+        candidate: AutoPlayCandidate,
+        prepareToken: Long,
+    ) {
+        withContext(Dispatchers.Main) {
+            if (!isPreparedAutoPlayCandidateActive(candidate, prepareToken)) return@withContext
+            preparedAutoPlayTarget = preparedAutoPlayTarget?.copy(isSupported = false)
+        }
+    }
+
+    private fun invalidatePreparedAutoPlayTarget() {
+        autoPlayPrepareJob?.cancel()
+        autoPlayPrepareJob = null
+        autoPlayPrefetchJob?.cancel()
+        autoPlayPrefetchJob = null
+        autoPlayPrepareToken += 1
+        preparedAutoPlayTarget = null
     }
 
     private fun beginVodPlaybackSession(): Long {
