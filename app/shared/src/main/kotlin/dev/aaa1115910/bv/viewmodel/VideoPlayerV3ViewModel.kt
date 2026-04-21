@@ -1062,7 +1062,16 @@ class VideoPlayerV3ViewModel(
         viewModelScope.launch(Dispatchers.Default) {
             runCatching {
                 addLogs("跳转后重载弹幕")
-                ensureDanmakuPlayer()
+                val reusedExistingPlayer = withContext(Dispatchers.Main) {
+                    danmakuPlayer?.let {
+                        it.pause()
+                        it.clearData()
+                        true
+                    } ?: false
+                }
+                if (!reusedExistingPlayer) {
+                    ensureDanmakuPlayer()
+                }
                 loadDanmaku(
                     cid = currentCid,
                     durationMs = durationMs,

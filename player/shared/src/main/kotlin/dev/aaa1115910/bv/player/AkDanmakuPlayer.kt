@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.player
 
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
@@ -8,11 +9,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.kuaishou.akdanmaku.DanmakuConfig
 import com.kuaishou.akdanmaku.render.EmojiSupportRenderer
@@ -20,6 +21,7 @@ import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import com.kuaishou.akdanmaku.ui.DanmakuSurfaceView
 import com.kuaishou.akdanmaku.ui.DanmakuView
 import com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer
+import com.kuaishou.akdanmaku.ui.VideoDanmakuSurfaceView
 
 /**
  * 普通弹幕播放器组件
@@ -28,12 +30,17 @@ import com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer
 fun AkDanmakuPlayer(
     modifier: Modifier = Modifier,
     danmakuPlayer: DanmakuPlayer?,
-    visible: Boolean = true
+    visible: Boolean = true,
+    maskBitmap: Bitmap? = null,
+    videoAspectRatio: Float = 0f,
 ) {
     AkDanmakuPlayer(
         modifier = modifier,
         danmakuPlayer = danmakuPlayer,
         visible = visible,
+        maskBitmap = maskBitmap,
+        videoAspectRatio = videoAspectRatio,
+        useSurfaceViewForNormalMode = false,
         isLiveMode = false,
         onLiveDanmakuPlayerReady = null
     )
@@ -50,10 +57,12 @@ fun AkDanmakuPlayer(
     modifier: Modifier = Modifier,
     danmakuPlayer: DanmakuPlayer? = null,
     visible: Boolean = true,
+    maskBitmap: Bitmap? = null,
+    videoAspectRatio: Float = 0f,
+    useSurfaceViewForNormalMode: Boolean = false,
     isLiveMode: Boolean = false,
     onLiveDanmakuPlayerReady: ((LiveDanmakuPlayer) -> Unit)? = null
 ) {
-    val context = LocalContext.current
     var danmakuView: DanmakuView? by remember { mutableStateOf(null) }
     var liveDanmakuPlayer: LiveDanmakuPlayer? by remember { mutableStateOf(null) }
 
@@ -107,6 +116,33 @@ fun AkDanmakuPlayer(
                 surfaceView.visibility = if (visible) View.VISIBLE else View.INVISIBLE
             }
         )
+    } else if (useSurfaceViewForNormalMode) {
+        key(danmakuPlayer, useSurfaceViewForNormalMode) {
+            var danmakuSurfaceView: VideoDanmakuSurfaceView? by remember { mutableStateOf(null) }
+
+            LaunchedEffect(danmakuSurfaceView, danmakuPlayer) {
+                danmakuSurfaceView?.let { surfaceView ->
+                    danmakuPlayer?.bindSurfaceView(surfaceView)
+                }
+            }
+
+            AndroidView(
+                modifier = modifier,
+                factory = { ctx ->
+                    VideoDanmakuSurfaceView(ctx).apply {
+                        setBackgroundColor(Color.TRANSPARENT)
+                        setZOrderOnTop(false)
+                        setZOrderMediaOverlay(true)
+                        holder?.setFormat(PixelFormat.TRANSLUCENT)
+                        updateMaskBitmap(maskBitmap, videoAspectRatio)
+                    }.also { danmakuSurfaceView = it }
+                },
+                update = { surfaceView ->
+                    surfaceView.visibility = if (visible) View.VISIBLE else View.INVISIBLE
+                    surfaceView.updateMaskBitmap(maskBitmap, videoAspectRatio)
+                }
+            )
+        }
     } else {
         AndroidView(
             modifier = modifier,

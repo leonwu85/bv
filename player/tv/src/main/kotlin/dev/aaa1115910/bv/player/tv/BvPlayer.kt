@@ -303,10 +303,12 @@ fun BvPlayer(
     val currentSponsorSegment by rememberUpdatedState(currentSponsorSegment)
     val currentOnShowSponsorBlockTip by rememberUpdatedState(onShowSponsorBlockTip)
     val currentOnSkipSponsorSegment by rememberUpdatedState(onSkipSponsorSegment)
+    val useSurfaceViewDanmaku = !videoPlayerConfigData.isLive
     val currentDanmakuMasks by rememberUpdatedState(videoPlayerDanmakuMaskData.danmakuMasks)
     val currentIsPlaying by rememberUpdatedState(isPlaying)
     val currentDanmakuMaskEnabled by rememberUpdatedState(videoPlayerConfigData.currentDanmakuMask)
     val currentIsLive by rememberUpdatedState(videoPlayerConfigData.isLive)
+    val currentUseSurfaceViewDanmaku by rememberUpdatedState(useSurfaceViewDanmaku)
     val currentVideoCid by rememberUpdatedState(videoPlayerConfigData.currentVideoCid)
 
     // 独立弹幕层句柄（Stable），父级重组频率降低
@@ -352,8 +354,13 @@ fun BvPlayer(
     }
 
     val scheduleDanmakuReload: (Long, Boolean) -> Unit = { targetPosition, shouldPlayAfterSeek ->
-        pendingReloadDanmakuPosition = targetPosition
-        pendingReloadDanmakuShouldPlay = shouldPlayAfterSeek
+        if (mDanmakuPlayer == null) {
+            pendingReloadDanmakuPosition = targetPosition
+            pendingReloadDanmakuShouldPlay = shouldPlayAfterSeek
+        } else {
+            pendingReloadDanmakuPosition = -1L
+            pendingReloadDanmakuShouldPlay = false
+        }
         onReloadDanmakuAfterSeek(targetPosition, shouldPlayAfterSeek)
     }
 
@@ -1360,8 +1367,12 @@ fun BvPlayer(
             DanmakuLayerSideEffects(
                 danmakuLayerHandle = danmakuLayerHandle,
                 visible = videoPlayerConfigData.showDanmaku,
-                maskFrame = currentDanmakuMaskFrame.takeIf { videoPlayerConfigData.currentDanmakuMask },
-                maskBitmap = currentDanmakuMaskBitmap.takeIf { videoPlayerConfigData.currentDanmakuMask },
+                maskFrame = currentDanmakuMaskFrame.takeIf {
+                    videoPlayerConfigData.currentDanmakuMask && !useSurfaceViewDanmaku
+                },
+                maskBitmap = currentDanmakuMaskBitmap.takeIf {
+                    videoPlayerConfigData.currentDanmakuMask
+                },
                 videoAspectRatio = aspectRatioValue
             )
         

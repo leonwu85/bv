@@ -84,9 +84,10 @@ fun DanmakuLayer(
     handle: DanmakuLayerHandle,
 ) {
     val player = handle.danmakuPlayer
+    val useSurfaceViewForNormalMode = !handle.isLiveMode
 
-    // 使用预渲染的 Bitmap
-    val maskModifier = if (handle.maskBitmap != null && handle.videoAspectRatio > 0f) {
+    // 普通模式 GLSurfaceView 走独立 Surface，宿主 Compose bitmap mask 对它不生效。
+    val maskModifier = if (!useSurfaceViewForNormalMode && handle.maskBitmap != null && handle.videoAspectRatio > 0f) {
         Modifier.danmakuMaskBitmap(handle.maskBitmap, handle.videoAspectRatio)
     } else Modifier
 
@@ -100,6 +101,9 @@ fun DanmakuLayer(
             modifier = Modifier.fillMaxWidth().fillMaxHeight(),
             danmakuPlayer = player,
             visible = handle.visible,
+            maskBitmap = handle.maskBitmap,
+            videoAspectRatio = handle.videoAspectRatio,
+            useSurfaceViewForNormalMode = useSurfaceViewForNormalMode,
             isLiveMode = handle.isLiveMode,
             onLiveDanmakuPlayerReady = handle.onLiveDanmakuPlayerReady
         )
