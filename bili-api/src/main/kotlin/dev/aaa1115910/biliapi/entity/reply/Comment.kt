@@ -1,5 +1,7 @@
 package dev.aaa1115910.biliapi.entity.reply
 
+import bilibili.main.community.reply.v1.Content as GrpcContent
+import bilibili.main.community.reply.v1.TranslationSwitch
 import dev.aaa1115910.biliapi.entity.Picture
 
 data class CommentsData(
@@ -45,7 +47,23 @@ data class Comment(
     val replies: List<Comment>,
     val repliesCount: Int,
     val like: Long = 0,
+    val translatedContent: List<String> = emptyList(),
+    val translatedEmotes: List<Emote> = emptyList(),
+    val showTranslation: Boolean = false,
+    val translationSwitch: TranslationSwitch = TranslationSwitch.TRANSLATION_SWITCH_UNSUPPORTED,
 ) {
+    val displayContent: List<String>
+        get() = if (showTranslation && hasTranslatedContent) translatedContent else content
+
+    val displayEmotes: List<Emote>
+        get() = if (showTranslation && hasTranslatedContent) translatedEmotes else emotes
+
+    val hasTranslatedContent: Boolean
+        get() = translatedContent.isNotEmpty() || translatedEmotes.isNotEmpty()
+
+    val canTranslate: Boolean
+        get() = translationSwitch == TranslationSwitch.TRANSLATION_SWITCH_SHOW_TRANSLATION
+
     companion object {
         fun fromReply(reply: dev.aaa1115910.biliapi.http.entity.reply.CommentData.Reply): Comment {
             return Comment(
@@ -65,29 +83,61 @@ data class Comment(
                 pictures = reply.content.pictures.map { Picture.fromPicture(it) },
                 replies = reply.replies.map { fromReply(it) },
                 repliesCount = reply.count,
-                like = reply.like.toLong()
+                like = reply.like.toLong(),
+                translationSwitch = TranslationSwitch.TRANSLATION_SWITCH_UNSUPPORTED
             )
         }
 
         fun fromReplyInfo(reply: bilibili.main.community.reply.v1.ReplyInfo): Comment {
+            val originalContent = mapGrpcContent(reply.content)
+            val translatedContent = mapTranslatedGrpcContent(reply)
             return Comment(
                 rpid = reply.id,
                 mid = reply.mid,
                 oid = reply.oid,
                 type = reply.type,
                 parent = reply.parent,
-                content = reply.content.message.splitWithEmotes(*reply.content.emoteMap.keys.toTypedArray()),
+                content = originalContent.content,
                 member = Member(
                     mid = reply.mid,
                     avatar = reply.member.face,
                     name = reply.member.name
                 ),
                 timeDesc = reply.replyControl.timeDesc,
-                emotes = reply.content.emoteMap.values.map { Emote.fromEmote(it) },
+                emotes = originalContent.emotes,
                 pictures = reply.content.picturesList.map { Picture.fromPicture(it) },
                 replies = reply.repliesList.map { fromReplyInfo(it) },
                 repliesCount = reply.count.toInt(),
-                like = reply.like
+                like = reply.like,
+                translatedContent = translatedContent?.content.orEmpty(),
+                translatedEmotes = translatedContent?.emotes.orEmpty(),
+                showTranslation = translatedContent != null && reply.replyControl.showTranslation,
+                translationSwitch = reply.replyControl.translationSwitch
+            )
+        }
+
+        fun withTranslatedReply(comment: Comment, reply: bilibili.main.community.reply.v1.ReplyInfo): Comment {
+            val translatedContent = mapTranslatedGrpcContent(reply) ?: return comment
+            val translationSwitch = reply.replyControl.translationSwitch.takeUnless {
+                it == TranslationSwitch.TRANSLATION_SWITCH_UNSPECIFIED
+            } ?: comment.translationSwitch
+            return comment.copy(
+                translatedContent = translatedContent.content,
+                translatedEmotes = translatedContent.emotes,
+                showTranslation = true,
+                translationSwitch = translationSwitch
+            )
+        }
+
+        private fun mapTranslatedGrpcContent(reply: bilibili.main.community.reply.v1.ReplyInfo): RichContent? {
+            if (!reply.hasTranslatedContent()) return null
+            return mapGrpcContent(reply.translatedContent)
+        }
+
+        private fun mapGrpcContent(content: GrpcContent): RichContent {
+            return RichContent(
+                content = content.message.splitWithEmotes(*content.emoteMap.keys.toTypedArray()),
+                emotes = content.emoteMap.values.map { Emote.fromEmote(it) }
             )
         }
     }
@@ -121,6 +171,11 @@ data class Comment(
             }
         }
     }
+
+    private data class RichContent(
+        val content: List<String>,
+        val emotes: List<Emote>
+    )
 }
 
 enum class EmoteSize(val fontSize: Int) {

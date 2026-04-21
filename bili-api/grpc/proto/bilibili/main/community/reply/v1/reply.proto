@@ -21,6 +21,8 @@ service Reply {
   rpc SearchItemPreHook(SearchItemPreHookReq) returns (SearchItemPreHookReply);
   // 评论搜索插入项目接口
   rpc SearchItem(SearchItemReq) returns (SearchItemReply);
+  // 评论翻译接口
+  rpc TranslateReply(TranslateReplyReq) returns (TranslateReplyResp);
   // 评论at用户搜索接口
   rpc AtSearch(AtSearchReq) returns (AtSearchReply);
   // 查询单条评论接口
@@ -659,6 +661,14 @@ enum Mode {
   MAIN_LIST_HOT = 3; // 按热度
 }
 
+// 评论翻译开关
+enum TranslationSwitch {
+  TRANSLATION_SWITCH_UNSPECIFIED = 0;
+  TRANSLATION_SWITCH_UNSUPPORTED = 1;
+  TRANSLATION_SWITCH_SHOW_TRANSLATION = 2;
+  TRANSLATION_SWITCH_SHOW_ORIGIN = 3;
+}
+
 //
 message Notice {
   //
@@ -866,6 +876,10 @@ message ReplyControl {
   string biz_scene = 24;
   // IP属地信息 "IP属地：xxx"
   string location = 25;
+  // 翻译展示开关
+  TranslationSwitch translation_switch = 37;
+  // 是否展示译文
+  bool show_translation = 100;
 }
 
 //
@@ -912,6 +926,8 @@ message ReplyInfo {
   ReplyControl reply_control = 14;
   // 发布者信息V2
   MemberV2 member_v2 = 15;
+  // 译文内容
+  Content translated_content = 17;
 }
 
 // 查询单条评论-响应
@@ -926,6 +942,22 @@ message ReplyInfoReq {
   int64 rpid = 1;
   //
   int32 scene = 2;
+}
+
+// 评论翻译请求
+message TranslateReplyReq {
+  // 评论区类型
+  int64 type = 1;
+  // 评论区对象 id
+  int64 oid = 2;
+  // 需要翻译的评论 rpid 列表
+  repeated int64 rpids = 3;
+}
+
+// 评论翻译响应
+message TranslateReplyResp {
+  // rpid -> 评论翻译结果
+  map<int64, ReplyInfo> translated_replies = 1;
 }
 
 // 富文本
