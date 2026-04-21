@@ -93,6 +93,10 @@ fun MenuController(
     onSubtitleSizeChange: (TextUnit) -> Unit,
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
     onSubtitleBottomPadding: (Dp) -> Unit,
+    onSecondarySubtitleChange: (Subtitle) -> Unit,
+    onSecondarySubtitleSizeChange: (TextUnit) -> Unit,
+    onSecondarySubtitleBackgroundOpacityChange: (Float) -> Unit,
+    onSecondarySubtitleBottomPadding: (Dp) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -140,6 +144,10 @@ fun MenuController(
                 onSubtitleSizeChange = onSubtitleSizeChange,
                 onSubtitleBackgroundOpacityChange = onSubtitleBackgroundOpacityChange,
                 onSubtitleBottomPadding = onSubtitleBottomPadding,
+                onSecondarySubtitleChange = onSecondarySubtitleChange,
+                onSecondarySubtitleSizeChange = onSecondarySubtitleSizeChange,
+                onSecondarySubtitleBackgroundOpacityChange = onSecondarySubtitleBackgroundOpacityChange,
+                onSecondarySubtitleBottomPadding = onSecondarySubtitleBottomPadding,
                 onPlayModeChange = onPlayModeChange
             )
         }
@@ -170,6 +178,10 @@ fun MenuController(
     onSubtitleSizeChange: (TextUnit) -> Unit,
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
     onSubtitleBottomPadding: (Dp) -> Unit,
+    onSecondarySubtitleChange: (Subtitle) -> Unit,
+    onSecondarySubtitleSizeChange: (TextUnit) -> Unit,
+    onSecondarySubtitleBackgroundOpacityChange: (Float) -> Unit,
+    onSecondarySubtitleBottomPadding: (Dp) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit
 ) {
     var focusedNavItem by remember { mutableStateOf(VideoPlayerMenuNavItem.Picture) }
@@ -251,6 +263,10 @@ fun MenuController(
                     onSubtitleSizeChange = onSubtitleSizeChange,
                     onSubtitleBackgroundOpacityChange = onSubtitleBackgroundOpacityChange,
                     onSubtitleBottomPadding = onSubtitleBottomPadding,
+                    onSecondarySubtitleChange = onSecondarySubtitleChange,
+                    onSecondarySubtitleSizeChange = onSecondarySubtitleSizeChange,
+                    onSecondarySubtitleBackgroundOpacityChange = onSecondarySubtitleBackgroundOpacityChange,
+                    onSecondarySubtitleBottomPadding = onSecondarySubtitleBottomPadding,
                     onPlayModeChange = onPlayModeChange
                 )
                 // 导航栏区域：稍深的半透明背景
@@ -309,6 +325,10 @@ private fun MenuList(
     onSubtitleSizeChange: (TextUnit) -> Unit,
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
     onSubtitleBottomPadding: (Dp) -> Unit,
+    onSecondarySubtitleChange: (Subtitle) -> Unit,
+    onSecondarySubtitleSizeChange: (TextUnit) -> Unit,
+    onSecondarySubtitleBackgroundOpacityChange: (Float) -> Unit,
+    onSecondarySubtitleBottomPadding: (Dp) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit,
     onFocusStateChange: (MenuFocusState) -> Unit
 ) {
@@ -351,6 +371,10 @@ private fun MenuList(
                     onSubtitleSizeChange = onSubtitleSizeChange,
                     onSubtitleBackgroundOpacityChange = onSubtitleBackgroundOpacityChange,
                     onSubtitleBottomPadding = onSubtitleBottomPadding,
+                    onSecondarySubtitleChange = onSecondarySubtitleChange,
+                    onSecondarySubtitleSizeChange = onSecondarySubtitleSizeChange,
+                    onSecondarySubtitleBackgroundOpacityChange = onSecondarySubtitleBackgroundOpacityChange,
+                    onSecondarySubtitleBottomPadding = onSecondarySubtitleBottomPadding,
                     onFocusStateChange = onFocusStateChange
                 )
             }
@@ -390,6 +414,10 @@ fun MenuControllerPreview() {
     var currentSubtitleFontSize by remember { mutableStateOf(24.sp) }
     var currentSubtitleBackgroundOpacity by remember { mutableFloatStateOf(0.4f) }
     var currentSubtitleBottomPadding by remember { mutableStateOf(8.dp) }
+    var currentSecondarySubtitleId by remember { mutableLongStateOf(-1L) }
+    var currentSecondarySubtitleFontSize by remember { mutableStateOf(24.sp) }
+    var currentSecondarySubtitleBackgroundOpacity by remember { mutableFloatStateOf(0.4f) }
+    var currentSecondarySubtitleBottomPadding by remember { mutableStateOf(8.dp) }
 
     var currentPlayMode by remember { mutableStateOf(PlayMode.Sequential) }
 
@@ -470,6 +498,10 @@ fun MenuControllerPreview() {
                         currentSubtitleFontSize = currentSubtitleFontSize,
                         currentSubtitleBackgroundOpacity = currentSubtitleBackgroundOpacity,
                         currentSubtitleBottomPadding = currentSubtitleBottomPadding,
+                        currentSecondarySubtitleId = currentSecondarySubtitleId,
+                        currentSecondarySubtitleFontSize = currentSecondarySubtitleFontSize,
+                        currentSecondarySubtitleBackgroundOpacity = currentSecondarySubtitleBackgroundOpacity,
+                        currentSecondarySubtitleBottomPadding = currentSecondarySubtitleBottomPadding,
 
                         currentPlayMode = currentPlayMode
                     )
@@ -503,6 +535,12 @@ fun MenuControllerPreview() {
                             currentSubtitleBackgroundOpacity = it
                         },
                         onSubtitleBottomPadding = { currentSubtitleBottomPadding = it },
+                        onSecondarySubtitleChange = { currentSecondarySubtitleId = it.id },
+                        onSecondarySubtitleSizeChange = { currentSecondarySubtitleFontSize = it },
+                        onSecondarySubtitleBackgroundOpacityChange = {
+                            currentSecondarySubtitleBackgroundOpacity = it
+                        },
+                        onSecondarySubtitleBottomPadding = { currentSecondarySubtitleBottomPadding = it },
                         onPlayModeChange = { currentPlayMode = it }
                     )
                 }

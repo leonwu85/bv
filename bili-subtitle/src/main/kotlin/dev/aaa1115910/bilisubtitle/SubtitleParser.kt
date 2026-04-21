@@ -7,10 +7,14 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 
 object SubtitleParser {
+    private val bccJson = Json {
+        ignoreUnknownKeys = true
+    }
+
     fun fromBccString(bcc: String, isAI: Boolean = false): List<SubtitleItem> {
         val result = mutableListOf<SubtitleItem>()
         val bccResult = runCatching {
-            Json.decodeFromString<BiliSubtitle>(bcc)
+            bccJson.decodeFromString<BiliSubtitle>(bcc)
         }.onFailure { e ->
             println("[SubtitleParser] BCC decode failed: ${e.message}")
         }.getOrNull()

@@ -127,6 +127,10 @@ fun VideoPlayerController(
     onSubtitleSizeChange: (TextUnit) -> Unit,
     onSubtitleBackgroundOpacityChange: (Float) -> Unit,
     onSubtitleBottomPadding: (Dp) -> Unit,
+    onSecondarySubtitleChange: (Subtitle) -> Unit,
+    onSecondarySubtitleSizeChange: (TextUnit) -> Unit,
+    onSecondarySubtitleBackgroundOpacityChange: (Float) -> Unit,
+    onSecondarySubtitleBottomPadding: (Dp) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit,
     onLoadNextVideo: (Boolean) -> Unit,
     onLoadPrevVideo: () -> Unit = {},
@@ -710,6 +714,10 @@ fun VideoPlayerController(
             onSubtitleSizeChange = onSubtitleSizeChange,
             onSubtitleBackgroundOpacityChange = onSubtitleBackgroundOpacityChange,
             onSubtitleBottomPadding = onSubtitleBottomPadding,
+            onSecondarySubtitleChange = onSecondarySubtitleChange,
+            onSecondarySubtitleSizeChange = onSecondarySubtitleSizeChange,
+            onSecondarySubtitleBackgroundOpacityChange = onSecondarySubtitleBackgroundOpacityChange,
+            onSecondarySubtitleBottomPadding = onSecondarySubtitleBottomPadding,
             onPlayModeChange = onPlayModeChange
         )
         // 缓存底部进度条显示条件，避免频繁计算
