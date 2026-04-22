@@ -525,7 +525,17 @@ class VideoPlayerV3ViewModel(
 
         val prepareToken = autoPlayPrepareToken
         val transitionContext = awaitPreparedAutoPlayTransitionContext(candidate, prepareToken)
-            ?: return false
+            ?: run {
+                logger.fInfo { "Prepared auto play target unavailable, resolve on demand: $candidate" }
+                withContext(Dispatchers.IO) {
+                    resolvePreparedAutoPlayTransitionContext(candidate)
+                }?.also {
+                    logger.fInfo { "Resolved auto play target on demand: $candidate" }
+                } ?: run {
+                    logger.fInfo { "Resolve auto play target on demand failed: $candidate" }
+                    return false
+                }
+            }
         val currentPreparedTarget = awaitPreparedAutoPlayTarget(candidate, prepareToken)
         val preparedPlayData = currentPreparedTarget?.takeIf(::hasFreshPreparedAutoPlayPlayData)?.playData
 
