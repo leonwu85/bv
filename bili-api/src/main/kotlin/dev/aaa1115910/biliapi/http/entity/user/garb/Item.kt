@@ -7,7 +7,7 @@ import kotlinx.serialization.json.JsonObject
 @Serializable
 data class Item(
     @SerialName("item_id")
-    val itemId: Int,
+    val itemId: Long,
     val name: String,
     val state: String,
     @SerialName("tab_id")
