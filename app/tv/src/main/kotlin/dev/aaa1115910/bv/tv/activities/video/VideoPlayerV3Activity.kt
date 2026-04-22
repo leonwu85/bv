@@ -9,25 +9,33 @@ import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import java.lang.ref.WeakReference
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import dev.aaa1115910.biliapi.entity.ApiType
+import dev.aaa1115910.biliapi.http.BiliPlusHttpApi
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.PlayerType
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.player.entity.PlaybackMediaMode
+import dev.aaa1115910.bv.player.entity.RequestState
 import dev.aaa1115910.bv.player.VideoPlayerOptions
 import dev.aaa1115910.bv.player.impl.exo.ExoPlayerFactory
 import dev.aaa1115910.bv.player.impl.vlc.VlcPlayerFactory
 import dev.aaa1115910.bv.tv.screens.VideoPlayerV3Screen
+import dev.aaa1115910.bv.tv.manager.VideoUserActionManager
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.bv.util.formatPubTimeString
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.viewmodel.VideoPlayerV3ViewModel
+import dev.aaa1115910.bv.viewmodel.video.VideoDetailViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class VideoPlayerV3Activity : ComponentActivity() {
     companion object {
+        private const val EXTRA_DIRECT_OPEN = "direct_open"
         private val logger = KotlinLogging.logger { }
         private var currentInstance: WeakReference<VideoPlayerV3Activity>? = null
 
@@ -149,9 +157,42 @@ class VideoPlayerV3Activity : ComponentActivity() {
                 }
             )
         }
+
+        fun actionStartDirect(
+            context: Context,
+            avid: Long,
+            cid: Long? = null,
+            proxyArea: ProxyArea = ProxyArea.MainLand,
+            audioOnlyMode: Boolean = false
+        ) {
+            val runtime = Runtime.getRuntime()
+            val usedMemory = runtime.totalMemory() - runtime.freeMemory()
+            val maxMemory = runtime.maxMemory()
+            logger.info { "Current memory usage VideoPlayerV3Activity.actionStartDirect: ${usedMemory / 1024 / 1024} MB / ${maxMemory / 1024 / 1024} MB" }
+
+            currentInstance?.get()?.let { instance ->
+                logger.info { "Closing previous video player instance" }
+                instance.finish()
+            }
+            currentInstance = null
+
+            context.startActivity(
+                Intent(
+                    context,
+                    dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity::class.java
+                ).apply {
+                    putExtra(EXTRA_DIRECT_OPEN, true)
+                    putExtra("avid", avid)
+                    cid?.takeIf { it > 0L }?.let { putExtra("cid", it) }
+                    putExtra("proxy_area", proxyArea.ordinal)
+                    putExtra("audioOnlyMode", audioOnlyMode)
+                }
+            )
+        }
     }
 
     private val playerViewModel: VideoPlayerV3ViewModel by viewModel()
+    private val videoDetailViewModel: VideoDetailViewModel by viewModel()
 
     private fun resetSessionPlaySpeedToDefault() {
         val defaultPlaySpeed = Prefs.defaultPlaySpeed
@@ -232,6 +273,164 @@ class VideoPlayerV3Activity : ComponentActivity() {
         playerViewModel.videoPlayer = videoPlayer
     }
 
+    private fun startVodPlayback(
+        aid: Long,
+        cid: Long,
+        title: String,
+        partTitle: String,
+        played: Int,
+        fromSeason: Boolean,
+        subType: Int? = null,
+        epid: Int? = null,
+        seasonId: Int? = null,
+        isVerticalVideo: Boolean = false,
+        proxyArea: ProxyArea = ProxyArea.MainLand,
+        playerIconIdle: String = "",
+        playerIconMoving: String = "",
+        play: Long = 0,
+        danmaku: Int = 0,
+        like: Int = 0,
+        coin: Int = 0,
+        favorite: Int = 0,
+        upName: String = "",
+        upId: Long = 0L,
+        upFace: String = "",
+        pubTime: String = "",
+        audioOnlyMode: Boolean = false
+    ) {
+        playerViewModel.apply {
+            lastPlayed = played
+            currentPlaybackMediaMode = if (audioOnlyMode) PlaybackMediaMode.AudioOnly else PlaybackMediaMode.Normal
+            this.title = title
+            this.partTitle = partTitle
+            this.fromSeason = fromSeason
+            this.subType = subType ?: 0
+            this.epid = epid ?: 0
+            this.seasonId = seasonId ?: 0
+            this.isVerticalVideo = isVerticalVideo
+            this.proxyArea = proxyArea
+            this.playerIconIdle = playerIconIdle
+            this.playerIconMoving = playerIconMoving
+            this.play = play
+            this.danmaku = danmaku
+            this.like = like
+            this.coin = coin
+            this.favorite = favorite
+            this.upName = upName
+            this.upId = upId
+            this.upFace = upFace
+            this.pubTime = pubTime
+            loadPlayUrl(
+                avid = aid,
+                cid = cid,
+                epid = epid,
+                seasonId = seasonId
+            )
+        }
+    }
+
+    private fun launchDirectOpenPlayback(
+        aid: Long,
+        requestedCid: Long?,
+        proxyArea: ProxyArea,
+        audioOnlyMode: Boolean
+    ) {
+        playerViewModel.loadState = RequestState.Doing
+        playerViewModel.errorMessage = ""
+        playerViewModel.currentPlaybackMediaMode = if (audioOnlyMode) PlaybackMediaMode.AudioOnly else PlaybackMediaMode.Normal
+        playerViewModel.proxyArea = proxyArea
+
+        lifecycleScope.launch {
+            runCatching {
+                if (proxyArea != ProxyArea.MainLand) {
+                    val redirectSeasonId = withContext(Dispatchers.IO) {
+                        runCatching { BiliPlusHttpApi.getSeasonIdByAvid(aid) }.getOrNull()
+                    }
+                    if (redirectSeasonId != null) {
+                        SeasonInfoActivity.actionStart(
+                            context = this@VideoPlayerV3Activity,
+                            seasonId = redirectSeasonId,
+                            proxyArea = proxyArea
+                        )
+                        finish()
+                        return@launch
+                    }
+                }
+
+                withContext(Dispatchers.IO) {
+                    videoDetailViewModel.loadDetail(aid)
+                }
+                val detail = videoDetailViewModel.videoDetail
+                    ?: error("视频详情为空")
+
+                VideoUserActionManager.updateFromLoadedData(
+                    aid = detail.aid,
+                    liked = detail.userActions.like,
+                    favorited = detail.userActions.favorite,
+                    coin = detail.userActions.coin
+                )
+                if (Prefs.isLogin) {
+                    VideoUserActionManager.fetchFavoriteData(detail.aid, Prefs.uid)
+                }
+
+                if (detail.redirectToEp) {
+                    SeasonInfoActivity.actionStart(
+                        context = this@VideoPlayerV3Activity,
+                        epId = detail.epid,
+                        proxyArea = proxyArea
+                    )
+                    finish()
+                    return@launch
+                }
+
+                val playPage = detail.pages.firstOrNull() ?: error("视频分P为空")
+                val cid = requestedCid?.takeIf { targetCid ->
+                    detail.pages.any { it.cid == targetCid }
+                } ?: playPage.cid
+                val currentPage = detail.pages.find { it.cid == cid } ?: playPage
+
+                val ugcSeason = detail.ugcSeason
+                if (ugcSeason != null) {
+                    val sectionIndex = ugcSeason.sections.indexOfFirst { section ->
+                        section.episodes.any { episode ->
+                            episode.cid == cid || episode.pages.any { page -> page.cid == cid }
+                        }
+                    }
+                    if (sectionIndex >= 0) {
+                        videoDetailViewModel.updateUgcSeasonSectionVideoList(sectionIndex)
+                    }
+                }
+
+                startVodPlayback(
+                    aid = detail.aid,
+                    cid = cid,
+                    title = detail.title,
+                    partTitle = currentPage.title,
+                    played = if (detail.history.lastPlayedCid == cid) detail.history.progress * 1000 else 0,
+                    fromSeason = false,
+                    isVerticalVideo = currentPage.dimension.isVertical,
+                    proxyArea = proxyArea,
+                    playerIconIdle = detail.playerIcon?.idle ?: "",
+                    playerIconMoving = detail.playerIcon?.moving ?: "",
+                    play = detail.stat.view,
+                    danmaku = detail.stat.danmaku,
+                    like = detail.stat.like,
+                    coin = detail.stat.coin,
+                    favorite = detail.stat.favorite,
+                    upName = detail.author.name,
+                    upId = detail.author.mid,
+                    upFace = detail.author.face,
+                    pubTime = detail.publishDate.formatPubTimeString(),
+                    audioOnlyMode = audioOnlyMode
+                )
+            }.onFailure {
+                logger.warn(it) { "Direct open playback failed" }
+                playerViewModel.errorMessage = it.localizedMessage ?: "未知错误"
+                playerViewModel.loadState = RequestState.Failed
+            }
+        }
+    }
+
     /*private fun initDanmakuPlayer() {
         logger.info { "Init danamku player" }
         runBlocking { playerViewModel.initDanmakuPlayer() }
@@ -263,6 +462,16 @@ class VideoPlayerV3Activity : ComponentActivity() {
             }
             return
         }
+
+        if (intent.getBooleanExtra(EXTRA_DIRECT_OPEN, false)) {
+            launchDirectOpenPlayback(
+                aid = intent.getLongExtra("avid", 0),
+                requestedCid = intent.getLongExtra("cid", 0).takeIf { it > 0L },
+                proxyArea = ProxyArea.entries[intent.getIntExtra("proxy_area", 0)],
+                audioOnlyMode = intent.getBooleanExtra("audioOnlyMode", false)
+            )
+            return
+        }
         
         if (intent.hasExtra("avid")) {
             val aid = intent.getLongExtra("avid", 170001)
@@ -289,35 +498,31 @@ class VideoPlayerV3Activity : ComponentActivity() {
             val pubTime = intent.getStringExtra("pubTime") ?: ""
             val audioOnlyMode = intent.getBooleanExtra("audioOnlyMode", false)
             dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity.Companion.logger.fInfo { "Launch parameter: [aid=$aid, cid=$cid]" }
-            playerViewModel.apply {
-                // lastPlayed 需要在 loadPlayUrl 之前设置，以便 prepare() 时能正确设置初始跳转位置
-                this.lastPlayed = played
-                this.currentPlaybackMediaMode = if (audioOnlyMode) PlaybackMediaMode.AudioOnly else PlaybackMediaMode.Normal
-                loadPlayUrl(
-                    avid = aid,
-                    cid = cid,
-                    epid = epid.takeIf { it != 0 }
-                )
-                this.title = title
-                this.partTitle = partTitle
-                this.fromSeason = fromSeason
-                this.subType = subType
-                this.epid = epid
-                this.seasonId = seasonId
-                this.isVerticalVideo = isVerticalVideo
-                this.proxyArea = proxyArea
-                this.playerIconIdle = playerIconIdle
-                this.playerIconMoving = playerIconMoving
-                this.play = play
-                this.danmaku = danmaku
-                this.like = like
-                this.coin = coin
-                this.favorite = favorite
-                this.upName = upName
-                this.upId = upId
-                this.upFace = upFace
-                this.pubTime = pubTime
-            }
+            startVodPlayback(
+                aid = aid,
+                cid = cid,
+                title = title,
+                partTitle = partTitle,
+                played = played,
+                fromSeason = fromSeason,
+                subType = subType.takeIf { it != 0 },
+                epid = epid.takeIf { it != 0 },
+                seasonId = seasonId.takeIf { it != 0 },
+                isVerticalVideo = isVerticalVideo,
+                proxyArea = proxyArea,
+                playerIconIdle = playerIconIdle,
+                playerIconMoving = playerIconMoving,
+                play = play,
+                danmaku = danmaku,
+                like = like,
+                coin = coin,
+                favorite = favorite,
+                upName = upName,
+                upId = upId,
+                upFace = upFace,
+                pubTime = pubTime,
+                audioOnlyMode = audioOnlyMode
+            )
         } else {
             dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity.Companion.logger.fInfo { "Null launch parameter" }
         }

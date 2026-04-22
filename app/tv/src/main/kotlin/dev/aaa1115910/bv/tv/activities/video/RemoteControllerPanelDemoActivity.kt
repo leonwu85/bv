@@ -17,6 +17,8 @@ import dev.aaa1115910.bv.util.Prefs
 
 class RemoteControllerPanelDemoActivity : ComponentActivity() {
     companion object {
+        const val EXTRA_DIRECT_OPEN = "direct_open"
+
         fun actionStart(
             context: Context,
             avid: Long,
@@ -71,6 +73,24 @@ class RemoteControllerPanelDemoActivity : ComponentActivity() {
                 }
             )
         }
+
+        fun actionStartDirect(
+            context: Context,
+            avid: Long,
+            cid: Long? = null,
+            proxyArea: ProxyArea = ProxyArea.MainLand,
+            audioOnlyMode: Boolean = false
+        ) {
+            context.startActivity(
+                Intent(context, RemoteControllerPanelDemoActivity::class.java).apply {
+                    putExtra(EXTRA_DIRECT_OPEN, true)
+                    putExtra("avid", avid)
+                    cid?.takeIf { it > 0L }?.let { putExtra("cid", it) }
+                    putExtra("proxy_area", proxyArea.ordinal)
+                    putExtra("audioOnlyMode", audioOnlyMode)
+                }
+            )
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,23 +112,33 @@ fun RemoteControllerPanelDemoScreen(
 
     val continueToPlayerV3 = {
         Prefs.showedRemoteControllerPanelDemo = true
-        dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity.actionStart(
-            context = context,
-            avid = intent.getLongExtra("avid", 0),
-            cid = intent.getLongExtra("cid", 0),
-            title = intent.getStringExtra("title") ?: "",
-            partTitle = intent.getStringExtra("partTitle") ?: "",
-            played = intent.getIntExtra("played", 0),
-            fromSeason = intent.getBooleanExtra("fromSeason", false),
-            subType = intent.getIntExtra("subType", 0),
-            epid = intent.getIntExtra("epid", 0),
-            seasonId = intent.getIntExtra("seasonId", 0),
-            isVerticalVideo = intent.getBooleanExtra("isVerticalVideo", false),
-            proxyArea = ProxyArea.entries[intent.getIntExtra("proxy_area", 0)],
-            playerIconIdle = intent.getStringExtra("playerIconIdle") ?: "",
-            playerIconMoving = intent.getStringExtra("playerIconMoving") ?: "",
-            audioOnlyMode = intent.getBooleanExtra("audioOnlyMode", false)
-        )
+        if (intent.getBooleanExtra(RemoteControllerPanelDemoActivity.EXTRA_DIRECT_OPEN, false)) {
+            dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity.actionStartDirect(
+                context = context,
+                avid = intent.getLongExtra("avid", 0),
+                cid = intent.getLongExtra("cid", 0).takeIf { it > 0L },
+                proxyArea = ProxyArea.entries[intent.getIntExtra("proxy_area", 0)],
+                audioOnlyMode = intent.getBooleanExtra("audioOnlyMode", false)
+            )
+        } else {
+            dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity.actionStart(
+                context = context,
+                avid = intent.getLongExtra("avid", 0),
+                cid = intent.getLongExtra("cid", 0),
+                title = intent.getStringExtra("title") ?: "",
+                partTitle = intent.getStringExtra("partTitle") ?: "",
+                played = intent.getIntExtra("played", 0),
+                fromSeason = intent.getBooleanExtra("fromSeason", false),
+                subType = intent.getIntExtra("subType", 0),
+                epid = intent.getIntExtra("epid", 0),
+                seasonId = intent.getIntExtra("seasonId", 0),
+                isVerticalVideo = intent.getBooleanExtra("isVerticalVideo", false),
+                proxyArea = ProxyArea.entries[intent.getIntExtra("proxy_area", 0)],
+                playerIconIdle = intent.getStringExtra("playerIconIdle") ?: "",
+                playerIconMoving = intent.getStringExtra("playerIconMoving") ?: "",
+                audioOnlyMode = intent.getBooleanExtra("audioOnlyMode", false)
+            )
+        }
         context.finish()
     }
 

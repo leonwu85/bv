@@ -46,3 +46,29 @@ fun launchPlayerActivity(
         )
     }
 }
+
+fun launchDirectPlayerActivity(
+    context: Context,
+    avid: Long,
+    cid: Long? = null,
+    proxyArea: ProxyArea = ProxyArea.MainLand,
+    audioOnlyMode: Boolean = false
+) {
+    if (Prefs.showedRemoteControllerPanelDemo) {
+        VideoPlayerV3Activity.actionStartDirect(
+            context = context,
+            avid = avid,
+            cid = cid,
+            proxyArea = proxyArea,
+            audioOnlyMode = audioOnlyMode
+        )
+    } else {
+        RemoteControllerPanelDemoActivity.actionStartDirect(
+            context = context,
+            avid = avid,
+            cid = cid,
+            proxyArea = proxyArea,
+            audioOnlyMode = audioOnlyMode
+        )
+    }
+}

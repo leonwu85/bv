@@ -7,7 +7,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.tv.screens.VideoInfoScreen
+import dev.aaa1115910.bv.tv.util.launchDirectPlayerActivity
 import dev.aaa1115910.bv.ui.theme.BVTheme
+import dev.aaa1115910.bv.util.Prefs
 import java.lang.ref.WeakReference
 import java.util.LinkedList
 
@@ -26,6 +28,17 @@ class VideoInfoActivity : ComponentActivity() {
             audioOnlyMode: Boolean = false,
             proxyArea: ProxyArea = ProxyArea.MainLand
         ) {
+            if (!fromSeason && !fromPlayer && !Prefs.showUGCVideoInfo) {
+                launchDirectPlayerActivity(
+                    context = context,
+                    avid = aid,
+                    cid = cid,
+                    proxyArea = proxyArea,
+                    audioOnlyMode = audioOnlyMode
+                )
+                return
+            }
+
             context.startActivity(
                 Intent(context, VideoInfoActivity::class.java).apply {
                     putExtra("aid", aid)
