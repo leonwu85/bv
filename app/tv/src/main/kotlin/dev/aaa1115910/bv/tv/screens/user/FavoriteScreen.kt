@@ -33,6 +33,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,9 +43,10 @@ import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
 import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
-import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.R as AppR
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
+import dev.aaa1115910.bv.tv.R as TvR
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.util.ifElse
@@ -131,12 +133,12 @@ fun FavoriteScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "${stringResource(R.string.user_homepage_favorite)} - ${favoriteViewModel.currentFavoriteFolderMetadata?.title}",
+                            text = "${stringResource(AppR.string.user_homepage_favorite)} - ${favoriteViewModel.currentFavoriteFolderMetadata?.title}",
                             fontSize = titleFontSize.sp
                         )
                         Text(
                             text = stringResource(
-                                R.string.load_data_count,
+                                AppR.string.load_data_count,
                                 favoriteViewModel.favorites.size
                             ),
                             color = Color.White.copy(alpha = 0.6f)
@@ -147,19 +149,21 @@ fun FavoriteScreen(
         }
     ) { innerPadding ->
         val gridColumns = Prefs.gridColumns
+        val padding = dimensionResource(TvR.dimen.grid_padding) / 2
+        val spacedBy = dimensionResource(TvR.dimen.grid_spacedBy) / 2
         ProvideListBringIntoViewSpec(padding = 24.dp) {
             LazyVerticalGrid(
                 modifier = Modifier.padding(innerPadding),
                 state = lazyGridState,
                 columns = GridCells.Fixed(gridColumns),
                 contentPadding = PaddingValues(
-                    top = if (showPageTitle) 12.dp else 4.dp,
-                    bottom = 12.dp,
-                    start = 12.dp,
-                    end = 12.dp
+                    top = if (showPageTitle) padding else 4.dp,
+                    bottom = padding,
+                    start = padding,
+                    end = padding
                 ),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(spacedBy),
+                horizontalArrangement = Arrangement.spacedBy(spacedBy)
             ) {
                 item(
                     span = { GridItemSpan(gridColumns) }

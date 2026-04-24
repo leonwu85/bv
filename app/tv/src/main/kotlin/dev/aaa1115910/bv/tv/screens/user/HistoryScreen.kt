@@ -41,6 +41,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,11 +50,12 @@ import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
-import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.R as AppR
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
+import dev.aaa1115910.bv.tv.R as TvR
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
@@ -166,13 +168,13 @@ fun HistoryScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = stringResource(R.string.user_homepage_recent),
+                            text = stringResource(AppR.string.user_homepage_recent),
                             fontSize = titleFontSize.sp
                         )
                         if (historyViewModel.noMore) {
                             Text(
                                 text = stringResource(
-                                    R.string.load_data_count_no_more,
+                                    AppR.string.load_data_count_no_more,
                                     historyViewModel.histories.size
                                 ),
                                 color = Color.White.copy(alpha = 0.6f)
@@ -180,7 +182,7 @@ fun HistoryScreen(
                         } else {
                             Text(
                                 text = stringResource(
-                                    R.string.load_data_count,
+                                    AppR.string.load_data_count,
                                     historyViewModel.histories.size
                                 ),
                                 color = Color.White.copy(alpha = 0.6f)
@@ -192,6 +194,8 @@ fun HistoryScreen(
         }
     ) { innerPadding ->
         val gridColumns = Prefs.gridColumns
+        val padding = dimensionResource(TvR.dimen.grid_padding) / 2
+        val spacedBy = dimensionResource(TvR.dimen.grid_spacedBy) / 2
         ProvideListBringIntoViewSpec(padding = 26.dp) {
             Box(modifier = Modifier.fillMaxSize()) {
                 Box(
@@ -208,9 +212,9 @@ fun HistoryScreen(
                         .focusRestorer(),
                     state = lazyGridState,
                     columns = GridCells.Fixed(gridColumns),
-                    contentPadding = PaddingValues(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    contentPadding = PaddingValues(padding),
+                    verticalArrangement = Arrangement.spacedBy(spacedBy),
+                    horizontalArrangement = Arrangement.spacedBy(spacedBy)
                 ) {
                     itemsIndexed(
                         items = historyViewModel.histories,
@@ -338,7 +342,7 @@ private fun HistoryMenuDialog(
     if (show) {
         TvAlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text(text = stringResource(R.string.toview_menu_title)) },
+            title = { Text(text = stringResource(AppR.string.toview_menu_title)) },
             text = {
                 Box {
                     Box(
@@ -370,14 +374,14 @@ private fun HistoryMenuDialog(
                         item {
                             HistoryMenuButton(
                                 modifier = Modifier.focusRequester(focusRequester),
-                                text = stringResource(R.string.history_menu_delete),
+                                text = stringResource(AppR.string.history_menu_delete),
                                 onClick = onDelete
                             )
                         }
                         if (showGotoUpSpace) {
                             item {
                                 HistoryMenuButton(
-                                    text = stringResource(R.string.toview_menu_goto_up_space),
+                                    text = stringResource(AppR.string.toview_menu_goto_up_space),
                                     onClick = onGotoUpSpace
                                 )
                             }
@@ -402,18 +406,18 @@ private fun DeleteHistoryConfirmDialog(
     if (show) {
         TvAlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text(text = stringResource(R.string.history_delete_confirm_dialog_title)) },
+            title = { Text(text = stringResource(AppR.string.history_delete_confirm_dialog_title)) },
             text = {
                 Text(
                     text = stringResource(
-                        R.string.history_delete_confirm_dialog_text,
+                        AppR.string.history_delete_confirm_dialog_text,
                         videoTitle
                     )
                 )
             },
             confirmButton = {
                 Button(onClick = onConfirm) {
-                    Text(text = stringResource(R.string.history_delete_confirm_dialog_confirm))
+                    Text(text = stringResource(AppR.string.history_delete_confirm_dialog_confirm))
                 }
             },
             dismissButton = {
@@ -421,7 +425,7 @@ private fun DeleteHistoryConfirmDialog(
                     modifier = Modifier.focusRequester(focusRequester),
                     onClick = onDismiss
                 ) {
-                    Text(text = stringResource(R.string.history_delete_confirm_dialog_dismiss))
+                    Text(text = stringResource(AppR.string.history_delete_confirm_dialog_dismiss))
                 }
             }
         )
