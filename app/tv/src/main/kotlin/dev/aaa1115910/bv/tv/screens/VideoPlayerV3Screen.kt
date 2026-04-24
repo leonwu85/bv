@@ -88,6 +88,7 @@ import dev.aaa1115910.bv.tv.manager.FollowStateManager
 import dev.aaa1115910.bv.tv.manager.PlayedAidsCache
 import dev.aaa1115910.bv.tv.manager.VideoUserActionManager
 import dev.aaa1115910.bv.tv.manager.VideoUserActionManager.getStateFlow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import dev.aaa1115910.bv.tv.component.videocard.VideosRow
@@ -210,6 +211,8 @@ fun VideoPlayerV3Screen(
                             showOnlineViewerCountTip = false
                         }
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     logger.warn(e) { "Failed to get online viewer count" }
                 }
@@ -232,6 +235,8 @@ fun VideoPlayerV3Screen(
                             if (response.code == 0) {
                                 onlineViewerCount = response.data?.total ?: ""
                             }
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             logger.warn(e) { "Failed to refresh online viewer count" }
                         }
@@ -468,6 +473,7 @@ fun VideoPlayerV3Screen(
                 onSendHeartbeat = playerViewModel::uploadHistory,
                 onClearBackToHistoryData = { playerViewModel.lastPlayed = 0 },
                 onReloadDanmakuAfterSeek = playerViewModel::reloadDanmakuAfterSeek,
+                onEnsureDanmakuCoverage = playerViewModel::ensureDanmakuCoverage,
                 onNearEnd = {
                     if (playerViewModel.showRelatedVideos || playerViewModel.isInteractivePlayback) return@BvPlayer
                     val directCandidate = buildDirectAutoPlayCandidate(resolveNextAutoPlayVideo(immediate = false))

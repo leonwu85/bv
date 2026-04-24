@@ -16,30 +16,51 @@ internal data class DanmakuSegmentMergeResult(
 )
 
 internal class VodDanmakuMergeState {
+    private val lock = Any()
     private val activeGroups = LinkedHashMap<VodDanmakuMergeKey, ActiveDanmakuGroup>()
     internal var lastProcessedSegmentIndex: Int? = null
 
-    internal fun getGroup(key: VodDanmakuMergeKey): ActiveDanmakuGroup? = activeGroups[key]
+    internal fun getGroup(key: VodDanmakuMergeKey): ActiveDanmakuGroup? = synchronized(lock) {
+        activeGroups[key]
+    }
 
     internal fun putGroup(key: VodDanmakuMergeKey, group: ActiveDanmakuGroup) {
-        activeGroups[key] = group
+        synchronized(lock) {
+            activeGroups[key] = group
+        }
     }
 
     internal fun removeGroup(key: VodDanmakuMergeKey) {
-        activeGroups.remove(key)
+        synchronized(lock) {
+            activeGroups.remove(key)
+        }
     }
 
-    internal fun isEmpty(): Boolean = activeGroups.isEmpty()
+    internal fun isEmpty(): Boolean = synchronized(lock) {
+        activeGroups.isEmpty()
+    }
 
-    internal fun matchingGroups(
+    internal fun takeMatchingGroups(
         predicate: (ActiveDanmakuGroup) -> Boolean
-    ): List<Pair<VodDanmakuMergeKey, ActiveDanmakuGroup>> {
-        return activeGroups.filterValues(predicate).toList()
+    ): List<Pair<VodDanmakuMergeKey, ActiveDanmakuGroup>> = synchronized(lock) {
+        if (activeGroups.isEmpty()) return emptyList()
+
+        val matchedGroups = mutableListOf<Pair<VodDanmakuMergeKey, ActiveDanmakuGroup>>()
+        val iterator = activeGroups.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (!predicate(entry.value)) continue
+            matchedGroups += entry.toPair()
+            iterator.remove()
+        }
+        matchedGroups
     }
 
     fun clear() {
-        activeGroups.clear()
-        lastProcessedSegmentIndex = null
+        synchronized(lock) {
+            activeGroups.clear()
+            lastProcessedSegmentIndex = null
+        }
     }
 }
 
@@ -127,14 +148,10 @@ internal object VodDanmakuMerger {
     ): List<MergedDanmakuEntry> {
         if (state.isEmpty()) return emptyList()
 
-        val matchedGroups = state.matchingGroups(predicate)
+        val matchedGroups = state.takeMatchingGroups(predicate)
             .sortedBy { (_, group) -> group.source.time }
 
         if (matchedGroups.isEmpty()) return emptyList()
-
-        matchedGroups.forEach { (key, _) ->
-            state.removeGroup(key)
-        }
 
         return matchedGroups.map { (_, group) ->
             MergedDanmakuEntry(

@@ -112,6 +112,7 @@ fun BvPlayer(
     onSendHeartbeat: suspend (Int) -> Unit,
     onClearBackToHistoryData: () -> Unit,
     onReloadDanmakuAfterSeek: (Long, Boolean) -> Unit = { _, _ -> },
+    onEnsureDanmakuCoverage: (Long) -> Unit = {},
     onNearEnd: () -> Unit = {},
     onLoadNextVideo: (Boolean) -> Unit,
     onLoadPrevVideo: () -> Unit = {},
@@ -241,9 +242,7 @@ fun BvPlayer(
         videoPlayerHistoryData.lastPlayed.toLong().coerceAtLeast(0L)
     }
     var pendingInitialHistoryDanmakuReload by remember(videoPlayerConfigData.currentVideoCid) {
-        mutableStateOf(
-            videoPlayerConfigData.enableStartPositionSwitch && initialHistoryPositionSnapshot > 0L
-        )
+        mutableStateOf(false)
     }
     var initialHistoryDanmakuPosition by remember(videoPlayerConfigData.currentVideoCid) {
         mutableLongStateOf(initialHistoryPositionSnapshot)
@@ -610,7 +609,6 @@ fun BvPlayer(
         val historyPosition = videoPlayerHistoryData.lastPlayed.toLong().coerceAtLeast(0L)
         if (historyPosition > 0L && initialHistoryDanmakuPosition <= 0L) {
             initialHistoryDanmakuPosition = historyPosition
-            pendingInitialHistoryDanmakuReload = videoPlayerConfigData.enableStartPositionSwitch
         }
     }
 
@@ -832,11 +830,9 @@ fun BvPlayer(
                     pendingSeekDanmakuPosition < 0L
             if (isStartupSeekBeforePlay) {
                 initialHistoryDanmakuPosition = syncPosition
-                pendingInitialHistoryDanmakuReload = true
                 logger.info {
-                    "onSeeked: treat startup seek as initial history seek, defer danmaku rebuild until playback progresses to ${syncPosition.formatHourMinSec()}"
+                    "onSeeked: startup seek already covered by initial danmaku load, skip deferred rebuild at ${syncPosition.formatHourMinSec()}"
                 }
-                lastDanmakuSeekTime = System.currentTimeMillis()
                 lastHeartbeatPosition = syncPosition
                 return
             }
@@ -875,6 +871,16 @@ fun BvPlayer(
                 if (seekState.position != pos) seekState.position = pos
                 if (seekState.duration != dur) seekState.duration = dur
                 if (seekState.bufferedPercentage != buf) seekState.bufferedPercentage = buf
+
+                if (
+                    videoPlayerConfigData.showDanmaku &&
+                    isPlaying &&
+                    !isBuffering &&
+                    pendingSeekDanmakuPosition < 0L &&
+                    !pendingInitialHistoryDanmakuReload
+                ) {
+                    onEnsureDanmakuCoverage(pos)
+                }
 
                 if (pendingInitialHistoryDanmakuReload && isPlaying && initialHistoryDanmakuPosition > 0L) {
                     val triggerPosition = (initialHistoryDanmakuPosition - 1_500L).coerceAtLeast(0L)
