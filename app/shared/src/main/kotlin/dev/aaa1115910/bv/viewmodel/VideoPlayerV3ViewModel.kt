@@ -71,6 +71,7 @@ import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.repository.VideoInfoRepository
 import dev.aaa1115910.bv.util.DanmakuSegmentMergeResult
+import dev.aaa1115910.bv.util.DeviceUtil
 import dev.aaa1115910.bv.util.MergedDanmakuEntry
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.VodDanmakuMergeState
@@ -2368,11 +2369,7 @@ class VideoPlayerV3ViewModel(
         val targetCid = currentCid
 
         runCatching {
-            val masks = videoPlayRepository.getDanmakuMask(
-                aid = targetAid,
-                cid = targetCid,
-                preferApiType = Prefs.apiType
-            )
+            val masks = loadDanmakuMasks(targetAid, targetCid)
 
             if (targetAid != currentAid || targetCid != currentCid) {
                 return@runCatching
@@ -2391,6 +2388,46 @@ class VideoPlayerV3ViewModel(
             }
             logger.fWarn { "Load danmaku mask failed: ${it.stackTraceToString()}" }
         }
+    }
+
+    private suspend fun loadDanmakuMasks(
+        aid: Long,
+        cid: Long
+    ): List<DanmakuMaskSegment> {
+        val apiCandidates = buildList {
+            add(Prefs.apiType)
+            if (DeviceUtil.isTvDevice()) {
+                add(if (Prefs.apiType == ApiType.App) ApiType.Web else ApiType.App)
+            }
+        }.distinct()
+
+        var lastFailure: Throwable? = null
+        apiCandidates.forEachIndexed { index, apiType ->
+            val masks = runCatching {
+                videoPlayRepository.getDanmakuMask(
+                    aid = aid,
+                    cid = cid,
+                    preferApiType = apiType
+                )
+            }.onFailure { error ->
+                lastFailure = error
+                logger.fWarn { "Load danmaku mask failed with apiType=$apiType: ${error.localizedMessage}" }
+            }.getOrNull() ?: emptyList()
+
+            if (masks.isNotEmpty()) {
+                if (index > 0) {
+                    logger.fInfo { "Load danmaku mask fallback hit with apiType=$apiType, size=${masks.size}" }
+                }
+                return masks
+            }
+
+            if (index < apiCandidates.lastIndex) {
+                logger.fInfo { "Danmaku mask empty with apiType=$apiType, fallback to next candidate" }
+            }
+        }
+
+        lastFailure?.let { throw it }
+        return emptyList()
     }
 
     private suspend fun updateVideoShot() {

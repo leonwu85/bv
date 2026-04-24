@@ -33,6 +33,7 @@ fun AkDanmakuPlayer(
     visible: Boolean = true,
     maskBitmap: Bitmap? = null,
     videoAspectRatio: Float = 0f,
+    onVideoDanmakuSurfaceViewReady: ((VideoDanmakuSurfaceView?) -> Unit)? = null,
 ) {
     AkDanmakuPlayer(
         modifier = modifier,
@@ -40,6 +41,7 @@ fun AkDanmakuPlayer(
         visible = visible,
         maskBitmap = maskBitmap,
         videoAspectRatio = videoAspectRatio,
+        onVideoDanmakuSurfaceViewReady = onVideoDanmakuSurfaceViewReady,
         useSurfaceViewForNormalMode = false,
         isLiveMode = false,
         onLiveDanmakuPlayerReady = null
@@ -59,6 +61,7 @@ fun AkDanmakuPlayer(
     visible: Boolean = true,
     maskBitmap: Bitmap? = null,
     videoAspectRatio: Float = 0f,
+    onVideoDanmakuSurfaceViewReady: ((VideoDanmakuSurfaceView?) -> Unit)? = null,
     useSurfaceViewForNormalMode: Boolean = false,
     isLiveMode: Boolean = false,
     onLiveDanmakuPlayerReady: ((LiveDanmakuPlayer) -> Unit)? = null
@@ -120,6 +123,12 @@ fun AkDanmakuPlayer(
         key(danmakuPlayer, useSurfaceViewForNormalMode) {
             var danmakuSurfaceView: VideoDanmakuSurfaceView? by remember { mutableStateOf(null) }
 
+            DisposableEffect(Unit) {
+                onDispose {
+                    onVideoDanmakuSurfaceViewReady?.invoke(null)
+                }
+            }
+
             LaunchedEffect(danmakuSurfaceView, danmakuPlayer) {
                 danmakuSurfaceView?.let { surfaceView ->
                     danmakuPlayer?.bindSurfaceView(surfaceView)
@@ -135,11 +144,18 @@ fun AkDanmakuPlayer(
                         setZOrderMediaOverlay(true)
                         holder?.setFormat(PixelFormat.TRANSLUCENT)
                         updateMaskBitmap(maskBitmap, videoAspectRatio)
-                    }.also { danmakuSurfaceView = it }
+                    }.also {
+                        danmakuSurfaceView = it
+                        onVideoDanmakuSurfaceViewReady?.invoke(it)
+                    }
                 },
                 update = { surfaceView ->
                     surfaceView.visibility = if (visible) View.VISIBLE else View.INVISIBLE
-                    surfaceView.updateMaskBitmap(maskBitmap, videoAspectRatio)
+                    if (maskBitmap != null && !maskBitmap.isRecycled) {
+                        surfaceView.updateMaskBitmap(maskBitmap, videoAspectRatio)
+                    } else if (onVideoDanmakuSurfaceViewReady == null) {
+                        surfaceView.clearMaskBitmap()
+                    }
                 }
             )
         }

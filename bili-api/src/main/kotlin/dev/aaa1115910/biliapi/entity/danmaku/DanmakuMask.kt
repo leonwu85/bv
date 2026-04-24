@@ -26,6 +26,14 @@ data class DanmakuMobMaskFrame(
     val height: Int,
     val image: ByteArray
 ) : DanmakuMaskFrame(range) {
+    private val cachedHashCode = run {
+        var result = range.hashCode()
+        result = 31 * result + width
+        result = 31 * result + height
+        result = 31 * result + image.contentHashCode()
+        result
+    }
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -41,11 +49,7 @@ data class DanmakuMobMaskFrame(
     }
 
     override fun hashCode(): Int {
-        var result = range.hashCode()
-        result = 31 * result + width
-        result = 31 * result + height
-        result = 31 * result + image.contentHashCode()
-        return result
+        return cachedHashCode
     }
 }
 

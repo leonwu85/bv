@@ -34,6 +34,7 @@ import com.kuaishou.akdanmaku.data.DanmakuItemData
 import com.kuaishou.akdanmaku.ecs.component.filter.TypeFilter
 import com.kuaishou.akdanmaku.ext.RETAINER_BILIBILI
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
+import com.kuaishou.akdanmaku.ui.VideoDanmakuSurfaceView
 import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskFrame
 import dev.aaa1115910.biliapi.http.entity.video.ClipInfo
 import dev.aaa1115910.biliapi.http.entity.video.ClipType
@@ -95,6 +96,33 @@ private fun Bitmap.safeCacheSize(): Int = if (isRecycled) 0 else byteCount
 private fun Bitmap.safeRecycle() {
     if (!isRecycled) {
         recycle()
+    }
+}
+
+private class DanmakuMaskRenderState {
+    var currentFrame: DanmakuMaskFrame? = null
+    var currentBitmap: Bitmap? = null
+    var surfaceView: VideoDanmakuSurfaceView? = null
+}
+
+private class DanmakuMaskBitmapPool {
+    private val bitmaps = arrayOfNulls<Bitmap>(2)
+    private var nextIndex = 0
+
+    fun render(frame: DanmakuMaskFrame): Bitmap {
+        val index = nextIndex
+        nextIndex = (nextIndex + 1) % bitmaps.size
+        val reusableBitmap = bitmaps[index]?.takeUnless { it.isRecycled }
+        return renderMaskFrameToBitmap(frame, reusableBitmap).also { renderedBitmap ->
+            bitmaps[index] = renderedBitmap
+        }
+    }
+
+    fun release() {
+        bitmaps.indices.forEach { index ->
+            bitmaps[index]?.safeRecycle()
+            bitmaps[index] = null
+        }
     }
 }
 
@@ -262,6 +290,8 @@ fun BvPlayer(
 
     var currentDanmakuMaskFrame: DanmakuMaskFrame? by remember { mutableStateOf(null) }
     var currentDanmakuMaskBitmap: Bitmap? by remember { mutableStateOf(null) }
+    val danmakuMaskRenderState = remember { DanmakuMaskRenderState() }
+    val danmakuMaskBitmapPool = remember { DanmakuMaskBitmapPool() }
     var danmakuMaskGeneration by remember { mutableLongStateOf(0L) }
     var isDanmakuMaskDisposed by remember { mutableStateOf(false) }
 
@@ -315,6 +345,7 @@ fun BvPlayer(
     val currentIsLive by rememberUpdatedState(videoPlayerConfigData.isLive)
     val currentUseSurfaceViewDanmaku by rememberUpdatedState(useSurfaceViewDanmaku)
     val currentVideoCid by rememberUpdatedState(videoPlayerConfigData.currentVideoCid)
+    val currentAspectRatioValue by rememberUpdatedState(aspectRatioValue)
 
     // 独立弹幕层句柄（Stable），父级重组频率降低
     val danmakuLayerHandle = remember { DanmakuLayerHandle(initialIsLiveMode = isLive) }
@@ -323,9 +354,31 @@ fun BvPlayer(
         danmakuMaskGeneration++
         currentDanmakuMaskFrame = null
         currentDanmakuMaskBitmap = null
+        danmakuMaskRenderState.currentFrame = null
+        danmakuMaskRenderState.currentBitmap = null
+        danmakuMaskRenderState.surfaceView?.clearMaskBitmap()
         danmakuLayerHandle.update(mask = null, bitmap = null)
         if (clearCache) {
             danmakuMaskBitmapCache.evictAll()
+            danmakuMaskBitmapPool.release()
+        }
+    }
+
+    val bindDanmakuSurfaceView = remember(danmakuMaskRenderState) {
+        { surfaceView: VideoDanmakuSurfaceView? ->
+            danmakuMaskRenderState.surfaceView = surfaceView
+            if (surfaceView != null) {
+                val currentBitmap = danmakuMaskRenderState.currentBitmap
+                if (
+                    currentDanmakuMaskEnabled &&
+                    currentBitmap != null &&
+                    !currentBitmap.isRecycled
+                ) {
+                    surfaceView.updateMaskBitmap(currentBitmap, currentAspectRatioValue)
+                } else {
+                    surfaceView.clearMaskBitmap()
+                }
+            }
         }
     }
 
@@ -424,7 +477,7 @@ fun BvPlayer(
         val maskFrame = DanmakuMaskFinder.findMaskFrame(currentDanmakuMasks, position)
 
         // 只有找到新帧时才更新，null 时保持当前蒙版（避免帧空隙导致蒙版闪烁）
-        if (maskFrame != null && currentDanmakuMaskFrame != maskFrame) {
+        if (maskFrame != null && danmakuMaskRenderState.currentFrame !== maskFrame) {
             val cachedBitmap = danmakuMaskBitmapCache.get(maskFrame)?.also { bitmap ->
                 if (bitmap.isRecycled) {
                     danmakuMaskBitmapCache.remove(maskFrame)
@@ -433,9 +486,9 @@ fun BvPlayer(
 
             // 优先使用缓存中的 Bitmap，避免实时渲染
             val bitmap = cachedBitmap ?: run {
-                // 缓存未命中，实时渲染并缓存
+                // 缓存未命中时复用双缓冲，避免持续分配新 Bitmap
                 val renderedBitmap = withContext(Dispatchers.Default) {
-                    renderMaskFrameToBitmap(maskFrame)
+                    danmakuMaskBitmapPool.render(maskFrame)
                 }
 
                 if (
@@ -447,8 +500,6 @@ fun BvPlayer(
                     renderedBitmap.safeRecycle()
                     return@update
                 }
-
-                danmakuMaskBitmapCache.put(maskFrame, renderedBitmap)
                 renderedBitmap
             }
 
@@ -474,6 +525,9 @@ fun BvPlayer(
                 }
                 currentDanmakuMaskFrame = maskFrame
                 currentDanmakuMaskBitmap = bitmap
+                danmakuMaskRenderState.currentFrame = maskFrame
+                danmakuMaskRenderState.currentBitmap = bitmap
+                danmakuMaskRenderState.surfaceView?.updateMaskBitmap(bitmap, aspectRatioValue)
             }
         }
         // 如果 maskFrame 为 null（帧空隙），不做任何操作，保持当前蒙版
@@ -978,6 +1032,24 @@ fun BvPlayer(
         }
     }
 
+    LaunchedEffect(videoPlayerConfigData.currentDanmakuMask) {
+        if (!videoPlayerConfigData.currentDanmakuMask && !isDanmakuMaskDisposed) {
+            clearDanmakuMaskState(false)
+        }
+    }
+
+    LaunchedEffect(aspectRatioValue) {
+        val currentBitmap = danmakuMaskRenderState.currentBitmap
+        if (
+            !isDanmakuMaskDisposed &&
+            currentDanmakuMaskEnabled &&
+            currentBitmap != null &&
+            !currentBitmap.isRecycled
+        ) {
+            danmakuMaskRenderState.surfaceView?.updateMaskBitmap(currentBitmap, aspectRatioValue)
+        }
+    }
+
     LaunchedEffect(videoPlayerConfigData.isLoop, videoPlayerConfigData.showDanmaku) {
         videoPlayer.setPlayerEventListener(videoPlayerListener)
     }
@@ -1436,7 +1508,8 @@ fun BvPlayer(
 
             DanmakuLayer(
                 modifier = Modifier.align(Alignment.TopCenter),
-                handle = danmakuLayerHandle
+                handle = danmakuLayerHandle,
+                onVideoDanmakuSurfaceViewReady = bindDanmakuSurfaceView
             )
 
             // 跳过片头片尾提示

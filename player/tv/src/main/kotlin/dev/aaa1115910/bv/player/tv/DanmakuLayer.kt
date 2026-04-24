@@ -15,6 +15,7 @@ import dev.aaa1115910.bv.player.AkDanmakuPlayer
 import dev.aaa1115910.bv.player.util.danmakuMaskBitmap
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer
+import com.kuaishou.akdanmaku.ui.VideoDanmakuSurfaceView
 
 /**
  * 可稳定引用的弹幕层句柄
@@ -82,6 +83,7 @@ class DanmakuLayerHandle(
 fun DanmakuLayer(
     modifier: Modifier = Modifier,
     handle: DanmakuLayerHandle,
+    onVideoDanmakuSurfaceViewReady: ((VideoDanmakuSurfaceView?) -> Unit)? = null,
 ) {
     val player = handle.danmakuPlayer
     val useSurfaceViewForNormalMode = !handle.isLiveMode
@@ -103,6 +105,7 @@ fun DanmakuLayer(
             visible = handle.visible,
             maskBitmap = handle.maskBitmap,
             videoAspectRatio = handle.videoAspectRatio,
+            onVideoDanmakuSurfaceViewReady = onVideoDanmakuSurfaceViewReady,
             useSurfaceViewForNormalMode = useSurfaceViewForNormalMode,
             isLiveMode = handle.isLiveMode,
             onLiveDanmakuPlayerReady = handle.onLiveDanmakuPlayerReady
