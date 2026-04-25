@@ -8,16 +8,23 @@ import dev.aaa1115910.biliapi.entity.ugc.region.UgcFeedPage
 import dev.aaa1115910.biliapi.entity.ugc.region.UgcRegionData
 import dev.aaa1115910.biliapi.entity.ugc.region.UgcRegionListData
 import dev.aaa1115910.biliapi.http.BiliHttpApi
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.koin.core.annotation.Single
 
 @Single
 class UgcRepository(
     private val authRepository: AuthRepository
 ) {
+    private val logger = KotlinLogging.logger {}
+
     suspend fun getCarousel(ugcType: UgcTypeV2): CarouselData {
-        val regionBanner = BiliHttpApi.getRegionBanner(ugcType.tid).getResponseData()
-        val carouselData = CarouselData.fromRegionBanner(regionBanner)
-        return carouselData
+        return runCatching {
+            val regionBanner = BiliHttpApi.getRegionBanner(ugcType.tid).getResponseData()
+            CarouselData.fromRegionBanner(regionBanner)
+        }.getOrElse {
+            logger.warn(it) { "load $ugcType carousel failed, fallback to empty carousel" }
+            CarouselData(emptyList())
+        }
     }
 
     @Deprecated("User getRegionFeedRcmd instead")
