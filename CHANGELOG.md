@@ -1,5 +1,13 @@
 [![Downloads](https://img.shields.io/github/downloads/leonwu85/bv/total?cacheSeconds=3600)](https://github.com/leonwu85/bv/releases)
-
+## 新增功能点汇总 (2026-04-17 ~ 2026-04-25)
+- 播放页
+    - 支持副字幕显示
+    - 弹幕支持 GLSurfaceView，弹幕蒙版移入弹幕库合成处理
+    - 自动跳过广告增加Tip
+    - 修改不显示详情时点击播放，直接进入播放页，不再经过经过详情页
+- 评论面板
+    - APP 接口支持翻译
+    
 ## 新增功能点汇总 (2026-04-09 ~ 2026-04-16)
 - 主页重构
     - 全局统一焦点管理
