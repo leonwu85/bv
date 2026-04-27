@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import dev.aaa1115910.biliapi.entity.user.DynamicVideo
+import dev.aaa1115910.bv.R as AppR
+import dev.aaa1115910.bv.tv.component.ContentStatusCard
 import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
@@ -109,67 +111,80 @@ fun DynamicsScreen(
                 textAlign = TextAlign.End
             )
         }
-        ProvideListBringIntoViewSpec {
-            LazyVerticalGrid(
-                modifier = modifier
-                    .fillMaxSize()
-                    .onFocusChanged{
-                        if (!it.isFocused) {
-                            currentFocusedIndex = -1
-                        }
-                    }
-                    .onPreviewKeyEvent {
-                        if(it.type == KeyEventType.KeyUp && it.key == Key.Menu) {
-                            context.startActivity(Intent(context, FollowActivity::class.java))
-                            return@onPreviewKeyEvent true
-                        }
-                        false
-                    },
-                columns = GridCells.Fixed(gridColumns),
-                state = lazyGridState,
-                contentPadding = PaddingValues(padding),
-                verticalArrangement = Arrangement.spacedBy(spacedBy),
-                horizontalArrangement = Arrangement.spacedBy(spacedBy)
+        if (dynamicViewModel.dynamicVideoList.isEmpty()) {
+            Box(
+                modifier = modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                itemsIndexed(dynamicViewModel.dynamicVideoList) { index, item ->
-                    SmallVideoCard(
-                        data = remember(item.aid) {
-                            VideoCardData(
-                                avid = item.aid,
-                                title = item.title,
-                                cover = item.cover,
-                                play = item.play,
-                                danmaku = item.danmaku,
-                                upName = item.author,
-                                time = item.duration * 1000L,
-                                pubTime = item.pubTime,
-                                isChargingArc = item.isChargingArc,
-                                badgeText = item.chargingArcBadge
-                            )
-                        },
-                        onClick = { onClickVideo(item) },
-                        onLongClick = {onLongClickVideo(item) },
-                        onFocus = { currentFocusedIndex = index }
-                    )
-                }
-
                 if (dynamicViewModel.loadingVideo) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            LoadingTip()
+                    LoadingTip()
+                } else {
+                    ContentStatusCard(text = stringResource(AppR.string.no_data))
+                }
+            }
+        } else {
+            ProvideListBringIntoViewSpec {
+                LazyVerticalGrid(
+                    modifier = modifier
+                        .fillMaxSize()
+                        .onFocusChanged{
+                            if (!it.isFocused) {
+                                currentFocusedIndex = -1
+                            }
+                        }
+                        .onPreviewKeyEvent {
+                            if(it.type == KeyEventType.KeyUp && it.key == Key.Menu) {
+                                context.startActivity(Intent(context, FollowActivity::class.java))
+                                return@onPreviewKeyEvent true
+                            }
+                            false
+                        },
+                    columns = GridCells.Fixed(gridColumns),
+                    state = lazyGridState,
+                    contentPadding = PaddingValues(padding),
+                    verticalArrangement = Arrangement.spacedBy(spacedBy),
+                    horizontalArrangement = Arrangement.spacedBy(spacedBy)
+                ) {
+                    itemsIndexed(dynamicViewModel.dynamicVideoList) { index, item ->
+                        SmallVideoCard(
+                            data = remember(item.aid) {
+                                VideoCardData(
+                                    avid = item.aid,
+                                    title = item.title,
+                                    cover = item.cover,
+                                    play = item.play,
+                                    danmaku = item.danmaku,
+                                    upName = item.author,
+                                    time = item.duration * 1000L,
+                                    pubTime = item.pubTime,
+                                    isChargingArc = item.isChargingArc,
+                                    badgeText = item.chargingArcBadge
+                                )
+                            },
+                            onClick = { onClickVideo(item) },
+                            onLongClick = {onLongClickVideo(item) },
+                            onFocus = { currentFocusedIndex = index }
+                        )
+                    }
+
+                    if (dynamicViewModel.loadingVideo) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                LoadingTip()
+                            }
                         }
                     }
-                }
 
-                if (!dynamicViewModel.videoHasMore) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        Text(
-                            text = "没有更多了捏",
-                            color = Color.White
-                        )
+                    if (!dynamicViewModel.videoHasMore) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Text(
+                                text = "没有更多了捏",
+                                color = Color.White
+                            )
+                        }
                     }
                 }
             }

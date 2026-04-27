@@ -40,7 +40,8 @@ class ToViewViewModel(
     var noMore by mutableStateOf(false)
 
     private var cursor = 0L
-    private var updating = false
+    var updating by mutableStateOf(false)
+        private set
 
     fun update() {
         viewModelScope.launch(Dispatchers.IO) {

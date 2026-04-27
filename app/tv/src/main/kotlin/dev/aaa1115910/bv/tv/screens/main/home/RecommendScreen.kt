@@ -23,8 +23,11 @@ import androidx.compose.ui.Modifier
 
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.aaa1115910.biliapi.entity.ugc.UgcItem
+import dev.aaa1115910.bv.R as AppR
+import dev.aaa1115910.bv.tv.component.ContentStatusCard
 import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.tv.R
@@ -77,42 +80,55 @@ fun RecommendScreen(
     val spacedBy = dimensionResource(R.dimen.grid_spacedBy) / 2
     val gridColumns = Prefs.gridColumns
     ProvideListBringIntoViewSpec {
-        LazyVerticalGrid(
-            modifier = modifier.fillMaxSize(),
-            columns = GridCells.Fixed(gridColumns),
-            state = lazyGridState,
-            contentPadding = PaddingValues(padding),
-            verticalArrangement = Arrangement.spacedBy(spacedBy),
-            horizontalArrangement = Arrangement.spacedBy(spacedBy)
-        ) {
-            itemsIndexed(recommendViewModel.recommendVideoList) { index, item ->
-                SmallVideoCard(
-                    data = remember(item.aid) {
-                        VideoCardData(
-                            avid = item.aid,
-                            title = item.title,
-                            cover = item.cover,
-                            play = with(item.play) { if (this == -1L) null else this },
-                            danmaku = with(item.danmaku) { if (this == -1) null else this },
-                            upName = item.author,
-                            time = item.duration * 1000L,
-                            pubTime = item.pubTime,
-                            isInteractive = item.isInteractive
-                        )
-                    },
-                    onClick = { onClickVideo(item) },
-                    onLongClick = {onLongClickVideo(item) },
-                    onFocus = { currentFocusedIndex = index }
-                )
+        if (recommendViewModel.recommendVideoList.isEmpty()) {
+            Box(
+                modifier = modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                if (recommendViewModel.loading) {
+                    LoadingTip()
+                } else {
+                    ContentStatusCard(text = stringResource(AppR.string.no_data))
+                }
             }
+        } else {
+            LazyVerticalGrid(
+                modifier = modifier.fillMaxSize(),
+                columns = GridCells.Fixed(gridColumns),
+                state = lazyGridState,
+                contentPadding = PaddingValues(padding),
+                verticalArrangement = Arrangement.spacedBy(spacedBy),
+                horizontalArrangement = Arrangement.spacedBy(spacedBy)
+            ) {
+                itemsIndexed(recommendViewModel.recommendVideoList) { index, item ->
+                    SmallVideoCard(
+                        data = remember(item.aid) {
+                            VideoCardData(
+                                avid = item.aid,
+                                title = item.title,
+                                cover = item.cover,
+                                play = with(item.play) { if (this == -1L) null else this },
+                                danmaku = with(item.danmaku) { if (this == -1) null else this },
+                                upName = item.author,
+                                time = item.duration * 1000L,
+                                pubTime = item.pubTime,
+                                isInteractive = item.isInteractive
+                            )
+                        },
+                        onClick = { onClickVideo(item) },
+                        onLongClick = {onLongClickVideo(item) },
+                        onFocus = { currentFocusedIndex = index }
+                    )
+                }
 
-            if (recommendViewModel.loading) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        LoadingTip()
+                if (recommendViewModel.loading) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            LoadingTip()
+                        }
                     }
                 }
             }

@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -44,6 +45,8 @@ import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
 import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
 import dev.aaa1115910.bv.R as AppR
+import dev.aaa1115910.bv.tv.component.ContentStatusCard
+import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.tv.R as TvR
@@ -132,8 +135,11 @@ fun FavoriteScreen(
                         verticalAlignment = Alignment.Bottom,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
+                        val title = favoriteViewModel.currentFavoriteFolderMetadata?.title?.let {
+                            "${stringResource(AppR.string.user_homepage_favorite)} - $it"
+                        } ?: stringResource(AppR.string.user_homepage_favorite)
                         Text(
-                            text = "${stringResource(AppR.string.user_homepage_favorite)} - ${favoriteViewModel.currentFavoriteFolderMetadata?.title}",
+                            text = title,
                             fontSize = titleFontSize.sp
                         )
                         Text(
@@ -151,88 +157,120 @@ fun FavoriteScreen(
         val gridColumns = Prefs.gridColumns
         val padding = dimensionResource(TvR.dimen.grid_padding) / 2
         val spacedBy = dimensionResource(TvR.dimen.grid_spacedBy) / 2
-        ProvideListBringIntoViewSpec(padding = 24.dp) {
-            LazyVerticalGrid(
-                modifier = Modifier.padding(innerPadding),
-                state = lazyGridState,
-                columns = GridCells.Fixed(gridColumns),
-                contentPadding = PaddingValues(
-                    top = if (showPageTitle) padding else 4.dp,
-                    bottom = padding,
-                    start = padding,
-                    end = padding
-                ),
-                verticalArrangement = Arrangement.spacedBy(spacedBy),
-                horizontalArrangement = Arrangement.spacedBy(spacedBy)
+        if (favoriteViewModel.favoriteFolderMetadataList.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                item(
-                    span = { GridItemSpan(gridColumns) }
+                if (favoriteViewModel.updatingFolders) {
+                    LoadingTip()
+                } else {
+                    ContentStatusCard(text = stringResource(AppR.string.no_data))
+                }
+            }
+        } else {
+            ProvideListBringIntoViewSpec(padding = 24.dp) {
+                LazyVerticalGrid(
+                    modifier = Modifier.padding(innerPadding),
+                    state = lazyGridState,
+                    columns = GridCells.Fixed(gridColumns),
+                    contentPadding = PaddingValues(
+                        top = if (showPageTitle) padding else 4.dp,
+                        bottom = padding,
+                        start = padding,
+                        end = padding
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(spacedBy),
+                    horizontalArrangement = Arrangement.spacedBy(spacedBy)
                 ) {
-                    TabRow(
-                        modifier = Modifier
-                            .focusRequester(defaultFocusRequester)
-                            .onFocusChanged { focusOnTabs = it.hasFocus }
-                            .onDelayFocusChanged(50) {
-                                if (focusOnTabs) {
-                                    focusRequester.requestFocus()
-                                }
-                            },
-                        selectedTabIndex = currentTabIndex,
-                        separator = { Spacer(modifier = Modifier.width(12.dp)) },
+                    item(
+                        span = { GridItemSpan(gridColumns) }
                     ) {
-                        favoriteViewModel.favoriteFolderMetadataList.forEachIndexed { index, folderMetadata ->
-                            Tab(
-                                modifier = Modifier
-                                    .onDelayFocusChanged {
-                                        if (it.isFocused && favoriteViewModel.currentFavoriteFolderMetadata != folderMetadata) {
-                                            updateCurrentFavoriteFolder(folderMetadata)
-                                        }
+                        TabRow(
+                            modifier = Modifier
+                                .focusRequester(defaultFocusRequester)
+                                .onFocusChanged { focusOnTabs = it.hasFocus }
+                                .onDelayFocusChanged(50) {
+                                    if (focusOnTabs) {
+                                        focusRequester.requestFocus()
                                     }
-                                    .ifElse(
-                                        index == currentTabIndex,
-                                        Modifier.focusRequester(focusRequester)
-                                    ),
-                                selected = currentTabIndex == index,
-                                onFocus = {},
-                                onClick = { updateCurrentFavoriteFolder(folderMetadata) }
-                            ) {
-                                Box(
-                                    modifier = Modifier.height(32.dp),
-                                    contentAlignment = Alignment.Center
+                                },
+                            selectedTabIndex = currentTabIndex,
+                            separator = { Spacer(modifier = Modifier.width(12.dp)) },
+                        ) {
+                            favoriteViewModel.favoriteFolderMetadataList.forEachIndexed { index, folderMetadata ->
+                                Tab(
+                                    modifier = Modifier
+                                        .onDelayFocusChanged {
+                                            if (it.isFocused && favoriteViewModel.currentFavoriteFolderMetadata != folderMetadata) {
+                                                updateCurrentFavoriteFolder(folderMetadata)
+                                            }
+                                        }
+                                        .ifElse(
+                                            index == currentTabIndex,
+                                            Modifier.focusRequester(focusRequester)
+                                        ),
+                                    selected = currentTabIndex == index,
+                                    onFocus = {},
+                                    onClick = { updateCurrentFavoriteFolder(folderMetadata) }
                                 ) {
-                                    Text(
-                                        modifier = Modifier
-                                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                                        text = folderMetadata.title,
-                                        color = LocalContentColor.current,
-                                        style = MaterialTheme.typography.labelLarge
-                                    )
+                                    Box(
+                                        modifier = Modifier.height(32.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            modifier = Modifier
+                                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                                            text = folderMetadata.title,
+                                            color = LocalContentColor.current,
+                                            style = MaterialTheme.typography.labelLarge
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                itemsIndexed(favoriteViewModel.favorites) { index, history ->
-                    SmallVideoCard(
-                        data = history,
-                        onClick = { VideoInfoActivity.actionStart(context, history.avid) },
-                        onLongClick = {
-                            UpInfoActivity.actionStart(
-                                context,
-                                mid = history.upId,
-                                name = history.upName,
-                                face = history.upFace
-                            )
-                        },
-                        onFocus = {
-                            focusOnGrid = true
-                            currentIndex = index
-                            //预加载
-                            if (index + 12 > favoriteViewModel.favorites.size) {
-                                favoriteViewModel.updateFolderItems()
+                    if (favoriteViewModel.favorites.isEmpty()) {
+                        item(span = { GridItemSpan(gridColumns) }) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 48.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (favoriteViewModel.updatingFolderItems) {
+                                    LoadingTip()
+                                } else {
+                                    ContentStatusCard(text = stringResource(AppR.string.no_data))
+                                }
                             }
                         }
-                    )
+                    } else {
+                        itemsIndexed(favoriteViewModel.favorites) { index, history ->
+                            SmallVideoCard(
+                                data = history,
+                                onClick = { VideoInfoActivity.actionStart(context, history.avid) },
+                                onLongClick = {
+                                    UpInfoActivity.actionStart(
+                                        context,
+                                        mid = history.upId,
+                                        name = history.upName,
+                                        face = history.upFace
+                                    )
+                                },
+                                onFocus = {
+                                    focusOnGrid = true
+                                    currentIndex = index
+                                    //预加载
+                                    if (index + 12 > favoriteViewModel.favorites.size) {
+                                        favoriteViewModel.updateFolderItems()
+                                    }
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }

@@ -231,6 +231,20 @@ class LiveViewModel(
         }
     }
 
+    fun switchToAreaGroup(group: LiveAreaGroup) {
+        val switchingIntoArea = currentTabType != LiveTabType.Area
+        currentTabType = LiveTabType.Area
+
+        if (currentParentGroup?.id == group.id) {
+            if (switchingIntoArea && roomList.isEmpty() && currentSubArea != null) {
+                restoreAreaCacheOrLoad(currentSubArea!!)
+            }
+            return
+        }
+
+        applyParentAreaGroup(group)
+    }
+
     // ==================== 推荐加载 ====================
 
     /**
@@ -456,21 +470,7 @@ class LiveViewModel(
      */
     fun switchParentArea(group: LiveAreaGroup) {
         if (currentParentGroup?.id == group.id) return
-        currentParentGroup = group
-        subAreaList.clear()
-        subAreaList.addAll(group.list)
-        // 默认选中第一个子分区
-        if (group.list.isNotEmpty()) {
-            currentSubArea = group.list[0]
-            restoreAreaCacheOrLoad(group.list[0])
-        } else {
-            areaJob?.cancel()
-            areaRequestVersion++
-            areaLoading = false
-            roomList.clear()
-            hasMore = false
-            currentPage = 1
-        }
+        applyParentAreaGroup(group)
     }
 
     /**
@@ -654,5 +654,23 @@ class LiveViewModel(
 
     private fun buildAreaContextKey(parentAreaId: String, areaId: String): String {
         return "$parentAreaId:$areaId"
+    }
+
+    private fun applyParentAreaGroup(group: LiveAreaGroup) {
+        currentParentGroup = group
+        subAreaList.clear()
+        subAreaList.addAll(group.list)
+        // 默认选中第一个子分区
+        if (group.list.isNotEmpty()) {
+            currentSubArea = group.list[0]
+            restoreAreaCacheOrLoad(group.list[0])
+        } else {
+            areaJob?.cancel()
+            areaRequestVersion++
+            areaLoading = false
+            roomList.clear()
+            hasMore = false
+            currentPage = 1
+        }
     }
 }

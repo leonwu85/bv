@@ -15,7 +15,9 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -40,10 +42,13 @@ import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.tv.component.TopNav
 import dev.aaa1115910.bv.tv.component.TopNavItem
 import dev.aaa1115910.bv.tv.component.live.LiveRoomCard
+import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.requestFocus
 import dev.aaa1115910.bv.viewmodel.live.LiveViewModel
 import dev.aaa1115910.bv.viewmodel.live.LiveTabType
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import dev.aaa1115910.biliapi.entity.live.LiveAreaGroup
@@ -85,22 +90,22 @@ fun LiveContent(
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger("LiveContent")
     val context = LocalContext.current
+    val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
+    val navSelectionCommitDelay = if (enableMainUiAnimation) 250L else 0L
 
     val gridState = rememberLazyGridState()
     val subNavFocusRequester = remember { FocusRequester() }
     var focusLayer by remember { mutableStateOf<LiveFocusLayer?>(null) }
+    var parentNavCommitJob by remember { mutableStateOf<Job?>(null) }
+    var subNavCommitJob by remember { mutableStateOf<Job?>(null) }
 
     val currentRoomList = liveViewModel.getCurrentRoomList()
     val currentHistoryList = liveViewModel.historyList
     val currentContentKey = liveViewModel.currentContentKey()
     var suppressLoadMore by remember { mutableStateOf(false) }
-    val currentListSize by remember {
-        derivedStateOf {
-            when (liveViewModel.currentTabType) {
-                LiveTabType.History -> currentHistoryList.size
-                else -> currentRoomList.size
-            }
-        }
+    val currentListSize = when (liveViewModel.currentTabType) {
+        LiveTabType.History -> currentHistoryList.size
+        else -> currentRoomList.size
     }
 
     val currentListOnTop by remember {
@@ -143,6 +148,70 @@ fun LiveContent(
 
     // 判断当前是否有子分区导航
     val hasSubNav = liveViewModel.currentTabType == LiveTabType.Area && liveViewModel.subAreaList.isNotEmpty()
+
+    fun isCommittedParentNav(nav: LiveParentNavItem): Boolean {
+        return when (nav) {
+            LiveParentNavItem.Recommend -> liveViewModel.currentTabType == LiveTabType.Recommend
+            LiveParentNavItem.Following -> liveViewModel.currentTabType == LiveTabType.Following
+            LiveParentNavItem.History -> liveViewModel.currentTabType == LiveTabType.History
+            is LiveParentNavItem.Area -> {
+                liveViewModel.currentTabType == LiveTabType.Area &&
+                    liveViewModel.currentParentGroup?.id == nav.group.id
+            }
+        }
+    }
+
+    fun scheduleParentNavCommit(nav: LiveParentNavItem) {
+        parentNavCommitJob?.cancel()
+        parentNavCommitJob = null
+        subNavCommitJob?.cancel()
+        subNavCommitJob = null
+
+        if (isCommittedParentNav(nav)) return
+
+        parentNavCommitJob = scope.launch {
+            delay(navSelectionCommitDelay)
+            if (isCommittedParentNav(nav)) return@launch
+
+            liveViewModel.lastFocusedRoomIndex = 0
+            when (nav) {
+                LiveParentNavItem.Recommend -> liveViewModel.switchTab(LiveTabType.Recommend)
+                LiveParentNavItem.Following -> liveViewModel.switchTab(LiveTabType.Following)
+                LiveParentNavItem.History -> {
+                    liveViewModel.switchTab(LiveTabType.History)
+                    liveViewModel.refresh()
+                }
+                is LiveParentNavItem.Area -> liveViewModel.switchToAreaGroup(nav.group)
+            }
+        }
+    }
+
+    fun isCommittedSubNav(nav: SubAreaNavItem): Boolean {
+        return liveViewModel.currentTabType == LiveTabType.Area &&
+            liveViewModel.currentSubArea?.id == nav.area.id
+    }
+
+    fun scheduleSubNavCommit(nav: SubAreaNavItem) {
+        subNavCommitJob?.cancel()
+        subNavCommitJob = null
+
+        if (isCommittedSubNav(nav)) return
+
+        subNavCommitJob = scope.launch {
+            delay(navSelectionCommitDelay)
+            if (isCommittedSubNav(nav)) return@launch
+
+            liveViewModel.lastFocusedRoomIndex = 0
+            liveViewModel.switchSubArea(nav.area)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            parentNavCommitJob?.cancel()
+            subNavCommitJob?.cancel()
+        }
+    }
 
     BackHandler(focusLayer != null) {
         logger.info { "onFocusBackToNav" }
@@ -203,25 +272,8 @@ fun LiveContent(
                         items = parentNavItems,
                         isLargePadding = false,
                         initialSelectedItem = initialSelectedItem,
-                        onSelectedChanged = { nav ->
-                            liveViewModel.lastFocusedRoomIndex = 0
-                            when (nav) {
-                                is LiveParentNavItem.Recommend -> {
-                                    liveViewModel.switchTab(LiveTabType.Recommend)
-                                }
-                                is LiveParentNavItem.Following -> {
-                                    liveViewModel.switchTab(LiveTabType.Following)
-                                }
-                                is LiveParentNavItem.History -> {
-                                    liveViewModel.switchTab(LiveTabType.History)
-                                    liveViewModel.refresh()
-                                }
-                                is LiveParentNavItem.Area -> {
-                                    liveViewModel.switchTab(LiveTabType.Area)
-                                    liveViewModel.switchParentArea(nav.group)
-                                }
-                            }
-                            scope.launch { gridState.scrollToItem(0) }
+                        onFocusedChanged = { nav ->
+                            (nav as? LiveParentNavItem)?.let(::scheduleParentNavCommit)
                         },
                         onClick = { nav ->
                             when (nav) {
@@ -265,43 +317,38 @@ fun LiveContent(
                 if (liveViewModel.currentTabType == LiveTabType.Area &&
                     liveViewModel.subAreaList.isNotEmpty()) {
                     val subNavItems = liveViewModel.subAreaList.map { SubAreaNavItem(it) }
-                    key(liveViewModel.currentParentGroup?.id) {
-                        TopNav(
-                            modifier = Modifier
-                                .focusRequester(subNavFocusRequester)
-                                .padding(end = 80.dp)
-                                .onFocusChanged {
-                                    if (it.hasFocus) {
-                                        focusLayer = LiveFocusLayer.SubNav
-                                    } else if (focusLayer == LiveFocusLayer.SubNav) {
-                                        focusLayer = null
-                                    }
-                                },
-                            items = subNavItems,
-                            isLargePadding = focusLayer != LiveFocusLayer.Content && currentListOnTop,
-                            initialSelectedItem = subNavItems.firstOrNull {
-                                it.area.id == liveViewModel.currentSubArea?.id
+                    TopNav(
+                        modifier = Modifier
+                            .focusRequester(subNavFocusRequester)
+                            .padding(end = 80.dp)
+                            .onFocusChanged {
+                                if (it.hasFocus) {
+                                    focusLayer = LiveFocusLayer.SubNav
+                                } else if (focusLayer == LiveFocusLayer.SubNav) {
+                                    focusLayer = null
+                                }
                             },
-                            onSelectedChanged = { nav ->
-                                (nav as? SubAreaNavItem)?.let {
+                        items = subNavItems,
+                        isLargePadding = focusLayer != LiveFocusLayer.Content && currentListOnTop,
+                        initialSelectedItem = subNavItems.firstOrNull {
+                            it.area.id == liveViewModel.currentSubArea?.id
+                        },
+                        onFocusedChanged = { nav ->
+                            (nav as? SubAreaNavItem)?.let(::scheduleSubNavCommit)
+                        },
+                        onClick = { nav ->
+                            (nav as? SubAreaNavItem)?.let { item ->
+                                if (item.area.id == liveViewModel.currentSubArea?.id) {
                                     liveViewModel.lastFocusedRoomIndex = 0
-                                    liveViewModel.switchSubArea(it.area)
+                                    liveViewModel.refresh()
+                                    scope.launch { gridState.scrollToItem(0) }
                                 }
-                            },
-                            onClick = { nav ->
-                                (nav as? SubAreaNavItem)?.let { item ->
-                                    if (item.area.id == liveViewModel.currentSubArea?.id) {
-                                        liveViewModel.lastFocusedRoomIndex = 0
-                                        liveViewModel.refresh()
-                                        scope.launch { gridState.scrollToItem(0) }
-                                    }
-                                }
-                            },
-                            onLeftKeyEvent = {
-                                navFocusRequester.requestFocus(scope)
                             }
-                        )
-                    }
+                        },
+                        onLeftKeyEvent = {
+                            navFocusRequester.requestFocus(scope)
+                        }
+                    )
                 }
             }
         }

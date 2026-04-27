@@ -84,6 +84,7 @@ import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.activities.dynamic.DynamicDetailActivity
+import dev.aaa1115910.bv.tv.component.ContentStatusCard
 import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
@@ -404,6 +405,20 @@ private fun VideoDynamicContent(
     val spacedBy = dimensionResource(tvR.dimen.grid_spacedBy) / 2
     val gridColumns = Prefs.gridColumns
 
+    if (videoList.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isLoading) {
+                LoadingTip()
+            } else {
+                ContentStatusCard(text = stringResource(R.string.no_data))
+            }
+        }
+        return
+    }
+
     ProvideListBringIntoViewSpec {
         LazyVerticalGrid(
             modifier = Modifier
@@ -484,6 +499,20 @@ private fun StaggeredDynamicContent(
 ) {
     val context = LocalContext.current
     val staggeredGridState = rememberLazyStaggeredGridState()
+
+    if (filteredList.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isLoading) {
+                LoadingTip()
+            } else {
+                ContentStatusCard(text = stringResource(R.string.no_data))
+            }
+        }
+        return
+    }
 
     ProvideListBringIntoViewSpec {
         LazyVerticalStaggeredGrid(

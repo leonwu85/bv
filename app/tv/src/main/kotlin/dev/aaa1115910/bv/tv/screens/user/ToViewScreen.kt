@@ -56,6 +56,8 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R as AppR
+import dev.aaa1115910.bv.tv.component.ContentStatusCard
+import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
@@ -233,59 +235,74 @@ fun ToViewScreen(
                         }
                     }
             ) {
-                LazyVerticalGrid(
-                    modifier = Modifier
-                        .padding(innerPadding)
-                        .focusRestorer(),
-                    state = lazyGridState,
-                    columns = GridCells.Fixed(gridColumns),
-                    contentPadding = PaddingValues(padding),
-                    verticalArrangement = Arrangement.spacedBy(spacedBy),
-                    horizontalArrangement = Arrangement.spacedBy(spacedBy)
-                ) {
-                    itemsIndexed(
-                        items = ToViewViewModel.histories,
-                        key = { _, item -> item.avid }
-                    ) { index, item ->
-                        val itemFocusRequester = remember(item.avid) { FocusRequester() }
-                        DisposableEffect(item.avid, itemFocusRequester) {
-                            focusRequesters[item.avid] = itemFocusRequester
-                            onDispose {
-                                if (focusRequesters[item.avid] === itemFocusRequester) {
-                                    focusRequesters.remove(item.avid)
-                                }
-                            }
+                if (ToViewViewModel.histories.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (ToViewViewModel.updating && !ToViewViewModel.noMore) {
+                            LoadingTip()
+                        } else {
+                            ContentStatusCard(text = stringResource(AppR.string.no_data))
                         }
-                        SmallVideoCard(
-                            modifier = Modifier.focusRequester(itemFocusRequester),
-                            data = item,
-                            onClick = {
-                                if (deleteMode) {
-                                    requestDelete(item, index)
-                                } else {
-                                    VideoInfoActivity.actionStart(
-                                        context = context,
-                                        aid = item.avid,
-                                        proxyArea = ProxyArea.checkProxyArea(item.title)
-                                    )
-                                }
-                            },
-                            onLongClick = {
-                                if (!deleteMode) {
-                                    currentIndex = index
-                                    selectedVideo = item
-                                    showMenuDialog = true
-                                }
-                            },
-                            onFocus = {
-                                currentIndex = index
-                            },
-                            overlay = { hasFocus ->
-                                if (deleteMode) {
-                                    ToViewDeleteBadge(isFocused = hasFocus)
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        modifier = Modifier
+                            .padding(innerPadding)
+                            .focusRestorer(),
+                        state = lazyGridState,
+                        columns = GridCells.Fixed(gridColumns),
+                        contentPadding = PaddingValues(padding),
+                        verticalArrangement = Arrangement.spacedBy(spacedBy),
+                        horizontalArrangement = Arrangement.spacedBy(spacedBy)
+                    ) {
+                        itemsIndexed(
+                            items = ToViewViewModel.histories,
+                            key = { _, item -> item.avid }
+                        ) { index, item ->
+                            val itemFocusRequester = remember(item.avid) { FocusRequester() }
+                            DisposableEffect(item.avid, itemFocusRequester) {
+                                focusRequesters[item.avid] = itemFocusRequester
+                                onDispose {
+                                    if (focusRequesters[item.avid] === itemFocusRequester) {
+                                        focusRequesters.remove(item.avid)
+                                    }
                                 }
                             }
-                        )
+                            SmallVideoCard(
+                                modifier = Modifier.focusRequester(itemFocusRequester),
+                                data = item,
+                                onClick = {
+                                    if (deleteMode) {
+                                        requestDelete(item, index)
+                                    } else {
+                                        VideoInfoActivity.actionStart(
+                                            context = context,
+                                            aid = item.avid,
+                                            proxyArea = ProxyArea.checkProxyArea(item.title)
+                                        )
+                                    }
+                                },
+                                onLongClick = {
+                                    if (!deleteMode) {
+                                        currentIndex = index
+                                        selectedVideo = item
+                                        showMenuDialog = true
+                                    }
+                                },
+                                onFocus = {
+                                    currentIndex = index
+                                },
+                                overlay = { hasFocus ->
+                                    if (deleteMode) {
+                                        ToViewDeleteBadge(isFocused = hasFocus)
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }

@@ -36,8 +36,8 @@ class DynamicViewModel(
     // 视频动态
     val dynamicVideoList = mutableStateListOf<DynamicVideo>()
     private var currentVideoPage = 0
-    var loadingVideo = false
-    var videoHasMore = true
+    var loadingVideo by mutableStateOf(false)
+    var videoHasMore by mutableStateOf(true)
     private var videoHistoryOffset: String? = null
     private var videoUpdateBaseline: String? = null
 
