@@ -104,10 +104,21 @@ fun SettingsContent(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
+                Button(
+                    modifier = Modifier
+                        .padding(top = 16.dp)
+                        .focusRequester(navFocusRequester),
+                    onClick = {
+                        context.startActivity(SettingsActivity.createIntent(context))
+                    }
+                ) {
+                    Text(text = stringResource(R.string.main_settings_open_button))
+                }
+            }
+            item {
                 SettingListItem(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(navFocusRequester),
+                        .fillMaxWidth(),
                     title = stringResource(R.string.settings_ui_theme_type_title),
                     supportText = stringResource(R.string.settings_ui_theme_type_text),
                     valueText = themeType.getDisplayName(context),
@@ -207,16 +218,6 @@ fun SettingsContent(
                         )
                     }
                 )
-            }
-            item {
-                Button(
-                    modifier = Modifier.padding(top = 16.dp),
-                    onClick = {
-                        context.startActivity(SettingsActivity.createIntent(context))
-                    }
-                ) {
-                    Text(text = stringResource(R.string.main_settings_open_button))
-                }
             }
         }
     }

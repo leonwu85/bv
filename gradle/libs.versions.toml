@@ -19,6 +19,7 @@ ktor = "3.4.2"
 ktor-jsoup = "2.3.0"
 logging = "7.0.14"
 lottie = "6.7.1"
+markwon = "4.6.2"
 material = "1.13.0"
 material-symbols-compose = "1.0.1"
 protobuf = "4.34.1"
@@ -109,6 +110,11 @@ logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "loggin
 
 # https://airbnb.io/lottie
 lottie = { module = "com.airbnb.android:lottie-compose", version.ref = "lottie" }
+
+# https://noties.io/Markwon/
+markwon-core = { module = "io.noties.markwon:core", version.ref = "markwon" }
+markwon-html = { module = "io.noties.markwon:html", version.ref = "markwon" }
+markwon-image-coil = { module = "io.noties.markwon:image-coil", version.ref = "markwon" }
 
 # https://github.com/material-components/material-components-android
 material = { module = "com.google.android.material:material", version.ref = "material" }
