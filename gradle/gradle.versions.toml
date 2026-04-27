@@ -5,8 +5,8 @@ gms = "4.4.4"
 koin-compiler = "0.6.2"
 kotlin = "2.3.20"
 ksp = "2.2.21-2.0.4"
-protobuf = "0.9.6"
-versions = "0.53.0"
+protobuf = "0.10.0"
+versions = "0.54.0"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
