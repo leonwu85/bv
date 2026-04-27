@@ -47,6 +47,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -91,10 +92,12 @@ import androidx.compose.ui.platform.LocalDensity
 /**
  * 评论浮层组件
  *
+ * @param modifier 外层容器修饰符
  * @param show 是否显示浮层
  * @param oid 评论对象 ID
  * @param type 评论类型（1=视频, 11=动态图文, 17=动态等）
  * @param onHide 关闭浮层回调
+ * @param embedded 是否作为播放页分屏内嵌面板显示
  * @param episodes 正片剧集列表（用于选集切换）
  * @param sections 章节选集列表（用于选集切换）
  * @param initialEpisodeId 初始选中的剧集ID
@@ -102,10 +105,12 @@ import androidx.compose.ui.platform.LocalDensity
  */
 @Composable
 fun CommentPanel(
+    modifier: Modifier = Modifier,
     show: Boolean,
     oid: Long,
     type: Long = 1L,
     onHide: () -> Unit,
+    embedded: Boolean = false,
     episodes: List<Episode> = emptyList(),
     sections: List<Section> = emptyList(),
     initialEpisodeId: Int = -1,
@@ -433,31 +438,42 @@ fun CommentPanel(
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
-            .clickable(onClick = onHide),
+            .then(
+                if (embedded) {
+                    Modifier
+                } else {
+                    Modifier.clickable(onClick = onHide)
+                }
+            ),
         contentAlignment = Alignment.CenterEnd
     ) {
         AnimatedVisibility(
+            modifier = if (embedded) Modifier.fillMaxSize() else Modifier,
             visible = show && !showSubCommentPanel,
             enter = expandHorizontally(expandFrom = Alignment.End),
             exit = shrinkHorizontally(shrinkTowards = Alignment.End)
         ) {
             Surface(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
-                    .widthIn(
-                        min = if (showSidebar) 600.dp else 300.dp,
-                        max = if (showSidebar) 700.dp else 400.dp
-                    )
-                    .fillMaxWidth(if (showSidebar) 0.5f else 0.3f)
-                    .clickable(enabled = true, onClick = {}) // 阻止点击穿透
+                modifier = if (embedded) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier
+                        .fillMaxHeight()
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
+                        .widthIn(
+                            min = if (showSidebar) 600.dp else 300.dp,
+                            max = if (showSidebar) 700.dp else 400.dp
+                        )
+                        .fillMaxWidth(if (showSidebar) 0.5f else 0.3f)
+                        .clickable(enabled = true, onClick = {}) // 阻止点击穿透
+                }
                     .onBackPressed { handleBack() },
                 colors = SurfaceDefaults.colors(
                     containerColor = Color.Black.copy(alpha = 0.95f)
                 ),
-                shape = MaterialTheme.shapes.large
+                shape = if (embedded) RectangleShape else MaterialTheme.shapes.large
             ) {
                 Row(
                     modifier = Modifier
@@ -756,6 +772,7 @@ fun CommentPanel(
     // 子评论浮窗
     if (selectedRootComment != null) {
         SubCommentPanel(
+            modifier = if (embedded) modifier else Modifier,
             show = showSubCommentPanel,
             oid = currentOid,
             rootId = selectedRootComment!!.rpid,
@@ -763,7 +780,8 @@ fun CommentPanel(
             onHide = {
                 showSubCommentPanel = false
                 selectedRootComment = null
-            }
+            },
+            embedded = embedded
         )
     }
 

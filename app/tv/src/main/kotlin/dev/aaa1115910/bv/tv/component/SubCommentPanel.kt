@@ -40,6 +40,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -70,18 +71,22 @@ import org.koin.compose.getKoin
  * 子评论浮窗组件
  *
  * @param show 是否显示浮窗
+ * @param modifier 外层容器修饰符
  * @param oid 视频 ID
  * @param rootId 根评论 ID
  * @param rootComment 根评论数据
  * @param onHide 关闭回调
+ * @param embedded 是否作为播放页分屏内嵌面板显示
  */
 @Composable
 fun SubCommentPanel(
+    modifier: Modifier = Modifier,
     show: Boolean,
     oid: Long,
     rootId: Long,
     rootComment: Comment,
-    onHide: () -> Unit
+    onHide: () -> Unit,
+    embedded: Boolean = false
 ) {
     val commentRepository: CommentRepository = getKoin().get()
     val scope = rememberCoroutineScope()
@@ -210,28 +215,39 @@ fun SubCommentPanel(
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
-            .clickable(onClick = onHide),
+            .then(
+                if (embedded) {
+                    Modifier
+                } else {
+                    Modifier.clickable(onClick = onHide)
+                }
+            ),
         contentAlignment = Alignment.CenterEnd
     ) {
         AnimatedVisibility(
+            modifier = if (embedded) Modifier.fillMaxSize() else Modifier,
             visible = show,
             enter = expandHorizontally(expandFrom = Alignment.End),
             exit = shrinkHorizontally(shrinkTowards = Alignment.End)
         ) {
             Surface(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
-                    .widthIn(min = 300.dp, max = 400.dp)
-                    .fillMaxWidth(0.3f)
-                    .clickable(enabled = true, onClick = {})
+                modifier = if (embedded) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier
+                        .fillMaxHeight()
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
+                        .widthIn(min = 300.dp, max = 400.dp)
+                        .fillMaxWidth(0.3f)
+                        .clickable(enabled = true, onClick = {})
+                }
                     .onBackPressed { onHide() },
                 colors = SurfaceDefaults.colors(
                     containerColor = Color.Black.copy(alpha = 0.95f)
                 ),
-                shape = MaterialTheme.shapes.large
+                shape = if (embedded) RectangleShape else MaterialTheme.shapes.large
             ) {
                 Column(
                     modifier = Modifier

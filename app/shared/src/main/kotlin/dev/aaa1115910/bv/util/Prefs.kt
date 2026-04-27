@@ -523,6 +523,10 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefPlayerShowBottomProgressBarRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefPlayerShowBottomProgressBarKey, value) }
 
+    var playerCommentSplitScreen: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefPlayerCommentSplitScreenRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefPlayerCommentSplitScreenKey, value) }
+
     var playerBottomProgressBarColor: PlayerBottomProgressBarColor
         get() = runBlocking {
             PlayerBottomProgressBarColor.fromValue(
@@ -749,6 +753,7 @@ object PrefKeys {
     val prefPlayerSeekForwardStepKey = intPreferencesKey("player_seek_forward_step")
     val prefPlayerSeekBackwardStepKey = intPreferencesKey("player_seek_backward_step")
     val prefPlayerShowBottomProgressBarKey = booleanPreferencesKey("player_show_bottom_progress_bar")
+    val prefPlayerCommentSplitScreenKey = booleanPreferencesKey("player_comment_split_screen")
     val prefPlayerBottomProgressBarColorKey = intPreferencesKey("player_bottom_progress_bar_color")
     val prefShowUGCVideoInfoKey = booleanPreferencesKey("pref_show_ugc_video_info")
     val prefIsLoopKey = booleanPreferencesKey("player_is_loop")
@@ -856,6 +861,7 @@ object PrefKeys {
     val prefPlayerSeekForwardStepRequest = PreferenceRequest(prefPlayerSeekForwardStepKey, 10)
     val prefPlayerSeekBackwardStepRequest = PreferenceRequest(prefPlayerSeekBackwardStepKey, 5)
     val prefPlayerShowBottomProgressBarRequest = PreferenceRequest(prefPlayerShowBottomProgressBarKey, false)
+    val prefPlayerCommentSplitScreenRequest = PreferenceRequest(prefPlayerCommentSplitScreenKey, false)
     val prefPlayerBottomProgressBarColorRequest = PreferenceRequest(prefPlayerBottomProgressBarColorKey, PlayerBottomProgressBarColor.Purple.value)
     val prefShowUGCVideoInfoRequest = PreferenceRequest(prefShowUGCVideoInfoKey, true)
     val prefIsLoopRequest = PreferenceRequest(prefIsLoopKey, false)

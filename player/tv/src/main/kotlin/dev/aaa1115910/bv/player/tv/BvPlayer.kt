@@ -179,6 +179,8 @@ fun BvPlayer(
     onRefreshVideo: () -> Unit = {},
     onLiveRetry: () -> Unit = {},
     onInfoVisibilityChanged: (Boolean) -> Unit = {},
+    commentPanelVisible: Boolean = false,
+    hideControllerOnCommentPanelOpen: Boolean = false,
     onShowComment: () -> Unit = {},
     onShowDescription: () -> Unit = {},
     onTripleLike: () -> Unit = {},
@@ -1203,6 +1205,8 @@ fun BvPlayer(
             registerShowInfoProvider = { provider -> showInfoProvider = provider },
             registerControllerInteractionProvider = { provider -> controllerInteractionProvider = provider },
             onInfoVisibilityChanged = onInfoVisibilityChanged,
+            commentPanelVisible = commentPanelVisible,
+            hideControllerOnCommentPanelOpen = hideControllerOnCommentPanelOpen,
 
             onPlay = { videoPlayer.start() },
             onPause = {

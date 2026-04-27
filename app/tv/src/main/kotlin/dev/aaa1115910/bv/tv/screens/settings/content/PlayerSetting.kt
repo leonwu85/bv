@@ -53,6 +53,7 @@ fun PlayerSetting(
     var enableFfmpegAudioRenderer by remember { mutableStateOf(Prefs.enableFfmpegAudioRenderer) }
     var showUGCVideoInfo by remember { mutableStateOf(Prefs.showUGCVideoInfo) }
     var playerShowBottomProgressBar by remember { mutableStateOf(Prefs.playerShowBottomProgressBar) }
+    var playerCommentSplitScreen by remember { mutableStateOf(Prefs.playerCommentSplitScreen) }
     var playerBottomProgressBarColor by remember { mutableStateOf(Prefs.playerBottomProgressBarColor) }
     var playerShowDebugInfo by remember { mutableStateOf(Prefs.playerShowDebugInfo) }
     var playerExitWhenAllIsPlayed by remember { mutableStateOf(Prefs.playerExitWhenAllIsPlayed) }
@@ -183,6 +184,17 @@ fun PlayerSetting(
                     onCheckedChange = {
                         playerShowBottomProgressBar = it
                         Prefs.playerShowBottomProgressBar = it
+                    }
+                )
+            }
+            item {
+                SettingSwitchListItem(
+                    title = stringResource(R.string.settings_player_comment_split_screen_title),
+                    supportText = stringResource(R.string.settings_player_comment_split_screen_text),
+                    checked = playerCommentSplitScreen,
+                    onCheckedChange = {
+                        playerCommentSplitScreen = it
+                        Prefs.playerCommentSplitScreen = it
                     }
                 )
             }

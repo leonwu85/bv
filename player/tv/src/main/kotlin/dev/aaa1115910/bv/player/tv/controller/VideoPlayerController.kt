@@ -84,6 +84,8 @@ fun VideoPlayerController(
     registerShowInfoProvider: ((() -> Boolean) -> Unit) = {},
     registerControllerInteractionProvider: ((() -> Boolean) -> Unit) = {},
     onInfoVisibilityChanged: (Boolean) -> Unit = {},
+    commentPanelVisible: Boolean = false,
+    hideControllerOnCommentPanelOpen: Boolean = false,
 
     //player events
     onPlay: () -> Unit,
@@ -188,6 +190,19 @@ fun VideoPlayerController(
     var hideVideoInfoJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var autoSeekConfirmJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var doublePressDownJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    fun hideInfoController() {
+        hideVideoInfoJob?.cancel()
+        hideVideoInfoJob = null
+        showInfo = false
+    }
+
+    val handleShowComment = {
+        val shouldHideController = hideControllerOnCommentPanelOpen && !commentPanelVisible
+        onShowComment()
+        if (shouldHideController) hideInfoController()
+    }
+
     val isSeekToVideoEnd = {
         val duration = videoPlayerSeekState.duration
         duration > 0L && goTime >= (duration - 1000L).coerceAtLeast(0L)
@@ -266,6 +281,11 @@ fun VideoPlayerController(
     }
     LaunchedEffect(showInfo) {
         onInfoVisibilityChanged(showInfo)
+    }
+    LaunchedEffect(hideControllerOnCommentPanelOpen, commentPanelVisible) {
+        if (hideControllerOnCommentPanelOpen && commentPanelVisible) {
+            hideInfoController()
+        }
     }
     LaunchedEffect(showInfo, showMenuController, showSeekController, showRelatedVideos) {
         if (
@@ -607,7 +627,7 @@ fun VideoPlayerController(
             playSpeed = videoPlayer.speed,
             bottomProgressBarColor = bottomProgressBarColor,
             onInteraction = { markControllerInteraction(CONTROLLER_INTERACTION_COOLDOWN_MS) },
-            onHideInfo = { showInfo = false },
+            onHideInfo = { hideInfoController() },
             onPlay = {
                 if (videoPlayer.currentPosition >= videoPlayer.duration) {
                     goTime = 0
@@ -674,7 +694,8 @@ fun VideoPlayerController(
             onSubtitleChange = onSubtitleChange,
             onLoadNextVideo = onLoadNextVideo,
             onLoadPrevVideo = onLoadPrevVideo,
-            onShowComment = onShowComment,
+            commentPanelVisible = commentPanelVisible,
+            onShowComment = handleShowComment,
             onShowDescription = onShowDescription,
             onTripleLike = onTripleLike,
             onToggleFollow = onToggleFollow,

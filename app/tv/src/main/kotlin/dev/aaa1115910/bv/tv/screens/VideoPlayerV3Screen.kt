@@ -3,18 +3,22 @@ package dev.aaa1115910.bv.tv.screens
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -106,6 +110,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.getKoin
+
+private const val COMMENT_SPLIT_PLAYER_RESIZE_ANIMATION_MS = 260
 
 @Composable
 fun VideoPlayerV3Screen(
@@ -331,6 +337,20 @@ fun VideoPlayerV3Screen(
         exitPlayer()
     }
 
+    val commentSplitScreenEnabled = Prefs.playerCommentSplitScreen && playerViewModel.currentAid > 0
+    val useCommentSplitScreen = commentSplitScreenEnabled && showCommentPanel
+    var splitCommentPanelVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(useCommentSplitScreen) {
+        if (useCommentSplitScreen) {
+            splitCommentPanelVisible = false
+            delay(COMMENT_SPLIT_PLAYER_RESIZE_ANIMATION_MS.toLong())
+            splitCommentPanelVisible = true
+        } else {
+            splitCommentPanelVisible = false
+        }
+    }
+
     LaunchedEffect(
         playerViewModel.currentCid,
         playerViewModel.isInteractivePlayback,
@@ -442,7 +462,8 @@ fun VideoPlayerV3Screen(
         ),
     ) {
         Box(
-            modifier = Modifier
+            modifier = modifier
+                .fillMaxSize()
                 .onPreviewKeyEvent { keyEvent ->
                     if (keyEvent.type == KeyEventType.KeyUp && autoActionCountdownJob != null) {
                         // 任何按键都可以取消倒计时
@@ -455,17 +476,29 @@ fun VideoPlayerV3Screen(
                     false
                 }
         ) {
-            BvPlayer(
-                modifier = modifier
-                    .fillMaxSize(),
-                videoPlayer = playerViewModel.videoPlayer!!,
-                danmakuPlayer = playerViewModel.danmakuPlayer,
-                danmakuOpacity = playerViewModel.currentDanmakuOpacity,
-                playerSeekForwardStep = Prefs.playerSeekForwardStep,
-                playerSeekBackwardStep = Prefs.playerSeekBackwardStep,
-                showBottomProgressBar = Prefs.playerShowBottomProgressBar,
-                bottomProgressBarColor = Prefs.playerBottomProgressBarColor.toComposeColor(),
-                useTextureViewFixPortraitVideo = Prefs.portraitVideoFixMode == PortraitVideoFixMode.UseTextureView && playerViewModel.isVerticalVideo && playerViewModel.currentQuality >= Resolution.R4K,
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val splitCommentPanelWidth = maxWidth / 3
+                val playerWidth by animateDpAsState(
+                    targetValue = if (useCommentSplitScreen) maxWidth * (2f / 3f) else maxWidth,
+                    animationSpec = tween(durationMillis = COMMENT_SPLIT_PLAYER_RESIZE_ANIMATION_MS),
+                    label = "CommentSplitPlayerWidth"
+                )
+                Box(
+                    modifier = Modifier
+                        .width(playerWidth)
+                        .fillMaxHeight()
+                        .align(Alignment.CenterStart)
+                ) {
+                    BvPlayer(
+                        modifier = Modifier.fillMaxSize(),
+                        videoPlayer = playerViewModel.videoPlayer!!,
+                        danmakuPlayer = playerViewModel.danmakuPlayer,
+                        danmakuOpacity = playerViewModel.currentDanmakuOpacity,
+                        playerSeekForwardStep = Prefs.playerSeekForwardStep,
+                        playerSeekBackwardStep = Prefs.playerSeekBackwardStep,
+                        showBottomProgressBar = Prefs.playerShowBottomProgressBar,
+                        bottomProgressBarColor = Prefs.playerBottomProgressBarColor.toComposeColor(),
+                        useTextureViewFixPortraitVideo = Prefs.portraitVideoFixMode == PortraitVideoFixMode.UseTextureView && playerViewModel.isVerticalVideo && playerViewModel.currentQuality >= Resolution.R4K,
                 onToggleRelatedVideos = { state ->
                     playerViewModel.showRelatedVideos = if (playerViewModel.relatedVideos.isNotEmpty()) state else false
                 },
@@ -679,7 +712,11 @@ fun VideoPlayerV3Screen(
                 onLiveRetry = {
                     playerViewModel.retryLiveStream()
                 },
-                onShowComment = { showCommentPanel = true },
+                commentPanelVisible = showCommentPanel,
+                hideControllerOnCommentPanelOpen = commentSplitScreenEnabled,
+                onShowComment = {
+                    showCommentPanel = playerViewModel.currentAid > 0 && !showCommentPanel
+                },
                 onShowDescription = {
                     if (!descriptionLoaded) {
                         scope.launch(Dispatchers.IO) {
@@ -1120,7 +1157,7 @@ fun VideoPlayerV3Screen(
             }
 
             // 评论面板
-            if (playerViewModel.currentAid > 0) {
+            if (!useCommentSplitScreen && playerViewModel.currentAid > 0) {
                 CommentPanel(
                     show = showCommentPanel,
                     oid = playerViewModel.currentAid,
@@ -1146,6 +1183,21 @@ fun VideoPlayerV3Screen(
                 show = showTripleLikeTip,
                 message = tripleLikeTipMessage
             )
+                }
+
+                if (useCommentSplitScreen) {
+                    CommentPanel(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .width(splitCommentPanelWidth)
+                            .fillMaxHeight(),
+                        show = splitCommentPanelVisible,
+                        oid = playerViewModel.currentAid,
+                        onHide = { showCommentPanel = false },
+                        embedded = true
+                    )
+                }
+            }
         }
 
         // 简介弹窗

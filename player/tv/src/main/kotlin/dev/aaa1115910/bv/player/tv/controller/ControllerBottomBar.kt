@@ -157,6 +157,7 @@ fun ControllerBottomBar(
     onSubtitleChange: (Long) -> Unit,
     onLoadNextVideo: (Boolean) -> Unit,
     onLoadPrevVideo: () -> Unit = {},
+    commentPanelVisible: Boolean = false,
     onShowComment: () -> Unit = {},
     onShowDescription: () -> Unit = {},
     onTripleLike: () -> Unit = {},
@@ -193,13 +194,15 @@ fun ControllerBottomBar(
     val buttons = remember(
         fromSeason, showDanmaku, isPlaying, isLoop,
         showPrevVideoBtn, showNextVideoBtn, isLive,
-        speed, isAudioOnly, rotation, hasSubtitles, currentSubtitleId
+        speed, isAudioOnly, rotation, hasSubtitles, currentSubtitleId,
+        commentPanelVisible
     ) {
         listOf(
             ControlButton(
                 id = "comment",
                 icon = Icons.AutoMirrored.Rounded.Chat,
                 onClick = onShowComment,
+                selected = commentPanelVisible
             ),
             ControlButton(
                 id = "prevVideo",
