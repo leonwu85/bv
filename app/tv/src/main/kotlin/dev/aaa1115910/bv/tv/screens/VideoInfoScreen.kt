@@ -1223,30 +1223,37 @@ fun VideoInfoScreen(
                                         (videoDetailViewModel.videoDetail?.pages?.size ?: 0) > 5,
                                     onClick = { cid ->
                                         logger.fInfo { "Click video part: [av:${videoDetailViewModel.videoDetail?.aid}, bv:${videoDetailViewModel.videoDetail?.bvid}, cid:$cid]" }
-                                        launchPlayerActivity(
-                                            context = context,
-                                            avid = videoDetailViewModel.videoDetail!!.aid,
-                                            cid = cid,
-                                            title = videoDetailViewModel.videoDetail!!.title,
-                                            partTitle = videoDetailViewModel.videoDetail!!.pages.find { it.cid == cid }!!.title,
-                                            played = if (cid == lastPlayedCid) lastPlayedTime * 1000 else 0,
-                                            fromSeason = false,
-                                            isVerticalVideo = videoDetailViewModel.videoDetail!!.pages.find { it.cid == cid }!!.dimension.isVertical,
-                                            playerIconIdle = videoDetailViewModel.videoDetail!!.playerIcon?.idle
-                                                ?: "",
-                                            playerIconMoving = videoDetailViewModel.videoDetail!!.playerIcon?.moving
-                                                ?: "",
-                                            play = videoDetailViewModel.videoDetail!!.stat.view,
-                                            danmaku = videoDetailViewModel.videoDetail!!.stat.danmaku,
-                                            like = videoDetailViewModel.videoDetail!!.stat.like,
-                                            coin = videoDetailViewModel.videoDetail!!.stat.coin,
-                                            favorite = videoDetailViewModel.videoDetail!!.stat.favorite,
-                                            upName = videoDetailViewModel.videoDetail!!.author.name,
-                                            upId = videoDetailViewModel.videoDetail!!.author.mid,
-                                            upFace = videoDetailViewModel.videoDetail!!.author.face,
-                                            pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString(),
-                                            audioOnlyMode = audioOnlyMode
-                                        )
+                                        val videoDetail = videoDetailViewModel.videoDetail
+                                        if (videoDetail == null) {
+                                            logger.fWarn { "Skip video part click because video detail is missing: cid=$cid" }
+                                        } else {
+                                            val selectedPage = videoDetail.pages.find { it.cid == cid }
+                                            val fallbackPage = videoDetail.pages.firstOrNull()
+                                            launchPlayerActivity(
+                                                context = context,
+                                                avid = videoDetail.aid,
+                                                cid = cid,
+                                                title = videoDetail.title,
+                                                partTitle = selectedPage?.title.orEmpty(),
+                                                played = if (cid == lastPlayedCid) lastPlayedTime * 1000 else 0,
+                                                fromSeason = false,
+                                                isVerticalVideo = selectedPage?.dimension?.isVertical
+                                                    ?: fallbackPage?.dimension?.isVertical
+                                                    ?: false,
+                                                playerIconIdle = videoDetail.playerIcon?.idle ?: "",
+                                                playerIconMoving = videoDetail.playerIcon?.moving ?: "",
+                                                play = videoDetail.stat.view,
+                                                danmaku = videoDetail.stat.danmaku,
+                                                like = videoDetail.stat.like,
+                                                coin = videoDetail.stat.coin,
+                                                favorite = videoDetail.stat.favorite,
+                                                upName = videoDetail.author.name,
+                                                upId = videoDetail.author.mid,
+                                                upFace = videoDetail.author.face,
+                                                pubTime = videoDetail.publishDate.formatPubTimeString(),
+                                                audioOnlyMode = audioOnlyMode
+                                            )
+                                        }
                                     }
                                 )
                             }
@@ -1262,68 +1269,87 @@ fun VideoInfoScreen(
                                     onClickEp = { aid, cid ->
                                         logger.fInfo { "Click ugc season episode: [av:${videoDetailViewModel.videoDetail?.aid}, bv:${videoDetailViewModel.videoDetail?.bvid}, cid:$cid]" }
                                         updateUgcSeasonSectionVideoList(index)
+                                        val videoDetail = videoDetailViewModel.videoDetail
                                         val sectionTitle =
-                                            videoDetailViewModel.videoDetail?.ugcSeason?.sections?.getOrNull(
-                                                index
-                                            )?.title
+                                            videoDetail?.ugcSeason?.sections?.getOrNull(index)?.title
                                         val episode = section.episodes.find { it.cid == cid }
-                                        launchPlayerActivity(
-                                            context = context,
-                                            avid = aid,
-                                            cid = cid,
-                                            title = if (sectionTitle == "正片") episode!!.title else sectionTitle
-                                                ?: videoDetailViewModel.videoDetail?.ugcSeason?.title
-                                                ?: "",
-                                            partTitle = if (sectionTitle == "正片") if (episode!!.pages.size > 1) episode.pages.first().title else "" else episode!!.title,
-                                            played = if (cid == lastPlayedCid) lastPlayedTime * 1000 else 0,
-                                            fromSeason = false,
-                                            isVerticalVideo = videoDetailViewModel.videoDetail!!.pages.first().dimension.isVertical,
-                                            playerIconIdle = videoDetailViewModel.videoDetail!!.playerIcon?.idle
-                                                ?: "",
-                                            playerIconMoving = videoDetailViewModel.videoDetail!!.playerIcon?.moving
-                                                ?: "",
-                                            play = videoDetailViewModel.videoDetail!!.stat.view,
-                                            danmaku = videoDetailViewModel.videoDetail!!.stat.danmaku,
-                                            like = videoDetailViewModel.videoDetail!!.stat.like,
-                                            coin = videoDetailViewModel.videoDetail!!.stat.coin,
-                                            favorite = videoDetailViewModel.videoDetail!!.stat.favorite,
-                                            upName = videoDetailViewModel.videoDetail!!.author.name,
-                                            upId = videoDetailViewModel.videoDetail!!.author.mid,
-                                            upFace = videoDetailViewModel.videoDetail!!.author.face,
-                                            pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString(),
-                                            audioOnlyMode = audioOnlyMode
-                                        )
+                                        if (videoDetail == null || episode == null) {
+                                            logger.fWarn {
+                                                "Skip ugc season episode click because detail or episode is missing: cid=$cid, sectionIndex=$index"
+                                            }
+                                        } else {
+                                            val firstPage = episode.pages.firstOrNull()
+                                            val fallbackPage = videoDetail.pages.firstOrNull()
+                                            launchPlayerActivity(
+                                                context = context,
+                                                avid = aid,
+                                                cid = cid,
+                                                title = if (sectionTitle == "正片") {
+                                                    episode.title
+                                                } else {
+                                                    sectionTitle ?: videoDetail.ugcSeason?.title ?: ""
+                                                },
+                                                partTitle = if (sectionTitle == "正片") {
+                                                    if (episode.pages.size > 1) firstPage?.title.orEmpty() else ""
+                                                } else {
+                                                    episode.title
+                                                },
+                                                played = if (cid == lastPlayedCid) lastPlayedTime * 1000 else 0,
+                                                fromSeason = false,
+                                                isVerticalVideo = fallbackPage?.dimension?.isVertical ?: false,
+                                                playerIconIdle = videoDetail.playerIcon?.idle ?: "",
+                                                playerIconMoving = videoDetail.playerIcon?.moving ?: "",
+                                                play = videoDetail.stat.view,
+                                                danmaku = videoDetail.stat.danmaku,
+                                                like = videoDetail.stat.like,
+                                                coin = videoDetail.stat.coin,
+                                                favorite = videoDetail.stat.favorite,
+                                                upName = videoDetail.author.name,
+                                                upId = videoDetail.author.mid,
+                                                upFace = videoDetail.author.face,
+                                                pubTime = videoDetail.publishDate.formatPubTimeString(),
+                                                audioOnlyMode = audioOnlyMode
+                                            )
+                                        }
                                     },
                                     onClickEpPart = { episode, cid ->
                                         logger.fInfo { "Click ugc season episode part: [av:${videoDetailViewModel.videoDetail?.aid}, bv:${videoDetailViewModel.videoDetail?.bvid}, cid:$cid]" }
+                                        val videoDetail = videoDetailViewModel.videoDetail
                                         val sectionTitle =
-                                            videoDetailViewModel.videoDetail?.ugcSeason?.sections?.getOrNull(
-                                                index
-                                            )?.title
-                                        launchPlayerActivity(
-                                            context = context,
-                                            avid = episode.aid,
-                                            cid = cid,
-                                            title = if (!sectionTitle.isNullOrEmpty()) episode.title else videoDetailViewModel.videoDetail!!.title,
-                                            partTitle = episode.pages.find { it.cid == cid }!!.title,
-                                            played = if (cid == lastPlayedCid) lastPlayedTime * 1000 else 0,
-                                            fromSeason = false,
-                                            isVerticalVideo = videoDetailViewModel.videoDetail!!.pages.find { it.cid == cid }!!.dimension.isVertical,
-                                            playerIconIdle = videoDetailViewModel.videoDetail!!.playerIcon?.idle
-                                                ?: "",
-                                            playerIconMoving = videoDetailViewModel.videoDetail!!.playerIcon?.moving
-                                                ?: "",
-                                            play = videoDetailViewModel.videoDetail!!.stat.view,
-                                            danmaku = videoDetailViewModel.videoDetail!!.stat.danmaku,
-                                            like = videoDetailViewModel.videoDetail!!.stat.like,
-                                            coin = videoDetailViewModel.videoDetail!!.stat.coin,
-                                            favorite = videoDetailViewModel.videoDetail!!.stat.favorite,
-                                            upName = videoDetailViewModel.videoDetail!!.author.name,
-                                            upId = videoDetailViewModel.videoDetail!!.author.mid,
-                                            upFace = videoDetailViewModel.videoDetail!!.author.face,
-                                            pubTime = videoDetailViewModel.videoDetail!!.publishDate.formatPubTimeString(),
-                                            audioOnlyMode = audioOnlyMode
-                                        )
+                                            videoDetail?.ugcSeason?.sections?.getOrNull(index)?.title
+                                        if (videoDetail == null) {
+                                            logger.fWarn {
+                                                "Skip ugc season episode part click because video detail is missing: cid=$cid, sectionIndex=$index"
+                                            }
+                                        } else {
+                                            val episodePage = episode.pages.find { it.cid == cid }
+                                            val selectedPage = videoDetail.pages.find { it.cid == cid }
+                                            val fallbackPage = videoDetail.pages.firstOrNull()
+                                            launchPlayerActivity(
+                                                context = context,
+                                                avid = episode.aid,
+                                                cid = cid,
+                                                title = if (!sectionTitle.isNullOrEmpty()) episode.title else videoDetail.title,
+                                                partTitle = episodePage?.title.orEmpty(),
+                                                played = if (cid == lastPlayedCid) lastPlayedTime * 1000 else 0,
+                                                fromSeason = false,
+                                                isVerticalVideo = selectedPage?.dimension?.isVertical
+                                                    ?: fallbackPage?.dimension?.isVertical
+                                                    ?: false,
+                                                playerIconIdle = videoDetail.playerIcon?.idle ?: "",
+                                                playerIconMoving = videoDetail.playerIcon?.moving ?: "",
+                                                play = videoDetail.stat.view,
+                                                danmaku = videoDetail.stat.danmaku,
+                                                like = videoDetail.stat.like,
+                                                coin = videoDetail.stat.coin,
+                                                favorite = videoDetail.stat.favorite,
+                                                upName = videoDetail.author.name,
+                                                upId = videoDetail.author.mid,
+                                                upFace = videoDetail.author.face,
+                                                pubTime = videoDetail.publishDate.formatPubTimeString(),
+                                                audioOnlyMode = audioOnlyMode
+                                            )
+                                        }
                                     }
                                 )
                             }

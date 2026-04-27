@@ -56,6 +56,9 @@ class HistoryViewModel(
             updating = true
         }
         runCatching {
+            val existingKeys = withContext(Dispatchers.Main) {
+                histories.mapTo(mutableSetOf()) { historyCardKey(it) }
+            }
             val data = historyRepository.getHistories(
                 cursor = cursor,
                 preferApiType = Prefs.apiType
@@ -63,6 +66,11 @@ class HistoryViewModel(
 
             data.data.forEach { historyItem ->
                 val isPgc = historyItem.type == HistoryItemType.Pgc
+                val itemKey = historyItemKey(historyItem)
+                if (!existingKeys.add(itemKey)) {
+                    logger.fInfo { "Skip duplicated history item: $itemKey" }
+                    return@forEach
+                }
                 histories.addWithMainContext(
                     VideoCardData(
                         avid = historyItem.oid,
@@ -188,6 +196,22 @@ class HistoryViewModel(
     fun resetDeletePhase() {
         deletePhase = 0
         pendingFocusIndex = -1
+    }
+
+    private fun historyItemKey(item: dev.aaa1115910.biliapi.entity.user.HistoryItem): String {
+        return "${historyBusiness(item.type)}_${item.kid}_${item.viewAt}_${item.oid}"
+    }
+
+    private fun historyCardKey(item: VideoCardData): String {
+        return "${item.historyBusiness}_${item.historyKid ?: item.avid}_${item.historyViewAt ?: 0L}_${item.avid}"
+    }
+
+    private fun historyBusiness(type: HistoryItemType): String? {
+        return when (type) {
+            HistoryItemType.Archive -> "archive"
+            HistoryItemType.Pgc -> "pgc"
+            HistoryItemType.Unknown -> null
+        }
     }
 
     fun clearData() {

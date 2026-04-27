@@ -157,7 +157,9 @@ fun UgcListItem(
                                 )
                                 Text(text = data.danmakuString)
                             }
-                            data.pubTime?.toLong()?.toSmartDate()?.let { Text(text = it) }
+                            data.pubTime
+                                ?.toDisplayPubTime()
+                                ?.let { Text(text = it) }
                         }
                     }
                 }
@@ -188,3 +190,8 @@ private val previewData = VideoCardData(
     pubTime = "3小时前",
     isInteractive = true
 )
+
+private fun String.toDisplayPubTime(): String? {
+    if (isBlank()) return null
+    return toLongOrNull()?.toSmartDate() ?: this
+}
