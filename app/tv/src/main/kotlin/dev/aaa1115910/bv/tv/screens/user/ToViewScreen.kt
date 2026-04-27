@@ -3,6 +3,7 @@ package dev.aaa1115910.bv.tv.screens.user
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,12 +11,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -39,6 +43,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
@@ -47,8 +52,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R as AppR
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
@@ -62,7 +67,6 @@ import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.requestFocus
 import dev.aaa1115910.bv.viewmodel.user.ToViewViewModel
-import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -81,16 +85,25 @@ fun ToViewScreen(
         label = "title font size"
     )
 
+    var deleteMode by remember { mutableStateOf(false) }
     var showMenuDialog by remember { mutableStateOf(false) }
-    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var selectedVideo by remember { mutableStateOf<VideoCardData?>(null) }
     val menuFocusRequester = remember { FocusRequester() }
-    val deleteFocusRequester = remember { FocusRequester() }
-    val contentFocusAnchorRequester = remember { FocusRequester() }
 
     val lazyGridState = rememberLazyGridState()
     val focusRequesters = remember { mutableMapOf<Long, FocusRequester>() }
     var pendingRestoreFocusIndex by remember { mutableIntStateOf(-1) }
+
+    val requestDelete: (VideoCardData, Int) -> Unit = { video, index ->
+        if (!ToViewViewModel.deleting) {
+            val targetIndex = when {
+                ToViewViewModel.histories.size <= 1 -> -1
+                index >= ToViewViewModel.histories.lastIndex -> index - 1
+                else -> index
+            }
+            ToViewViewModel.deleteToView(video.avid, targetIndex)
+        }
+    }
 
     LaunchedEffect(Unit) {
         if (ToViewViewModel.histories.isEmpty()) {
@@ -99,16 +112,13 @@ fun ToViewScreen(
         }
     }
 
-    LaunchedEffect(showDeleteConfirmDialog) {
-        if (showDeleteConfirmDialog) deleteFocusRequester.requestFocus(scope)
-    }
-
     LaunchedEffect(ToViewViewModel.deletePhase) {
         when (ToViewViewModel.deletePhase) {
             1 -> Unit
             2 -> {
                 if (ToViewViewModel.histories.isEmpty()) {
                     pendingRestoreFocusIndex = -1
+                    deleteMode = false
                     onListEmpty?.invoke()
                 } else {
                     pendingRestoreFocusIndex = ToViewViewModel.pendingFocusIndex.coerceIn(
@@ -123,10 +133,9 @@ fun ToViewScreen(
 
     LaunchedEffect(
         pendingRestoreFocusIndex,
-        showDeleteConfirmDialog,
         ToViewViewModel.histories.size
     ) {
-        if (pendingRestoreFocusIndex == -1 || showDeleteConfirmDialog) return@LaunchedEffect
+        if (pendingRestoreFocusIndex == -1) return@LaunchedEffect
         if (ToViewViewModel.histories.isEmpty()) {
             pendingRestoreFocusIndex = -1
             return@LaunchedEffect
@@ -169,7 +178,12 @@ fun ToViewScreen(
                             text = stringResource(AppR.string.title_activity_toview),
                             fontSize = titleFontSize.sp
                         )
-                        if (ToViewViewModel.noMore) {
+                        if (deleteMode) {
+                            Text(
+                                text = stringResource(AppR.string.toview_delete_mode_hint),
+                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f)
+                            )
+                        } else if (ToViewViewModel.noMore) {
                             Text(
                                 text = stringResource(
                                     AppR.string.load_data_count_no_more,
@@ -195,15 +209,30 @@ fun ToViewScreen(
         val padding = dimensionResource(TvR.dimen.grid_padding) / 2
         val spacedBy = dimensionResource(TvR.dimen.grid_spacedBy) / 2
         ProvideListBringIntoViewSpec(padding = 26.dp) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                Box(
-                    modifier = Modifier
-                        .padding(innerPadding)
-                        .width(1.dp)
-                        .height(1.dp)
-                        .focusRequester(contentFocusAnchorRequester)
-                        .focusable()
-                )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onPreviewKeyEvent { keyEvent ->
+                        when (keyEvent.key) {
+                            Key.Menu -> {
+                                if (keyEvent.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
+                                if (ToViewViewModel.histories.isNotEmpty()) {
+                                    deleteMode = !deleteMode
+                                }
+                                true
+                            }
+
+                            Key.Back -> {
+                                if (!deleteMode) return@onPreviewKeyEvent false
+                                if (keyEvent.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
+                                deleteMode = false
+                                true
+                            }
+
+                            else -> false
+                        }
+                    }
+            ) {
                 LazyVerticalGrid(
                     modifier = Modifier
                         .padding(innerPadding)
@@ -231,22 +260,30 @@ fun ToViewScreen(
                             modifier = Modifier.focusRequester(itemFocusRequester),
                             data = item,
                             onClick = {
-                                VideoInfoActivity.actionStart(
-                                    context = context,
-                                    aid = item.avid,
-                                    proxyArea = ProxyArea.checkProxyArea(item.title)
-                                )
+                                if (deleteMode) {
+                                    requestDelete(item, index)
+                                } else {
+                                    VideoInfoActivity.actionStart(
+                                        context = context,
+                                        aid = item.avid,
+                                        proxyArea = ProxyArea.checkProxyArea(item.title)
+                                    )
+                                }
                             },
                             onLongClick = {
-                                selectedVideo = item
-                                showMenuDialog = true
+                                if (!deleteMode) {
+                                    currentIndex = index
+                                    selectedVideo = item
+                                    showMenuDialog = true
+                                }
                             },
                             onFocus = {
                                 currentIndex = index
-                                //预加载
-                                // if (index + 12 > ToViewViewModel.histories.size) {
-                                //     ToViewViewModel.update()
-                                // }
+                            },
+                            overlay = { hasFocus ->
+                                if (deleteMode) {
+                                    ToViewDeleteBadge(isFocused = hasFocus)
+                                }
                             }
                         )
                     }
@@ -259,13 +296,15 @@ fun ToViewScreen(
         ToViewMenuDialog(
             show = showMenuDialog,
             focusRequester = menuFocusRequester,
+            showGotoUpSpace = selectedVideo!!.upId > 0,
             onDismiss = {
                 showMenuDialog = false
                 selectedVideo = null
             },
-            onDelete = {
+            onEnterDeleteMode = {
                 showMenuDialog = false
-                showDeleteConfirmDialog = true
+                deleteMode = true
+                selectedVideo = null
             },
             onGotoUpSpace = {
                 showMenuDialog = false
@@ -279,36 +318,15 @@ fun ToViewScreen(
             }
         )
     }
-
-    if (showDeleteConfirmDialog && selectedVideo != null) {
-        DeleteToViewConfirmDialog(
-            show = showDeleteConfirmDialog,
-            focusRequester = deleteFocusRequester,
-            videoTitle = selectedVideo!!.title,
-            onDismiss = {
-                showDeleteConfirmDialog = false
-                selectedVideo = null
-            },
-            onConfirm = {
-                val targetIndex = maxOf(0, currentIndex - 1)
-                ToViewViewModel.deleteToView(selectedVideo!!.avid, targetIndex)
-                showDeleteConfirmDialog = false
-                scope.launch {
-                    withFrameNanos { }
-                    contentFocusAnchorRequester.requestFocus(this)
-                }
-                selectedVideo = null
-            }
-        )
-    }
 }
 
 @Composable
 private fun ToViewMenuDialog(
     show: Boolean,
     focusRequester: FocusRequester,
+    showGotoUpSpace: Boolean,
     onDismiss: () -> Unit,
-    onDelete: () -> Unit,
+    onEnterDeleteMode: () -> Unit,
     onGotoUpSpace: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -357,58 +375,23 @@ private fun ToViewMenuDialog(
                         item {
                             MenuButton(
                                 modifier = Modifier.focusRequester(focusRequester),
-                                text = stringResource(AppR.string.toview_menu_delete),
-                                onClick = onDelete
+                                text = stringResource(AppR.string.toview_menu_enter_delete_mode),
+                                onClick = onEnterDeleteMode
                             )
                         }
-                        item {
-                            MenuButton(
-                                text = stringResource(AppR.string.toview_menu_goto_up_space),
-                                onClick = onGotoUpSpace
-                            )
+                        if (showGotoUpSpace) {
+                            item {
+                                MenuButton(
+                                    text = stringResource(AppR.string.toview_menu_goto_up_space),
+                                    onClick = onGotoUpSpace
+                                )
+                            }
                         }
                     }
                 }
             },
             dismissButton = {},
             confirmButton = {}
-        )
-    }
-}
-
-@Composable
-private fun DeleteToViewConfirmDialog(
-    show: Boolean,
-    focusRequester: FocusRequester,
-    videoTitle: String,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit
-) {
-    if (show) {
-        TvAlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(text = stringResource(AppR.string.toview_delete_confirm_dialog_title)) },
-            text = {
-                Text(
-                    text = stringResource(
-                        AppR.string.toview_delete_confirm_dialog_text,
-                        videoTitle
-                    )
-                )
-            },
-            confirmButton = {
-                Button(onClick = onConfirm) {
-                    Text(text = stringResource(AppR.string.toview_delete_confirm_dialog_confirm))
-                }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    modifier = Modifier.focusRequester(focusRequester),
-                    onClick = onDismiss
-                ) {
-                    Text(text = stringResource(AppR.string.toview_delete_confirm_dialog_dismiss))
-                }
-            }
         )
     }
 }
@@ -435,5 +418,45 @@ private fun MenuButton(
                 style = MaterialTheme.typography.bodyLarge,
             )
         }
+    }
+}
+
+@Composable
+private fun BoxScope.ToViewDeleteBadge(
+    isFocused: Boolean
+) {
+    Row(
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .padding(top = 12.dp, end = 12.dp)
+            .background(
+                color = if (isFocused) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.95f)
+                } else {
+                    MaterialTheme.colorScheme.error.copy(alpha = 0.92f)
+                },
+                shape = MaterialTheme.shapes.small
+            )
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Icon(
+            modifier = Modifier.size(14.dp),
+            imageVector = Icons.Default.Delete,
+            contentDescription = null,
+            tint = Color.White
+        )
+        Text(
+            text = stringResource(
+                if (isFocused) {
+                    AppR.string.toview_delete_mode_badge_focused
+                } else {
+                    AppR.string.toview_delete_mode_badge
+                }
+            ),
+            color = Color.White,
+            fontSize = 12.sp
+        )
     }
 }

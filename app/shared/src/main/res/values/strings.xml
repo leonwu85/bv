@@ -349,7 +349,11 @@
     <string name="title_activity_up_info">UP 投稿</string>
     <string name="toview_menu_title">操作菜单</string>
     <string name="toview_menu_delete">从稍后再看中移除</string>
+    <string name="toview_menu_enter_delete_mode">进入删除模式</string>
     <string name="toview_menu_goto_up_space">进入UP主空间</string>
+    <string name="toview_delete_mode_hint">删除模式：按确认删除，按返回退出</string>
+    <string name="toview_delete_mode_badge">删除</string>
+    <string name="toview_delete_mode_badge_focused">点击删除</string>
     <string name="toview_delete_confirm_dialog_title">确认删除</string>
     <string name="toview_delete_confirm_dialog_text">是否将 "%1$s" 从稍后再看列表中移除？</string>
     <string name="toview_delete_confirm_dialog_confirm">确认</string>
@@ -357,6 +361,10 @@
     <string name="toview_delete_success">删除成功</string>
     <string name="toview_delete_failed">删除失败</string>
     <string name="history_menu_delete">删除历史记录</string>
+    <string name="history_menu_enter_delete_mode">进入删除模式</string>
+    <string name="history_delete_mode_hint">删除模式：按确认删除，按返回退出</string>
+    <string name="history_delete_mode_badge">删除</string>
+    <string name="history_delete_mode_badge_focused">点击删除</string>
     <string name="history_delete_confirm_dialog_title">确认删除</string>
     <string name="history_delete_confirm_dialog_text">是否删除历史记录中的 "%1$s"？</string>
     <string name="history_delete_confirm_dialog_confirm">确认</string>

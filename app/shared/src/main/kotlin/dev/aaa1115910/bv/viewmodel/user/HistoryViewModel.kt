@@ -134,15 +134,17 @@ class HistoryViewModel(
         val viewAt = history.historyViewAt
 
         viewModelScope.launch(Dispatchers.IO) {
-            deleting = true
+            withContext(Dispatchers.Main) {
+                deleting = true
+            }
             runCatching {
                 val success = historyRepository.deleteHistory(
                     business = business,
                     kid = kid
                 )
                 if (success) {
-                    pendingFocusIndex = targetIndex
                     withContext(Dispatchers.Main) {
+                        pendingFocusIndex = targetIndex
                         deletePhase = 1
                     }
 

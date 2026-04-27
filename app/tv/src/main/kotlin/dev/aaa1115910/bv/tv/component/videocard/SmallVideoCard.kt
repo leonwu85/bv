@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -61,6 +62,8 @@ fun SmallVideoCard(
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onFocus: () -> Unit = {},
+    onFocusStateChanged: (Boolean) -> Unit = {},
+    overlay: @Composable BoxScope.(hasFocus: Boolean) -> Unit = {},
     initialFocus: Boolean = false
 ) {
     var hasFocus by remember { mutableStateOf(initialFocus) }
@@ -70,6 +73,7 @@ fun SmallVideoCard(
             .fillMaxWidth()
             .onFocusChanged {
                 hasFocus = it.isFocused
+                onFocusStateChanged(hasFocus)
                 if (hasFocus) onFocus()
             }
             .ifElse(
@@ -90,30 +94,33 @@ fun SmallVideoCard(
         shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
         scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1f)
     ) {
-        Column(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(top = 3.dp, start = 3.dp, end = 3.dp),
-        ) {
-            CardCover(
-                modifier = Modifier
-                    .clip(MaterialTheme.shapes.medium),
-                cover = data.cover,
-                play = data.playString,
-                danmaku = data.danmakuString,
-                time = data.timeString,
-                badges = data.coverBadges
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            CardInfo(
-                modifier = Modifier
+        Box {
+            Column(
+                modifier = modifier
                     .fillMaxWidth()
-                    .height(79.dp)
-                    .padding(horizontal = 1.dp),
-                title = data.title,
-                upName = data.upName,
-                pubTime = data.pubTime
-            )
+                    .padding(top = 3.dp, start = 3.dp, end = 3.dp),
+            ) {
+                CardCover(
+                    modifier = Modifier
+                        .clip(MaterialTheme.shapes.medium),
+                    cover = data.cover,
+                    play = data.playString,
+                    danmaku = data.danmakuString,
+                    time = data.timeString,
+                    badges = data.coverBadges
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                CardInfo(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(79.dp)
+                        .padding(horizontal = 1.dp),
+                    title = data.title,
+                    upName = data.upName,
+                    pubTime = data.pubTime
+                )
+            }
+            overlay(hasFocus)
         }
     }
 }
