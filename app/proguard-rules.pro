@@ -117,6 +117,9 @@
 -dontwarn ch.qos.logback.classic.spi.LogbackServiceProvider
 -dontwarn ch.qos.logback.classic.spi.LoggingEvent
 
+# markwon html 可选 commonmark 扩展
+-dontwarn org.commonmark.ext.gfm.strikethrough.Strikethrough
+
 # geetest
 -keep class com.geetest.sdk.** {*;}
 
