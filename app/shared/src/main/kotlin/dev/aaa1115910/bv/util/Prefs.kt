@@ -886,7 +886,7 @@ object PrefKeys {
     val prefShowOnlineViewerCountRequest = PreferenceRequest(prefShowOnlineViewerCountKey, 1)  // 0=不显示, 1=30秒后隐藏, 2=始终显示
     val prefVlcAutoRotateRequest = PreferenceRequest(prefVlcAutoRotate, true)
     val prefEnableAsyncQueueingRequest = PreferenceRequest(prefEnableAsyncQueueing, true)
-    val prefEnableTunnelingRequest = PreferenceRequest(prefEnableTunneling, false)
+    val prefEnableTunnelingRequest = PreferenceRequest(prefEnableTunneling, true)
     val prefEnableAudioPlaybackParamsRequest = PreferenceRequest(prefEnableAudioPlaybackParams, true)
     val prefVlcLibsVersionRequest = PreferenceRequest(prefVlcLibsVersionKey, "")
     val prefDefaultDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultDanmakuFilterLevelKey, 1)

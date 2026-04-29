@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -339,14 +340,18 @@ fun VideoPlayerV3Screen(
 
     val commentSplitScreenEnabled = Prefs.playerCommentSplitScreen && playerViewModel.currentAid > 0
     val useCommentSplitScreen = commentSplitScreenEnabled && showCommentPanel
+    var splitPlayerSnapped by remember { mutableStateOf(false) }
     var splitCommentPanelVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(useCommentSplitScreen) {
         if (useCommentSplitScreen) {
+            splitPlayerSnapped = false
             splitCommentPanelVisible = false
             delay(COMMENT_SPLIT_PLAYER_RESIZE_ANIMATION_MS.toLong())
+            splitPlayerSnapped = true
             splitCommentPanelVisible = true
         } else {
+            splitPlayerSnapped = false
             splitCommentPanelVisible = false
         }
     }
@@ -477,15 +482,21 @@ fun VideoPlayerV3Screen(
                 }
         ) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val splitCommentPanelWidth = maxWidth / 3
-                val playerWidth by animateDpAsState(
-                    targetValue = if (useCommentSplitScreen) maxWidth * (2f / 3f) else maxWidth,
+                val splitCommentPanelWidth = maxWidth * 0.3f
+                val splitMaskWidth by animateDpAsState(
+                    targetValue = if (useCommentSplitScreen) splitCommentPanelWidth else 0.dp,
                     animationSpec = tween(durationMillis = COMMENT_SPLIT_PLAYER_RESIZE_ANIMATION_MS),
-                    label = "CommentSplitPlayerWidth"
+                    label = "CommentSplitMaskWidth"
                 )
                 Box(
                     modifier = Modifier
-                        .width(playerWidth)
+                        .width(
+                            if (useCommentSplitScreen && splitPlayerSnapped) {
+                                maxWidth - splitCommentPanelWidth
+                            } else {
+                                maxWidth
+                            }
+                        )
                         .fillMaxHeight()
                         .align(Alignment.CenterStart)
                 ) {
@@ -1184,6 +1195,14 @@ fun VideoPlayerV3Screen(
                 message = tripleLikeTipMessage
             )
                 }
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .width(splitMaskWidth)
+                        .fillMaxHeight()
+                        .background(Color.Black.copy(alpha = 0.95f))
+                )
 
                 if (useCommentSplitScreen) {
                     CommentPanel(
