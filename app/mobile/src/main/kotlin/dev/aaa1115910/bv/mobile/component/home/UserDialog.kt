@@ -125,6 +125,7 @@ fun UserDialog(
 @Composable
 fun UserDialogContent(
     modifier: Modifier = Modifier,
+    showCloseButton: Boolean = true,
     currentUser: UserDB?,
     userList: List<UserDB>,
     onClose: () -> Unit,
@@ -148,8 +149,10 @@ fun UserDialogContent(
             CenterAlignedTopAppBar(
                 title = { Text(text = "Bv Video") },
                 navigationIcon = {
-                    IconButton(onClick = onClose) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = null)
+                    if (showCloseButton) {
+                        IconButton(onClick = onClose) {
+                            Icon(imageVector = Icons.Default.Close, contentDescription = null)
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(

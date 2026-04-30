@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import dev.aaa1115910.bv.mobile.screen.MobileMainScreen
 import dev.aaa1115910.bv.mobile.screen.RegionBlockScreen
+import dev.aaa1115910.bv.mobile.settings.MobileRuntime
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.util.NetworkUtil
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +20,7 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        MobileRuntime.install()
         var keepSplashScreen = true
         installSplashScreen().apply {
             setKeepOnScreenCondition { keepSplashScreen }

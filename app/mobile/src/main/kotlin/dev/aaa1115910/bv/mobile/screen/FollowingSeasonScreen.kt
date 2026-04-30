@@ -35,6 +35,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.aaa1115910.biliapi.entity.season.FollowingSeasonType
 import dev.aaa1115910.bv.entity.carddata.SeasonCardData
+import dev.aaa1115910.bv.mobile.activities.SeasonInfoActivity
 import dev.aaa1115910.bv.mobile.component.videocard.SeasonCard
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.util.OnBottomReached
@@ -70,7 +71,12 @@ fun FollowingSeasonScreen(
             followingSeasonViewModel.clearData()
             followingSeasonViewModel.loadMore()
         },
-        onClickSeason = {}
+        onClickSeason = { season ->
+            SeasonInfoActivity.actionStart(
+                context = context,
+                seasonId = season.seasonId
+            )
+        }
     )
 }
 

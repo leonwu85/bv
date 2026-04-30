@@ -110,7 +110,7 @@ fun DynamicScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(text = "Dynamic") },
+                title = { Text(text = "动态") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 )

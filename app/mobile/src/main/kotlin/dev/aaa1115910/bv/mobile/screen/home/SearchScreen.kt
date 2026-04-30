@@ -46,7 +46,10 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import dev.aaa1115910.biliapi.repositories.SearchType
 import dev.aaa1115910.biliapi.repositories.SearchTypeResult
+import dev.aaa1115910.bv.mobile.activities.SeasonInfoActivity
+import dev.aaa1115910.bv.mobile.activities.UserSpaceActivity
 import dev.aaa1115910.bv.mobile.activities.VideoPlayerActivity
 import dev.aaa1115910.bv.mobile.component.preferences.items.listItemPreference
 import dev.aaa1115910.bv.mobile.component.preferences.preferenceGroups
@@ -86,6 +89,35 @@ fun SearchScreen(
     val onOpenUgc: (Long) -> Unit = { aid ->
         VideoPlayerActivity.actionStart(context = context, aid = aid)
     }
+    val onOpenPgc: (Int) -> Unit = {
+        SeasonInfoActivity.actionStart(context = context, seasonId = it)
+    }
+    val onOpenUser: (SearchTypeResult.User) -> Unit = { user ->
+        UserSpaceActivity.actionStart(
+            context = context,
+            mid = user.mid,
+            name = user.name
+        )
+    }
+    val onOpenLiveRoom: (SearchTypeResult.LiveRoom) -> Unit = { room ->
+        VideoPlayerActivity.actionStartLive(
+            context = context,
+            roomId = room.roomId,
+            title = room.title,
+            upName = room.uname,
+            upFace = room.uface,
+            upMid = room.uid,
+            watchedNum = room.online
+        )
+    }
+    val onSearchTypeChange: (SearchType) -> Unit = { type ->
+        if (searchResultViewModel.searchType != type) {
+            searchResultViewModel.searchType = type
+            if (searchResultViewModel.keyword.isNotBlank()) {
+                searchResultViewModel.update()
+            }
+        }
+    }
 
     SearchContent(
         modifier = modifier,
@@ -95,7 +127,14 @@ fun SearchScreen(
         matchedHistory = searchInputViewModel.matchedSearchHistories.map { it.keyword },
         updateKeyword = updateKeyword,
         onSearch = onSearch,
+        searchType = searchResultViewModel.searchType,
+        isLoading = searchResultViewModel.isLoading(searchResultViewModel.searchType),
+        onSearchTypeChange = onSearchTypeChange,
+        onLoadMore = searchResultViewModel::loadMore,
         onOpenUgc = onOpenUgc,
+        onOpenPgc = onOpenPgc,
+        onOpenUser = onOpenUser,
+        onOpenLiveRoom = onOpenLiveRoom,
         videoSearchResult = searchResultViewModel.videoSearchResult.videos,
         mediaBangumiSearchResult = searchResultViewModel.mediaBangumiSearchResult.mediaBangumis,
         mediaFtSearchResult = searchResultViewModel.mediaFtSearchResult.mediaFts,
@@ -114,7 +153,14 @@ fun SearchContent(
     matchedHistory: List<String>,
     updateKeyword: (String) -> Unit = {},
     onSearch: (String) -> Unit = {},
+    searchType: SearchType = SearchType.Video,
+    isLoading: Boolean = false,
+    onSearchTypeChange: (SearchType) -> Unit = {},
+    onLoadMore: (SearchType) -> Unit = {},
     onOpenUgc: (Long) -> Unit = {},
+    onOpenPgc: (Int) -> Unit = {},
+    onOpenUser: (SearchTypeResult.User) -> Unit = {},
+    onOpenLiveRoom: (SearchTypeResult.LiveRoom) -> Unit = {},
     videoSearchResult: List<SearchTypeResult.Video>,
     mediaBangumiSearchResult: List<SearchTypeResult.Pgc>,
     mediaFtSearchResult: List<SearchTypeResult.Pgc>,
@@ -196,7 +242,14 @@ fun SearchContent(
                     biliUserSearchResult = biliUserSearchResult,
                     liveRoomSearchResult = liveRoomSearchResult,
                     onSearch = onSearchKeyword,
-                    onOpenUgc = onOpenUgc
+                    searchType = searchType,
+                    isLoading = isLoading,
+                    onSearchTypeChange = onSearchTypeChange,
+                    onLoadMore = onLoadMore,
+                    onOpenUgc = onOpenUgc,
+                    onOpenPgc = onOpenPgc,
+                    onOpenUser = onOpenUser,
+                    onOpenLiveRoom = onOpenLiveRoom
                 )
             }
         }

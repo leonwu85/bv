@@ -38,6 +38,7 @@ fun RcmdPage(
 ) {
     val logger = KotlinLogging.logger { }
     val pullRefreshState = rememberPullRefreshState(refreshing, { onRefresh() })
+    val isCompact = windowSize == WindowWidthSizeClass.Compact
 
     state.OnBottomReached(
         loading = loading
@@ -53,10 +54,13 @@ fun RcmdPage(
     ) {
         LazyVerticalGrid(
             state = state,
-            columns = GridCells.Adaptive(if (windowSize == WindowWidthSizeClass.Compact) 180.dp else 220.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(8.dp)
+            columns = GridCells.Fixed(if (isCompact) 2 else 5),
+            horizontalArrangement = Arrangement.spacedBy(if (isCompact) 8.dp else 12.dp),
+            verticalArrangement = Arrangement.spacedBy(if (isCompact) 8.dp else 12.dp),
+            contentPadding = PaddingValues(
+                horizontal = if (isCompact) 8.dp else 12.dp,
+                vertical = if (isCompact) 8.dp else 12.dp
+            )
         ) {
             items(videos) { video ->
                 SmallVideoCard(

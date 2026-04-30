@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -28,6 +28,7 @@ import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.constraintlayout.compose.Dimension
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerSeekData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
+import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekData
 import dev.aaa1115910.bv.player.entity.VideoPlayerStateData
 import dev.aaa1115910.bv.player.mobile.VideoSeekBar
@@ -42,6 +43,7 @@ fun MiniControllers(
     onEnterFullScreen: () -> Unit,
     onSeekToPosition: (Long) -> Unit,
 ) {
+    val videoPlayerVideoInfoData = LocalVideoPlayerVideoInfoData.current
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -50,7 +52,8 @@ fun MiniControllers(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth(),
-            onBack = onBack
+            onBack = onBack,
+            title = videoPlayerVideoInfoData.displayTitle()
         )
         BottomControllers(
             modifier = Modifier
@@ -67,7 +70,8 @@ fun MiniControllers(
 @Composable
 private fun TopControllers(
     modifier: Modifier = Modifier,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    title: String
 ) {
     Box(
         modifier = modifier
@@ -79,18 +83,28 @@ private fun TopControllers(
         ) {
             IconButton(onClick = onBack) {
                 Icon(
-                    imageVector = Icons.Rounded.ArrowBack,
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = null,
                     tint = Color.White
                 )
             }
             Text(
-                text = "这是一个标题",
+                text = title,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = Color.White
             )
         }
+    }
+}
+
+private fun dev.aaa1115910.bv.player.entity.VideoPlayerVideoInfoData.displayTitle(): String {
+    val titleText = title.trim()
+    val partTitleText = partTitle.trim()
+    return when {
+        titleText.isBlank() -> partTitleText
+        partTitleText.isBlank() || titleText.contains(partTitleText) -> titleText
+        else -> "$partTitleText | $titleText"
     }
 }
 

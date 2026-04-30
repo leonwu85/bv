@@ -1,8 +1,11 @@
 package dev.aaa1115910.bv.player.mobile
 
+import android.graphics.Bitmap
 import android.os.CountDownTimer
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -21,6 +24,7 @@ import com.kuaishou.akdanmaku.data.DanmakuItemData
 import com.kuaishou.akdanmaku.ecs.component.filter.TypeFilter
 import com.kuaishou.akdanmaku.ext.RETAINER_BILIBILI
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
+import com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer
 import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskFrame
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.AkDanmakuPlayer
@@ -48,12 +52,53 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerDebugInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekData
 import dev.aaa1115910.bv.player.entity.VideoPlayerStateData
 import dev.aaa1115910.bv.player.mobile.controller.BvPlayerController
+import dev.aaa1115910.bv.player.util.DanmakuMaskFinder
+import dev.aaa1115910.bv.player.util.danmakuMaskBitmap
+import dev.aaa1115910.bv.player.util.renderMaskFrameToBitmap
 import dev.aaa1115910.bv.util.countDownTimer
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.Calendar
+
+private const val FULLSCREEN_DANMAKU_TEXT_SIZE_SCALE = 1f
+private const val EMBEDDED_DANMAKU_TEXT_SIZE_SCALE = 0.8f
+
+private fun DanmakuConfig.invalidateTextSizeDependentState() {
+    updateMeasure()
+    updateLayout()
+    updateRetainer()
+    updateCache()
+    updateRender()
+}
+
+private fun Bitmap.safeRecycle() {
+    if (!isRecycled) {
+        recycle()
+    }
+}
+
+private class DanmakuMaskBitmapPool {
+    private val bitmaps = arrayOfNulls<Bitmap>(2)
+    private var nextIndex = 0
+
+    fun render(frame: DanmakuMaskFrame): Bitmap {
+        val index = nextIndex
+        nextIndex = (nextIndex + 1) % bitmaps.size
+        val reusableBitmap = bitmaps[index]?.takeUnless { it.isRecycled }
+        return renderMaskFrameToBitmap(frame, reusableBitmap).also { renderedBitmap ->
+            bitmaps[index] = renderedBitmap
+        }
+    }
+
+    fun release() {
+        bitmaps.indices.forEach { index ->
+            bitmaps[index]?.safeRecycle()
+            bitmaps[index] = null
+        }
+    }
+}
 
 @Composable
 fun BvPlayer(
@@ -85,9 +130,10 @@ fun BvPlayer(
     val logger = KotlinLogging.logger("BvPlayer")
     // 直接调用 danmakuPlayer 会始终为 null
     var mDanmakuPlayer: DanmakuPlayer? by remember { mutableStateOf(null) }
+    var mLiveDanmakuPlayer: LiveDanmakuPlayer? by remember { mutableStateOf(null) }
 
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
-    // val videoPlayerDanmakuMaskData = LocalVideoPlayerDanmakuMasksData.current
+    val videoPlayerDanmakuMaskData = LocalVideoPlayerDanmakuMasksData.current
     val videoPlayerHistoryData = LocalVideoPlayerHistoryData.current
     // val videoPlayerLoadStateData = LocalVideoPlayerLoadStateData.current
     // val videoPlayerLogsData = LocalVideoPlayerLogsData.current
@@ -117,7 +163,9 @@ fun BvPlayer(
     var clockRefreshTimer: CountDownTimer? by remember { mutableStateOf(null) }
     var hideBackToHistoryTimer: CountDownTimer? by remember { mutableStateOf(null) }
 
-    // var currentDanmakuMaskFrame: DanmakuMaskFrame? by remember { mutableStateOf(null) }
+    var currentDanmakuMaskFrame: DanmakuMaskFrame? by remember { mutableStateOf(null) }
+    var currentDanmakuMaskBitmap: Bitmap? by remember { mutableStateOf(null) }
+    val danmakuMaskBitmapPool = remember { DanmakuMaskBitmapPool() }
 
 
     val updatePosition = {
@@ -144,44 +192,91 @@ fun BvPlayer(
         }
     }
 
+    val danmakuTextSizeScale: () -> Float = {
+        if (isFullScreen) {
+            FULLSCREEN_DANMAKU_TEXT_SIZE_SCALE
+        } else {
+            EMBEDDED_DANMAKU_TEXT_SIZE_SCALE
+        }
+    }
+
+    val buildDanmakuConfig: (Float) -> DanmakuConfig = { alpha ->
+        val textSizeScale = danmakuTextSizeScale()
+        val textSizeChanged = danmakuConfig.textSizeScale != textSizeScale
+        danmakuConfig.copy(
+            retainerPolicy = RETAINER_BILIBILI,
+            textSizeScale = textSizeScale,
+            dataFilter = listOf(typeFilter),
+            alpha = alpha,
+            liveMode = isLive
+        ).also { config ->
+            if (textSizeChanged) {
+                config.invalidateTextSizeDependentState()
+            }
+        }
+    }
+
+    val updateAllDanmakuPlayerConfig: () -> Unit = {
+        mDanmakuPlayer?.updateConfig(danmakuConfig)
+        mLiveDanmakuPlayer?.updateConfig(danmakuConfig)
+    }
 
     val initDanmakuConfig: () -> Unit = {
         updateEnabledDanmakuTypeFilter(videoPlayerConfigData.currentDanmakuEnabledList)
-        danmakuConfig = danmakuConfig.copy(
-            retainerPolicy = RETAINER_BILIBILI,
-            textSizeScale = videoPlayerConfigData.currentDanmakuScale,
-            dataFilter = listOf(typeFilter),
-            alpha = danmakuOpacity,
-            liveMode = isLive
-        )
+        danmakuConfig = buildDanmakuConfig(danmakuOpacity)
         danmakuConfig.updateFilter()
-        mDanmakuPlayer?.updateConfig(danmakuConfig)
+        updateAllDanmakuPlayerConfig()
     }
 
     val updateDanmakuConfigTypeFilter: () -> Unit = {
         updateEnabledDanmakuTypeFilter(videoPlayerConfigData.currentDanmakuEnabledList)
+        danmakuConfig = buildDanmakuConfig(videoPlayerConfigData.currentDanmakuOpacity)
         danmakuConfig.updateFilter()
-        mDanmakuPlayer?.updateConfig(danmakuConfig)
+        updateAllDanmakuPlayerConfig()
     }
 
     val toggleDanmakuEnabled: (Boolean) -> Unit = { enabled ->
         updateEnabledDanmakuTypeFilter(if (enabled) videoPlayerConfigData.currentDanmakuEnabledList else listOf())
+        danmakuConfig = buildDanmakuConfig(videoPlayerConfigData.currentDanmakuOpacity)
         danmakuConfig.updateFilter()
-        mDanmakuPlayer?.updateConfig(danmakuConfig)
+        updateAllDanmakuPlayerConfig()
     }
 
     val updateDanmakuConfig: () -> Unit = {
-        danmakuConfig = danmakuConfig.copy(
-            retainerPolicy = RETAINER_BILIBILI,
-            textSizeScale = videoPlayerConfigData.currentDanmakuScale,
-            alpha = videoPlayerConfigData.currentDanmakuOpacity
-        )
-        mDanmakuPlayer?.updateConfig(danmakuConfig)
+        danmakuConfig = buildDanmakuConfig(videoPlayerConfigData.currentDanmakuOpacity)
+        updateAllDanmakuPlayerConfig()
     }
 
     val updateVideoAspectRatio: () -> Unit = {
         val aspectRatioValue = videoPlayer.videoWidth / videoPlayer.videoHeight.toFloat()
         aspectRatio = if (aspectRatioValue > 0) aspectRatioValue else 16 / 9f
+    }
+
+    val clearDanmakuMaskState: () -> Unit = {
+        currentDanmakuMaskFrame = null
+        currentDanmakuMaskBitmap = null
+    }
+
+    val updateDanmakuMaskForPosition: suspend (Long) -> Unit = update@{ position ->
+        if (isLive || !videoPlayerConfigData.currentDanmakuMask || videoPlayerDanmakuMaskData.danmakuMasks.isEmpty()) {
+            clearDanmakuMaskState()
+            return@update
+        }
+
+        val maskFrame = DanmakuMaskFinder.findMaskFrame(videoPlayerDanmakuMaskData.danmakuMasks, position)
+        if (maskFrame === currentDanmakuMaskFrame) return@update
+
+        if (maskFrame == null) {
+            clearDanmakuMaskState()
+            return@update
+        }
+
+        val renderedBitmap = withContext(Dispatchers.Default) {
+            danmakuMaskBitmapPool.render(maskFrame)
+        }
+
+        currentDanmakuMaskFrame = maskFrame
+        currentDanmakuMaskBitmap = renderedBitmap
     }
 
     val updateBackToHistory: () -> Unit = {
@@ -236,6 +331,13 @@ fun BvPlayer(
 
         override fun onPause() {
             logger.info { "onPause" }
+            if (isLive) {
+                videoPlayer.start()
+                mLiveDanmakuPlayer?.play()
+                isPlaying = true
+                isBuffering = false
+                return
+            }
             mDanmakuPlayer?.pause()
             isPlaying = false
         }
@@ -284,6 +386,21 @@ fun BvPlayer(
 
     LaunchedEffect(danmakuPlayer) {
         mDanmakuPlayer = danmakuPlayer
+        updateAllDanmakuPlayerConfig()
+    }
+
+    LaunchedEffect(isFullScreen) {
+        updateDanmakuConfig()
+    }
+
+    LaunchedEffect(
+        currentPosition,
+        isLive,
+        videoPlayerConfigData.currentDanmakuMask,
+        videoPlayerConfigData.currentVideoCid,
+        videoPlayerDanmakuMaskData.danmakuMasks.size
+    ) {
+        updateDanmakuMaskForPosition(currentPosition)
     }
 
     DisposableEffect(Unit) {
@@ -302,6 +419,8 @@ fun BvPlayer(
         )
         onDispose {
             clockRefreshTimer?.cancel()
+            clearDanmakuMaskState()
+            danmakuMaskBitmapPool.release()
         }
     }
 
@@ -334,7 +453,14 @@ fun BvPlayer(
             onExitFullScreen = onExitFullScreen,
             onBack = onBack,
             onPlay = { videoPlayer.start() },
-            onPause = { videoPlayer.pause() },
+            onPause = {
+                if (isLive) {
+                    videoPlayer.start()
+                    mLiveDanmakuPlayer?.play()
+                } else {
+                    videoPlayer.pause()
+                }
+            },
             onSeekToPosition = { position ->
                 onReloadDanmakuAfterSeek(position, isPlaying)
                 videoPlayer.seekTo(position)
@@ -381,8 +507,8 @@ fun BvPlayer(
             },
             onDanmakuOpacityChange = { opacity ->
                 onDanmakuOpacityChange(opacity)
-                danmakuConfig = danmakuConfig.copy(alpha = opacity)
-                mDanmakuPlayer?.updateConfig(danmakuConfig)
+                danmakuConfig = buildDanmakuConfig(opacity)
+                updateAllDanmakuPlayerConfig()
             },
             onDanmakuScaleChange = { scale ->
                 onDanmakuScaleChange(scale)
@@ -401,13 +527,25 @@ fun BvPlayer(
                     .align(Alignment.Center),
                 videoPlayer = videoPlayer, playerListener = videoPlayerListener
             )
-            AkDanmakuPlayer(
+            Box(
                 modifier = Modifier
-                    .fillMaxHeight(videoPlayerConfigData.currentDanmakuArea),
-                danmakuPlayer = mDanmakuPlayer,
-                isLiveMode = isLive,
-                onLiveDanmakuPlayerReady = onLiveDanmakuPlayerReady
-            )
+                    .fillMaxHeight(videoPlayerConfigData.currentDanmakuArea)
+                    .danmakuMaskBitmap(
+                        bitmap = currentDanmakuMaskBitmap.takeIf { videoPlayerConfigData.currentDanmakuMask },
+                        videoAspectRatio = aspectRatio
+                    )
+            ) {
+                AkDanmakuPlayer(
+                    modifier = Modifier.fillMaxSize(),
+                    danmakuPlayer = mDanmakuPlayer,
+                    isLiveMode = isLive,
+                    onLiveDanmakuPlayerReady = { player ->
+                        mLiveDanmakuPlayer = player
+                        updateDanmakuConfig()
+                        onLiveDanmakuPlayerReady?.invoke(player)
+                    }
+                )
+            }
         }
     }
 }

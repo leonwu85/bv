@@ -32,7 +32,8 @@ class PgcIndexViewModel(
 
     val indexResultItems = mutableStateListOf<PgcItem>()
 
-    private var updating = false
+    var updating by mutableStateOf(false)
+        private set
     private var nextPage = PgcIndexData.PgcIndexPage()
     val noMore get() = nextPage.hasNext.not()
 
