@@ -27,11 +27,13 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Alignment
@@ -51,8 +53,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Surface
-import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import dev.aaa1115910.bv.ui.theme.BVTheme
@@ -64,12 +64,14 @@ import dev.aaa1115910.bv.util.isDpadDown
 import dev.aaa1115910.bv.util.isDpadRight
 import dev.aaa1115910.bv.util.isDpadUp
 import dev.aaa1115910.bv.util.isKeyDown
-import dev.aaa1115910.bv.util.onDelayFocusChanged
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-private enum class DrawerFocusLayer {
-    Navigation,
-    Content,
+private class DrawerNavigationState(initialItem: DrawerItem) {
+    var focusedItem: DrawerItem = initialItem
+    var hasFocus: Boolean = false
+    var commitJob: Job? = null
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -85,44 +87,79 @@ fun DrawerContent(
     onOpenSettings: () -> Unit = {},
     onFocusToContent: (DrawerItem) -> Unit = {}
 ) {
+    val scope = rememberCoroutineScope()
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
-    val drawerSelectionDelay = if (enableMainUiAnimation) 200L else 0L
+    val drawerSelectionDelay = if (enableMainUiAnimation) 300L else 150L
     val hasUserAvatar = isLogin && avatar.isNotBlank()
     val userDisplayName = if (isLogin) username.ifBlank { "用户" } else DrawerItem.User.displayName
 
-    var drawerFocusedItem by remember { mutableStateOf(currentDrawerItem) }
-    var focusLayer by remember { mutableStateOf(DrawerFocusLayer.Content) }
-    var canMoveFocusToContent by remember { mutableStateOf(true) }
-    val isNavigationFocused = focusLayer == DrawerFocusLayer.Navigation
-    val isContentFocused = focusLayer == DrawerFocusLayer.Content
-    val visualSelectedItem = if (isContentFocused) currentDrawerItem else drawerFocusedItem
-
-    LaunchedEffect(drawerFocusedItem, currentDrawerItem, focusLayer) {
-        if (!isNavigationFocused || !drawerFocusedItem.hasContentPanel || drawerFocusedItem == currentDrawerItem) {
-            canMoveFocusToContent = true
-            return@LaunchedEffect
-        }
-        canMoveFocusToContent = false
-        delay(drawerSelectionDelay)
-        onDrawerItemChanged(drawerFocusedItem)
-        // 别急着向右移动焦点，动画还没结束
-        delay(drawerSelectionDelay)
-        canMoveFocusToContent = true
-    }
+    val navigationState = remember { DrawerNavigationState(currentDrawerItem) }
+    var isNavigationFocused by remember { mutableStateOf(false) }
+    val isContentFocused = !isNavigationFocused
 
     val menuItems by drawerNavItemsFlow.collectAsState(
         initial = remember { parseDrawerItemsOrder(Prefs.drawerItemsOrder) }
     )
 
-    LaunchedEffect(menuItems, currentDrawerItem, focusLayer) {
+    fun cancelPendingDrawerCommit() {
+        navigationState.commitJob?.cancel()
+        navigationState.commitJob = null
+    }
+
+    fun commitDrawerItem(item: DrawerItem) {
+        if (!item.hasContentPanel || item == currentDrawerItem) return
+        onDrawerItemChanged(item)
+    }
+
+    fun scheduleDrawerCommit(item: DrawerItem) {
+        cancelPendingDrawerCommit()
+        if (!item.hasContentPanel || item == currentDrawerItem) return
+
+        navigationState.commitJob = scope.launch {
+            delay(drawerSelectionDelay)
+            if (!navigationState.hasFocus || navigationState.focusedItem != item) return@launch
+            commitDrawerItem(item)
+            navigationState.commitJob = null
+        }
+    }
+
+    fun onDrawerItemFocused(item: DrawerItem) {
+        navigationState.focusedItem = item
+        if (navigationState.hasFocus) {
+            scheduleDrawerCommit(item)
+        }
+    }
+
+    fun focusToContent() {
+        val targetItem = navigationState.focusedItem
+        cancelPendingDrawerCommit()
+        commitDrawerItem(targetItem)
+        onFocusToContent(targetItem)
+    }
+
+    LaunchedEffect(currentDrawerItem, isNavigationFocused) {
+        if (!isNavigationFocused) {
+            navigationState.focusedItem = currentDrawerItem
+        }
+    }
+
+    LaunchedEffect(menuItems, currentDrawerItem, isNavigationFocused) {
         val fallbackItem = menuItems.firstOrNull() ?: DrawerItem.defaultConfigurableItem
         if (isContentFocused) {
-            drawerFocusedItem = currentDrawerItem
+            navigationState.focusedItem = currentDrawerItem
             return@LaunchedEffect
         }
 
-        if (drawerFocusedItem.isConfigurable && drawerFocusedItem !in menuItems) {
-            drawerFocusedItem = fallbackItem
+        if (navigationState.focusedItem.isConfigurable && navigationState.focusedItem !in menuItems) {
+            navigationState.focusedItem = fallbackItem
+            focusRequesters[fallbackItem]?.requestFocus()
+            scheduleDrawerCommit(fallbackItem)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            cancelPendingDrawerCommit()
         }
     }
 
@@ -144,18 +181,24 @@ fun DrawerContent(
             .onPreviewKeyEvent { keyEvent ->
                 if (keyEvent.isDpadRight()) {
                     if (keyEvent.isKeyDown()) {
-                        if (canMoveFocusToContent) onFocusToContent(drawerFocusedItem)
+                        focusToContent()
                         return@onPreviewKeyEvent true
                     }
                 }
                 false
             }
-            .onDelayFocusChanged(delayTime = 0) {
-                focusLayer = if (it.hasFocus) DrawerFocusLayer.Navigation else DrawerFocusLayer.Content
+            .onFocusChanged {
+                navigationState.hasFocus = it.hasFocus
+                isNavigationFocused = it.hasFocus
+                if (it.hasFocus) {
+                    scheduleDrawerCommit(navigationState.focusedItem)
+                } else {
+                    cancelPendingDrawerCommit()
+                }
             },
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        NavigationRailItem(
+        DrawerUserNavigationItem(
             modifier = Modifier
                 .focusRequester(userFocusRequester)
                 .focusProperties {
@@ -167,74 +210,14 @@ fun DrawerContent(
                         return@onPreviewKeyEvent true
                     }
                     false
-                }
-                .onFocusChanged {
-                    if (it.hasFocus && isNavigationFocused) {
-                        drawerFocusedItem = DrawerItem.User
-                    }
                 },
-            onClick = {
-                drawerFocusedItem = DrawerItem.User
-            },
-            selected = visualSelectedItem == DrawerItem.User,
-            colors = NavigationRailItemDefaults.colors(
-                selectedIconColor = Color.Transparent,
-                indicatorColor = Color.Transparent
-            ),
-            icon = {
-                if (hasUserAvatar) {
-                    AsyncImage(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .ifElse(
-                                isNavigationFocused && drawerFocusedItem == DrawerItem.User,
-                                Modifier
-                                    .border(
-                                        width = 2.dp,
-                                        color = MaterialTheme.colorScheme.inverseSurface,
-                                        shape = CircleShape
-                                    )
-                            )
-                            .padding(3.dp)  // 边框和图片之间的1dp透明区域
-                            .clip(CircleShape),
-                        model = avatar,
-                        contentDescription = null,
-                        contentScale = ContentScale.FillBounds
-                    )
-                } else {
-                    val userIconTint by animateColorAsState(
-                        targetValue = if (isNavigationFocused && drawerFocusedItem == DrawerItem.User) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.inverseSurface,
-                        animationSpec = tween(150),
-                        label = "user icon tint"
-                    )
-                    Icon(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .ifElse(
-                                isNavigationFocused && drawerFocusedItem == DrawerItem.User,
-                                Modifier
-                                    .border(
-                                        width = 2.dp,
-                                        color = MaterialTheme.colorScheme.inverseSurface,
-                                        shape = CircleShape
-                                    )
-                            )
-                            .clip(CircleShape),
-                        imageVector = DrawerItem.User.displayIcon,
-                        contentDescription = null,
-                        tint = userIconTint
-                    )
-                }
-            },
-            label = {
-                Text(
-                    modifier = Modifier.offset(y = (-3).dp),
-                    text = userDisplayName,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
+            hasUserAvatar = hasUserAvatar,
+            avatar = avatar,
+            userDisplayName = userDisplayName,
+            isNavigationFocused = isNavigationFocused,
+            selectedWhenContentFocused = currentDrawerItem == DrawerItem.User,
+            onFocused = { onDrawerItemFocused(DrawerItem.User) },
+            onClick = { onDrawerItemFocused(DrawerItem.User) }
         )
 
         LazyColumn(
@@ -253,63 +236,37 @@ fun DrawerContent(
                 } else {
                     focusRequesters.getValue(menuItems[index + 1])
                 }
-                NavigationRailItem(
-                        modifier = Modifier
-                            .focusRequester(focusRequesters.getValue(item))
-                            .focusProperties {
-                                up = previousFocusRequester
-                                down = nextFocusRequester
-                            }
-                            .onPreviewKeyEvent { keyEvent ->
-                                if (!keyEvent.isKeyDown()) {
-                                    return@onPreviewKeyEvent false
-                                }
-                                if (index == 0 && keyEvent.isDpadUp()) {
-                                    previousFocusRequester.requestFocus()
-                                    return@onPreviewKeyEvent true
-                                }
-                                if (index == menuItems.lastIndex && keyEvent.isDpadDown()) {
-                                    nextFocusRequester.requestFocus()
-                                    return@onPreviewKeyEvent true
-                                }
-                                false
-                            }
-                            // 立即更新focusedItem以反映视觉状态
-                            .onFocusChanged {
-                                if (it.hasFocus && isNavigationFocused) {
-                                    drawerFocusedItem = item
-                                }
-                            },
-                        onClick = {
-                            drawerFocusedItem = item
-                        },
-                        selected = visualSelectedItem == item,
-                        colors = NavigationRailItemDefaults.colors(
-                            indicatorColor = if (isContentFocused) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.inverseSurface
-                        ),
-                        icon = {
-                            val iconTint by animateColorAsState(
-                                targetValue = if (isNavigationFocused && drawerFocusedItem == item) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.inverseSurface,
-                                animationSpec = tween(150),
-                                label = "drawer icon tint"
-                            )
-                            Icon(
-                                imageVector = item.displayIcon,
-                                contentDescription = null,
-                                tint = iconTint
-                            )
-                        },
-                        label = {
-                            Text(
-                                modifier = Modifier.offset(y = (-3).dp),
-                                text = item.displayName,
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                DrawerNavigationItem(
+                    modifier = Modifier
+                        .focusRequester(focusRequesters.getValue(item))
+                        .focusProperties {
+                            up = previousFocusRequester
+                            down = nextFocusRequester
                         }
-                    )
+                        .onPreviewKeyEvent { keyEvent ->
+                            if (!keyEvent.isKeyDown()) {
+                                return@onPreviewKeyEvent false
+                            }
+                            if (index == 0 && keyEvent.isDpadUp()) {
+                                previousFocusRequester.requestFocus()
+                                return@onPreviewKeyEvent true
+                            }
+                            if (index == menuItems.lastIndex && keyEvent.isDpadDown()) {
+                                nextFocusRequester.requestFocus()
+                                return@onPreviewKeyEvent true
+                            }
+                            false
+                        },
+                    item = item,
+                    isNavigationFocused = isNavigationFocused,
+                    selectedWhenContentFocused = currentDrawerItem == item,
+                    indicatorColorWhenContentFocused = MaterialTheme.colorScheme.surfaceVariant,
+                    onFocused = { onDrawerItemFocused(item) },
+                    onClick = { onDrawerItemFocused(item) }
+                )
             }
         }
-        NavigationRailItem(
+        DrawerNavigationItem(
             modifier = Modifier
                 .focusRequester(settingsFocusRequester)
                 .focusProperties {
@@ -321,41 +278,157 @@ fun DrawerContent(
                         return@onPreviewKeyEvent true
                     }
                     false
-                }
-                .onFocusChanged {
-                    if (it.hasFocus && isNavigationFocused) {
-                        drawerFocusedItem = DrawerItem.Settings
-                    }
                 },
+            item = DrawerItem.Settings,
+            isNavigationFocused = isNavigationFocused,
+            selectedWhenContentFocused = currentDrawerItem == DrawerItem.Settings,
+            indicatorColorWhenContentFocused = MaterialTheme.colorScheme.surfaceVariant,
+            onFocused = { onDrawerItemFocused(DrawerItem.Settings) },
             onClick = {
                 onOpenSettings()
-                drawerFocusedItem = DrawerItem.Settings
-            },
-            selected = visualSelectedItem == DrawerItem.Settings,
-            colors = NavigationRailItemDefaults.colors(
-                indicatorColor = if (isContentFocused) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.inverseSurface
-            ),
-            icon = {
-                val settingsIconTint by animateColorAsState(
-                    targetValue = if (isNavigationFocused && drawerFocusedItem == DrawerItem.Settings) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.inverseSurface,
-                    animationSpec = tween(150),
-                    label = "settings icon tint"
-                )
-                Icon(
-                    imageVector = DrawerItem.Settings.displayIcon,
-                    contentDescription = null,
-                    tint = settingsIconTint
-                )
-            },
-            label = {
-                Text(
-                    modifier = Modifier.offset(y = (-3).dp),
-                    text = DrawerItem.Settings.displayName,
-                    style = MaterialTheme.typography.bodySmall
-                )
+                onDrawerItemFocused(DrawerItem.Settings)
             }
         )
     }
+}
+
+@Composable
+private fun DrawerUserNavigationItem(
+    modifier: Modifier = Modifier,
+    hasUserAvatar: Boolean,
+    avatar: String,
+    userDisplayName: String,
+    isNavigationFocused: Boolean,
+    selectedWhenContentFocused: Boolean,
+    onFocused: () -> Unit,
+    onClick: () -> Unit
+) {
+    var hasFocus by remember { mutableStateOf(false) }
+    val focusedInNavigation = isNavigationFocused && hasFocus
+
+    NavigationRailItem(
+        modifier = modifier.onFocusChanged {
+            hasFocus = it.hasFocus
+            if (it.hasFocus) onFocused()
+        },
+        onClick = onClick,
+        selected = if (isNavigationFocused) hasFocus else selectedWhenContentFocused,
+        colors = NavigationRailItemDefaults.colors(
+            selectedIconColor = Color.Transparent,
+            indicatorColor = Color.Transparent
+        ),
+        icon = {
+            if (hasUserAvatar) {
+                AsyncImage(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .ifElse(
+                            focusedInNavigation,
+                            Modifier
+                                .border(
+                                    width = 2.dp,
+                                    color = MaterialTheme.colorScheme.inverseSurface,
+                                    shape = CircleShape
+                                )
+                        )
+                        .padding(3.dp)
+                        .clip(CircleShape),
+                    model = avatar,
+                    contentDescription = null,
+                    contentScale = ContentScale.FillBounds
+                )
+            } else {
+                val userIconTint by animateColorAsState(
+                    targetValue = if (focusedInNavigation) {
+                        MaterialTheme.colorScheme.surface
+                    } else {
+                        MaterialTheme.colorScheme.inverseSurface
+                    },
+                    animationSpec = tween(150),
+                    label = "user icon tint"
+                )
+                Icon(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .ifElse(
+                            focusedInNavigation,
+                            Modifier
+                                .border(
+                                    width = 2.dp,
+                                    color = MaterialTheme.colorScheme.inverseSurface,
+                                    shape = CircleShape
+                                )
+                        )
+                        .clip(CircleShape),
+                    imageVector = DrawerItem.User.displayIcon,
+                    contentDescription = null,
+                    tint = userIconTint
+                )
+            }
+        },
+        label = {
+            Text(
+                modifier = Modifier.offset(y = (-3).dp),
+                text = userDisplayName,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    )
+}
+
+@Composable
+private fun DrawerNavigationItem(
+    modifier: Modifier = Modifier,
+    item: DrawerItem,
+    isNavigationFocused: Boolean,
+    selectedWhenContentFocused: Boolean,
+    indicatorColorWhenContentFocused: Color,
+    onFocused: () -> Unit,
+    onClick: () -> Unit
+) {
+    var hasFocus by remember { mutableStateOf(false) }
+    val focusedInNavigation = isNavigationFocused && hasFocus
+    val iconTint by animateColorAsState(
+        targetValue = if (focusedInNavigation) {
+            MaterialTheme.colorScheme.surface
+        } else {
+            MaterialTheme.colorScheme.inverseSurface
+        },
+        animationSpec = tween(150),
+        label = "drawer icon tint"
+    )
+
+    NavigationRailItem(
+        modifier = modifier.onFocusChanged {
+            hasFocus = it.hasFocus
+            if (it.hasFocus) onFocused()
+        },
+        onClick = onClick,
+        selected = if (isNavigationFocused) hasFocus else selectedWhenContentFocused,
+        colors = NavigationRailItemDefaults.colors(
+            indicatorColor = if (isNavigationFocused) {
+                MaterialTheme.colorScheme.inverseSurface
+            } else {
+                indicatorColorWhenContentFocused
+            }
+        ),
+        icon = {
+            Icon(
+                imageVector = item.displayIcon,
+                contentDescription = null,
+                tint = iconTint
+            )
+        },
+        label = {
+            Text(
+                modifier = Modifier.offset(y = (-3).dp),
+                text = item.displayName,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    )
 }
 
 enum class DrawerItem(

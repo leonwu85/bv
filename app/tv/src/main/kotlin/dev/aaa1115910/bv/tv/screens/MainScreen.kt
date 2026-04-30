@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -102,21 +103,30 @@ fun MainScreen(
     val searchFocusRequester = remember { FocusRequester() }
     val userFocusRequester = remember { FocusRequester() }
     val settingsFocusRequester = remember { FocusRequester() }
+    var pendingContentFocusItem by remember { mutableStateOf<DrawerItem?>(null) }
 
-    fun requestDrawerFocus(item: DrawerItem) {
-        drawerFocusRequesters[item]?.requestFocus()
+    fun requestDrawerFocus(item: DrawerItem): Boolean {
+        return runCatching {
+            drawerFocusRequesters[item]?.requestFocus() ?: false
+        }.getOrDefault(false)
     }
 
-    fun requestContentFocus(item: DrawerItem) {
-        when (item) {
-            DrawerItem.User -> userFocusRequester.requestFocus()
-            DrawerItem.Home -> mainFocusRequester.requestFocus()
-            DrawerItem.UGC -> ugcFocusRequester.requestFocus()
-            DrawerItem.PGC -> pgcFocusRequester.requestFocus()
-            DrawerItem.Live -> liveFocusRequester.requestFocus()
-            DrawerItem.Search -> searchFocusRequester.requestFocus()
-            DrawerItem.Settings -> settingsFocusRequester.requestFocus()
+    fun contentFocusRequesterFor(item: DrawerItem): FocusRequester {
+        return when (item) {
+            DrawerItem.User -> userFocusRequester
+            DrawerItem.Home -> mainFocusRequester
+            DrawerItem.UGC -> ugcFocusRequester
+            DrawerItem.PGC -> pgcFocusRequester
+            DrawerItem.Live -> liveFocusRequester
+            DrawerItem.Search -> searchFocusRequester
+            DrawerItem.Settings -> settingsFocusRequester
         }
+    }
+
+    fun requestContentFocus(item: DrawerItem): Boolean {
+        return runCatching {
+            contentFocusRequesterFor(item).requestFocus()
+        }.getOrDefault(false)
     }
 
     // 时间显示状态
@@ -145,8 +155,19 @@ fun MainScreen(
         }
     }
 
+    suspend fun requestContentFocusWithRetry(item: DrawerItem): Boolean {
+        repeat(4) {
+            if (requestContentFocus(item)) return true
+            withFrameNanos { }
+        }
+        return false
+    }
+
     val onFocusToContent: (DrawerItem) -> Unit = { drawerItem ->
-        requestContentFocus(drawerItem)
+        if (selectedDrawerItem != drawerItem) {
+            selectedDrawerItem = drawerItem
+        }
+        pendingContentFocusItem = drawerItem
     }
 
     LaunchedEffect(drawerMenuItems) {
@@ -168,9 +189,26 @@ fun MainScreen(
 
     LaunchedEffect(Unit) {
         runCatching {
-            requestContentFocus(selectedDrawerItem)
+            withFrameNanos { }
+            if (!requestContentFocusWithRetry(selectedDrawerItem)) {
+                requestDrawerFocus(selectedDrawerItem)
+            }
         }.onFailure {
             logger.fException(it) { "request default focus requester failed" }
+        }
+    }
+
+    LaunchedEffect(pendingContentFocusItem, selectedDrawerItem) {
+        val targetItem = pendingContentFocusItem ?: return@LaunchedEffect
+        if (selectedDrawerItem != targetItem) return@LaunchedEffect
+
+        withFrameNanos { }
+        val focusSucceeded = requestContentFocusWithRetry(targetItem)
+        if (pendingContentFocusItem == targetItem) {
+            pendingContentFocusItem = null
+        }
+        if (!focusSucceeded) {
+            requestDrawerFocus(targetItem)
         }
     }
 

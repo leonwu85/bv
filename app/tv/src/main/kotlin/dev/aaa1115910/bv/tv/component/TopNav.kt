@@ -21,6 +21,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -53,6 +54,7 @@ fun TopNav(
     onSelectedChanged: (TopNavItem) -> Unit = {},
     onClick: (TopNavItem) -> Unit = {},
     onLeftKeyEvent: () -> Unit = {},
+    onPendingDownKeyEvent: (() -> Boolean)? = null,
     onDownKeyEvent: (() -> Boolean)? = null
 ) {
     if (items.isEmpty()) return
@@ -69,6 +71,7 @@ fun TopNav(
     val highlightedTabIndex = items.indexOf(highlightedNav).takeIf { it >= 0 } ?: 0
 
     var canMoveFocusDown by remember { mutableStateOf(true) }
+    var hasNavFocus by remember { mutableStateOf(false) }
 
     LaunchedEffect(items, initialSelectedItem) {
         val nextSelectedItem = initialSelectedItem?.takeIf { it in items } ?: items.first()
@@ -76,8 +79,12 @@ fun TopNav(
         canMoveFocusDown = true
     }
 
-    LaunchedEffect(highlightedNav, initialSelectedItem, items) {
+    LaunchedEffect(highlightedNav, initialSelectedItem, items, hasNavFocus) {
         if (highlightedNav !in items) return@LaunchedEffect
+        if (!hasNavFocus) {
+            canMoveFocusDown = true
+            return@LaunchedEffect
+        }
         if (highlightedNav == initialSelectedItem) {
             canMoveFocusDown = true
             return@LaunchedEffect
@@ -86,7 +93,7 @@ fun TopNav(
         if (highlightedNav != initialSelectedItem) {
             onSelectedChanged(highlightedNav)
         }
-        
+
         delay(focusUnlockDelay)
         canMoveFocusDown = true
     }
@@ -107,6 +114,9 @@ fun TopNav(
             modifier = Modifier
                 .focusProperties { onEnter = { focusRequester.requestFocus() } }
                 .focusRestorer(focusRequester)
+                .onFocusChanged {
+                    hasNavFocus = it.hasFocus
+                }
                 .onPreviewKeyEvent {
                     if (it.isKeyDown()) {
                         if (it.key == Key.DirectionLeft && highlightedTabIndex == 0) {
@@ -115,6 +125,9 @@ fun TopNav(
                         }
                         if (it.key == Key.DirectionDown) {
                             if (!canMoveFocusDown) {
+                                if (onPendingDownKeyEvent?.invoke() == true) {
+                                    return@onPreviewKeyEvent true
+                                }
                                 return@onPreviewKeyEvent true
                             }
                             if (onDownKeyEvent?.invoke() == true) {

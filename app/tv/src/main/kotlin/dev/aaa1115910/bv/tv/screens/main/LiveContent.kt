@@ -20,7 +20,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -80,6 +79,30 @@ private enum class LiveFocusLayer {
     Content,
 }
 
+private class LiveNavCommitState {
+    var parentJob: Job? = null
+    var subJob: Job? = null
+    var pendingParentNav: LiveParentNavItem? = null
+    var pendingSubNav: SubAreaNavItem? = null
+
+    fun cancelParent() {
+        parentJob?.cancel()
+        parentJob = null
+        pendingParentNav = null
+    }
+
+    fun cancelSub() {
+        subJob?.cancel()
+        subJob = null
+        pendingSubNav = null
+    }
+
+    fun cancelAll() {
+        cancelParent()
+        cancelSub()
+    }
+}
+
 @Composable
 fun LiveContent(
     modifier: Modifier = Modifier,
@@ -91,13 +114,13 @@ fun LiveContent(
     val logger = KotlinLogging.logger("LiveContent")
     val context = LocalContext.current
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
-    val navSelectionCommitDelay = if (enableMainUiAnimation) 250L else 0L
+    val navSelectionCommitDelay = if (enableMainUiAnimation) 250L else 150L
 
     val gridState = rememberLazyGridState()
     val subNavFocusRequester = remember { FocusRequester() }
+    val firstContentFocusRequester = remember { FocusRequester() }
     var focusLayer by remember { mutableStateOf<LiveFocusLayer?>(null) }
-    var parentNavCommitJob by remember { mutableStateOf<Job?>(null) }
-    var subNavCommitJob by remember { mutableStateOf<Job?>(null) }
+    val navCommitState = remember { LiveNavCommitState() }
 
     val currentRoomList = liveViewModel.getCurrentRoomList()
     val currentHistoryList = liveViewModel.historyList
@@ -161,28 +184,34 @@ fun LiveContent(
         }
     }
 
-    fun scheduleParentNavCommit(nav: LiveParentNavItem) {
-        parentNavCommitJob?.cancel()
-        parentNavCommitJob = null
-        subNavCommitJob?.cancel()
-        subNavCommitJob = null
-
+    fun commitParentNav(nav: LiveParentNavItem) {
         if (isCommittedParentNav(nav)) return
 
-        parentNavCommitJob = scope.launch {
-            delay(navSelectionCommitDelay)
-            if (isCommittedParentNav(nav)) return@launch
+        liveViewModel.lastFocusedRoomIndex = 0
+        when (nav) {
+            LiveParentNavItem.Recommend -> liveViewModel.switchTab(LiveTabType.Recommend)
+            LiveParentNavItem.Following -> liveViewModel.switchTab(LiveTabType.Following)
+            LiveParentNavItem.History -> liveViewModel.switchTab(LiveTabType.History)
+            is LiveParentNavItem.Area -> liveViewModel.switchToAreaGroup(nav.group)
+        }
+    }
 
-            liveViewModel.lastFocusedRoomIndex = 0
-            when (nav) {
-                LiveParentNavItem.Recommend -> liveViewModel.switchTab(LiveTabType.Recommend)
-                LiveParentNavItem.Following -> liveViewModel.switchTab(LiveTabType.Following)
-                LiveParentNavItem.History -> {
-                    liveViewModel.switchTab(LiveTabType.History)
-                    liveViewModel.refresh()
-                }
-                is LiveParentNavItem.Area -> liveViewModel.switchToAreaGroup(nav.group)
-            }
+    fun scheduleParentNavCommit(nav: LiveParentNavItem) {
+        navCommitState.cancelParent()
+        navCommitState.cancelSub()
+        navCommitState.pendingParentNav = nav
+
+        if (isCommittedParentNav(nav)) {
+            navCommitState.pendingParentNav = null
+            return
+        }
+
+        navCommitState.parentJob = scope.launch {
+            delay(navSelectionCommitDelay)
+            if (focusLayer != LiveFocusLayer.ParentNav) return@launch
+            if (navCommitState.pendingParentNav != nav) return@launch
+            commitParentNav(nav)
+            navCommitState.cancelParent()
         }
     }
 
@@ -191,25 +220,68 @@ fun LiveContent(
             liveViewModel.currentSubArea?.id == nav.area.id
     }
 
-    fun scheduleSubNavCommit(nav: SubAreaNavItem) {
-        subNavCommitJob?.cancel()
-        subNavCommitJob = null
-
+    fun commitSubNav(nav: SubAreaNavItem) {
         if (isCommittedSubNav(nav)) return
 
-        subNavCommitJob = scope.launch {
-            delay(navSelectionCommitDelay)
-            if (isCommittedSubNav(nav)) return@launch
+        liveViewModel.lastFocusedRoomIndex = 0
+        liveViewModel.switchSubArea(nav.area)
+    }
 
-            liveViewModel.lastFocusedRoomIndex = 0
-            liveViewModel.switchSubArea(nav.area)
+    fun scheduleSubNavCommit(nav: SubAreaNavItem) {
+        navCommitState.cancelSub()
+        navCommitState.pendingSubNav = nav
+
+        if (isCommittedSubNav(nav)) {
+            navCommitState.pendingSubNav = null
+            return
         }
+
+        navCommitState.subJob = scope.launch {
+            delay(navSelectionCommitDelay)
+            if (focusLayer != LiveFocusLayer.SubNav) return@launch
+            if (navCommitState.pendingSubNav != nav) return@launch
+            commitSubNav(nav)
+            navCommitState.cancelSub()
+        }
+    }
+
+    fun requestFirstContentFocusAfterFrame() {
+        scope.launch {
+            delay(16)
+            firstContentFocusRequester.requestFocus(scope)
+        }
+    }
+
+    fun requestFocusBelowParentNavAfterFrame() {
+        scope.launch {
+            delay(16)
+            if (liveViewModel.currentTabType == LiveTabType.Area && liveViewModel.subAreaList.isNotEmpty()) {
+                subNavFocusRequester.requestFocus(scope)
+            } else {
+                firstContentFocusRequester.requestFocus(scope)
+            }
+        }
+    }
+
+    fun commitPendingParentNavForDown(): Boolean {
+        val pendingNav = navCommitState.pendingParentNav ?: return false
+        navCommitState.cancelParent()
+        commitParentNav(pendingNav)
+        requestFocusBelowParentNavAfterFrame()
+        return true
+    }
+
+    fun commitPendingSubNavForDown(): Boolean {
+        val pendingNav = navCommitState.pendingSubNav ?: return false
+        navCommitState.cancelSub()
+        commitSubNav(pendingNav)
+        requestFirstContentFocusAfterFrame()
+        return true
     }
 
     DisposableEffect(Unit) {
         onDispose {
-            parentNavCommitJob?.cancel()
-            subNavCommitJob?.cancel()
+            navCommitState.cancelAll()
         }
     }
 
@@ -265,8 +337,11 @@ fun LiveContent(
                             .onFocusChanged {
                                 if (it.hasFocus) {
                                     focusLayer = LiveFocusLayer.ParentNav
-                                } else if (focusLayer == LiveFocusLayer.ParentNav) {
-                                    focusLayer = null
+                                } else {
+                                    navCommitState.cancelParent()
+                                    if (focusLayer == LiveFocusLayer.ParentNav) {
+                                        focusLayer = null
+                                    }
                                 }
                             },
                         items = parentNavItems,
@@ -309,6 +384,12 @@ fun LiveContent(
                         },
                         onLeftKeyEvent = {
                             onRequestDrawerFocus()
+                        },
+                        onPendingDownKeyEvent = {
+                            commitPendingParentNavForDown()
+                        },
+                        onDownKeyEvent = {
+                            commitPendingParentNavForDown()
                         }
                     )
                 }
@@ -316,7 +397,10 @@ fun LiveContent(
                 // 第二行：子分区
                 if (liveViewModel.currentTabType == LiveTabType.Area &&
                     liveViewModel.subAreaList.isNotEmpty()) {
-                    val subNavItems = liveViewModel.subAreaList.map { SubAreaNavItem(it) }
+                    val subAreaSnapshot = liveViewModel.subAreaList.toList()
+                    val subNavItems = remember(subAreaSnapshot) {
+                        subAreaSnapshot.map { SubAreaNavItem(it) }
+                    }
                     TopNav(
                         modifier = Modifier
                             .focusRequester(subNavFocusRequester)
@@ -324,8 +408,11 @@ fun LiveContent(
                             .onFocusChanged {
                                 if (it.hasFocus) {
                                     focusLayer = LiveFocusLayer.SubNav
-                                } else if (focusLayer == LiveFocusLayer.SubNav) {
-                                    focusLayer = null
+                                } else {
+                                    navCommitState.cancelSub()
+                                    if (focusLayer == LiveFocusLayer.SubNav) {
+                                        focusLayer = null
+                                    }
                                 }
                             },
                         items = subNavItems,
@@ -347,6 +434,12 @@ fun LiveContent(
                         },
                         onLeftKeyEvent = {
                             navFocusRequester.requestFocus(scope)
+                        },
+                        onPendingDownKeyEvent = {
+                            commitPendingSubNavForDown()
+                        },
+                        onDownKeyEvent = {
+                            commitPendingSubNavForDown()
                         }
                     )
                 }
@@ -410,6 +503,11 @@ fun LiveContent(
                             key = { _, room -> "${room.roomId}:${room.viewAt}" }
                         ) { index, room ->
                             LiveHistoryCard(
+                                modifier = if (index == 0) {
+                                    Modifier.focusRequester(firstContentFocusRequester)
+                                } else {
+                                    Modifier
+                                },
                                 data = room,
                                 onClick = {
                                     liveViewModel.lastFocusedRoomIndex = index
@@ -434,6 +532,11 @@ fun LiveContent(
                             key = { _, room -> room.roomId }
                         ) { index, room ->
                             LiveRoomCard(
+                                modifier = if (index == 0) {
+                                    Modifier.focusRequester(firstContentFocusRequester)
+                                } else {
+                                    Modifier
+                                },
                                 data = room,
                                 onClick = {
                                     liveViewModel.lastFocusedRoomIndex = index
