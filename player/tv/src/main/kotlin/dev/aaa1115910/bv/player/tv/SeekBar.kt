@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.tv.material3.MaterialTheme
@@ -46,6 +47,9 @@ fun VideoSeekBar(
     moveState: SeekMoveState = SeekMoveState.Idle,
     showPosition: Boolean = false,
     isFocused: Boolean = false,
+    showThumb: Boolean = true,
+    thumbSize: Dp = 48.dp,
+    trackBottomMargin: Dp = 8.dp,
 ) {
     VideoSeekBar(
         modifier = modifier,
@@ -55,15 +59,22 @@ fun VideoSeekBar(
         playedTrackBrush = playedTrackBrush,
         useDefaultThumb = idleIcon.isBlank(),
         showPosition = showPosition,
-        thumb = { thumbModifier ->
-            SeekBarThumb(
-                modifier = thumbModifier,
-                state = moveState,
-                idleJsonUrl = idleIcon,
-                movingJsonUrl = movingIcon
-            )
+        thumb = if (showThumb) {
+            { thumbModifier ->
+                SeekBarThumb(
+                    modifier = thumbModifier,
+                    state = moveState,
+                    idleJsonUrl = idleIcon,
+                    movingJsonUrl = movingIcon,
+                    size = thumbSize
+                )
+            }
+        } else {
+            null
         },
-        isFocused = isFocused
+        isFocused = isFocused,
+        thumbSize = thumbSize,
+        trackBottomMargin = trackBottomMargin
     )
 }
 
@@ -79,6 +90,8 @@ private fun VideoSeekBar(
     showPosition: Boolean = false,
     thumb: (@Composable (Modifier) -> Unit)? = null,
     isFocused: Boolean = false,
+    thumbSize: Dp = 48.dp,
+    trackBottomMargin: Dp = 8.dp,
 ) {
     val barHeight by animateDpAsState(
         targetValue = if (isFocused) 12.dp else 6.dp,
@@ -102,7 +115,7 @@ private fun VideoSeekBar(
                     .constrainAs(seek) {
                         start.linkTo(parent.start)
                         end.linkTo(parent.end)
-                        bottom.linkTo(parent.bottom, 8.dp)
+                        bottom.linkTo(parent.bottom, trackBottomMargin)
                     }
                     .border(
                         width = if (isFocused) 1.5.dp else 0.dp,
@@ -158,7 +171,7 @@ private fun VideoSeekBar(
                     .constrainAs(thumbIcon) {
                         start.linkTo(
                             parent.start,
-                            (width - 48.dp) * (position / max(duration.toFloat(), 1f))
+                            (width - thumbSize) * (position / max(duration.toFloat(), 1f))
                         )
                         bottom.linkTo(seek.bottom)
                         top.linkTo(seek.top)

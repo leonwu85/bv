@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,17 +54,22 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Border
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
@@ -88,6 +94,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 private fun formatSpeed(speed: Float): String {
@@ -98,10 +105,54 @@ private fun controllerSeekBarPlayedTrackBrush(progressColor: Color): Brush {
     return SolidColor(progressColor)
 }
 
+private const val ControllerPanelBaseDensity = 2f
+private val ControllerButtonIconSize = 28.dp
+private val ControllerPanelTopPadding = 16.dp
+private val ControllerPanelInfoTopPadding = 4.dp
+private val ControllerPanelRowGap = 6.dp
+private val ControllerPanelBottomPadding = 2.dp
+private val ControllerActionRowOffset = 0.dp
+private val ControllerActionRowBottomPadding = 0.dp
+private val ControllerSeekBarBottomPadding = 0.dp
+private val ControllerSeekBarTrackBottomMargin = 4.dp
+private val ControllerTitleFontSize = 16.sp
+private val ControllerTitleLineHeight = 20.sp
+private val ControllerInfoFontSize = 12.sp
+private val ControllerInfoLineHeight = 18.sp
+private val ControllerUpAvatarSize = 22.dp
+private val ControllerInfoButtonHeight = 30.dp
+private val ControllerActionButtonHeight = 26.dp
+private val ControllerFunctionButtonHeight = 42.dp
+private val ControllerMinInfoButtonHeight = 24.dp
+private val ControllerMinActionButtonHeight = 22.dp
+
 private class ControllerBottomBarAutoHideState {
     var hideVideoInfoJob: Job? = null
     var pauseAutoHide: Boolean = false
 }
+
+private fun Modifier.controllerButtonIconSize(
+    scale: Float = 1f,
+    size: Dp = ControllerButtonIconSize
+): Modifier = this
+    .size(size)
+    .ifElse(scale != 1f, Modifier.scale(scale))
+
+private fun Modifier.centeredControllerButtonIconSize(
+    scale: Float = 1f,
+    size: Dp = ControllerButtonIconSize
+): Modifier = this
+    .fillMaxSize()
+    .wrapContentSize(Alignment.Center)
+    .size(size)
+    .ifElse(scale != 1f, Modifier.scale(scale))
+
+private fun Dp.scaledBy(scale: Float): Dp = (value * scale).dp
+
+private fun TextUnit.scaledBy(scale: Float): TextUnit = (value * scale).sp
+
+private fun Dp.scaledByAtLeast(scale: Float, min: Dp): Dp =
+    max(value * scale, min.value).dp
 
 @Composable
 fun ControllerBottomBar(
@@ -386,20 +437,30 @@ fun ControllerBottomBar(
         onDispose { cancelHideJob() }
     }
 
-    Column(
-        modifier = modifier
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown) {
-                    scheduleHideJob()
-                }
-                false
-            }
-            .background(
-                Brush.verticalGradient(PlayerColors.controllerScrimBottom)
-            ),
-        verticalArrangement = Arrangement.Bottom
+    val currentDensity = LocalDensity.current
+    val controllerPanelScale =
+        (currentDensity.density / ControllerPanelBaseDensity).coerceAtLeast(0.01f)
+
+    CompositionLocalProvider(
+        LocalDensity provides Density(
+            density = ControllerPanelBaseDensity,
+            fontScale = currentDensity.fontScale
+        )
     ) {
-        Spacer(modifier = Modifier.padding(top = 32.dp))
+        Column(
+            modifier = modifier
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown) {
+                        scheduleHideJob()
+                    }
+                    false
+                }
+                .background(
+                    Brush.verticalGradient(PlayerColors.controllerScrimBottom)
+            ),
+            verticalArrangement = Arrangement.Bottom
+        ) {
+        Spacer(modifier = Modifier.height(ControllerPanelTopPadding.scaledBy(controllerPanelScale)))
 
         // ── 标题 ──
         Text(
@@ -408,7 +469,10 @@ fun ControllerBottomBar(
             color = PlayerColors.textPrimary,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.headlineSmall.copy(
+                fontSize = ControllerTitleFontSize.scaledBy(controllerPanelScale),
+                lineHeight = ControllerTitleLineHeight.scaledBy(controllerPanelScale)
+            ),
         )
 
         if (isLive) {
@@ -418,7 +482,11 @@ fun ControllerBottomBar(
             if (upName.isNotEmpty()) {
                 Row(
                     modifier = Modifier
-                        .padding(start = 32.dp, end = 32.dp, top = 8.dp)
+                        .padding(
+                            start = 32.dp,
+                            end = 32.dp,
+                            top = ControllerPanelInfoTopPadding.scaledBy(controllerPanelScale)
+                        )
                         .fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -426,7 +494,12 @@ fun ControllerBottomBar(
                     // UP主按钮
                     Button(
                         modifier = Modifier
-                            .height(30.dp)
+                            .height(
+                                ControllerInfoButtonHeight.scaledByAtLeast(
+                                    controllerPanelScale,
+                                    ControllerMinInfoButtonHeight
+                                )
+                            )
                             .onFocusChanged { if (it.isFocused) scheduleHideJob() },
                         onClick = onOpenUpSpace,
                         shape = ButtonDefaults.shape(shape = RoundedCornerShape(15.dp)),
@@ -444,7 +517,9 @@ fun ControllerBottomBar(
                     ) {
                         if (upAvatar.isNotEmpty()) {
                             AsyncImage(
-                                modifier = Modifier.size(28.dp).clip(CircleShape),
+                                modifier = Modifier
+                                    .size(ControllerUpAvatarSize.scaledBy(controllerPanelScale))
+                                    .clip(CircleShape),
                                 model = upAvatar,
                                 contentDescription = upName,
                                 contentScale = ContentScale.Crop
@@ -455,14 +530,22 @@ fun ControllerBottomBar(
                             text = upName,
                             color = PlayerColors.textPrimary,
                             maxLines = 1,
-                            style = MaterialTheme.typography.bodyMedium
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = ControllerInfoFontSize.scaledBy(controllerPanelScale),
+                                lineHeight = ControllerInfoLineHeight.scaledBy(controllerPanelScale)
+                            )
                         )
                     }
 
                     // 关注/取消关注按钮
                     Button(
                         modifier = Modifier
-                            .height(30.dp)
+                            .height(
+                                ControllerInfoButtonHeight.scaledByAtLeast(
+                                    controllerPanelScale,
+                                    ControllerMinInfoButtonHeight
+                                )
+                            )
                             .onFocusChanged { if (it.isFocused) scheduleHideJob() },
                         onClick = onToggleFollow,
                         shape = ButtonDefaults.shape(shape = RoundedCornerShape(15.dp)),
@@ -489,33 +572,43 @@ fun ControllerBottomBar(
                             text = if (isFollowingUp) "已关注" else "关注",
                             color = PlayerColors.textPrimary,
                             maxLines = 1,
-                            style = MaterialTheme.typography.bodyMedium
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = ControllerInfoFontSize.scaledBy(controllerPanelScale),
+                                lineHeight = ControllerInfoLineHeight.scaledBy(controllerPanelScale)
+                            )
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(ControllerPanelRowGap.scaledBy(controllerPanelScale)))
 
             // ── 直播功能按钮行 ──
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 32.dp, end = 32.dp, bottom = 10.dp),
+                    .padding(
+                        start = 32.dp,
+                        end = 32.dp,
+                        bottom = ControllerPanelBottomPadding.scaledBy(controllerPanelScale)
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 liveButtons.forEach { button ->
                     Button(
                         modifier = Modifier
-                            .height(48.dp)
+                            .height(ControllerFunctionButtonHeight.scaledBy(controllerPanelScale))
                             .width(if (button.text != null) (button.width ?: 48).dp else 48.dp)
                             .focusRequester(liveFocusRequesters[button.id] ?: FocusRequester())
                             .onFocusChanged { if (it.isFocused) scheduleHideJob() },
                         onClick = button.onClick,
                         shape = ButtonDefaults.shape(shape = RoundedCornerShape(12.dp)),
                         scale = ButtonDefaults.scale(focusedScale = 1.1f),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(
+                            horizontal = 8.dp,
+                            vertical = 4.dp.scaledBy(controllerPanelScale)
+                        ),
                         colors = ButtonDefaults.colors(
                             containerColor = PlayerColors.buttonDefault,
                             focusedContainerColor = PlayerColors.buttonFocused
@@ -533,7 +626,7 @@ fun ControllerBottomBar(
                             ) {
                                 Icon(
                                     modifier = Modifier
-                                        .ifElse(button.scale != 1f, Modifier.scale(button.scale)),
+                                        .controllerButtonIconSize(button.scale),
                                     imageVector = button.icon,
                                     contentDescription = null,
                                     tint = button.tint
@@ -553,7 +646,7 @@ fun ControllerBottomBar(
                             ) {
                                 Icon(
                                     modifier = Modifier
-                                        .ifElse(button.scale != 1f, Modifier.scale(button.scale)),
+                                        .controllerButtonIconSize(button.scale),
                                     painter = painterResource(id = button.painterId),
                                     contentDescription = null,
                                     tint = button.tint
@@ -563,8 +656,7 @@ fun ControllerBottomBar(
                             button.icon?.let {
                                 Icon(
                                     modifier = Modifier
-                                        .fillMaxSize()
-                                        .ifElse(button.scale != 1f, Modifier.scale(button.scale)),
+                                        .centeredControllerButtonIconSize(button.scale),
                                     imageVector = it,
                                     contentDescription = null,
                                     tint = button.tint
@@ -581,13 +673,22 @@ fun ControllerBottomBar(
             if (upName.isNotEmpty()) {
             Row(
                 modifier = Modifier
-                    .padding(start = 32.dp, end = 32.dp, top = 8.dp)
+                    .padding(
+                        start = 32.dp,
+                        end = 32.dp,
+                        top = ControllerPanelInfoTopPadding.scaledBy(controllerPanelScale)
+                    )
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(
                     modifier = Modifier
-                        .height(30.dp)
+                        .height(
+                            ControllerInfoButtonHeight.scaledByAtLeast(
+                                controllerPanelScale,
+                                ControllerMinInfoButtonHeight
+                            )
+                        )
                         .onFocusChanged { if (it.isFocused) scheduleHideJob() },
                     onClick = onOpenUpSpace,
                     shape = ButtonDefaults.shape(shape = RoundedCornerShape(15.dp)),
@@ -610,7 +711,7 @@ fun ControllerBottomBar(
                     if (upAvatar.isNotEmpty()) {
                         AsyncImage(
                             modifier = Modifier
-                                .size(28.dp)
+                                .size(ControllerUpAvatarSize.scaledBy(controllerPanelScale))
                                 .clip(CircleShape),
                             model = upAvatar,
                             contentDescription = upName,
@@ -622,7 +723,10 @@ fun ControllerBottomBar(
                         text = upName,
                         color = PlayerColors.textPrimary,
                         maxLines = 1,
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = ControllerInfoFontSize.scaledBy(controllerPanelScale),
+                            lineHeight = ControllerInfoLineHeight.scaledBy(controllerPanelScale)
+                        )
                     )
                 }
                 Text(
@@ -633,7 +737,10 @@ fun ControllerBottomBar(
                     color = PlayerColors.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = ControllerInfoFontSize.scaledBy(controllerPanelScale),
+                        lineHeight = ControllerInfoLineHeight.scaledBy(controllerPanelScale)
+                    )
                 )
             }
         }
@@ -642,8 +749,8 @@ fun ControllerBottomBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 32.dp, bottom = 4.dp)
-                .offset(y = 8.dp)
+                .padding(start = 32.dp, bottom = ControllerActionRowBottomPadding.scaledBy(controllerPanelScale))
+                .offset(y = ControllerActionRowOffset.scaledBy(controllerPanelScale))
                 .focusProperties {
                     down = seekbarFocusRequester
                 },
@@ -665,7 +772,12 @@ fun ControllerBottomBar(
             val tripleLikeFocus = userActionFocusRequesters.value["tripleLike"]
             Button(
                 modifier = Modifier
-                    .height(26.dp)
+                    .height(
+                        ControllerActionButtonHeight.scaledByAtLeast(
+                            controllerPanelScale,
+                            ControllerMinActionButtonHeight
+                        )
+                    )
                     .onFocusChanged { if (it.isFocused) scheduleHideJob() }
                     .then(tripleLikeFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
                 onClick = onTripleLike,
@@ -703,7 +815,12 @@ fun ControllerBottomBar(
             val descFocus = userActionFocusRequesters.value["description"]
             Button(
                 modifier = Modifier
-                    .height(26.dp)
+                    .height(
+                        ControllerActionButtonHeight.scaledByAtLeast(
+                            controllerPanelScale,
+                            ControllerMinActionButtonHeight
+                        )
+                    )
                     .onFocusChanged { if (it.isFocused) scheduleHideJob() }
                     .then(descFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
                 onClick = onShowDescription,
@@ -742,7 +859,12 @@ fun ControllerBottomBar(
                 val playlistFocus = userActionFocusRequesters.value["playlist"]
                 Button(
                     modifier = Modifier
-                        .height(26.dp)
+                        .height(
+                            ControllerActionButtonHeight.scaledByAtLeast(
+                                controllerPanelScale,
+                                ControllerMinActionButtonHeight
+                            )
+                        )
                         .onFocusChanged { if (it.isFocused) scheduleHideJob() }
                         .then(playlistFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
                     onClick = onOpenPlayList,
@@ -780,7 +902,12 @@ fun ControllerBottomBar(
                     val relatedFocus = userActionFocusRequesters.value["related"]
                     Button(
                         modifier = Modifier
-                            .height(26.dp)
+                            .height(
+                                ControllerActionButtonHeight.scaledByAtLeast(
+                                    controllerPanelScale,
+                                    ControllerMinActionButtonHeight
+                                )
+                            )
                             .onFocusChanged { if (it.isFocused) scheduleHideJob() }
                             .then(relatedFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
                         onClick = onOpenRelatedVideo,
@@ -821,7 +948,11 @@ fun ControllerBottomBar(
         VideoSeekBar(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 30.dp, end = 30.dp, bottom = 2.dp)
+                .padding(
+                    start = 30.dp,
+                    end = 30.dp,
+                    bottom = ControllerSeekBarBottomPadding.scaledBy(controllerPanelScale)
+                )
                 .focusRequester(seekbarFocusRequester)
                 .onFocusChanged {
                     scheduleHideJob()
@@ -851,14 +982,20 @@ fun ControllerBottomBar(
             idleIcon = idleIcon,
             movingIcon = movingIcon,
             isFocused = seekbarHasFocus,
-            playedTrackBrush = seekBarPlayedTrackBrush
+            playedTrackBrush = seekBarPlayedTrackBrush,
+            showThumb = false,
+            trackBottomMargin = ControllerSeekBarTrackBottomMargin.scaledBy(controllerPanelScale)
         )
 
         // ── Row 2: 功能按钮 ──
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 32.dp, end = 32.dp, bottom = 10.dp)
+                .padding(
+                    start = 32.dp,
+                    end = 32.dp,
+                    bottom = ControllerPanelBottomPadding.scaledBy(controllerPanelScale)
+                )
                 .focusProperties { up = seekbarFocusRequester },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -866,13 +1003,16 @@ fun ControllerBottomBar(
             buttons.forEach { button ->
                 Button(
                     modifier = Modifier
-                        .height(48.dp)
+                        .height(ControllerFunctionButtonHeight.scaledBy(controllerPanelScale))
                         .width(if (button.text != null) (button.width ?: 48).dp else 48.dp)
                         .focusRequester(focusRequesters[button.id] ?: FocusRequester()),
                     onClick = button.onClick,
                     shape = ButtonDefaults.shape(shape = RoundedCornerShape(12.dp)),
                     scale = ButtonDefaults.scale(focusedScale = 1.1f),
-                    contentPadding = PaddingValues(4.dp),
+                    contentPadding = PaddingValues(
+                        horizontal = 4.dp,
+                        vertical = 4.dp.scaledBy(controllerPanelScale)
+                    ),
                     colors = ButtonDefaults.colors(
                         containerColor = if (button.selected) PlayerColors.buttonSelected else PlayerColors.buttonDefault,
                         focusedContainerColor = PlayerColors.buttonFocused
@@ -913,7 +1053,7 @@ fun ControllerBottomBar(
                     } else if (button.painterId != null) {
                         Icon(
                             modifier = Modifier
-                                .ifElse(button.scale != 1f, Modifier.scale(button.scale)),
+                                .centeredControllerButtonIconSize(button.scale),
                             painter = painterResource(id = button.painterId),
                             contentDescription = null,
                             tint = button.tint
@@ -922,8 +1062,7 @@ fun ControllerBottomBar(
                         button.icon?.let {
                             Icon(
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .ifElse(button.scale != 1f, Modifier.scale(button.scale)),
+                                    .centeredControllerButtonIconSize(button.scale),
                                 imageVector = it,
                                 contentDescription = null,
                                 tint = button.tint
@@ -935,12 +1074,13 @@ fun ControllerBottomBar(
 
             Spacer(Modifier.weight(1f))
             Text(
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = 8.dp.scaledBy(controllerPanelScale)),
                 text = "${seekData.position.formatHourMinSec()} / ${seekData.duration.formatHourMinSec()}",
                 color = PlayerColors.textPrimary
             )
         }
         } // end else (non-live)
+        }
     }
 
     // ── 对话框 ──
