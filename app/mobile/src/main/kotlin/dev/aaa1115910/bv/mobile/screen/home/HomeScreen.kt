@@ -71,7 +71,10 @@ fun HomeScreen(
     onShowUserDialog: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val pageState = rememberPagerState(pageCount = { MobileHomeTab.entries.size })
+    val pageState = rememberPagerState(
+        initialPage = MobileHomeTab.Recommend.ordinal,
+        pageCount = { MobileHomeTab.entries.size }
+    )
 
     Scaffold(
         modifier = modifier,
