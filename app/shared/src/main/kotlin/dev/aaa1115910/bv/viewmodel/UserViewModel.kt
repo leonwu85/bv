@@ -56,8 +56,13 @@ class UserViewModel(
                 withContext(Dispatchers.Main) { responseData = data }
                 logger.fInfo { "Update user info success" }
                 shouldUpdateInfo = false
-                userRepository.username = responseData!!.name
-                userRepository.avatar = responseData!!.face
+                userRepository.username = data.name
+                userRepository.avatar = data.face
+                userRepository.findUserByUid(Prefs.uid)?.let { user ->
+                    user.username = data.name
+                    user.avatar = data.face
+                    userRepository.updateUser(user)
+                }
             }.onFailure {
                 when (it) {
                     is AuthFailureException -> {
