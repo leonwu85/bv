@@ -76,6 +76,8 @@ import dev.aaa1115910.bv.util.MergedDanmakuEntry
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.VodDanmakuMergeState
 import dev.aaa1115910.bv.util.VodDanmakuMerger
+import dev.aaa1115910.bv.util.VodCdnSelection
+import dev.aaa1115910.bv.util.VodCdnUrlSelector
 import dev.aaa1115910.bv.util.fError
 import dev.aaa1115910.bv.util.fException
 import dev.aaa1115910.bv.util.fInfo
@@ -908,7 +910,7 @@ class VideoPlayerV3ViewModel(
         }
         val videoUrls = mutableListOf<String?>()
         if (!audioOnlyMode) {
-            videoUrls.add(videoItem?.baseUrl)
+            videoUrls.add(videoUrl)
             videoUrls.addAll(videoItem?.backUrl ?: emptyList())
         }
 
@@ -924,13 +926,16 @@ class VideoPlayerV3ViewModel(
             return
         }
         val audioUrls = mutableListOf<String?>()
-        audioUrls.add(audioItem?.baseUrl)
+        audioUrls.add(audioUrl)
         audioUrls.addAll(audioItem?.backUrl ?: emptyList())
 
         if (videoUrls.isNotEmpty()) {
             logger.fInfo { "all video hosts: ${videoUrls.filterNotNull().map { with(URI(it)) { "$scheme://$authority" } }}" }
         }
         logger.fInfo { "all audio hosts: ${audioUrls.map { with(URI(it)) { "$scheme://$authority" } }}" }
+
+        var videoCdnSelection: VodCdnSelection? = null
+        var audioCdnSelection: VodCdnSelection? = null
 
         //replace cdn
         if (Prefs.enableProxy && proxyArea != ProxyArea.MainLand) {
@@ -941,9 +946,11 @@ class VideoPlayerV3ViewModel(
         } else {
             // 如果未通过网络代理获得播放地址，才判断是否应该替换为官方 cdn
             if (videoUrls.isNotEmpty()) {
-                videoUrl = selectOfficialCdnUrl(videoUrls.filterNotNull())
+                videoCdnSelection = VodCdnUrlSelector.select(videoUrls, Prefs.cdnService)
+                videoUrl = videoCdnSelection.url
             }
-            audioUrl = selectOfficialCdnUrl(audioUrls.filterNotNull())
+            audioCdnSelection = VodCdnUrlSelector.select(audioUrls, Prefs.cdnService)
+            audioUrl = audioCdnSelection.url
         }
 
         addLogs(
@@ -953,10 +960,12 @@ class VideoPlayerV3ViewModel(
         )
         if (videoUrl != null) {
             addLogs("video host: ${with(URI(videoUrl)) { "$scheme://$authority" }}")
+            videoCdnSelection?.let { addLogs("video cdn: ${it.reason}") }
         } else {
             addLogs("video host: audio only")
         }
         addLogs("audio host: ${with(URI(audioUrl)) { "$scheme://$authority" }}")
+        audioCdnSelection?.let { addLogs("audio cdn: ${it.reason}") }
 
         logger.fInfo { "Select audio: $audioItem" }
 
@@ -2082,48 +2091,6 @@ class VideoPlayerV3ViewModel(
             .authority("upos-sz-mirrorali.bilivideo.com")
             .build()
             .toString()
-    }
-
-    private fun selectOfficialCdnUrl(urls: List<String>): String {
-        if (urls.isEmpty()) {
-            logger.fInfo { "doesn't find any url, select a random url" }
-            return urls.randomOrNull() ?: ""
-        }
-
-        // 判定是否为“官方” CDN 的简单规则，和之前逻辑保持一致
-        val isOfficialCdn: (String) -> Boolean = {
-            !it.contains(".mcdn.bilivideo.") &&
-            !it.contains(".szbdyd.com") &&
-            !Regex("^(https?://)?(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(:\\d{1,5})?)(/[a-zA-Z0-9_./-]*)?(\\?.*)?$")
-                .matches(it)
-        }
-
-        if (!Prefs.preferOfficialCdn) {
-            // 当用户不偏好官方 CDN 时，使用加权随机：官方权重 0.8，非官方权重 1.2（基准为 1）
-            logger.fInfo { "doesn't need to filter official cdn url, select a weighted random url (favor non-official)" }
-
-            val weights = urls.map { url -> if (isOfficialCdn(url)) 0.8 else 1.2 }
-            val total = weights.sum()
-            // 如果权重计算异常，退回随机
-            if (total <= 0.0) return urls.randomOrNull() ?: ""
-
-            val r = kotlin.random.Random.Default.nextDouble() * total
-            var acc = 0.0
-            for (i in urls.indices) {
-                acc += weights[i]
-                if (r <= acc) return urls[i]
-            }
-            return urls.randomOrNull() ?: ""
-        }
-
-        val filteredUrls = urls.filter{isOfficialCdn(it)}
-        if (filteredUrls.isEmpty()) {
-            logger.fInfo { "doesn't find any official cdn url, select a random url" }
-            return urls.random()
-        } else {
-            logger.fInfo { "filtered official cdn urls: $filteredUrls" }
-            return filteredUrls.random()
-        }
     }
 
     private fun applyPreparedAutoPlayTransitionContext(transitionContext: PreparedAutoPlayTransitionContext) {

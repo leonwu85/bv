@@ -33,9 +33,11 @@ import dev.aaa1115910.biliapi.http.BiliHttpProxyApi
 import dev.aaa1115910.biliapi.repositories.ChannelRepository
 import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.entity.CdnService
 import dev.aaa1115910.bv.tv.activities.settings.SpeedTestActivity
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.component.settings.SettingListItem
+import dev.aaa1115910.bv.tv.component.settings.SettingListItemWithDialog
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
 import dev.aaa1115910.bv.ui.theme.BVTheme
@@ -52,6 +54,7 @@ fun NetworkSetting(
     var proxyHttpServer by remember { mutableStateOf(Prefs.proxyHttpServer) }
     var proxyGRPCServer by remember { mutableStateOf(Prefs.proxyGRPCServer) }
     var preferOfficialCdn by remember { mutableStateOf(Prefs.preferOfficialCdn) }
+    var cdnService by remember { mutableStateOf(Prefs.cdnService) }
     var showProxyHttpServerEditDialog by remember { mutableStateOf(false) }
     var showProxyGRPCServerEditDialog by remember { mutableStateOf(false) }
 
@@ -105,6 +108,20 @@ fun NetworkSetting(
                             }
                         }
                     }
+                }
+
+                item {
+                    SettingListItemWithDialog(
+                        title = stringResource(R.string.settings_network_cdn_service_title),
+                        supportText = stringResource(R.string.settings_network_cdn_service_text),
+                        options = CdnService.entries,
+                        getDisplayName = { cdn, _ -> cdn.displayName },
+                        value = cdnService,
+                        onValueChange = {
+                            cdnService = it
+                            Prefs.cdnService = it
+                        }
+                    )
                 }
 
                 item {

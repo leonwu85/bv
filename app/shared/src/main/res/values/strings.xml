@@ -246,7 +246,9 @@
     <string name="settings_sponsor_block_server_status_checking">检测中…</string>
     <string name="settings_network_enable_proxy_text">使用自定义代理服务器获取部分视频播放地址</string>
     <string name="settings_network_enable_proxy_title">启用代理</string>
-    <string name="settings_network_prefer_official_cdn_text">优先使用获取到的官方 CDN</string>
+    <string name="settings_network_cdn_service_text">按规则选择或改写点播 CDN，默认使用备用 URL</string>
+    <string name="settings_network_cdn_service_title">播放 CDN</string>
+    <string name="settings_network_prefer_official_cdn_text">旧版兼容开关，当前点播优先使用「播放 CDN」设置</string>
     <string name="settings_network_prefer_official_cdn_title">P(M)CDN 快走开</string>
     <string name="settings_network_proxy_grpc_server_title">gRPC 接口代理服务器</string>
     <string name="settings_network_proxy_http_server_title">HTTP 接口代理服务器</string>
