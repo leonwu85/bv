@@ -358,6 +358,7 @@ fun VideoPlayerScreen(
                                 playerSettings.defaultPlayModeMutable = playMode
                             },
                             onLoadNextVideo = playerViewModel::playNextVideo,
+                            onSendHeartbeat = playerViewModel::uploadHistory,
                             onLoadNewVideo = { videoListItem ->
                                 logger.fInfo { "on load new video: $videoListItem" }
                                 var aid = 0L

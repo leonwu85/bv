@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,6 +60,7 @@ import dev.aaa1115910.bv.util.countDownTimer
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
 
@@ -121,6 +123,7 @@ fun BvPlayer(
     onPlayModeChange: (PlayMode) -> Unit,
     onLoadNextVideo: () -> Unit,
     onLoadNewVideo: (VideoListItem) -> Unit,
+    onSendHeartbeat: suspend (Int) -> Unit,
     videoPlayer: AbstractVideoPlayer,
     danmakuPlayer: DanmakuPlayer?,
     danmakuOpacity: Float,
@@ -128,6 +131,7 @@ fun BvPlayer(
     onLiveDanmakuPlayerReady: ((com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer) -> Unit)? = null,
 ) {
     val logger = KotlinLogging.logger("BvPlayer")
+    val scope = rememberCoroutineScope()
     // 直接调用 danmakuPlayer 会始终为 null
     var mDanmakuPlayer: DanmakuPlayer? by remember { mutableStateOf(null) }
     var mLiveDanmakuPlayer: LiveDanmakuPlayer? by remember { mutableStateOf(null) }
@@ -156,6 +160,7 @@ fun BvPlayer(
     //var currentPlaySpeed by remember { mutableFloatStateOf(Prefs.defaultPlaySpeed) }
     var aspectRatio by remember { mutableFloatStateOf(16f / 9f) }
     var lastPlayed by remember { mutableLongStateOf(0L) }
+    var lastHeartbeatPosition by remember { mutableLongStateOf(0L) }
 
     var clock: Triple<Int, Int, Int> by remember { mutableStateOf(Triple(0, 0, 0)) }
 
@@ -294,6 +299,27 @@ fun BvPlayer(
         }
     }
 
+    val sendHeartbeat: () -> Unit = sendHeartbeat@{
+        if (isLive || videoPlayerConfigData.incognitoMode) return@sendHeartbeat
+        scope.launch(Dispatchers.IO) {
+            val time = withContext(Dispatchers.Main) {
+                val currentTime = (videoPlayer.currentPosition.coerceAtLeast(0L) / 1000).toInt()
+                val totalTime = (videoPlayer.duration.coerceAtLeast(0L) / 1000).toInt()
+
+                if (totalTime == 0) {
+                    -2
+                } else if (currentTime >= totalTime - 1) {
+                    -1
+                } else {
+                    currentTime
+                }
+            }
+            if (time > -2) {
+                onSendHeartbeat(time)
+            }
+        }
+    }
+
     val videoPlayerListener = object : VideoPlayerListener {
         override fun onError(error: Exception) {
             println("onError: $error")
@@ -340,6 +366,7 @@ fun BvPlayer(
             }
             mDanmakuPlayer?.pause()
             isPlaying = false
+            sendHeartbeat()
         }
 
         override fun onBuffering() {
@@ -352,7 +379,7 @@ fun BvPlayer(
             logger.info { "onEnd" }
             mDanmakuPlayer?.pause()
             isPlaying = false
-            //if (!Prefs.incognitoMode) sendHeartbeat()
+            sendHeartbeat()
 
             onLoadNextVideo()
         }
@@ -379,6 +406,10 @@ fun BvPlayer(
         }
     }
 
+    LaunchedEffect(videoPlayerConfigData.currentVideoCid) {
+        lastHeartbeatPosition = 0L
+    }
+
     // 同步 videoPlayerHistoryData.lastPlayed 到本地变量
     LaunchedEffect(videoPlayerHistoryData.lastPlayed) {
         lastPlayed = videoPlayerHistoryData.lastPlayed.toLong()
@@ -403,6 +434,15 @@ fun BvPlayer(
         updateDanmakuMaskForPosition(currentPosition)
     }
 
+    LaunchedEffect(currentPosition, isPlaying, isLive, videoPlayerConfigData.incognitoMode) {
+        if (!isLive && !videoPlayerConfigData.incognitoMode && isPlaying) {
+            if (currentPosition - lastHeartbeatPosition >= 15_000) {
+                lastHeartbeatPosition = currentPosition
+                sendHeartbeat()
+            }
+        }
+    }
+
     DisposableEffect(Unit) {
         clockRefreshTimer = countDownTimer(
             millisInFuture = Long.MAX_VALUE,
@@ -418,6 +458,7 @@ fun BvPlayer(
             }
         )
         onDispose {
+            sendHeartbeat()
             clockRefreshTimer?.cancel()
             clearDanmakuMaskState()
             danmakuMaskBitmapPool.release()
@@ -517,7 +558,7 @@ fun BvPlayer(
             onDanmakuAreaChange = onDanmakuAreaChange,
             onPlayModeChange = onPlayModeChange,
             onPlayNewVideo = {
-                //if (!Prefs.incognitoMode) sendHeartbeat()
+                sendHeartbeat()
                 onLoadNewVideo(it)
             }
         ) {
