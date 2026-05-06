@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -344,6 +345,13 @@ fun BvPlayer(
             mDanmakuPlayer?.updatePlaySpeed(videoPlayerConfigData.currentVideoSpeed)
         }
 
+        override fun onVideoSizeChanged(width: Int, height: Int) {
+            logger.info { "onVideoSizeChanged: ${width}x${height}" }
+            if (width > 0 && height > 0) {
+                aspectRatio = width / height.toFloat()
+            }
+        }
+
         override fun onPlay() {
             logger.info { "onPlay" }
             // 同步弹幕到视频当前位置
@@ -570,22 +578,28 @@ fun BvPlayer(
             )
             Box(
                 modifier = Modifier
-                    .fillMaxHeight(videoPlayerConfigData.currentDanmakuArea)
+                    .fillMaxSize()
                     .danmakuMaskBitmap(
                         bitmap = currentDanmakuMaskBitmap.takeIf { videoPlayerConfigData.currentDanmakuMask },
                         videoAspectRatio = aspectRatio
                     )
             ) {
-                AkDanmakuPlayer(
-                    modifier = Modifier.fillMaxSize(),
-                    danmakuPlayer = mDanmakuPlayer,
-                    isLiveMode = isLive,
-                    onLiveDanmakuPlayerReady = { player ->
-                        mLiveDanmakuPlayer = player
-                        updateDanmakuConfig()
-                        onLiveDanmakuPlayerReady?.invoke(player)
-                    }
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(videoPlayerConfigData.currentDanmakuArea)
+                ) {
+                    AkDanmakuPlayer(
+                        modifier = Modifier.fillMaxSize(),
+                        danmakuPlayer = mDanmakuPlayer,
+                        isLiveMode = isLive,
+                        onLiveDanmakuPlayerReady = { player ->
+                            mLiveDanmakuPlayer = player
+                            updateDanmakuConfig()
+                            onLiveDanmakuPlayerReady?.invoke(player)
+                        }
+                    )
+                }
             }
         }
     }
