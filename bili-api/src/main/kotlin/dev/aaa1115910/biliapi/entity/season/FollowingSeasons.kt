@@ -8,21 +8,35 @@ data class FollowingSeasonData(
 data class FollowingSeason(
     val seasonId: Int,
     val title: String,
-    val cover: String
+    val cover: String,
+    val badge: String = "",
+    val renewalTime: String = "",
+    val progress: String = "",
+    val newEpIndexShow: String = "",
+    val isFinish: Boolean = false
 ) {
     companion object {
         fun fromFollowingSeason(season: dev.aaa1115910.biliapi.http.entity.season.WebFollowingSeason) =
             FollowingSeason(
                 seasonId = season.seasonId,
                 title = season.title,
-                cover = season.cover
+                cover = season.cover,
+                badge = season.badge,
+                renewalTime = season.renewalTime.orEmpty(),
+                progress = season.progress,
+                newEpIndexShow = season.newEp.indexShow.orEmpty(),
+                isFinish = season.isFinish == 1
             )
 
         fun fromFollowingSeason(season: dev.aaa1115910.biliapi.http.entity.season.AppFollowingSeason) =
             FollowingSeason(
                 seasonId = season.seasonId,
                 title = season.title,
-                cover = season.cover
+                cover = season.cover,
+                badge = season.badge,
+                progress = season.progress?.indexShow.orEmpty(),
+                newEpIndexShow = season.newEp.indexShow,
+                isFinish = season.isFinish
             )
     }
 }

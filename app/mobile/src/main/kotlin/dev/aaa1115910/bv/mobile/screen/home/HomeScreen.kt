@@ -8,9 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
@@ -26,8 +26,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -40,12 +38,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import dev.aaa1115910.biliapi.entity.pgc.PgcType
 import dev.aaa1115910.bv.mobile.activities.VideoPlayerActivity
+import dev.aaa1115910.bv.mobile.component.MobileTabRow
 import dev.aaa1115910.bv.mobile.screen.home.home.PopularPage
 import dev.aaa1115910.bv.mobile.screen.home.home.RcmdPage
 import dev.aaa1115910.bv.viewmodel.UserViewModel
@@ -78,7 +76,7 @@ fun HomeScreen(
 
     Scaffold(
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             if (windowSize == WindowWidthSizeClass.Compact) {
                 HomeTopAppBar(
@@ -117,39 +115,29 @@ fun HomeScreenContent(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val isCompact = windowSize == WindowWidthSizeClass.Compact
 
     Column(
         modifier = modifier
-            .background(MaterialTheme.colorScheme.surfaceContainer),
+            .background(MaterialTheme.colorScheme.surface),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(top = 4.dp)
+                .height(42.dp)
                 .zIndex(1f),
             contentAlignment = Alignment.Center
         ) {
-            TabRow(
-                modifier = if (isCompact) Modifier.fillMaxWidth() else Modifier.width(560.dp),
+            MobileTabRow(
+                modifier = Modifier.fillMaxWidth(),
                 selectedTabIndex = selectedTabIndex,
-                containerColor = MaterialTheme.colorScheme.surfaceContainer
-            ) {
-                MobileHomeTab.entries.forEachIndexed { index, tab ->
-                    Tab(
-                        selected = selectedTabIndex == index,
-                        onClick = {
-                            onChangeTabIndex(index)
-                        },
-                        text = {
-                            Text(
-                                text = tab.title,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    )
-                }
-            }
+                tabs = MobileHomeTab.entries.map { it.title },
+                onTabSelected = onChangeTabIndex,
+                containerColor = MaterialTheme.colorScheme.surface,
+                horizontalArrangement = Arrangement.Center,
+                tabHeight = 42.dp
+            )
         }
 
         Surface(
