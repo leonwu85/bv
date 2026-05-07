@@ -26,6 +26,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.constraintlayout.compose.Dimension
+import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerSeekData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoInfoData
@@ -116,6 +117,7 @@ private fun BottomControllers(
     onEnterFullScreen: () -> Unit,
     onSeekToPosition: (Long) -> Unit
 ) {
+    val videoPlayerConfigData = LocalVideoPlayerConfigData.current
     val videoPlayerSeekData = LocalVideoPlayerSeekData.current
     val videoPlayerStateData = LocalVideoPlayerStateData.current
     Box(
@@ -152,22 +154,24 @@ private fun BottomControllers(
                 }
             }
 
-            VideoSeekBar(
-                modifier = Modifier.constrainAs(seekSlider) {
-                    top.linkTo(parent.top)
-                    start.linkTo(playButton.end)
-                    bottom.linkTo(parent.bottom)
-                    end.linkTo(positionText.start)
-                    width = Dimension.preferredWrapContent
-                },
-                duration = videoPlayerSeekData.duration,
-                position = videoPlayerSeekData.position,
-                bufferedPercentage = videoPlayerSeekData.bufferedPercentage,
-                playing = videoPlayerStateData.isPlaying,
-                onPositionChange = { newPosition, isPressing ->
-                    if (!isPressing) onSeekToPosition(newPosition)
-                }
-            )
+            if (!videoPlayerConfigData.isLive) {
+                VideoSeekBar(
+                    modifier = Modifier.constrainAs(seekSlider) {
+                        top.linkTo(parent.top)
+                        start.linkTo(playButton.end)
+                        bottom.linkTo(parent.bottom)
+                        end.linkTo(positionText.start)
+                        width = Dimension.preferredWrapContent
+                    },
+                    duration = videoPlayerSeekData.duration,
+                    position = videoPlayerSeekData.position,
+                    bufferedPercentage = videoPlayerSeekData.bufferedPercentage,
+                    playing = videoPlayerStateData.isPlaying,
+                    onPositionChange = { newPosition, isPressing ->
+                        if (!isPressing) onSeekToPosition(newPosition)
+                    }
+                )
+            }
 
             Text(
                 modifier = Modifier.constrainAs(positionText) {

@@ -69,6 +69,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -1439,14 +1440,18 @@ private fun VerticalTabBar(
                         )
                     }
                     Text(
-                        modifier = Modifier.padding(
-                            start = HomeContentStyle.VerticalTabIndicatorPadding,
-                            end = 5.dp
-                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                start = HomeContentStyle.VerticalTabTextStartPadding,
+                                end = HomeContentStyle.VerticalTabTextEndPadding
+                            ),
                         text = label,
                         style = MaterialTheme.typography.titleSmall,
                         color = if (selected) colorScheme.primary else colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
                         maxLines = 1,
+                        softWrap = false,
                         overflow = TextOverflow.Clip
                     )
                 }
@@ -2098,10 +2103,11 @@ private object HomeContentStyle {
     val ZoneTopPadding = 7.dp
     val ZoneMainAxisSpacing = 2.dp
 
-    val VerticalTabWidth = 51.dp
+    val VerticalTabWidth = 72.dp
     val VerticalTabHeight = 46.dp
     val VerticalTabBottomPadding = 105.dp
-    val VerticalTabIndicatorPadding = 3.dp
     val IndicatorWidth = 3.dp
+    val VerticalTabTextStartPadding = IndicatorWidth + 3.dp
+    val VerticalTabTextEndPadding = 3.dp
     val VerticalIndicatorShape = RoundedCornerShape(topEnd = 3.dp, bottomEnd = 3.dp)
 }

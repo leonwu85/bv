@@ -101,6 +101,7 @@ fun FullscreenControllers(
             currentResolutionName = videoPlayerConfigData.currentResolution.getDisplayName(context),
             enabledDanmaku = videoPlayerConfigData.currentDanmakuEnabled,
             showPartButton = videoPlayerConfigData.availableVideoList.size > 1,
+            isLive = videoPlayerConfigData.isLive,
             onPlay = onPlay,
             onPause = onPause,
             onExitFullScreen = onExitFullScreen,
@@ -192,6 +193,7 @@ private fun BottomControllers(
     currentResolutionName: String,
     enabledDanmaku: Boolean,
     showPartButton: Boolean,
+    isLive: Boolean,
     onPlay: () -> Unit,
     onPause: () -> Unit,
     onExitFullScreen: () -> Unit,
@@ -207,16 +209,18 @@ private fun BottomControllers(
         //.background(Color.Black.copy(alpha = 0.6f))
     ) {
         Column {
-            VideoSeekBar(
-                modifier = Modifier.padding(bottom = 8.dp),
-                duration = totalTime,
-                position = currentTime,
-                bufferedPercentage = bufferedSeekPosition,
-                playing = isPlaying,
-                onPositionChange = { newPosition, isPressing ->
-                    if (!isPressing) onSeekToPosition(newPosition)
-                }
-            )
+            if (!isLive) {
+                VideoSeekBar(
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    duration = totalTime,
+                    position = currentTime,
+                    bufferedPercentage = bufferedSeekPosition,
+                    playing = isPlaying,
+                    onPositionChange = { newPosition, isPressing ->
+                        if (!isPressing) onSeekToPosition(newPosition)
+                    }
+                )
+            }
 
             ProvideTextStyle(TextStyle(color = Color.White)) {
                 Row(
