@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -83,6 +84,9 @@ fun ControllerVideoInfo(
     val videoPlayerVideoInfoData = LocalVideoPlayerVideoInfoData.current
     val videoPlayerStateData = LocalVideoPlayerStateData.current
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
+    val controllerPanelScale =
+        (LocalDensity.current.density / ControllerPanelBaseDensity).coerceAtLeast(0.01f)
+    val useCompactTitle = controllerPanelScale <= 0.75f
 
     Box(
         modifier = modifier
@@ -95,7 +99,7 @@ fun ControllerVideoInfo(
             }
     ) {
         AnimatedVisibility(
-            modifier = Modifier.align(Alignment.TopEnd),
+            modifier = Modifier.align(Alignment.TopCenter),
             visible = show,
             enter = PlayerAnimations.controllerEnter,
             exit = PlayerAnimations.controllerExit,
@@ -106,7 +110,15 @@ fun ControllerVideoInfo(
                     videoPlayerClockState.hour,
                     videoPlayerClockState.minute,
                     videoPlayerClockState.second
-                )
+                ),
+                title = if (useCompactTitle) {
+                    formatControllerTitle(
+                        title = videoPlayerVideoInfoData.title,
+                        partTitle = videoPlayerVideoInfoData.partTitle
+                    )
+                } else {
+                    null
+                }
             )
         }
         AnimatedVisibility(
@@ -123,6 +135,7 @@ fun ControllerVideoInfo(
                 stateData = videoPlayerStateData,
                 title = videoPlayerVideoInfoData.title,
                 partTitle = videoPlayerVideoInfoData.partTitle,
+                showTitle = !useCompactTitle,
                 playSpeed = playSpeed,
                 bottomProgressBarColor = bottomProgressBarColor,
                 rotation = videoPlayerConfigData.currentVideoRotation,

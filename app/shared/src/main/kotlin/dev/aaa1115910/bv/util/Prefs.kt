@@ -530,6 +530,10 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefPlayerShowBottomProgressBarRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefPlayerShowBottomProgressBarKey, value) }
 
+    var supportManualVideoRotation: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefSupportManualVideoRotationRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefSupportManualVideoRotationKey, value) }
+
     var playerCommentSplitScreen: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefPlayerCommentSplitScreenRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefPlayerCommentSplitScreenKey, value) }
@@ -761,6 +765,7 @@ object PrefKeys {
     val prefPlayerSeekForwardStepKey = intPreferencesKey("player_seek_forward_step")
     val prefPlayerSeekBackwardStepKey = intPreferencesKey("player_seek_backward_step")
     val prefPlayerShowBottomProgressBarKey = booleanPreferencesKey("player_show_bottom_progress_bar")
+    val prefSupportManualVideoRotationKey = booleanPreferencesKey("support_manual_video_rotation")
     val prefPlayerCommentSplitScreenKey = booleanPreferencesKey("player_comment_split_screen")
     val prefPlayerBottomProgressBarColorKey = intPreferencesKey("player_bottom_progress_bar_color")
     val prefShowUGCVideoInfoKey = booleanPreferencesKey("pref_show_ugc_video_info")
@@ -870,6 +875,7 @@ object PrefKeys {
     val prefPlayerSeekForwardStepRequest = PreferenceRequest(prefPlayerSeekForwardStepKey, 10)
     val prefPlayerSeekBackwardStepRequest = PreferenceRequest(prefPlayerSeekBackwardStepKey, 5)
     val prefPlayerShowBottomProgressBarRequest = PreferenceRequest(prefPlayerShowBottomProgressBarKey, false)
+    val prefSupportManualVideoRotationRequest = PreferenceRequest(prefSupportManualVideoRotationKey, false)
     val prefPlayerCommentSplitScreenRequest = PreferenceRequest(prefPlayerCommentSplitScreenKey, false)
     val prefPlayerBottomProgressBarColorRequest = PreferenceRequest(prefPlayerBottomProgressBarColorKey, PlayerBottomProgressBarColor.Purple.value)
     val prefShowUGCVideoInfoRequest = PreferenceRequest(prefShowUGCVideoInfoKey, true)

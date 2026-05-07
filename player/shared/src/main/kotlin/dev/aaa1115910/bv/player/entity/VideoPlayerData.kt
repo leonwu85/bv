@@ -112,6 +112,7 @@ data class VideoPlayerConfigData(
     val currentVideoCodec: VideoCodec = VideoCodec.AVC,
     val currentVideoAspectRatio: VideoAspectRatio = VideoAspectRatio.Default,
     val currentVideoRotation: VideoRotation = VideoRotation.Original,
+    val supportManualVideoRotation: Boolean = false,
     val currentVideoSpeed: Float = 1f,
     val currentPlaybackMediaMode: PlaybackMediaMode = PlaybackMediaMode.Normal,
     val currentAudio: Audio = Audio.A192K,

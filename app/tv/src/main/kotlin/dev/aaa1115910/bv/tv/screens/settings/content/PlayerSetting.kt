@@ -53,6 +53,7 @@ fun PlayerSetting(
     var enableFfmpegAudioRenderer by remember { mutableStateOf(Prefs.enableFfmpegAudioRenderer) }
     var showUGCVideoInfo by remember { mutableStateOf(Prefs.showUGCVideoInfo) }
     var playerShowBottomProgressBar by remember { mutableStateOf(Prefs.playerShowBottomProgressBar) }
+    var supportManualVideoRotation by remember { mutableStateOf(Prefs.supportManualVideoRotation) }
     var playerCommentSplitScreen by remember { mutableStateOf(Prefs.playerCommentSplitScreen) }
     var playerBottomProgressBarColor by remember { mutableStateOf(Prefs.playerBottomProgressBarColor) }
     var playerShowDebugInfo by remember { mutableStateOf(Prefs.playerShowDebugInfo) }
@@ -184,6 +185,17 @@ fun PlayerSetting(
                     onCheckedChange = {
                         playerShowBottomProgressBar = it
                         Prefs.playerShowBottomProgressBar = it
+                    }
+                )
+            }
+            item {
+                SettingSwitchListItem(
+                    title = stringResource(R.string.settings_player_support_manual_video_rotation_title),
+                    supportText = stringResource(R.string.settings_player_support_manual_video_rotation_text),
+                    checked = supportManualVideoRotation,
+                    onCheckedChange = {
+                        supportManualVideoRotation = it
+                        Prefs.supportManualVideoRotation = it
                     }
                 )
             }

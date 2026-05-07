@@ -421,6 +421,7 @@ fun VideoPlayerV3Screen(
             currentVideoCodec = playerViewModel.currentVideoCodec,
             currentVideoAspectRatio = playerViewModel.currentVideoAspectRatio,
             currentVideoRotation = playerViewModel.currentVideoRotation,
+            supportManualVideoRotation = Prefs.supportManualVideoRotation,
             currentVideoSpeed = playerViewModel.currentPlaySpeed,
             currentPlaybackMediaMode = playerViewModel.currentPlaybackMediaMode,
             currentAudio = playerViewModel.currentAudio,

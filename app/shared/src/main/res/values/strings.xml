@@ -842,6 +842,8 @@
     <string name="settings_player_seek_backward_step_title">视频快退时间间隔（秒）</string>
     <string name="settings_player_show_bottom_progress_bar_text">在播放器底部常驻显示迷你进度条</string>
     <string name="settings_player_show_bottom_progress_bar_title">显示迷你进度条</string>
+    <string name="settings_player_support_manual_video_rotation_text">开启后可在 TV 播放器中手动旋转视频画面</string>
+    <string name="settings_player_support_manual_video_rotation_title">支持手动旋转视频</string>
     <string name="settings_player_comment_split_screen_text">开启后，播放页打开评论时右侧显示评论，播放器缩至左侧三分之二</string>
     <string name="settings_player_comment_split_screen_title">播放时评论分屏(Beta)</string>
     <string name="settings_player_bottom_progress_bar_color_text">设置进度条的颜色</string>

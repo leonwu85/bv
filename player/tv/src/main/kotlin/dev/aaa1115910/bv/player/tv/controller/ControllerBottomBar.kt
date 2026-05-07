@@ -105,7 +105,7 @@ private fun controllerSeekBarPlayedTrackBrush(progressColor: Color): Brush {
     return SolidColor(progressColor)
 }
 
-private const val ControllerPanelBaseDensity = 2f
+internal const val ControllerPanelBaseDensity = 2f
 private val ControllerButtonIconSize = 28.dp
 private val ControllerPanelTopPadding = 16.dp
 private val ControllerPanelInfoTopPadding = 4.dp
@@ -113,6 +113,7 @@ private val ControllerPanelRowGap = 6.dp
 private val ControllerPanelBottomPadding = 2.dp
 private val ControllerActionRowOffset = 0.dp
 private val ControllerActionRowBottomPadding = 0.dp
+private val ControllerSeekBarTopPadding = 4.dp
 private val ControllerSeekBarBottomPadding = 0.dp
 private val ControllerSeekBarTrackBottomMargin = 4.dp
 private val ControllerTitleFontSize = 16.sp
@@ -122,7 +123,7 @@ private val ControllerInfoLineHeight = 18.sp
 private val ControllerUpAvatarSize = 22.dp
 private val ControllerInfoButtonHeight = 30.dp
 private val ControllerActionButtonHeight = 26.dp
-private val ControllerFunctionButtonHeight = 42.dp
+private val ControllerFunctionButtonSize = 36.dp
 private val ControllerMinInfoButtonHeight = 24.dp
 private val ControllerMinActionButtonHeight = 22.dp
 
@@ -154,6 +155,9 @@ private fun TextUnit.scaledBy(scale: Float): TextUnit = (value * scale).sp
 private fun Dp.scaledByAtLeast(scale: Float, min: Dp): Dp =
     max(value * scale, min.value).dp
 
+internal fun formatControllerTitle(title: String, partTitle: String): String =
+    "${if (title.contains(partTitle)) "" else "$partTitle ｜ "}$title"
+
 @Composable
 fun ControllerBottomBar(
     show: Boolean,
@@ -164,6 +168,7 @@ fun ControllerBottomBar(
     rotation: VideoRotation,
     title: String,
     partTitle: String,
+    showTitle: Boolean = true,
     seekData: VideoPlayerSeekState,
     stateData: VideoPlayerStateData,
     idleIcon: String,
@@ -246,7 +251,7 @@ fun ControllerBottomBar(
         fromSeason, showDanmaku, isPlaying, isLoop,
         showPrevVideoBtn, showNextVideoBtn, isLive,
         speed, isAudioOnly, rotation, hasSubtitles, currentSubtitleId,
-        commentPanelVisible
+        commentPanelVisible, videoPlayerConfigData.supportManualVideoRotation
     ) {
         listOf(
             ControlButton(
@@ -295,7 +300,7 @@ fun ControllerBottomBar(
             ControlButton(
                 id = "speed",
                 text = formatSpeed(speed),
-                width = 48,
+                width = 36,
                 onClick = { showSpeedDialog = true },
                 visible = !isLive,
                 selected = speed != 1f,
@@ -310,7 +315,7 @@ fun ControllerBottomBar(
                 id = "rotation",
                 icon = Icons.Rounded.ScreenRotation,
                 onClick = { showRotationDialog = true },
-                visible = !isLive,
+                visible = !isLive && videoPlayerConfigData.supportManualVideoRotation,
                 selected = rotation != VideoRotation.Original
             ),
             ControlButton(
@@ -460,20 +465,22 @@ fun ControllerBottomBar(
             ),
             verticalArrangement = Arrangement.Bottom
         ) {
-        Spacer(modifier = Modifier.height(ControllerPanelTopPadding.scaledBy(controllerPanelScale)))
+        if (showTitle) {
+            Spacer(modifier = Modifier.height(ControllerPanelTopPadding.scaledBy(controllerPanelScale)))
 
-        // ── 标题 ──
-        Text(
-            modifier = Modifier.padding(horizontal = 32.dp),
-            text = "${if (title.contains(partTitle)) "" else "$partTitle ｜ "}$title",
-            color = PlayerColors.textPrimary,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.headlineSmall.copy(
-                fontSize = ControllerTitleFontSize.scaledBy(controllerPanelScale),
-                lineHeight = ControllerTitleLineHeight.scaledBy(controllerPanelScale)
-            ),
-        )
+            // ── 标题 ──
+            Text(
+                modifier = Modifier.padding(horizontal = 32.dp),
+                text = formatControllerTitle(title, partTitle),
+                color = PlayerColors.textPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontSize = ControllerTitleFontSize.scaledBy(controllerPanelScale),
+                    lineHeight = ControllerTitleLineHeight.scaledBy(controllerPanelScale)
+                ),
+            )
+        }
 
         if (isLive) {
             // ══════════════ 直播专用布局 ══════════════
@@ -598,17 +605,18 @@ fun ControllerBottomBar(
                 liveButtons.forEach { button ->
                     Button(
                         modifier = Modifier
-                            .height(ControllerFunctionButtonHeight.scaledBy(controllerPanelScale))
-                            .width(if (button.text != null) (button.width ?: 48).dp else 48.dp)
+                            .height(ControllerFunctionButtonSize.scaledBy(controllerPanelScale))
+                            .width(
+                                (button.width ?: ControllerFunctionButtonSize.value.toInt())
+                                    .dp
+                                    .scaledBy(controllerPanelScale)
+                            )
                             .focusRequester(liveFocusRequesters[button.id] ?: FocusRequester())
                             .onFocusChanged { if (it.isFocused) scheduleHideJob() },
                         onClick = button.onClick,
                         shape = ButtonDefaults.shape(shape = RoundedCornerShape(12.dp)),
                         scale = ButtonDefaults.scale(focusedScale = 1.1f),
-                        contentPadding = PaddingValues(
-                            horizontal = 8.dp,
-                            vertical = 4.dp.scaledBy(controllerPanelScale)
-                        ),
+                        contentPadding = PaddingValues(0.dp),
                         colors = ButtonDefaults.colors(
                             containerColor = PlayerColors.buttonDefault,
                             focusedContainerColor = PlayerColors.buttonFocused
@@ -951,6 +959,7 @@ fun ControllerBottomBar(
                 .padding(
                     start = 30.dp,
                     end = 30.dp,
+                    top = ControllerSeekBarTopPadding.scaledBy(controllerPanelScale),
                     bottom = ControllerSeekBarBottomPadding.scaledBy(controllerPanelScale)
                 )
                 .focusRequester(seekbarFocusRequester)
@@ -1003,16 +1012,17 @@ fun ControllerBottomBar(
             buttons.forEach { button ->
                 Button(
                     modifier = Modifier
-                        .height(ControllerFunctionButtonHeight.scaledBy(controllerPanelScale))
-                        .width(if (button.text != null) (button.width ?: 48).dp else 48.dp)
+                        .height(ControllerFunctionButtonSize.scaledBy(controllerPanelScale))
+                        .width(
+                            (button.width ?: ControllerFunctionButtonSize.value.toInt())
+                                .dp
+                                .scaledBy(controllerPanelScale)
+                        )
                         .focusRequester(focusRequesters[button.id] ?: FocusRequester()),
                     onClick = button.onClick,
                     shape = ButtonDefaults.shape(shape = RoundedCornerShape(12.dp)),
                     scale = ButtonDefaults.scale(focusedScale = 1.1f),
-                    contentPadding = PaddingValues(
-                        horizontal = 4.dp,
-                        vertical = 4.dp.scaledBy(controllerPanelScale)
-                    ),
+                    contentPadding = PaddingValues(0.dp),
                     colors = ButtonDefaults.colors(
                         containerColor = if (button.selected) PlayerColors.buttonSelected else PlayerColors.buttonDefault,
                         focusedContainerColor = PlayerColors.buttonFocused
