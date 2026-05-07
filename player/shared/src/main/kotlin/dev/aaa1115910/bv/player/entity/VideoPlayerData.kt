@@ -145,6 +145,7 @@ data class VideoPlayerConfigData(
     var showNextVideoBtn: Boolean = false,
     val defaultStartPosition: DefaultStartPosition = DefaultStartPosition.History,
     val enableStartPositionSwitch: Boolean = false,
+    val debugDanmakuMaskDownsample180p: Boolean = false,
     val clipInfoList: List<ClipInfo> = emptyList(),
     val skipPgcIntroOutro: Boolean = false,
     val isLive: Boolean = false,

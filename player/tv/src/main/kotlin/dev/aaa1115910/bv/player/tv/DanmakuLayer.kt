@@ -84,6 +84,7 @@ fun DanmakuLayer(
     modifier: Modifier = Modifier,
     handle: DanmakuLayerHandle,
     onVideoDanmakuSurfaceViewReady: ((VideoDanmakuSurfaceView?) -> Unit)? = null,
+    onVideoDanmakuSurfaceViewRelease: ((VideoDanmakuSurfaceView) -> Unit)? = null,
 ) {
     val player = handle.danmakuPlayer
     val useSurfaceViewForNormalMode = !handle.isLiveMode
@@ -106,6 +107,7 @@ fun DanmakuLayer(
             maskBitmap = handle.maskBitmap,
             videoAspectRatio = handle.videoAspectRatio,
             onVideoDanmakuSurfaceViewReady = onVideoDanmakuSurfaceViewReady,
+            onVideoDanmakuSurfaceViewRelease = onVideoDanmakuSurfaceViewRelease,
             useSurfaceViewForNormalMode = useSurfaceViewForNormalMode,
             isLiveMode = handle.isLiveMode,
             onLiveDanmakuPlayerReady = handle.onLiveDanmakuPlayerReady

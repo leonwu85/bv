@@ -43,7 +43,7 @@ object DanmakuMaskFinder {
 
             when {
                 positionMs < segment.range.first -> right = mid - 1
-                positionMs >= segment.range.last -> left = mid + 1
+                positionMs > segment.range.last -> left = mid + 1
                 else -> return segment
             }
         }
@@ -68,7 +68,7 @@ object DanmakuMaskFinder {
 
             when {
                 positionMs < frame.range.first -> right = mid - 1
-                positionMs >= frame.range.last -> left = mid + 1
+                positionMs > frame.range.last -> left = mid + 1
                 else -> return frame
             }
         }

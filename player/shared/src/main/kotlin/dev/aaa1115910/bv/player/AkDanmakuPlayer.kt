@@ -34,6 +34,7 @@ fun AkDanmakuPlayer(
     maskBitmap: Bitmap? = null,
     videoAspectRatio: Float = 0f,
     onVideoDanmakuSurfaceViewReady: ((VideoDanmakuSurfaceView?) -> Unit)? = null,
+    onVideoDanmakuSurfaceViewRelease: ((VideoDanmakuSurfaceView) -> Unit)? = null,
 ) {
     AkDanmakuPlayer(
         modifier = modifier,
@@ -42,6 +43,7 @@ fun AkDanmakuPlayer(
         maskBitmap = maskBitmap,
         videoAspectRatio = videoAspectRatio,
         onVideoDanmakuSurfaceViewReady = onVideoDanmakuSurfaceViewReady,
+        onVideoDanmakuSurfaceViewRelease = onVideoDanmakuSurfaceViewRelease,
         useSurfaceViewForNormalMode = false,
         isLiveMode = false,
         onLiveDanmakuPlayerReady = null
@@ -62,6 +64,7 @@ fun AkDanmakuPlayer(
     maskBitmap: Bitmap? = null,
     videoAspectRatio: Float = 0f,
     onVideoDanmakuSurfaceViewReady: ((VideoDanmakuSurfaceView?) -> Unit)? = null,
+    onVideoDanmakuSurfaceViewRelease: ((VideoDanmakuSurfaceView) -> Unit)? = null,
     useSurfaceViewForNormalMode: Boolean = false,
     isLiveMode: Boolean = false,
     onLiveDanmakuPlayerReady: ((LiveDanmakuPlayer) -> Unit)? = null
@@ -123,9 +126,15 @@ fun AkDanmakuPlayer(
         key(danmakuPlayer, useSurfaceViewForNormalMode) {
             var danmakuSurfaceView: VideoDanmakuSurfaceView? by remember { mutableStateOf(null) }
 
-            DisposableEffect(Unit) {
-                onDispose {
-                    onVideoDanmakuSurfaceViewReady?.invoke(null)
+            danmakuSurfaceView?.let { surfaceView ->
+                DisposableEffect(surfaceView) {
+                    onDispose {
+                        if (onVideoDanmakuSurfaceViewRelease != null) {
+                            onVideoDanmakuSurfaceViewRelease(surfaceView)
+                        } else {
+                            onVideoDanmakuSurfaceViewReady?.invoke(null)
+                        }
+                    }
                 }
             }
 
@@ -143,7 +152,9 @@ fun AkDanmakuPlayer(
                         setZOrderOnTop(false)
                         setZOrderMediaOverlay(true)
                         holder?.setFormat(PixelFormat.TRANSLUCENT)
-                        updateMaskBitmap(maskBitmap, videoAspectRatio)
+                        if (onVideoDanmakuSurfaceViewReady == null) {
+                            updateMaskBitmap(maskBitmap, videoAspectRatio)
+                        }
                     }.also {
                         danmakuSurfaceView = it
                         onVideoDanmakuSurfaceViewReady?.invoke(it)
@@ -151,10 +162,12 @@ fun AkDanmakuPlayer(
                 },
                 update = { surfaceView ->
                     surfaceView.visibility = if (visible) View.VISIBLE else View.INVISIBLE
-                    if (maskBitmap != null && !maskBitmap.isRecycled) {
-                        surfaceView.updateMaskBitmap(maskBitmap, videoAspectRatio)
-                    } else if (onVideoDanmakuSurfaceViewReady == null) {
-                        surfaceView.clearMaskBitmap()
+                    if (onVideoDanmakuSurfaceViewReady == null) {
+                        if (maskBitmap != null && !maskBitmap.isRecycled) {
+                            surfaceView.updateMaskBitmap(maskBitmap, videoAspectRatio)
+                        } else {
+                            surfaceView.clearMaskBitmap()
+                        }
                     }
                 }
             )

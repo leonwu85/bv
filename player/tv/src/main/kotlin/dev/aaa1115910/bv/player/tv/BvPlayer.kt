@@ -89,6 +89,8 @@ import java.util.Calendar
 import kotlin.math.roundToInt
 
 private const val DANMAKU_MASK_BITMAP_CACHE_MAX_BYTES = 64 * 1024 * 1024
+private const val DANMAKU_MASK_DOWNSAMPLE_HEIGHT_DEFAULT = 360
+private const val DANMAKU_MASK_DOWNSAMPLE_HEIGHT_DEBUG = 180
 private const val AUTO_PLAY_PREPARE_WINDOW_MS = 15_000L
 
 private fun Bitmap.safeCacheSize(): Int = if (isRecycled) 0 else byteCount
@@ -103,6 +105,21 @@ private class DanmakuMaskRenderState {
     var currentFrame: DanmakuMaskFrame? = null
     var currentBitmap: Bitmap? = null
     var surfaceView: VideoDanmakuSurfaceView? = null
+    var submittedSurfaceView: VideoDanmakuSurfaceView? = null
+    var submittedBitmap: Bitmap? = null
+    var submittedGenerationId: Int = -1
+    var submittedAspectRatio: Float = -1f
+    var submittedTargetHeight: Int = -1
+    var submittedCleared: Boolean = true
+
+    fun resetSubmission() {
+        submittedSurfaceView = null
+        submittedBitmap = null
+        submittedGenerationId = -1
+        submittedAspectRatio = -1f
+        submittedTargetHeight = -1
+        submittedCleared = true
+    }
 }
 
 private class DanmakuMaskBitmapPool {
@@ -348,9 +365,53 @@ fun BvPlayer(
     val currentUseSurfaceViewDanmaku by rememberUpdatedState(useSurfaceViewDanmaku)
     val currentVideoCid by rememberUpdatedState(videoPlayerConfigData.currentVideoCid)
     val currentAspectRatioValue by rememberUpdatedState(aspectRatioValue)
+    val currentMaskDownsampleTargetHeight by rememberUpdatedState(
+        if (videoPlayerConfigData.debugDanmakuMaskDownsample180p) {
+            DANMAKU_MASK_DOWNSAMPLE_HEIGHT_DEBUG
+        } else {
+            DANMAKU_MASK_DOWNSAMPLE_HEIGHT_DEFAULT
+        }
+    )
 
     // 独立弹幕层句柄（Stable），父级重组频率降低
     val danmakuLayerHandle = remember { DanmakuLayerHandle(initialIsLiveMode = isLive) }
+
+    val clearDanmakuMaskSurface: () -> Unit = {
+        danmakuMaskRenderState.surfaceView?.clearMaskBitmap()
+        danmakuMaskRenderState.resetSubmission()
+    }
+
+    val submitDanmakuMaskBitmap: (Bitmap?, Float, Int) -> Unit = submit@{ bitmap, aspectRatio, targetHeight ->
+        val surfaceView = danmakuMaskRenderState.surfaceView ?: return@submit
+        surfaceView.setMaskDownsampleTargetHeight(targetHeight)
+        if (bitmap == null || bitmap.isRecycled) {
+            if (!danmakuMaskRenderState.submittedCleared || danmakuMaskRenderState.submittedSurfaceView !== surfaceView) {
+                surfaceView.clearMaskBitmap()
+                danmakuMaskRenderState.resetSubmission()
+                danmakuMaskRenderState.submittedSurfaceView = surfaceView
+            }
+            return@submit
+        }
+
+        val generationId = bitmap.generationId
+        if (
+            danmakuMaskRenderState.submittedSurfaceView === surfaceView &&
+            danmakuMaskRenderState.submittedBitmap === bitmap &&
+            danmakuMaskRenderState.submittedGenerationId == generationId &&
+            danmakuMaskRenderState.submittedAspectRatio == aspectRatio &&
+            danmakuMaskRenderState.submittedTargetHeight == targetHeight
+        ) {
+            return@submit
+        }
+
+        surfaceView.updateMaskBitmap(bitmap, aspectRatio)
+        danmakuMaskRenderState.submittedSurfaceView = surfaceView
+        danmakuMaskRenderState.submittedBitmap = bitmap
+        danmakuMaskRenderState.submittedGenerationId = generationId
+        danmakuMaskRenderState.submittedAspectRatio = aspectRatio
+        danmakuMaskRenderState.submittedTargetHeight = targetHeight
+        danmakuMaskRenderState.submittedCleared = false
+    }
 
     val clearDanmakuMaskState: (Boolean) -> Unit = { clearCache ->
         danmakuMaskGeneration++
@@ -358,7 +419,7 @@ fun BvPlayer(
         currentDanmakuMaskBitmap = null
         danmakuMaskRenderState.currentFrame = null
         danmakuMaskRenderState.currentBitmap = null
-        danmakuMaskRenderState.surfaceView?.clearMaskBitmap()
+        clearDanmakuMaskSurface()
         danmakuLayerHandle.update(mask = null, bitmap = null)
         if (clearCache) {
             danmakuMaskBitmapCache.evictAll()
@@ -370,16 +431,26 @@ fun BvPlayer(
         { surfaceView: VideoDanmakuSurfaceView? ->
             danmakuMaskRenderState.surfaceView = surfaceView
             if (surfaceView != null) {
+                danmakuMaskRenderState.resetSubmission()
                 val currentBitmap = danmakuMaskRenderState.currentBitmap
                 if (
                     currentDanmakuMaskEnabled &&
                     currentBitmap != null &&
                     !currentBitmap.isRecycled
                 ) {
-                    surfaceView.updateMaskBitmap(currentBitmap, currentAspectRatioValue)
+                    submitDanmakuMaskBitmap(currentBitmap, currentAspectRatioValue, currentMaskDownsampleTargetHeight)
                 } else {
-                    surfaceView.clearMaskBitmap()
+                    submitDanmakuMaskBitmap(null, currentAspectRatioValue, currentMaskDownsampleTargetHeight)
                 }
+            }
+        }
+    }
+
+    val unbindDanmakuSurfaceView = remember(danmakuMaskRenderState) {
+        { surfaceView: VideoDanmakuSurfaceView ->
+            if (danmakuMaskRenderState.surfaceView === surfaceView) {
+                danmakuMaskRenderState.surfaceView = null
+                danmakuMaskRenderState.resetSubmission()
             }
         }
     }
@@ -529,7 +600,7 @@ fun BvPlayer(
                 currentDanmakuMaskBitmap = bitmap
                 danmakuMaskRenderState.currentFrame = maskFrame
                 danmakuMaskRenderState.currentBitmap = bitmap
-                danmakuMaskRenderState.surfaceView?.updateMaskBitmap(bitmap, aspectRatioValue)
+                submitDanmakuMaskBitmap(bitmap, aspectRatioValue, currentMaskDownsampleTargetHeight)
             }
         }
         // 如果 maskFrame 为 null（帧空隙），不做任何操作，保持当前蒙版
@@ -1040,15 +1111,16 @@ fun BvPlayer(
         }
     }
 
-    LaunchedEffect(aspectRatioValue) {
+    LaunchedEffect(aspectRatioValue, videoPlayerConfigData.debugDanmakuMaskDownsample180p) {
         val currentBitmap = danmakuMaskRenderState.currentBitmap
+        danmakuMaskRenderState.resetSubmission()
         if (
             !isDanmakuMaskDisposed &&
             currentDanmakuMaskEnabled &&
             currentBitmap != null &&
             !currentBitmap.isRecycled
         ) {
-            danmakuMaskRenderState.surfaceView?.updateMaskBitmap(currentBitmap, aspectRatioValue)
+            submitDanmakuMaskBitmap(currentBitmap, aspectRatioValue, currentMaskDownsampleTargetHeight)
         }
     }
 
@@ -1145,7 +1217,7 @@ fun BvPlayer(
             // 如果是 VLC 播放器，先分离视图再释放
             // 这防止在 Surface 被销毁后 VLC 仍尝试渲染导致 BufferQueue abandoned 错误
             if (videoPlayer is dev.aaa1115910.bv.player.impl.vlc.VlcMediaPlayer) {
-                (videoPlayer as dev.aaa1115910.bv.player.impl.vlc.VlcMediaPlayer).detachVideoLayout()
+                videoPlayer.detachVideoLayout()
             }
 
             videoPlayer.release()
@@ -1488,7 +1560,7 @@ fun BvPlayer(
                     videoPlayerConfigData.currentDanmakuMask && !useSurfaceViewDanmaku
                 },
                 maskBitmap = currentDanmakuMaskBitmap.takeIf {
-                    videoPlayerConfigData.currentDanmakuMask
+                    videoPlayerConfigData.currentDanmakuMask && !useSurfaceViewDanmaku
                 },
                 videoAspectRatio = aspectRatioValue
             )
@@ -1513,7 +1585,8 @@ fun BvPlayer(
             DanmakuLayer(
                 modifier = Modifier.align(Alignment.TopCenter),
                 handle = danmakuLayerHandle,
-                onVideoDanmakuSurfaceViewReady = bindDanmakuSurfaceView
+                onVideoDanmakuSurfaceViewReady = bindDanmakuSurfaceView,
+                onVideoDanmakuSurfaceViewRelease = unbindDanmakuSurfaceView
             )
 
             // 跳过片头片尾提示

@@ -57,6 +57,7 @@ fun PlayerSetting(
     var playerCommentSplitScreen by remember { mutableStateOf(Prefs.playerCommentSplitScreen) }
     var playerBottomProgressBarColor by remember { mutableStateOf(Prefs.playerBottomProgressBarColor) }
     var playerShowDebugInfo by remember { mutableStateOf(Prefs.playerShowDebugInfo) }
+    var debugDanmakuMaskDownsample180p by remember { mutableStateOf(Prefs.debugDanmakuMaskDownsample180p) }
     var playerExitWhenAllIsPlayed by remember { mutableStateOf(Prefs.playerExitWhenAllIsPlayed) }
     var playerLoadNextAction by remember { mutableStateOf(Prefs.playerLoadNextAction) }
     var playerDefaultStartPosition by remember { mutableStateOf(Prefs.playerDefaultStartPosition) }
@@ -233,6 +234,17 @@ fun PlayerSetting(
                     onCheckedChange = {
                         playerShowDebugInfo = it
                         Prefs.playerShowDebugInfo = it
+                    }
+                )
+            }
+            item {
+                SettingSwitchListItem(
+                    title = "弹幕蒙版 180p 降采样",
+                    supportText = "降低普通模式 GL 弹幕蒙版上传尺寸，可能改善低性能设备掉帧",
+                    checked = debugDanmakuMaskDownsample180p,
+                    onCheckedChange = {
+                        debugDanmakuMaskDownsample180p = it
+                        Prefs.debugDanmakuMaskDownsample180p = it
                     }
                 )
             }
