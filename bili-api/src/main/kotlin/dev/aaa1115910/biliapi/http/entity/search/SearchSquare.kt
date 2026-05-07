@@ -139,3 +139,18 @@ data class SearchTendingData(
         val isCommercial: Int
     )
 }
+
+@Serializable
+data class SearchRecommendData(
+    val list: List<Item> = emptyList()
+) {
+    @Serializable
+    data class Item(
+        val keyword: String? = null,
+        val icon: String? = null,
+        @SerialName("show_live_icon")
+        val showLiveIcon: Boolean? = null,
+        @SerialName("recommend_reason")
+        val recommendReason: String? = null
+    )
+}

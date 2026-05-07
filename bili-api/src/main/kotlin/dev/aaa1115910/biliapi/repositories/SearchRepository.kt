@@ -5,7 +5,7 @@ import bilibili.pagination.pagination
 import bilibili.polymer.app.search.v1.SearchByTypeRequest
 import bilibili.polymer.app.search.v1.searchByTypeRequest
 import dev.aaa1115910.biliapi.entity.ApiType
-import dev.aaa1115910.biliapi.entity.search.Hotword
+import dev.aaa1115910.biliapi.entity.search.SearchKeyword
 import dev.aaa1115910.biliapi.grpc.utils.handleGrpcException
 import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.http.BiliHttpProxyApi
@@ -67,23 +67,41 @@ class SearchRepository(
     suspend fun getSearchHotwords(
         limit: Int = 30,
         preferApiType: ApiType = ApiType.Web
-    ): List<Hotword> {
+    ): List<SearchKeyword> {
         return when (preferApiType) {
             ApiType.Web -> BiliHttpApi.getWebSearchSquare(limit = limit)
                 .getResponseData().trending.list
-                .map { Hotword.fromHttpWebHotword(it) }
+                .map { SearchKeyword.fromHttpWebHotword(it) }
 
             /*ApiType.App -> BiliHttpApi.getAppSearchSquare(limit = limit)
                 .getResponseData()
                 .firstOrNull { it.type == "trending" }
                 ?.data?.list
-                ?.map { Hotword.fromHttpAppSquareDataItem(it) }
+                ?.map { SearchKeyword.fromHttpAppSquareDataItem(it) }
                 ?: emptyList()*/
 
-            ApiType.App -> BiliHttpApi.getSearchTrendRank(limit = 50)
+            ApiType.App -> BiliHttpApi.getSearchTrendRank(limit = limit)
                 .getResponseData().list
-                .map { Hotword.fromHttpAppSearchTrendingHotword(it) }
-        }
+                .map { SearchKeyword.fromHttpAppSearchTrendingHotword(it) }
+        }.filter { it.keyword.isNotBlank() }
+    }
+
+    suspend fun getSearchRecommendKeywords(): List<SearchKeyword> {
+        return BiliHttpApi.getSearchRecommend()
+            .getResponseData()
+            .list
+            .map { SearchKeyword.fromHttpSearchRecommendItem(it) }
+            .filter { it.keyword.isNotBlank() }
+    }
+
+    suspend fun getSearchTrendingRanking(
+        limit: Int = 50
+    ): List<SearchKeyword> {
+        return BiliHttpApi.getSearchTrendRank(limit = limit)
+            .getResponseData()
+            .list
+            .map { SearchKeyword.fromHttpAppSearchTrendingHotword(it) }
+            .filter { it.keyword.isNotBlank() }
     }
 
     suspend fun getSearchSuggest(

@@ -61,6 +61,18 @@ class SearchRepositoryTest {
     }
 
     @Test
+    fun `get search recommend keywords`() = runBlocking {
+        val result = searchRepository.getSearchRecommendKeywords()
+        println(result)
+    }
+
+    @Test
+    fun `get search trending ranking`() = runBlocking {
+        val result = searchRepository.getSearchTrendingRanking(limit = 50)
+        println(result)
+    }
+
+    @Test
     fun `get search suggest with web api`() = runBlocking {
         val result = searchRepository.getSearchSuggest(
             keyword = "00",
