@@ -7,5 +7,6 @@ data class VideoPlayerOptions(
     val enableAsyncQueueing: Boolean = true,
     val enableTunneling: Boolean = true,
     val enableAudioPlaybackParams: Boolean = true,
+    val enableVideoFrameRateStrategy: Boolean = true,
     val isLive: Boolean = false
 )

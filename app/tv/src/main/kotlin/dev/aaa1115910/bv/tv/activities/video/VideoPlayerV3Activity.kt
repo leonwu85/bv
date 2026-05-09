@@ -264,6 +264,7 @@ class VideoPlayerV3Activity : ComponentActivity() {
             enableAsyncQueueing = Prefs.enableAsyncQueueing,
             enableTunneling = Prefs.enableTunneling,
             enableAudioPlaybackParams = Prefs.enableAudioPlaybackParams,
+            enableVideoFrameRateStrategy = false,
             isLive = isLive
         )
         val videoPlayer = when (Prefs.playerType) {

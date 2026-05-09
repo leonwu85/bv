@@ -120,6 +120,13 @@ class ExoMediaPlayer(
         val exoPlayerBuilder = ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setLoadControl(loadControl)
+            .setVideoChangeFrameRateStrategy(
+                if (options.enableVideoFrameRateStrategy) {
+                    C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_ONLY_IF_SEAMLESS
+                } else {
+                    C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF
+                }
+            )
             .setSeekForwardIncrementMs(1000 * 10)
             .setSeekBackIncrementMs(1000 * 10)
 
