@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -46,6 +47,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -171,6 +173,11 @@ fun ContentCenterScreen(
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.surface,
+        contentWindowInsets = if (showTopBar) {
+            ScaffoldDefaults.contentWindowInsets
+        } else {
+            WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
+        },
         topBar = {
             if (showTopBar) {
                 TopAppBar(
@@ -1063,7 +1070,8 @@ private fun LiveAreaSelector(
 
     Column(
         modifier = modifier
-            .fillMaxWidth()
+            .fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         val selectedParentIndex = if (liveViewModel.currentTabType == LiveTabType.Area) {
             parentGroups
@@ -1087,7 +1095,7 @@ private fun LiveAreaSelector(
             },
             fontSize = 14.sp,
             topPadding = 5.dp,
-            bottomPadding = if (showSubAreas) 0.dp else HomeContentStyle.CardSpace
+            bottomPadding = if (showSubAreas) 2.dp else HomeContentStyle.CardSpace
         )
 
         val subAreas = liveViewModel.subAreaList
@@ -1101,7 +1109,7 @@ private fun LiveAreaSelector(
                 tabs = subAreas.map { it.name },
                 onTabSelected = { index -> liveViewModel.switchSubArea(subAreas[index]) },
                 fontSize = 13.sp,
-                topPadding = 0.dp,
+                topPadding = 2.dp,
                 bottomPadding = HomeContentStyle.CardSpace
             )
         }

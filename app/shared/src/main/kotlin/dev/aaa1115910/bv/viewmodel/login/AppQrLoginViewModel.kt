@@ -81,24 +81,31 @@ class AppQrLoginViewModel(
         logger.fInfo { "Check for login result" }
         runCatching {
             val qrLoginResult = loginRepository.checkAppQrLoginState(key)
-            withContext(Dispatchers.Main) { state = qrLoginResult.state }
-            when (state) {
+            when (qrLoginResult.state) {
                 QrLoginState.WaitingForScan -> {
+                    withContext(Dispatchers.Main) { state = qrLoginResult.state }
                     logger.fInfo { "Waiting to scan" }
                 }
 
                 QrLoginState.WaitingForConfirm -> {
+                    withContext(Dispatchers.Main) { state = qrLoginResult.state }
                     logger.fInfo { "Waiting to confirm" }
                 }
 
                 QrLoginState.Expired -> {
+                    withContext(Dispatchers.Main) { state = qrLoginResult.state }
                     logger.fInfo { "QR expired" }
                     timer.cancel()
                 }
 
                 QrLoginState.Success -> {
                     logger.fInfo { "Login success" }
-                    Prefs.buvid3 = loginRepository.getbuvid3()
+                    timer.cancel()
+                    runCatching {
+                        Prefs.buvid3 = loginRepository.getbuvid3()
+                    }.onFailure {
+                        logger.warn { "Get buvid3 failed: ${it.stackTraceToString()}" }
+                    }
 
                     val authData = AuthData(
                         uid = qrLoginResult.cookies!!.dedeUserId,
@@ -111,13 +118,14 @@ class AppQrLoginViewModel(
                         refreshToken = qrLoginResult.refreshToken!!
                     )
 
-                    timer.cancel()
-                    BlacklistUtil.checkUid(Prefs.uid)
+                    BlacklistUtil.checkUid(authData.uid)
                     userRepository.addUser(authData)
+                    withContext(Dispatchers.Main) { state = QrLoginState.Success }
                 }
 
                 else -> {
-                    logger.fInfo { "This state should not be here: $state" }
+                    withContext(Dispatchers.Main) { state = qrLoginResult.state }
+                    logger.fInfo { "This state should not be here: ${qrLoginResult.state}" }
                 }
             }
         }.onFailure {

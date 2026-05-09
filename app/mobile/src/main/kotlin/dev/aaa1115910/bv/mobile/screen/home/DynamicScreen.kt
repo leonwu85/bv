@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -119,31 +120,42 @@ fun DynamicScreen(
         containerColor = MaterialTheme.colorScheme.surfaceContainer
     ) { innerPadding ->
         Box(
-            modifier = Modifier.padding(top = innerPadding.calculateTopPadding())
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = innerPadding.calculateTopPadding())
         ) {
-            LazyVerticalStaggeredGrid(
-                modifier = modifier
-                    .fillMaxSize()
-                    .ifElse(
-                        { windowSize != WindowWidthSizeClass.Compact },
-                        Modifier.clip(MaterialTheme.shapes.medium)
-                    )
-                    .background(MaterialTheme.colorScheme.surface),
-                columns = StaggeredGridCells.Adaptive(300.dp),
-                state = dynamicGridState,
-                verticalItemSpacing = 8.dp,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(if (lane == 1) 0.dp else 8.dp)
-            ) {
-                items(items = dynamicViewModel.dynamicAllList) { dynamicItem ->
-                    DynamicItem(
-                        modifier = Modifier
-                            .ifElse(lane != 1, Modifier.clip(MaterialTheme.shapes.medium)),
-                        dynamicItem = dynamicItem,
-                        previewerState = previewerState,
-                        onShowPreviewer = onShowPreviewer,
-                        onClick = onClickDynamicItem
-                    )
+            if (!dynamicViewModel.isLogin) {
+                Text(
+                    modifier = Modifier.align(Alignment.Center),
+                    text = "请先登录后查看动态",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                LazyVerticalStaggeredGrid(
+                    modifier = modifier
+                        .fillMaxSize()
+                        .ifElse(
+                            { windowSize != WindowWidthSizeClass.Compact },
+                            Modifier.clip(MaterialTheme.shapes.medium)
+                        )
+                        .background(MaterialTheme.colorScheme.surface),
+                    columns = StaggeredGridCells.Adaptive(300.dp),
+                    state = dynamicGridState,
+                    verticalItemSpacing = 8.dp,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(if (lane == 1) 0.dp else 8.dp)
+                ) {
+                    items(items = dynamicViewModel.dynamicAllList) { dynamicItem ->
+                        DynamicItem(
+                            modifier = Modifier
+                                .ifElse(lane != 1, Modifier.clip(MaterialTheme.shapes.medium)),
+                            dynamicItem = dynamicItem,
+                            previewerState = previewerState,
+                            onShowPreviewer = onShowPreviewer,
+                            onClick = onClickDynamicItem
+                        )
+                    }
                 }
             }
         }

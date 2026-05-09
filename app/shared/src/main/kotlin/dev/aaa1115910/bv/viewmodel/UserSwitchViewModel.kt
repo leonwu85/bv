@@ -49,11 +49,12 @@ class UserSwitchViewModel(
 
     suspend fun deleteUser(userDB: UserDB) {
         db.userDao().delete(userDB)
-        updateUserDbList()
-        if (userDbList.isNotEmpty()) {
-            switchUser(userDbList.first())
+        val users = db.userDao().getAll()
+        if (users.isNotEmpty()) {
+            switchUser(users.first())
         } else {
             userRepository.logout()
         }
+        updateUserDbList()
     }
 }
