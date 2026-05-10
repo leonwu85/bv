@@ -92,6 +92,7 @@ private const val DANMAKU_MASK_BITMAP_CACHE_MAX_BYTES = 64 * 1024 * 1024
 private const val DANMAKU_MASK_DOWNSAMPLE_SHORT_SIDE_DEFAULT = 360
 private const val DANMAKU_MASK_DOWNSAMPLE_SHORT_SIDE_DEBUG = 180
 private const val AUTO_PLAY_PREPARE_WINDOW_MS = 15_000L
+private const val VIDEO_END_SKIP_THRESHOLD_MS = 1_000L
 
 private fun Bitmap.safeCacheSize(): Int = if (isRecycled) 0 else byteCount
 
@@ -285,6 +286,7 @@ fun BvPlayer(
     var pendingReloadDanmakuPosition by remember { mutableLongStateOf(-1L) }
     var pendingReloadDanmakuShouldPlay by remember { mutableStateOf(false) }
     var hasStartedPlaybackOnce by remember(videoPlayerConfigData.currentVideoCid) { mutableStateOf(false) }
+    var handledNaturalVideoEnd by remember(videoPlayerConfigData.currentVideoCid) { mutableStateOf(false) }
     val initialHistoryPositionSnapshot = remember(videoPlayerConfigData.currentVideoCid) {
         videoPlayerHistoryData.lastPlayed.toLong().coerceAtLeast(0L)
     }
@@ -357,6 +359,7 @@ fun BvPlayer(
     val currentSponsorSegment by rememberUpdatedState(currentSponsorSegment)
     val currentOnShowSponsorBlockTip by rememberUpdatedState(onShowSponsorBlockTip)
     val currentOnSkipSponsorSegment by rememberUpdatedState(onSkipSponsorSegment)
+    val currentOnDismissSponsorBlockTip by rememberUpdatedState(onDismissSponsorBlockTip)
     val useSurfaceViewDanmaku = !videoPlayerConfigData.isLive
     val currentDanmakuMasks by rememberUpdatedState(videoPlayerDanmakuMaskData.danmakuMasks)
     val currentIsPlaying by rememberUpdatedState(isPlaying)
@@ -495,6 +498,89 @@ fun BvPlayer(
         onReloadDanmakuAfterSeek(targetPosition, shouldPlayAfterSeek)
     }
 
+    fun isNearVideoEnd(targetPosition: Long): Boolean {
+        val duration = videoPlayer.duration.coerceAtLeast(seekState.duration)
+        return duration > 0L && targetPosition >= (duration - VIDEO_END_SKIP_THRESHOLD_MS).coerceAtLeast(0L)
+    }
+
+    fun handleNaturalVideoEnd(reason: String, alignPlaybackToEnd: Boolean = false) {
+        if (handledNaturalVideoEnd) {
+            logger.info { "handleNaturalVideoEnd ignored: already handled, reason=$reason" }
+            return
+        }
+        handledNaturalVideoEnd = true
+
+        fun alignPlaybackToEndIfNeeded() {
+            if (!alignPlaybackToEnd) return
+            val duration = videoPlayer.duration.coerceAtLeast(seekState.duration)
+            if (duration > 0L) {
+                scheduleDanmakuSeekSync(duration, false)
+                videoPlayer.seekTo(duration)
+            }
+            videoPlayer.pause()
+        }
+
+        if (videoPlayerConfigData.showRelatedVideos) {
+            alignPlaybackToEndIfNeeded()
+            logger.info { "$reason: show related videos, skip auto next" }
+            scope.launch(Dispatchers.Main) {
+                isPlaying = false
+            }
+            return
+        }
+
+        if (videoPlayerConfigData.isLoop) {
+            logger.info { "$reason: replay" }
+            scope.launch(Dispatchers.Main) {
+                scheduleDanmakuSeekSync(0, true)
+                videoPlayer.seekTo(0)
+                mDanmakuPlayer?.pause()
+                videoPlayer.start()
+            }
+            return
+        }
+
+        alignPlaybackToEndIfNeeded()
+
+        logger.info { reason }
+        mDanmakuPlayer?.pause()
+        scope.launch(Dispatchers.Main) {
+            isPlaying = false
+            if (!videoPlayerConfigData.incognitoMode && !videoPlayerConfigData.isLive) {
+                scope.launch(Dispatchers.IO) {
+                    onSendHeartbeat(-1)
+                }
+            }
+            // 当控制信息面板显示时不自动播放下一集
+            if (!showInfoProvider()) {
+                if (autoOpenPlayListOnVideoEnd) {
+                    openPlayListRequestToken = System.currentTimeMillis()
+                } else {
+                    onLoadNextVideo(false)
+                }
+            } else {
+                logger.info { "Skip auto next because info panel visible" }
+            }
+        }
+    }
+
+    fun skipSponsorSegment(segment: SponsorSegment?) {
+        if (segment == null) {
+            currentOnSkipSponsorSegment(null)
+            return
+        }
+
+        if (isNearVideoEnd(segment.endTime)) {
+            currentOnDismissSponsorBlockTip()
+            handleNaturalVideoEnd(
+                "SponsorBlock skip reached video end: ${segment.category}",
+                alignPlaybackToEnd = true
+            )
+        } else {
+            currentOnSkipSponsorSegment(segment)
+        }
+    }
+
     // 跳过片头片尾检测任务
     val checkSkipTask: (Long) -> Unit = { positionMs ->
         val currentPosition = (positionMs / 1000).toInt()  // 毫秒转秒
@@ -529,8 +615,13 @@ fun BvPlayer(
                                 skipEdTipText = clipInfo.toastText.ifBlank { "即将跳过片尾" }
                                 showSkipEdTip = true
                                 delay(1500)
-                                scheduleDanmakuSeekSync(clipInfo.end * 1000L, true)
-                                videoPlayer.seekTo(clipInfo.end * 1000L)
+                                val targetPosition = clipInfo.end * 1000L
+                                if (isNearVideoEnd(targetPosition)) {
+                                    handleNaturalVideoEnd("PGC outro skip reached video end", alignPlaybackToEnd = true)
+                                } else {
+                                    scheduleDanmakuSeekSync(targetPosition, true)
+                                    videoPlayer.seekTo(targetPosition)
+                                }
                                 showSkipEdTip = false
                             }
                             processedClipIndices = processedClipIndices + index
@@ -887,41 +978,7 @@ fun BvPlayer(
         }
 
         override fun onEnd() {
-            if (videoPlayerConfigData.showRelatedVideos) {
-                logger.info { "onEnd: show related videos, skip auto next" }
-                scope.launch(Dispatchers.Main) {
-                    isPlaying = false
-                }
-                return
-            }
-
-            if (videoPlayerConfigData.isLoop) {
-                logger.info { "onEnd: replay" }
-                scope.launch(Dispatchers.Main) {
-                    scheduleDanmakuSeekSync(0, true)
-                    videoPlayer.seekTo(0)
-                    mDanmakuPlayer?.pause()
-                    videoPlayer.start()
-                }
-                return
-            }
-
-            logger.info { "onEnd" }
-            mDanmakuPlayer?.pause()
-            scope.launch(Dispatchers.Main) {
-                isPlaying = false
-                if (!videoPlayerConfigData.incognitoMode) sendHeartbeat()
-                // 当控制信息面板显示时不自动播放下一集
-                if (!showInfoProvider()) {
-                    if (autoOpenPlayListOnVideoEnd) {
-                        openPlayListRequestToken = System.currentTimeMillis()
-                    } else {
-                        onLoadNextVideo(false)
-                    }
-                } else {
-                    logger.info { "Skip auto next because info panel visible" }
-                }
-            }
+            handleNaturalVideoEnd("onEnd")
         }
 
         override fun onIdle() {
@@ -998,6 +1055,9 @@ fun BvPlayer(
                 if (seekState.position != pos) seekState.position = pos
                 if (seekState.duration != dur) seekState.duration = dur
                 if (seekState.bufferedPercentage != buf) seekState.bufferedPercentage = buf
+                if (handledNaturalVideoEnd && dur > 0L && !isNearVideoEnd(pos)) {
+                    handledNaturalVideoEnd = false
+                }
 
                 if (
                     videoPlayerConfigData.showDanmaku &&
@@ -1049,7 +1109,7 @@ fun BvPlayer(
                         if (currentSponsorBlockSkipMode == SponsorBlockSkipMode.Auto) {
                             autoSkipSponsorSeconds = (segment.duration / 1000.0).roundToInt().coerceAtLeast(1)
                             autoSkipSponsorTipToken++
-                            currentOnSkipSponsorSegment(segment)
+                            skipSponsorSegment(segment)
                         } else {
                             // 手动
                             currentOnShowSponsorBlockTip(segment)
@@ -1544,7 +1604,7 @@ fun BvPlayer(
             currentSponsorSegment = currentSponsorSegment,
             onSkipSponsorSegment = {
                 logger.info { "Skip sponsor segment" }
-                onSkipSponsorSegment(currentSponsorSegment)
+                skipSponsorSegment(currentSponsorSegment)
             },
             onDismissSponsorBlockTip = onDismissSponsorBlockTip
         ) {
