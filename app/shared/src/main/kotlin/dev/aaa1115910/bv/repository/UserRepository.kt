@@ -107,6 +107,8 @@ class UserRepository(
         expiredDate = Date(0)
         accessToken = ""
         refreshToken = ""
+        username = ""
+        avatar = ""
         saveToPrefs()
     }
 
@@ -169,7 +171,12 @@ class UserRepository(
 
     suspend fun reloadAvatar() {
         val user = db.userDao().findUserByUid(uid)
-        user?.let {
+        if (user == null || !isLogin) {
+            username = ""
+            avatar = ""
+            return
+        }
+        user.let {
             username = it.username
             avatar = it.avatar
         }

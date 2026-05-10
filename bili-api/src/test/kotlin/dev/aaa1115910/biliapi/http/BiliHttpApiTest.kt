@@ -540,6 +540,11 @@ internal class BiliHttpApiTest {
     }
 
     @Test
+    fun `get app search recommend keywords`() = runBlocking {
+        println(BiliHttpApi.getSearchRecommend())
+    }
+
+    @Test
     fun `get search keyword suggests`() {
         runBlocking {
             println(

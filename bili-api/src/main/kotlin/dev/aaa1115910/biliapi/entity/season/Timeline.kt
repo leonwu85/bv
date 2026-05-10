@@ -39,9 +39,11 @@ data class TimelineEp(
     val cover: String,
     val title: String,
     val seasonId: Int,
+    val episodeId: Int = 0,
     val publishIndex: String,
     val publishTime: String,
-    val publishDate: Date
+    val publishDate: Date,
+    val isFollowing: Boolean = false
 ) {
     companion object {
         fun fromTimelineEpisode(episode: dev.aaa1115910.biliapi.http.entity.video.Timeline.Episode) =
@@ -49,9 +51,11 @@ data class TimelineEp(
                 cover = episode.cover,
                 title = episode.title,
                 seasonId = episode.seasonId,
+                episodeId = episode.episodeId,
                 publishIndex = episode.pubIndex,
                 publishTime = episode.pubTime,
-                publishDate = Date(episode.pubTs * 1000L)
+                publishDate = Date(episode.pubTs * 1000L),
+                isFollowing = episode.follow
             )
     }
 }

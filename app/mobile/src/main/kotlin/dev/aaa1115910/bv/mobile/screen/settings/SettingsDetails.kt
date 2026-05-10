@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import dev.aaa1115910.bv.mobile.screen.settings.details.AboutContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.AdvanceContent
+import dev.aaa1115910.bv.mobile.screen.settings.details.AppearanceContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.DebugContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.PlayContent
 
@@ -54,7 +55,8 @@ fun SettingsDetails(
         Box(modifier = Modifier.padding(innerPadding))
         val contentModifier = Modifier.padding(top = innerPadding.calculateTopPadding())
         when (selectedSettings) {
-            null, MobileSettings.Play -> PlayContent(modifier = contentModifier)
+            null, MobileSettings.Appearance -> AppearanceContent(modifier = contentModifier)
+            MobileSettings.Play -> PlayContent(modifier = contentModifier)
             MobileSettings.About -> AboutContent(modifier = contentModifier)
             MobileSettings.Debug -> DebugContent(modifier = contentModifier)
             MobileSettings.Advance -> AdvanceContent(modifier = contentModifier)

@@ -41,8 +41,8 @@ import dev.aaa1115910.biliapi.entity.reply.CommentReplyPage
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
 import dev.aaa1115910.biliapi.repositories.VideoDetailRepository
 import dev.aaa1115910.bv.BuildConfig
+import dev.aaa1115910.bv.mobile.settings.MobilePrefs
 import dev.aaa1115910.bv.util.OnBottomReached
-import dev.aaa1115910.bv.util.Prefs
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -83,7 +83,7 @@ fun ReplySheetScaffold(
                         commentId = rpid,
                         page = nextPage,
                         sort = sort,
-                        preferApiType = Prefs.apiType
+                        preferApiType = MobilePrefs.apiType
                     )
                     hasNext = commentRepliesData.hasNext
                     nextPage = commentRepliesData.nextPage

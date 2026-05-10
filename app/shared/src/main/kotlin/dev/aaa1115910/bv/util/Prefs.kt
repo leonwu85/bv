@@ -169,6 +169,22 @@ object Prefs {
         }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDefaultDanmakuScaleKey, value) }
 
+        var defaultMobileDanmakuScale: Float
+            get() = runBlocking {
+                dsm.getPreferenceFlow(PrefKeys.prefDefaultMobileDanmakuScaleRequest).first()
+            }
+            set(value) = runBlocking {
+                dsm.editPreference(PrefKeys.prefDefaultMobileDanmakuScaleKey, value)
+            }
+
+        var defaultTvDanmakuScale: Float
+            get() = runBlocking {
+                dsm.getPreferenceFlow(PrefKeys.prefDefaultTvDanmakuScaleRequest).first()
+            }
+            set(value) = runBlocking {
+                dsm.editPreference(PrefKeys.prefDefaultTvDanmakuScaleKey, value)
+            }
+
     var defaultDanmakuTransparency: Int
         get() = runBlocking {
             dsm.getPreferenceFlow(PrefKeys.prefDefaultDanmakuTransparencyRequest).first()
@@ -656,6 +672,14 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableTunnelingRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableTunneling, value) }
 
+    var enableMobileTunneling: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableMobileTunnelingRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableMobileTunneling, value) }
+
+    var enableTvTunneling: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableTvTunnelingRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableTvTunneling, value) }
+
     var enableAudioPlaybackParams: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableAudioPlaybackParamsRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableAudioPlaybackParams, value) }
@@ -723,6 +747,8 @@ object PrefKeys {
     val prefCurrentPlaySpeedKey = floatPreferencesKey("cps")
     val prefDefaultDanmakuSizeKey = intPreferencesKey("dds")
     val prefDefaultDanmakuScaleKey = floatPreferencesKey("dds2")
+    val prefDefaultMobileDanmakuScaleKey = floatPreferencesKey("mobile_dds2")
+    val prefDefaultTvDanmakuScaleKey = floatPreferencesKey("tv_dds2")
     val prefDefaultDanmakuTransparencyKey = intPreferencesKey("ddt")
     val prefDefaultDanmakuOpacityKey = floatPreferencesKey("ddo")
     val prefDefaultDanmakuEnabledKey = booleanPreferencesKey("dde")
@@ -794,6 +820,8 @@ object PrefKeys {
     val prefVlcAutoRotate = booleanPreferencesKey("vlc_auto_rotate")
     val prefEnableAsyncQueueing = booleanPreferencesKey("enable_async_queueing")
     val prefEnableTunneling = booleanPreferencesKey("enable_tunneling")
+    val prefEnableMobileTunneling = booleanPreferencesKey("enable_mobile_tunneling")
+    val prefEnableTvTunneling = booleanPreferencesKey("enable_tv_tunneling")
     val prefEnableAudioPlaybackParams = booleanPreferencesKey("enable_audio_playback_params")
     val prefVlcLibsVersionKey = stringPreferencesKey("vlc_libs_version")
     val prefDefaultDanmakuFilterLevelKey = intPreferencesKey("default_danmaku_filter_level")
@@ -819,6 +847,8 @@ object PrefKeys {
     val prefDefaultAudioRequest = PreferenceRequest(prefDefaultAudioKey, Audio.A192K.code)
     val prefDefaultDanmakuSizeRequest = PreferenceRequest(prefDefaultDanmakuSizeKey, 6)
     val prefDefaultDanmakuScaleRequest = PreferenceRequest(prefDefaultDanmakuScaleKey, 1.25f)
+    val prefDefaultMobileDanmakuScaleRequest = PreferenceRequest(prefDefaultMobileDanmakuScaleKey, 0.8f)
+    val prefDefaultTvDanmakuScaleRequest = PreferenceRequest(prefDefaultTvDanmakuScaleKey, 1.25f)
     val prefDefaultDanmakuTransparencyRequest =
         PreferenceRequest(prefDefaultDanmakuTransparencyKey, 0)
     val prefDefaultDanmakuOpacityRequest = PreferenceRequest(prefDefaultDanmakuOpacityKey, 0.8f)
@@ -908,6 +938,8 @@ object PrefKeys {
     val prefVlcAutoRotateRequest = PreferenceRequest(prefVlcAutoRotate, true)
     val prefEnableAsyncQueueingRequest = PreferenceRequest(prefEnableAsyncQueueing, true)
     val prefEnableTunnelingRequest = PreferenceRequest(prefEnableTunneling, true)
+    val prefEnableMobileTunnelingRequest = PreferenceRequest(prefEnableMobileTunneling, false)
+    val prefEnableTvTunnelingRequest = PreferenceRequest(prefEnableTvTunneling, true)
     val prefEnableAudioPlaybackParamsRequest = PreferenceRequest(prefEnableAudioPlaybackParams, true)
     val prefVlcLibsVersionRequest = PreferenceRequest(prefVlcLibsVersionKey, "")
     val prefDefaultDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultDanmakuFilterLevelKey, 1)

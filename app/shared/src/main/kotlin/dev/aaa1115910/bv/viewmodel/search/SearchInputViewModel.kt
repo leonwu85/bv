@@ -6,7 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dev.aaa1115910.biliapi.entity.search.Hotword
+import dev.aaa1115910.biliapi.entity.search.SearchKeyword
 import dev.aaa1115910.biliapi.repositories.SearchRepository
 import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.dao.AppDatabase
@@ -30,31 +30,104 @@ class SearchInputViewModel(
     private val logger = KotlinLogging.logger { }
 
     var keyword by mutableStateOf("")
-    val hotwords = mutableStateListOf<Hotword>()
+    val hotwords = mutableStateListOf<SearchKeyword>()
+    val recommendKeywords = mutableStateListOf<SearchKeyword>()
+    val trendingRankingKeywords = mutableStateListOf<SearchKeyword>()
     val suggests = mutableStateListOf<String>()
     val searchHistories = mutableStateListOf<SearchHistoryDB>()
     val matchedSearchHistories = mutableStateListOf<SearchHistoryDB>()
 
+    var hotwordsLoading by mutableStateOf(false)
+        private set
+    var recommendKeywordsLoading by mutableStateOf(false)
+        private set
+    var trendingRankingLoading by mutableStateOf(false)
+        private set
+
+    var hotwordsError by mutableStateOf<String?>(null)
+        private set
+    var recommendKeywordsError by mutableStateOf<String?>(null)
+        private set
+    var trendingRankingError by mutableStateOf<String?>(null)
+        private set
+
     init {
-        updateHotwords()
+        refreshHotwords()
+        refreshRecommendKeywords()
         loadSearchHistories()
     }
 
-    private fun updateHotwords() {
+    fun refreshHotwords() {
         logger.fInfo { "Update hotwords" }
+        if (hotwordsLoading) return
+        hotwordsLoading = true
+        hotwordsError = null
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
+            try {
                 val hotwordData = searchRepository.getSearchHotwords(
-                    limit = 50,
+                    limit = 10,
                     preferApiType = Prefs.apiType
                 )
                 logger.debug { "Find hotwords: $hotwordData" }
-                withContext(Dispatchers.Main) { hotwords.addAll(hotwordData) }
-            }.onFailure {
+                hotwords.swapListWithMainContext(hotwordData)
+            } catch (e: Throwable) {
                 withContext(Dispatchers.Main) {
+                    hotwordsError = e.message ?: "bilibili 热搜加载失败"
                     "bilibili 热搜加载失败".toast(BVApp.context)
                 }
-                logger.info { it.stackTraceToString() }
+                logger.info { e.stackTraceToString() }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    hotwordsLoading = false
+                }
+            }
+        }
+    }
+
+    fun refreshRecommendKeywords() {
+        logger.fInfo { "Update search recommend keywords" }
+        if (recommendKeywordsLoading) return
+        recommendKeywordsLoading = true
+        recommendKeywordsError = null
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val keywordData = searchRepository.getSearchRecommendKeywords()
+                logger.debug { "Find search recommend keywords: $keywordData" }
+                recommendKeywords.swapListWithMainContext(keywordData)
+            } catch (e: Throwable) {
+                withContext(Dispatchers.Main) {
+                    recommendKeywordsError = e.message ?: "搜索发现加载失败"
+                    "搜索发现加载失败".toast(BVApp.context)
+                }
+                logger.info { e.stackTraceToString() }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    recommendKeywordsLoading = false
+                }
+            }
+        }
+    }
+
+    fun refreshTrendingRanking() {
+        logger.fInfo { "Update search trending ranking" }
+        if (trendingRankingLoading) return
+        trendingRankingLoading = true
+        trendingRankingError = null
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val keywordData = searchRepository.getSearchTrendingRanking(limit = 50)
+                logger.debug { "Find search trending ranking: $keywordData" }
+                trendingRankingKeywords.swapListWithMainContext(keywordData)
+            } catch (e: Throwable) {
+                withContext(Dispatchers.Main) {
+                    trendingRankingError = e.message ?: "完整榜单加载失败"
+                    "完整榜单加载失败".toast(BVApp.context)
+                }
+                logger.info { e.stackTraceToString() }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    trendingRankingLoading = false
+                }
             }
         }
     }
@@ -128,11 +201,23 @@ class SearchInputViewModel(
         }
     }
 
+    fun deleteSearchHistoryByKeyword(keyword: String) {
+        logger.fInfo { "Delete search history by keyword: $keyword" }
+        viewModelScope.launch(Dispatchers.IO) {
+            db.searchHistoryDao().findHistory(keyword)?.let {
+                db.searchHistoryDao().delete(it)
+            }
+            loadSearchHistories()
+            updateMatchedSearchHistories()
+        }
+    }
+
     fun deleteAllSearchHistories() {
         logger.fInfo { "Delete all search histories" }
         viewModelScope.launch(Dispatchers.IO) {
             db.searchHistoryDao().deleteAll()
             loadSearchHistories()
+            updateMatchedSearchHistories()
         }
     }
 }

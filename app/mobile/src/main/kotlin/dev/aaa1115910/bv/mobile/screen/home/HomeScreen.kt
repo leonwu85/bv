@@ -2,8 +2,13 @@ package dev.aaa1115910.bv.mobile.screen.home
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -14,31 +19,31 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
+import dev.aaa1115910.biliapi.entity.pgc.PgcType
 import dev.aaa1115910.bv.mobile.activities.VideoPlayerActivity
-import dev.aaa1115910.bv.mobile.component.home.HomeTab
+import dev.aaa1115910.bv.mobile.component.MobileTabRow
 import dev.aaa1115910.bv.mobile.screen.home.home.PopularPage
 import dev.aaa1115910.bv.mobile.screen.home.home.RcmdPage
 import dev.aaa1115910.bv.viewmodel.UserViewModel
@@ -60,20 +65,26 @@ fun HomeScreen(
     recommendViewModel: RecommendViewModel = koinViewModel(),
     userViewModel: UserViewModel = koinViewModel(),
     windowSize: WindowWidthSizeClass,
+    onOpenSearch: () -> Unit,
     onShowUserDialog: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val pageState = rememberPagerState(pageCount = { 2 })
+    val pageState = rememberPagerState(
+        initialPage = MobileHomeTab.Recommend.ordinal,
+        pageCount = { MobileHomeTab.entries.size }
+    )
 
     Scaffold(
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
-            HomeTopAppBar(
-                windowSize = windowSize,
-                avatar = userViewModel.face,
-                onShowUserDialog = onShowUserDialog
-            )
+            if (windowSize == WindowWidthSizeClass.Compact) {
+                HomeTopAppBar(
+                    avatar = userViewModel.face,
+                    onOpenSearch = onOpenSearch,
+                    onShowUserDialog = onShowUserDialog
+                )
+            }
         }
     ) { innerPadding ->
         HomeScreenContent(
@@ -107,29 +118,26 @@ fun HomeScreenContent(
 
     Column(
         modifier = modifier
-            .background(MaterialTheme.colorScheme.surfaceContainer),
+            .background(MaterialTheme.colorScheme.surface),
     ) {
-        TabRow(
+        Box(
             modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(top = 4.dp)
+                .height(42.dp)
                 .zIndex(1f),
-            selectedTabIndex = selectedTabIndex,
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
+            contentAlignment = Alignment.Center
         ) {
-            HomeTab.entries.forEachIndexed { index, tab ->
-                Tab(
-                    selected = selectedTabIndex == index,
-                    onClick = {
-                        onChangeTabIndex(index)
-                    },
-                    text = {
-                        Text(
-                            text = tab.getDisplayName(context),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                )
-            }
+            MobileTabRow(
+                modifier = Modifier.fillMaxWidth(),
+                selectedTabIndex = selectedTabIndex,
+                tabs = MobileHomeTab.entries.map { it.title },
+                onTabSelected = onChangeTabIndex,
+                containerColor = MaterialTheme.colorScheme.surface,
+                horizontalArrangement = Arrangement.Center,
+                tabHeight = 42.dp
+            )
         }
 
         Surface(
@@ -140,8 +148,16 @@ fun HomeScreenContent(
                 modifier = Modifier,
                 state = pageState,
             ) { page ->
-                when (page) {
-                    0 -> {
+                when (MobileHomeTab.entries[page]) {
+                    MobileHomeTab.Live -> {
+                        ContentCenterScreen(
+                            windowSize = windowSize,
+                            showTopBar = false,
+                            lockedSection = ContentCenterSection.Live
+                        )
+                    }
+
+                    MobileHomeTab.Recommend -> {
                         RcmdPage(
                             state = rcmdGridState,
                             windowSize = windowSize,
@@ -172,7 +188,7 @@ fun HomeScreenContent(
                         )
                     }
 
-                    1 -> {
+                    MobileHomeTab.Popular -> {
                         PopularPage(
                             state = popularGridState,
                             windowSize = windowSize,
@@ -202,6 +218,32 @@ fun HomeScreenContent(
                             }
                         )
                     }
+
+                    MobileHomeTab.Zone -> {
+                        ContentCenterScreen(
+                            windowSize = windowSize,
+                            showTopBar = false,
+                            lockedSection = ContentCenterSection.Ugc
+                        )
+                    }
+
+                    MobileHomeTab.Bangumi -> {
+                        ContentCenterScreen(
+                            windowSize = windowSize,
+                            showTopBar = false,
+                            lockedSection = ContentCenterSection.Pgc,
+                            initialPgcType = PgcType.Anime
+                        )
+                    }
+
+                    MobileHomeTab.Cinema -> {
+                        ContentCenterScreen(
+                            windowSize = windowSize,
+                            showTopBar = false,
+                            lockedSection = ContentCenterSection.Pgc,
+                            initialPgcType = PgcType.Movie
+                        )
+                    }
                 }
             }
         }
@@ -212,43 +254,75 @@ fun HomeScreenContent(
 @Composable
 private fun HomeTopAppBar(
     modifier: Modifier = Modifier,
-    windowSize: WindowWidthSizeClass,
     avatar: String,
+    onOpenSearch: () -> Unit,
     onShowUserDialog: () -> Unit,
 ) {
-    if (windowSize == WindowWidthSizeClass.Compact) {
-        TopAppBar(
-            modifier = modifier,
-            title = {
-            },
-            navigationIcon = {},
-            actions = {
-                IconButton(onClick = onShowUserDialog) {
-                    if (avatar.isBlank()) {
-                        Icon(
-                            imageVector = Icons.Rounded.Person,
-                            contentDescription = null
-                        )
-                    } else {
-                        Box(
+    TopAppBar(
+        modifier = modifier,
+        title = {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .clickable(onClick = onOpenSearch),
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = null
+                    )
+                    Text(
+                        text = "搜索",
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1
+                    )
+                }
+            }
+        },
+        navigationIcon = {},
+        actions = {
+            IconButton(onClick = onShowUserDialog) {
+                if (avatar.isBlank()) {
+                    Icon(
+                        imageVector = Icons.Rounded.Person,
+                        contentDescription = null
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(Color.Gray)
+                    ) {
+                        AsyncImage(
                             modifier = Modifier
-                                .clip(CircleShape)
-                                .background(Color.Gray)
-                        ) {
-                            AsyncImage(
-                                modifier = Modifier
-                                    .size(36.dp),
-                                model = avatar,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop
-                            )
-                        }
+                                .size(36.dp),
+                            model = avatar,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop
+                        )
                     }
                 }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-            )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
         )
-    }
+    )
+}
+
+private enum class MobileHomeTab(val title: String) {
+    Live("直播"),
+    Recommend("推荐"),
+    Popular("热门"),
+    Zone("分区"),
+    Bangumi("番剧"),
+    Cinema("影视")
 }

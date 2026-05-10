@@ -33,10 +33,13 @@ class UserSwitchViewModel(
     }
 
     suspend fun updateUserDbList() {
+        val users = db.userDao().getAll()
+        val activeUser = users.find { it.uid == Prefs.uid } ?: UserDB(-1, -1, "", "", "")
+
         withContext(Dispatchers.Main) {
             userDbList.clear()
-            userDbList.addAll(db.userDao().getAll())
-            currentUser = userDbList.find { it.uid == Prefs.uid } ?: UserDB(-1, -1, "", "", "")
+            userDbList.addAll(users)
+            currentUser = activeUser
         }
     }
 
@@ -46,11 +49,12 @@ class UserSwitchViewModel(
 
     suspend fun deleteUser(userDB: UserDB) {
         db.userDao().delete(userDB)
-        updateUserDbList()
-        if (userDbList.isNotEmpty()) {
-            switchUser(userDbList.first())
+        val users = db.userDao().getAll()
+        if (users.isNotEmpty()) {
+            switchUser(users.first())
         } else {
             userRepository.logout()
         }
+        updateUserDbList()
     }
 }

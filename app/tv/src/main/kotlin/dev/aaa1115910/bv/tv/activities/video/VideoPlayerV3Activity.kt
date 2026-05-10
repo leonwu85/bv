@@ -251,6 +251,8 @@ class VideoPlayerV3Activity : ComponentActivity() {
 
     private fun initVideoPlayer(isLive: Boolean = false) {
         dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity.Companion.logger.info { "Init video player: ${Prefs.playerType.name}, isLive=$isLive" }
+        val enableTunneling = Prefs.enableTvTunneling
+        playerViewModel.currentDanmakuScale = Prefs.defaultTvDanmakuScale
         val options = VideoPlayerOptions(
             userAgent = when (Prefs.apiType) {
                 ApiType.Web -> dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_WEB
@@ -262,7 +264,7 @@ class VideoPlayerV3Activity : ComponentActivity() {
             },
             enableFfmpegAudioRenderer = Prefs.enableFfmpegAudioRenderer,
             enableAsyncQueueing = Prefs.enableAsyncQueueing,
-            enableTunneling = Prefs.enableTunneling,
+            enableTunneling = enableTunneling,
             enableAudioPlaybackParams = Prefs.enableAudioPlaybackParams,
             enableVideoFrameRateStrategy = false,
             isLive = isLive

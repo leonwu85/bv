@@ -7,25 +7,30 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.ExpandedFullScreenSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.SearchBarValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -46,12 +51,17 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import dev.aaa1115910.biliapi.entity.search.SearchKeyword
+import dev.aaa1115910.biliapi.repositories.SearchType
 import dev.aaa1115910.biliapi.repositories.SearchTypeResult
+import dev.aaa1115910.bv.mobile.activities.SeasonInfoActivity
+import dev.aaa1115910.bv.mobile.activities.UserSpaceActivity
 import dev.aaa1115910.bv.mobile.activities.VideoPlayerActivity
 import dev.aaa1115910.bv.mobile.component.preferences.items.listItemPreference
 import dev.aaa1115910.bv.mobile.component.preferences.preferenceGroups
 import dev.aaa1115910.bv.mobile.screen.home.search.SearchInputContent
 import dev.aaa1115910.bv.mobile.screen.home.search.SearchResultContent
+import dev.aaa1115910.bv.mobile.screen.home.search.SearchTrendingRankingContent
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.viewmodel.search.SearchInputViewModel
 import dev.aaa1115910.bv.viewmodel.search.SearchResultViewModel
@@ -86,16 +96,66 @@ fun SearchScreen(
     val onOpenUgc: (Long) -> Unit = { aid ->
         VideoPlayerActivity.actionStart(context = context, aid = aid)
     }
+    val onOpenPgc: (Int) -> Unit = {
+        SeasonInfoActivity.actionStart(context = context, seasonId = it)
+    }
+    val onOpenUser: (SearchTypeResult.User) -> Unit = { user ->
+        UserSpaceActivity.actionStart(
+            context = context,
+            mid = user.mid,
+            name = user.name
+        )
+    }
+    val onOpenLiveRoom: (SearchTypeResult.LiveRoom) -> Unit = { room ->
+        VideoPlayerActivity.actionStartLive(
+            context = context,
+            roomId = room.roomId,
+            title = room.title,
+            upName = room.uname,
+            upFace = room.uface,
+            upMid = room.uid,
+            watchedNum = room.online
+        )
+    }
+    val onSearchTypeChange: (SearchType) -> Unit = { type ->
+        if (searchResultViewModel.searchType != type) {
+            searchResultViewModel.searchType = type
+            if (searchResultViewModel.keyword.isNotBlank()) {
+                searchResultViewModel.update()
+            }
+        }
+    }
 
     SearchContent(
         modifier = modifier,
         windowSize = windowSize,
+        hotwords = searchInputViewModel.hotwords,
+        recommendKeywords = searchInputViewModel.recommendKeywords,
+        trendingRankingKeywords = searchInputViewModel.trendingRankingKeywords,
         keywordSuggestions = searchInputViewModel.suggests,
         historyKeywords = searchInputViewModel.searchHistories.map { it.keyword },
         matchedHistory = searchInputViewModel.matchedSearchHistories.map { it.keyword },
+        hotwordsLoading = searchInputViewModel.hotwordsLoading,
+        recommendKeywordsLoading = searchInputViewModel.recommendKeywordsLoading,
+        trendingRankingLoading = searchInputViewModel.trendingRankingLoading,
+        hotwordsError = searchInputViewModel.hotwordsError,
+        recommendKeywordsError = searchInputViewModel.recommendKeywordsError,
+        trendingRankingError = searchInputViewModel.trendingRankingError,
         updateKeyword = updateKeyword,
         onSearch = onSearch,
+        onDeleteHistory = searchInputViewModel::deleteSearchHistoryByKeyword,
+        onClearHistories = searchInputViewModel::deleteAllSearchHistories,
+        onRefreshHotwords = searchInputViewModel::refreshHotwords,
+        onRefreshRecommendKeywords = searchInputViewModel::refreshRecommendKeywords,
+        onRefreshTrendingRanking = searchInputViewModel::refreshTrendingRanking,
+        searchType = searchResultViewModel.searchType,
+        isLoading = searchResultViewModel.isLoading(searchResultViewModel.searchType),
+        onSearchTypeChange = onSearchTypeChange,
+        onLoadMore = searchResultViewModel::loadMore,
         onOpenUgc = onOpenUgc,
+        onOpenPgc = onOpenPgc,
+        onOpenUser = onOpenUser,
+        onOpenLiveRoom = onOpenLiveRoom,
         videoSearchResult = searchResultViewModel.videoSearchResult.videos,
         mediaBangumiSearchResult = searchResultViewModel.mediaBangumiSearchResult.mediaBangumis,
         mediaFtSearchResult = searchResultViewModel.mediaFtSearchResult.mediaFts,
@@ -109,12 +169,33 @@ fun SearchScreen(
 fun SearchContent(
     modifier: Modifier = Modifier,
     windowSize: WindowWidthSizeClass,
+    hotwords: List<SearchKeyword> = emptyList(),
+    recommendKeywords: List<SearchKeyword> = emptyList(),
+    trendingRankingKeywords: List<SearchKeyword> = emptyList(),
     keywordSuggestions: List<String> = emptyList(),
     historyKeywords: List<String>,
     matchedHistory: List<String>,
+    hotwordsLoading: Boolean = false,
+    recommendKeywordsLoading: Boolean = false,
+    trendingRankingLoading: Boolean = false,
+    hotwordsError: String? = null,
+    recommendKeywordsError: String? = null,
+    trendingRankingError: String? = null,
     updateKeyword: (String) -> Unit = {},
     onSearch: (String) -> Unit = {},
+    onDeleteHistory: (String) -> Unit = {},
+    onClearHistories: () -> Unit = {},
+    onRefreshHotwords: () -> Unit = {},
+    onRefreshRecommendKeywords: () -> Unit = {},
+    onRefreshTrendingRanking: () -> Unit = {},
+    searchType: SearchType = SearchType.Video,
+    isLoading: Boolean = false,
+    onSearchTypeChange: (SearchType) -> Unit = {},
+    onLoadMore: (SearchType) -> Unit = {},
     onOpenUgc: (Long) -> Unit = {},
+    onOpenPgc: (Int) -> Unit = {},
+    onOpenUser: (SearchTypeResult.User) -> Unit = {},
+    onOpenLiveRoom: (SearchTypeResult.LiveRoom) -> Unit = {},
     videoSearchResult: List<SearchTypeResult.Video>,
     mediaBangumiSearchResult: List<SearchTypeResult.Pgc>,
     mediaFtSearchResult: List<SearchTypeResult.Pgc>,
@@ -128,21 +209,58 @@ fun SearchContent(
 
     var searchBarExpanded by remember { mutableStateOf(false) }
     var textFieldFocused by remember { mutableStateOf(false) }
+    var searchResultSourceRoute by remember { mutableStateOf("searchInput") }
 
     LaunchedEffect(textFieldState.text, textFieldFocused) {
-        println("Text field state: $textFieldState")
         searchBarExpanded = textFieldState.text != "" && textFieldFocused
         updateKeyword(textFieldState.text.toString())
     }
 
     val onSearchKeyword: (String) -> Unit = {
-        onSearch(it)
-        if (navController.currentDestination?.route != "searchResult") navController.navigate("searchResult")
-        textFieldState.setTextAndPlaceCursorAtEnd(it)
+        val keyword = it.trim()
+        if (keyword.isNotEmpty()) {
+            onSearch(keyword)
+            val currentRoute = navController.currentDestination?.route
+            if (currentRoute != "searchResult") {
+                searchResultSourceRoute = currentRoute ?: "searchInput"
+                navController.navigate("searchResult")
+            }
+            textFieldState.setTextAndPlaceCursorAtEnd(keyword)
+            scope.launch {
+                // 等到 searchBar 移动到顶部再收起
+                delay(500)
+                searchBarState.animateToCollapsed()
+            }
+        }
+    }
+    val onBackToSearchInput: () -> Unit = {
+        val popped = navController.popBackStack("searchInput", inclusive = false)
+        if (!popped && navController.currentDestination?.route != "searchInput") {
+            navController.navigate("searchInput")
+        }
+        textFieldState.setTextAndPlaceCursorAtEnd("")
+        textFieldFocused = false
+        searchBarExpanded = false
+        updateKeyword("")
         scope.launch {
-            // 等到 searchBar 移动到顶部再收起
-            delay(500)
             searchBarState.animateToCollapsed()
+        }
+    }
+    val onBackFromSearchResult: () -> Unit = {
+        if (searchResultSourceRoute == "searchTrendingRanking") {
+            val popped = navController.popBackStack("searchTrendingRanking", inclusive = false)
+            if (!popped && navController.currentDestination?.route != "searchTrendingRanking") {
+                navController.navigate("searchTrendingRanking")
+            }
+            textFieldState.setTextAndPlaceCursorAtEnd("")
+            textFieldFocused = false
+            searchBarExpanded = false
+            updateKeyword("")
+            scope.launch {
+                searchBarState.animateToCollapsed()
+            }
+        } else {
+            onBackToSearchInput()
         }
     }
 
@@ -153,6 +271,35 @@ fun SearchContent(
             textFieldState = textFieldState,
             onSearch = onSearchKeyword,
             placeholder = { Text(text = "在此处输入文字") },
+            trailingIcon = {
+                val keyword = textFieldState.text.toString()
+                Row {
+                    if (keyword.isNotEmpty()) {
+                        IconButton(
+                            modifier = Modifier.size(40.dp),
+                            onClick = {
+                                textFieldState.setTextAndPlaceCursorAtEnd("")
+                                updateKeyword("")
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = null
+                            )
+                        }
+                    }
+                    IconButton(
+                        modifier = Modifier.size(40.dp),
+                        enabled = keyword.isNotBlank(),
+                        onClick = { onSearchKeyword(keyword) }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null
+                        )
+                    }
+                }
+            }
         )
     }
 
@@ -166,9 +313,15 @@ fun SearchContent(
             composable("searchInput") {
                 SearchInputContent(
                     windowSize = windowSize,
+                    hotwords = hotwords,
+                    recommendKeywords = recommendKeywords,
                     keywordSuggestions = keywordSuggestions,
                     keywordHistories = historyKeywords,
                     matchedKeyworkHistories = matchedHistory,
+                    hotwordsLoading = hotwordsLoading,
+                    recommendKeywordsLoading = recommendKeywordsLoading,
+                    hotwordsError = hotwordsError,
+                    recommendKeywordsError = recommendKeywordsError,
                     searchBarState = searchBarState,
                     textFieldState = textFieldState,
                     searchBarExpanded = searchBarExpanded,
@@ -176,7 +329,27 @@ fun SearchContent(
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@composable,
                     inputField = inputField,
-                    onSearch = onSearchKeyword
+                    onSearch = onSearchKeyword,
+                    onDeleteHistory = onDeleteHistory,
+                    onClearHistories = onClearHistories,
+                    onRefreshHotwords = onRefreshHotwords,
+                    onRefreshRecommendKeywords = onRefreshRecommendKeywords,
+                    onOpenTrendingRanking = {
+                        navController.navigate("searchTrendingRanking")
+                    }
+                )
+            }
+            composable("searchTrendingRanking") {
+                SearchTrendingRankingContent(
+                    modifier = Modifier.fillMaxSize(),
+                    keywords = trendingRankingKeywords,
+                    loading = trendingRankingLoading,
+                    error = trendingRankingError,
+                    onSearch = onSearchKeyword,
+                    onRefresh = onRefreshTrendingRanking,
+                    onBack = {
+                        navController.popBackStack("searchInput", inclusive = false)
+                    }
                 )
             }
             composable("searchResult") {
@@ -196,7 +369,16 @@ fun SearchContent(
                     biliUserSearchResult = biliUserSearchResult,
                     liveRoomSearchResult = liveRoomSearchResult,
                     onSearch = onSearchKeyword,
-                    onOpenUgc = onOpenUgc
+                    onDeleteHistory = onDeleteHistory,
+                    onBackToSearchInput = onBackFromSearchResult,
+                    searchType = searchType,
+                    isLoading = isLoading,
+                    onSearchTypeChange = onSearchTypeChange,
+                    onLoadMore = onLoadMore,
+                    onOpenUgc = onOpenUgc,
+                    onOpenPgc = onOpenPgc,
+                    onOpenUser = onOpenUser,
+                    onOpenLiveRoom = onOpenLiveRoom
                 )
             }
         }
@@ -214,7 +396,7 @@ fun SearchContent(
                 matchedHistory = matchedHistory,
                 suggestions = keywordSuggestions,
                 onSearch = onSearchKeyword,
-                onDeleteHistory = {}
+                onDeleteHistory = onDeleteHistory
             )
         }
     }
@@ -263,7 +445,12 @@ fun SearchBarResultContent(
                                     }
                                 },
                                 colors = listItemColors,
-                                onClick = { onSearch(it) }
+                                onClick = { onSearch(it) },
+                                trailingContent = {
+                                    TextButton(onClick = { onDeleteHistory(it) }) {
+                                        Text(text = "删除")
+                                    }
+                                }
                             )
                         }
                     } else {
@@ -284,7 +471,12 @@ fun SearchBarResultContent(
                                     }
                                 },
                                 colors = listItemColors,
-                                onClick = { onSearch(it) }
+                                onClick = { onSearch(it) },
+                                trailingContent = {
+                                    TextButton(onClick = { onDeleteHistory(it) }) {
+                                        Text(text = "删除")
+                                    }
+                                }
                             )
                         }
                     }

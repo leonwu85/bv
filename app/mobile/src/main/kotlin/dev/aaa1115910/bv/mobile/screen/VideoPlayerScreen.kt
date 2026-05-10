@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -112,12 +113,13 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerSeekThumbData
 import dev.aaa1115910.bv.player.entity.VideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerVideoShotData
 import dev.aaa1115910.bv.player.mobile.BvPlayer
-import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.bv.settings.PlayerSettingsProvider
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.formatPubTimeString
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.swapList
 import dev.aaa1115910.bv.viewmodel.CommentViewModel
+import dev.aaa1115910.bv.viewmodel.LiveDanmakuMessage
 import dev.aaa1115910.bv.viewmodel.SeasonViewModel
 import dev.aaa1115910.bv.viewmodel.VideoPlayerV3ViewModel
 import dev.aaa1115910.bv.viewmodel.video.VideoDetailViewModel
@@ -138,6 +140,7 @@ fun VideoPlayerScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger("VideoPlayerScreen")
+    val playerSettings = PlayerSettingsProvider.current
 
     var isVideoFullscreen by rememberSaveable { mutableStateOf(false) }
     val forcePortrait =
@@ -272,8 +275,9 @@ fun VideoPlayerScreen(
                             currentSubtitleBackgroundOpacity = playerViewModel.currentSubtitleBackgroundOpacity,
                             currentSubtitleBottomPadding = playerViewModel.currentSubtitleBottomPadding,
                             currentPlayMode = playerViewModel.currentPlayMode,
-                            incognitoMode = Prefs.incognitoMode,
-                            defaultStartPosition = Prefs.playerDefaultStartPosition.toPlayerType()
+                            incognitoMode = playerSettings.incognitoMode,
+                            defaultStartPosition = playerSettings.playerDefaultStartPosition.toPlayerType(),
+                            isLive = playerViewModel.isLive
                         ),
                         LocalVideoPlayerDanmakuMasksData provides VideoPlayerDanmakuMasksData(
                             danmakuMasks = playerViewModel.danmakuMasks,
@@ -330,32 +334,32 @@ fun VideoPlayerScreen(
                             },
                             onChangeSpeed = { speed ->
                                 playerViewModel.currentPlaySpeed = speed
-                                // Prefs.defaultPlaySpeed = speed
                             },
                             onToggleDanmaku = { enabled ->
                                 playerViewModel.currentDanmakuEnabled = enabled
-                                Prefs.defaultDanmakuEnabled = enabled
+                                playerSettings.defaultDanmakuEnabledMutable = enabled
                             },
                             onEnabledDanmakuTypesChange = { types ->
                                 playerViewModel.currentDanmakuTypes.swapList(types)
                             },
                             onDanmakuOpacityChange = { opacity ->
                                 playerViewModel.currentDanmakuOpacity = opacity
-                                Prefs.defaultDanmakuOpacity = opacity
+                                playerSettings.defaultDanmakuOpacityMutable = opacity
                             },
                             onDanmakuScaleChange = { scale ->
                                 playerViewModel.currentDanmakuScale = scale
-                                Prefs.defaultDanmakuScale = scale
+                                playerSettings.defaultMobileDanmakuScaleMutable = scale
                             },
                             onDanmakuAreaChange = { area ->
                                 playerViewModel.currentDanmakuArea = area
-                                Prefs.defaultDanmakuArea = area
+                                playerSettings.defaultDanmakuAreaMutable = area
                             },
                             onPlayModeChange = { playMode ->
                                 playerViewModel.currentPlayMode = playMode
-                                Prefs.defaultPlayMode = playMode
+                                playerSettings.defaultPlayModeMutable = playMode
                             },
                             onLoadNextVideo = playerViewModel::playNextVideo,
+                            onSendHeartbeat = playerViewModel::uploadHistory,
                             onLoadNewVideo = { videoListItem ->
                                 logger.fInfo { "on load new video: $videoListItem" }
                                 var aid = 0L
@@ -393,13 +397,44 @@ fun VideoPlayerScreen(
                         )
                     }
                 }
-                val titles = listOf("简介", "评论")
-                val pagerState = rememberPagerState(
-                    initialPage = 0,
-                    initialPageOffsetFraction = 0f,
-                    pageCount = { 2 }
-                )
-                if (windowSizeClass.widthSizeClass != WindowWidthSizeClass.Expanded) {
+                if (playerViewModel.isLive) {
+                    if (windowSizeClass.widthSizeClass != WindowWidthSizeClass.Expanded) {
+                        LiveDanmakuList(
+                            modifier = Modifier.fillMaxSize(),
+                            messages = playerViewModel.liveDanmakuMessages
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp)
+                        ) {
+                            item {
+                                LivePlayerInfo(
+                                    modifier = Modifier.padding(12.dp),
+                                    upAvatar = playerViewModel.upFace,
+                                    upName = playerViewModel.upName,
+                                    title = playerViewModel.title,
+                                    roomId = playerViewModel.liveRoomId,
+                                    popularityText = playerViewModel.livePopularityText,
+                                    onlineCountText = playerViewModel.liveOnlineCount,
+                                    qualityText = playerViewModel.currentLiveQualityDescription,
+                                    backgroundColor = MaterialTheme.colorScheme.surfaceContainer
+                                )
+                            }
+                            item {
+                                Spacer(modifier = Modifier.navigationBarsPadding())
+                            }
+                        }
+                    }
+                } else {
+                    val titles = listOf("简介", "评论")
+                    val pagerState = rememberPagerState(
+                        initialPage = 0,
+                        initialPageOffsetFraction = 0f,
+                        pageCount = { 2 }
+                    )
+                    if (windowSizeClass.widthSizeClass != WindowWidthSizeClass.Expanded) {
                     // 小屏幕下的视频详情推荐/评论
                     ReplySheetScaffold(
                         aid = commentVideModel.commentId,
@@ -656,47 +691,57 @@ fun VideoPlayerScreen(
                             Spacer(modifier = Modifier.navigationBarsPadding())
                         }
                     }
+                    }
                 }
             }
             if (windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded) {
-                // 大屏幕下的右侧评论
-                Box(
-                    modifier = Modifier.padding(end = 12.dp)
-                ) {
-                    ReplySheetScaffold(
-                        modifier = Modifier,
-                        aid = commentVideModel.commentId,
-                        rpid = commentVideModel.rpid,
-                        repliesCount = commentVideModel.rpCount,
-                        sheetState = replySheetState,
-                        previewerState = previewerState,
-                        onShowPreviewer = setPreviewerPictures
+                if (playerViewModel.isLive) {
+                    LiveDanmakuList(
+                        modifier = Modifier
+                            .padding(end = 12.dp)
+                            .fillMaxHeight(),
+                        messages = playerViewModel.liveDanmakuMessages
+                    )
+                } else {
+                    // 大屏幕下的右侧评论
+                    Box(
+                        modifier = Modifier.padding(end = 12.dp)
                     ) {
-                        VideoComments(
-                            modifier = Modifier.fillMaxWidth(),
+                        ReplySheetScaffold(
+                            modifier = Modifier,
+                            aid = commentVideModel.commentId,
+                            rpid = commentVideModel.rpid,
+                            repliesCount = commentVideModel.rpCount,
+                            sheetState = replySheetState,
                             previewerState = previewerState,
-                            comments = commentVideModel.comments,
-                            commentSort = commentVideModel.commentSort,
-                            refreshingComments = commentVideModel.refreshingComments,
-                            onLoadMoreComments = {
-                                scope.launch(Dispatchers.IO) { commentVideModel.loadMoreComment() }
-                            },
-                            onRefreshComments = {
-                                scope.launch(Dispatchers.IO) { commentVideModel.refreshComments() }
-                            },
-                            onSwitchCommentSort = {
-                                scope.launch(Dispatchers.IO) {
-                                    commentVideModel.switchCommentSort(it)
+                            onShowPreviewer = setPreviewerPictures
+                        ) {
+                            VideoComments(
+                                modifier = Modifier.fillMaxWidth(),
+                                previewerState = previewerState,
+                                comments = commentVideModel.comments,
+                                commentSort = commentVideModel.commentSort,
+                                refreshingComments = commentVideModel.refreshingComments,
+                                onLoadMoreComments = {
+                                    scope.launch(Dispatchers.IO) { commentVideModel.loadMoreComment() }
+                                },
+                                onRefreshComments = {
+                                    scope.launch(Dispatchers.IO) { commentVideModel.refreshComments() }
+                                },
+                                onSwitchCommentSort = {
+                                    scope.launch(Dispatchers.IO) {
+                                        commentVideModel.switchCommentSort(it)
+                                    }
+                                },
+                                onShowPreviewer = setPreviewerPictures,
+                                onShowReplies = { rpId, repliesCount ->
+                                    //logger.info { "show reply sheet: rpid=$replyId" }
+                                    commentVideModel.rpid = rpId
+                                    commentVideModel.rpCount = repliesCount
+                                    scope.launch { replySheetState.bottomSheetState.expand() }
                                 }
-                            },
-                            onShowPreviewer = setPreviewerPictures,
-                            onShowReplies = { rpId, repliesCount ->
-                                //logger.info { "show reply sheet: rpid=$replyId" }
-                                commentVideModel.rpid = rpId
-                                commentVideModel.rpCount = repliesCount
-                                scope.launch { replySheetState.bottomSheetState.expand() }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }
@@ -830,6 +875,183 @@ fun VideoPlayerInfo(
             }
             Text(text = description)
         }
+    }
+}
+
+@Composable
+private fun LivePlayerInfo(
+    modifier: Modifier = Modifier,
+    upAvatar: String,
+    upName: String,
+    title: String,
+    roomId: Int,
+    popularityText: String,
+    onlineCountText: String,
+    qualityText: String,
+    backgroundColor: Color = MaterialTheme.colorScheme.surface
+) {
+    val summaryTextStyle = MaterialTheme.typography.bodySmall.copy(
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+    )
+    val stats = listOfNotNull(
+        popularityText.takeIf { it.isNotBlank() },
+        onlineCountText.takeIf { it.isNotBlank() },
+        qualityText.takeIf { it.isNotBlank() },
+        roomId.takeIf { it > 0 }?.let { "房间 $it" }
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(backgroundColor),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AsyncImage(
+                modifier = Modifier
+                    .padding(end = 8.dp)
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Color.Gray),
+                model = upAvatar,
+                contentDescription = null
+            )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = upName.ifBlank { "未知主播" },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelLarge
+                )
+                Text(
+                    text = "正在直播",
+                    style = summaryTextStyle,
+                    fontSize = 10.sp
+                )
+            }
+        }
+        Text(
+            text = title.ifBlank { "直播间" },
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.titleMedium
+        )
+        ProvideTextStyle(summaryTextStyle) {
+            Text(
+                text = stats.joinToString("  ·  "),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun LiveDanmakuList(
+    modifier: Modifier = Modifier,
+    messages: List<LiveDanmakuMessage>
+) {
+    val listState = rememberLazyListState()
+    var followLatest by remember { mutableStateOf(true) }
+    val isAtLatest by remember {
+        derivedStateOf {
+            val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+            val totalItemsCount = listState.layoutInfo.totalItemsCount
+            totalItemsCount == 0 || (lastVisibleItem?.index ?: 0) >= totalItemsCount - 1
+        }
+    }
+
+    LaunchedEffect(listState.isScrollInProgress, isAtLatest) {
+        if (isAtLatest) {
+            followLatest = true
+        } else if (listState.isScrollInProgress) {
+            followLatest = false
+        }
+    }
+
+    LaunchedEffect(messages.size, followLatest) {
+        if (followLatest && messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size)
+        }
+    }
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface),
+        state = listState,
+        contentPadding = PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            Text(
+                text = "直播弹幕",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+        if (messages.isEmpty()) {
+            item {
+                Text(
+                    text = "暂无弹幕",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+        }
+        items(
+            items = messages,
+            key = { it.id }
+        ) { message ->
+            LiveDanmakuItem(message = message)
+        }
+    }
+}
+
+@Composable
+private fun LiveDanmakuItem(
+    modifier: Modifier = Modifier,
+    message: LiveDanmakuMessage
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            message.medalName?.takeIf { it.isNotBlank() }?.let { medalName ->
+                Text(
+                    text = if (message.medalLevel != null) "$medalName ${message.medalLevel}" else medalName,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Text(
+                text = message.username.ifBlank { "匿名用户" },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+            )
+        }
+        Text(
+            text = message.content,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 

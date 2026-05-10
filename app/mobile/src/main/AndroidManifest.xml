@@ -44,6 +44,11 @@
             android:label="@string/title_mobile_activity_history"
             android:theme="@style/Theme.BV.Mobile" />
         <activity
+            android:name=".activities.ToViewActivity"
+            android:exported="false"
+            android:label="@string/title_mobile_activity_toview"
+            android:theme="@style/Theme.BV.Mobile" />
+        <activity
             android:name=".activities.FavoriteActivity"
             android:exported="false"
             android:label="@string/title_mobile_activity_favorite"
@@ -52,6 +57,16 @@
             android:name=".activities.FollowingSeasonActivity"
             android:exported="false"
             android:label="@string/title_mobile_activity_following_season"
+            android:theme="@style/Theme.BV.Mobile" />
+        <activity
+            android:name=".activities.SeasonInfoActivity"
+            android:exported="false"
+            android:label="@string/title_activity_season_info"
+            android:theme="@style/Theme.BV.Mobile" />
+        <activity
+            android:name=".activities.PgcIndexActivity"
+            android:exported="false"
+            android:label="@string/title_activity_pgc_index"
             android:theme="@style/Theme.BV.Mobile" />
         <activity
             android:name=".activities.IntentHandlerActivity"

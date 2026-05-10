@@ -71,7 +71,7 @@ fun PlayerSetting(
     var vlcAutoRotate by remember { mutableStateOf(Prefs.vlcAutoRotate) }
     var selectedPlayerType by remember { mutableStateOf(Prefs.playerType) }
     var enableAsyncQueueing by remember { mutableStateOf(Prefs.enableAsyncQueueing) }
-    var enableTunneling by remember { mutableStateOf(Prefs.enableTunneling) }
+    var enableTunneling by remember { mutableStateOf(Prefs.enableTvTunneling) }
     var enableAudioPlaybackParams by remember { mutableStateOf(Prefs.enableAudioPlaybackParams) }
     var showVlcDownloadConfirmDialog by remember { mutableStateOf(false) }
     var showVlcDownloaderDialog by remember { mutableStateOf(false) }
@@ -421,7 +421,7 @@ fun PlayerSetting(
                         checked = enableTunneling,
                         onCheckedChange = {
                             enableTunneling = it
-                            Prefs.enableTunneling = it
+                            Prefs.enableTvTunneling = it
                         }
                     )
                 }

@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerSeekData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
+import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekData
@@ -74,6 +75,7 @@ fun FullscreenControllers(
     val videoPlayerSeekData = LocalVideoPlayerSeekData.current
     val videoPlayerStateData = LocalVideoPlayerStateData.current
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
+    val videoPlayerVideoInfoData = LocalVideoPlayerVideoInfoData.current
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -84,7 +86,8 @@ fun FullscreenControllers(
                 .fillMaxWidth()
                 .noRippleClickable { },
             onOpenMoreMenu = onOpenMoreMenu,
-            onExitFullScreen = onExitFullScreen
+            onExitFullScreen = onExitFullScreen,
+            title = videoPlayerVideoInfoData.displayTitle()
         )
         BottomControllers(
             modifier = Modifier
@@ -98,6 +101,7 @@ fun FullscreenControllers(
             currentResolutionName = videoPlayerConfigData.currentResolution.getDisplayName(context),
             enabledDanmaku = videoPlayerConfigData.currentDanmakuEnabled,
             showPartButton = videoPlayerConfigData.availableVideoList.size > 1,
+            isLive = videoPlayerConfigData.isLive,
             onPlay = onPlay,
             onPause = onPause,
             onExitFullScreen = onExitFullScreen,
@@ -116,6 +120,7 @@ private fun TopControllers(
     modifier: Modifier = Modifier,
     onOpenMoreMenu: () -> Unit,
     onExitFullScreen: () -> Unit,
+    title: String
 ) {
     Box(
         modifier = modifier
@@ -140,7 +145,7 @@ private fun TopControllers(
                 }
                 Text(
                     modifier = Modifier.padding(end = 12.dp),
-                    text = "这是一个标题",
+                    text = title,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = Color.White
@@ -168,6 +173,16 @@ private fun TopControllers(
     }
 }
 
+private fun dev.aaa1115910.bv.player.entity.VideoPlayerVideoInfoData.displayTitle(): String {
+    val titleText = title.trim()
+    val partTitleText = partTitle.trim()
+    return when {
+        titleText.isBlank() -> partTitleText
+        partTitleText.isBlank() || titleText.contains(partTitleText) -> titleText
+        else -> "$partTitleText | $titleText"
+    }
+}
+
 @Composable
 private fun BottomControllers(
     modifier: Modifier = Modifier,
@@ -178,6 +193,7 @@ private fun BottomControllers(
     currentResolutionName: String,
     enabledDanmaku: Boolean,
     showPartButton: Boolean,
+    isLive: Boolean,
     onPlay: () -> Unit,
     onPause: () -> Unit,
     onExitFullScreen: () -> Unit,
@@ -193,16 +209,18 @@ private fun BottomControllers(
         //.background(Color.Black.copy(alpha = 0.6f))
     ) {
         Column {
-            VideoSeekBar(
-                modifier = Modifier.padding(bottom = 8.dp),
-                duration = totalTime,
-                position = currentTime,
-                bufferedPercentage = bufferedSeekPosition,
-                playing = isPlaying,
-                onPositionChange = { newPosition, isPressing ->
-                    if (!isPressing) onSeekToPosition(newPosition)
-                }
-            )
+            if (!isLive) {
+                VideoSeekBar(
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    duration = totalTime,
+                    position = currentTime,
+                    bufferedPercentage = bufferedSeekPosition,
+                    playing = isPlaying,
+                    onPositionChange = { newPosition, isPressing ->
+                        if (!isPressing) onSeekToPosition(newPosition)
+                    }
+                )
+            }
 
             ProvideTextStyle(TextStyle(color = Color.White)) {
                 Row(

@@ -70,6 +70,7 @@ import dev.aaa1115910.bv.player.entity.VideoListItemData
 import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.repository.VideoInfoRepository
+import dev.aaa1115910.bv.settings.PlayerSettingsProvider
 import dev.aaa1115910.bv.util.DanmakuSegmentMergeResult
 import dev.aaa1115910.bv.util.DeviceUtil
 import dev.aaa1115910.bv.util.MergedDanmakuEntry
@@ -106,6 +107,18 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.annotation.KoinViewModel
 import java.net.URI
 
+data class LiveDanmakuMessage(
+    val id: Long,
+    val username: String,
+    val content: String,
+    val medalName: String?,
+    val medalLevel: Int?,
+    val userLevel: Int,
+    val color: Int,
+    val timestampMs: Long,
+    val emojiMap: Map<String, String>
+)
+
 @KoinViewModel
 class VideoPlayerV3ViewModel(
     private val videoInfoRepository: VideoInfoRepository,
@@ -114,6 +127,7 @@ class VideoPlayerV3ViewModel(
     private val liveRepository: LiveRepository,
 ) : ViewModel() {
     private val logger = KotlinLogging.logger { }
+    private val settings get() = PlayerSettingsProvider.current
 
     private enum class SubtitleSlot(val logPrefix: String, val debugName: String) {
         Primary("", "primary"),
@@ -195,21 +209,21 @@ class VideoPlayerV3ViewModel(
     var currentVideoHeight by mutableIntStateOf(0)
     var currentVideoWidth by mutableIntStateOf(0)
 
-    var currentQuality by mutableStateOf(Prefs.defaultQuality)
-    var currentVideoCodec by mutableStateOf(Prefs.defaultVideoCodec)
-    var currentPlaySpeed by mutableFloatStateOf(Prefs.currentPlaySpeed)
+    var currentQuality by mutableStateOf(settings.defaultQuality)
+    var currentVideoCodec by mutableStateOf(settings.defaultVideoCodec)
+    var currentPlaySpeed by mutableFloatStateOf(settings.currentPlaySpeed)
     var currentVideoAspectRatio by mutableStateOf(VideoAspectRatio.Default)
     var currentVideoRotation by mutableStateOf(VideoRotation.Original)
     var currentPlaybackMediaMode by mutableStateOf(PlaybackMediaMode.Normal)
-    var currentAudio by mutableStateOf(Prefs.defaultAudio)
-    var currentDanmakuScale by mutableFloatStateOf(Prefs.defaultDanmakuScale)
-    var currentDanmakuOpacity by mutableFloatStateOf(Prefs.defaultDanmakuOpacity)
-    var currentDanmakuEnabled by mutableStateOf(Prefs.defaultDanmakuEnabled)
+    var currentAudio by mutableStateOf(settings.defaultAudio)
+    var currentDanmakuScale by mutableFloatStateOf(settings.defaultDanmakuScale)
+    var currentDanmakuOpacity by mutableFloatStateOf(settings.defaultDanmakuOpacity)
+    var currentDanmakuEnabled by mutableStateOf(settings.defaultDanmakuEnabled)
     val currentDanmakuTypes = mutableStateListOf<DanmakuType>().apply {
-        addAll(Prefs.defaultDanmakuTypes)
+        addAll(settings.defaultDanmakuTypes)
     }
-    var currentDanmakuArea by mutableFloatStateOf(Prefs.defaultDanmakuArea)
-    private var currentDanmakuMaskState by mutableStateOf(Prefs.defaultDanmakuMask)
+    var currentDanmakuArea by mutableFloatStateOf(settings.defaultDanmakuArea)
+    private var currentDanmakuMaskState by mutableStateOf(settings.defaultDanmakuMask)
     var currentDanmakuMask: Boolean
         get() = currentDanmakuMaskState
         set(value) {
@@ -228,25 +242,25 @@ class VideoPlayerV3ViewModel(
                 updateDanmakuMask()
             }
         }
-    var currentDanmakuFilterLevel by mutableIntStateOf(Prefs.defaultDanmakuFilterLevel)
-    var currentDanmakuMergeEnabled by mutableStateOf(Prefs.defaultDanmakuMergeEnabled)
-    var currentLiveDanmakuFilterLevel by mutableIntStateOf(Prefs.defaultLiveDanmakuFilterLevel)
+    var currentDanmakuFilterLevel by mutableIntStateOf(settings.defaultDanmakuFilterLevel)
+    var currentDanmakuMergeEnabled by mutableStateOf(settings.defaultDanmakuMergeEnabled)
+    var currentLiveDanmakuFilterLevel by mutableIntStateOf(settings.defaultLiveDanmakuFilterLevel)
     var currentSubtitleId by mutableLongStateOf(-1L)
     var currentSubtitleData = mutableStateListOf<SubtitleItem>()
     var currentSubtitleType by mutableStateOf(SubtitleType.CC)
-    var currentSubtitleFontSize by mutableStateOf(Prefs.defaultSubtitleFontSize)
-    var currentSubtitleBackgroundOpacity by mutableFloatStateOf(Prefs.defaultSubtitleBackgroundOpacity)
-    var currentSubtitleBottomPadding by mutableStateOf(Prefs.defaultSubtitleBottomPadding)
+    var currentSubtitleFontSize by mutableStateOf(settings.defaultSubtitleFontSize)
+    var currentSubtitleBackgroundOpacity by mutableFloatStateOf(settings.defaultSubtitleBackgroundOpacity)
+    var currentSubtitleBottomPadding by mutableStateOf(settings.defaultSubtitleBottomPadding)
     var currentSecondarySubtitleId by mutableLongStateOf(-1L)
     var currentSecondarySubtitleData = mutableStateListOf<SubtitleItem>()
     var currentSecondarySubtitleType by mutableStateOf(SubtitleType.CC)
-    var currentSecondarySubtitleFontSize by mutableStateOf(Prefs.defaultSecondarySubtitleFontSize)
-    var currentSecondarySubtitleBackgroundOpacity by mutableFloatStateOf(Prefs.defaultSecondarySubtitleBackgroundOpacity)
-    var currentSecondarySubtitleBottomPadding by mutableStateOf(Prefs.defaultSecondarySubtitleBottomPadding)
+    var currentSecondarySubtitleFontSize by mutableStateOf(settings.defaultSecondarySubtitleFontSize)
+    var currentSecondarySubtitleBackgroundOpacity by mutableFloatStateOf(settings.defaultSecondarySubtitleBackgroundOpacity)
+    var currentSecondarySubtitleBottomPadding by mutableStateOf(settings.defaultSecondarySubtitleBottomPadding)
     private var currentPrimarySubtitleLoadToken = 0L
     private var currentSecondarySubtitleLoadToken = 0L
 
-    var currentPlayMode by mutableStateOf(Prefs.defaultPlayMode)
+    var currentPlayMode by mutableStateOf(settings.defaultPlayMode)
 
     var title by mutableStateOf("")
     var partTitle by mutableStateOf("")
@@ -268,12 +282,12 @@ class VideoPlayerV3ViewModel(
 
     // 直播画质管理
     var availableLiveQualities = mutableStateListOf<Pair<Int, String>>() // qn -> description
-    var currentLiveQn by mutableIntStateOf(Prefs.defaultLiveQn)
+    var currentLiveQn by mutableIntStateOf(settings.defaultLiveQn)
     var currentLiveQualityDescription by mutableStateOf("")
     private var liveQnDescMap: Map<Int, String> = emptyMap()
 
     // 直播编码管理
-    var currentLiveCodec by mutableStateOf(Prefs.defaultLiveCodec)
+    var currentLiveCodec by mutableStateOf(settings.defaultLiveCodec)
 
     // 直播流URL过期时间（毫秒时间戳）
     var liveStreamExpiresAt by mutableLongStateOf(0L)
@@ -317,6 +331,7 @@ class VideoPlayerV3ViewModel(
         private const val DANMAKU_BATCH_SIZE = 600
         private const val DANMAKU_SLICE_SIZE = 2000
         private const val DANMAKU_SLICE_EMIT_DELAY_MS = 12L
+        private const val LIVE_DANMAKU_MESSAGE_LIMIT = 300
         private const val AUTO_PLAY_PREPARE_WAIT_MS = 1_200L
         private const val PREPARED_AUTO_PLAY_PLAY_DATA_TTL_MS = 2 * 60_000L
     }
@@ -334,6 +349,9 @@ class VideoPlayerV3ViewModel(
     private var liveWebSocketInner: Job? = null
     private var liveDanmakuConsumer: Job? = null
     private var liveDanmakuChannel: Channel<DanmakuEvent>? = null
+    private var currentLiveDanmakuRoomId: Int? = null
+    val liveDanmakuMessages = mutableStateListOf<LiveDanmakuMessage>()
+    private var nextLiveDanmakuMessageId = 0L
     
     var coin by mutableStateOf(0)
     var favorite by mutableStateOf(0)
@@ -341,8 +359,8 @@ class VideoPlayerV3ViewModel(
     var upFace by mutableStateOf("")
     var pubTime by mutableStateOf("")
     var upId by mutableLongStateOf(0L)
-    var isLoop by mutableStateOf(Prefs.isLoop)
-    var showDanmaku by mutableStateOf(Prefs.showDanmaku)
+    var isLoop by mutableStateOf(settings.isLoop)
+    var showDanmaku by mutableStateOf(settings.showDanmaku)
     var showRelatedVideos by mutableStateOf(false)
     var isFollowingUp by mutableStateOf(false)
 
@@ -365,8 +383,8 @@ class VideoPlayerV3ViewModel(
     private var hasResolvedDanmakuMask by mutableStateOf(false)
 
     // SponsorBlock 相关状态
-    var enableSponsorBlock by mutableStateOf(Prefs.enableSponsorBlock)
-    var sponsorBlockSkipMode by mutableStateOf(Prefs.sponsorBlockSkipMode)
+    var enableSponsorBlock by mutableStateOf(settings.enableSponsorBlock)
+    var sponsorBlockSkipMode by mutableStateOf(settings.sponsorBlockSkipMode)
     var sponsorSegments by mutableStateOf<List<SponsorSegment>>(emptyList())
     var showSponsorBlockTip by mutableStateOf(false)
     var currentSponsorSegment by mutableStateOf<SponsorSegment?>(null)
@@ -521,7 +539,7 @@ class VideoPlayerV3ViewModel(
                 val playData = videoPlayRepository.getPlayData(
                     aid = transitionContext.aid,
                     cid = transitionContext.cid,
-                    preferApiType = Prefs.apiType,
+                    preferApiType = settings.apiType,
                 )
 
                 withContext(Dispatchers.Main) {
@@ -621,7 +639,7 @@ class VideoPlayerV3ViewModel(
                 avid,
                 cid,
                 epid ?: 0,
-                preferApi = Prefs.apiType,
+                preferApi = settings.apiType,
                 proxyArea = proxyArea,
                 initialSeekPositionMs = initialSeekPositionMs,
                 playbackSessionToken = playbackSessionToken,
@@ -650,7 +668,7 @@ class VideoPlayerV3ViewModel(
         avid: Long,
         cid: Long,
         epid: Int = 0,
-        preferApi: ApiType = Prefs.apiType,
+        preferApi: ApiType = settings.apiType,
         proxyArea: ProxyArea = ProxyArea.MainLand,
         initialSeekPositionMs: Long? = null,
         targetQuality: Resolution? = null,
@@ -674,8 +692,8 @@ class VideoPlayerV3ViewModel(
                     aid = avid,
                     cid = cid,
                     epid = epid,
-                    preferCodec = Prefs.defaultVideoCodec.toBiliApiCodeType(),
-                    preferApiType = Prefs.apiType,
+                    preferCodec = settings.defaultVideoCodec.toBiliApiCodeType(),
+                    preferApiType = settings.apiType,
                     enableProxy = proxyArea != ProxyArea.MainLand,
                     proxyArea = when (proxyArea) {
                         ProxyArea.MainLand -> ""
@@ -687,7 +705,7 @@ class VideoPlayerV3ViewModel(
                 videoPlayRepository.getPlayData(
                     aid = avid,
                     cid = cid,
-                    preferApiType = Prefs.apiType
+                    preferApiType = settings.apiType
                 )
             }
 
@@ -748,14 +766,14 @@ class VideoPlayerV3ViewModel(
             // 确定使用哪个默认分辨率
             val defaultQualityToUse = if (
                 isVerticalVideo &&
-                Prefs.portraitVideoFixMode == PortraitVideoFixMode.LimitResolution1080P &&
-                Prefs.defaultQuality >= Resolution.R4K
+                settings.portraitVideoFixMode == PortraitVideoFixMode.LimitResolution1080P &&
+                settings.defaultQuality >= Resolution.R4K
             ) {
                 // 如果是竖屏视频且用户设置了竖屏视频限制最高使用1080P
                 Resolution.R1080P60
             } else {
                 // 否则使用普通设置
-                Prefs.defaultQuality
+                settings.defaultQuality
             }
 
             val preferredQuality = targetQuality ?: defaultQualityToUse
@@ -769,7 +787,7 @@ class VideoPlayerV3ViewModel(
                 }
             }
 
-            val preferredAudio = targetAudio ?: Prefs.defaultAudio
+            val preferredAudio = targetAudio ?: settings.defaultAudio
             val selectedAudio = when {
                 availableAudio.contains(preferredAudio) -> preferredAudio
                 preferredAudio == Audio.ADolbyAtoms && availableAudio.contains(Audio.AHiRes) -> Audio.AHiRes
@@ -823,7 +841,7 @@ class VideoPlayerV3ViewModel(
     }
 
     private suspend fun updateAvailableCodec(preferredCodec: VideoCodec? = null) {
-        if (Prefs.apiType == ApiType.App && playData!!.codec.isEmpty()) {
+        if (settings.apiType == ApiType.App && playData!!.codec.isEmpty()) {
             // 纠正当前实际播放的编码
             val videoItem = playData!!.dashVideos
                 .find { it.quality == currentQuality.code }
@@ -846,8 +864,8 @@ class VideoPlayerV3ViewModel(
         logger.fInfo { "Default codec: $requestedCodec" }
         val currentVideoCodec = if (codecList.contains(requestedCodec)) {
             requestedCodec
-        } else if (codecList.contains(Prefs.defaultVideoCodec)) {
-            Prefs.defaultVideoCodec
+        } else if (codecList.contains(settings.defaultVideoCodec)) {
+            settings.defaultVideoCodec
         } else {
             codecList.minByOrNull { it.ordinal }!!
         }
@@ -893,7 +911,7 @@ class VideoPlayerV3ViewModel(
         val audioOnlyMode = mediaMode == PlaybackMediaMode.AudioOnly
 
         val videoItem = playData!!.dashVideos.find {
-            when (Prefs.apiType) {
+            when (settings.apiType) {
                 ApiType.Web -> it.quality == qn && it.codecs!!.startsWith(codec.prefix)
                 ApiType.App -> {
                     if (playData!!.codec.isEmpty()) it.quality == qn
@@ -982,7 +1000,7 @@ class VideoPlayerV3ViewModel(
             if (initialSeekPositionMs != null && initialSeekPositionMs > 0L) {
                 logger.info { "Set initial seek position to current: ${initialSeekPositionMs}ms" }
                 videoPlayer!!.setInitialSeekPosition(initialSeekPositionMs)
-            } else if (lastPlayed > 0 && Prefs.playerDefaultStartPosition == PlayerDefaultStartPosition.History) {
+            } else if (lastPlayed > 0 && settings.playerDefaultStartPosition == PlayerDefaultStartPosition.History) {
                 logger.info { "Set initial seek position to history: ${lastPlayed}ms" }
                 videoPlayer!!.setInitialSeekPosition(lastPlayed.toLong())
             }
@@ -1391,7 +1409,7 @@ class VideoPlayerV3ViewModel(
     private fun calculateInitialDanmakuPositionMs(): Long {
         return if (
             lastPlayed > 0 &&
-            Prefs.playerDefaultStartPosition == PlayerDefaultStartPosition.History
+            settings.playerDefaultStartPosition == PlayerDefaultStartPosition.History
         ) {
             lastPlayed.toLong()
         } else {
@@ -1733,7 +1751,7 @@ class VideoPlayerV3ViewModel(
             return
         }
 
-        SponsorBlockHttpApi.updateBaseUrl(Prefs.sponsorBlockApiServer)
+        SponsorBlockHttpApi.updateBaseUrl(settings.sponsorBlockApiServer)
 
         viewModelScope.launch(Dispatchers.IO) {
             addLogs("加载 SponsorBlock 片段")
@@ -1883,7 +1901,7 @@ class VideoPlayerV3ViewModel(
             val subtitleData = videoPlayRepository.getSubtitle(
                 aid = currentAid,
                 cid = currentCid,
-                preferApiType = Prefs.apiType
+                preferApiType = settings.apiType
             )
             withContext(Dispatchers.Main) {
                 availableSubtitle.clear()
@@ -1925,7 +1943,7 @@ class VideoPlayerV3ViewModel(
 
     private suspend fun addLogs(text: String) {
         logger.fInfo { text }
-        if (!Prefs.playerShowDebugInfo) {
+        if (!settings.playerShowDebugInfo) {
             return
         }
         val lines = logs.lines().toMutableList()
@@ -1951,7 +1969,7 @@ class VideoPlayerV3ViewModel(
                     aid = currentAid,
                     cid = currentCid,
                     time = time,
-                    preferApiType = Prefs.apiType
+                    preferApiType = settings.apiType
                 )
             } else {
                 logger.info { "Send heartbeat: [avid=$currentAid, cid=$currentCid, epid=$epid, sid=$seasonId, time=$time]" }
@@ -1963,7 +1981,7 @@ class VideoPlayerV3ViewModel(
                     subType = subType,
                     epid = epid,
                     seasonId = seasonId,
-                    preferApiType = Prefs.apiType
+                    preferApiType = settings.apiType
                 )
             }
         }.onSuccess {
@@ -1975,7 +1993,7 @@ class VideoPlayerV3ViewModel(
 
     private fun ensureLiveRoomEntryReported(roomId: Int) {
         if (!isLive || roomId <= 0) return
-        if (Prefs.liveIncognitoMode) {
+        if (settings.liveIncognitoMode) {
             logger.fInfo { "Skip live room entry report in live incognito mode: roomId=$roomId" }
             return
         }
@@ -2126,13 +2144,13 @@ class VideoPlayerV3ViewModel(
         val detail = when (candidate) {
             is AutoPlayCandidate.CrossVideoPart -> videoDetailRepository.getVideoDetail(
                 aid = candidate.item.aid,
-                preferApiType = Prefs.apiType,
+                preferApiType = settings.apiType,
                 withUserActions = false,
             )
 
             is AutoPlayCandidate.RelatedVideo -> videoDetailRepository.getVideoDetail(
                 aid = candidate.video.avid,
-                preferApiType = Prefs.apiType,
+                preferApiType = settings.apiType,
                 withUserActions = false,
             )
         }
@@ -2327,7 +2345,7 @@ class VideoPlayerV3ViewModel(
             avid = currentAid,
             cid = currentCid,
             epid = currentEpid,
-            preferApi = Prefs.apiType,
+            preferApi = settings.apiType,
             proxyArea = proxyArea,
             initialSeekPositionMs = resumePositionMs,
             targetQuality = currentQuality,
@@ -2403,9 +2421,9 @@ class VideoPlayerV3ViewModel(
         cid: Long
     ): List<DanmakuMaskSegment> {
         val apiCandidates = buildList {
-            add(Prefs.apiType)
+            add(settings.apiType)
             if (DeviceUtil.isTvDevice()) {
-                add(if (Prefs.apiType == ApiType.App) ApiType.Web else ApiType.App)
+                add(if (settings.apiType == ApiType.App) ApiType.Web else ApiType.App)
             }
         }.distinct()
 
@@ -2444,7 +2462,7 @@ class VideoPlayerV3ViewModel(
             val videoShot = videoPlayRepository.getVideoShot(
                 aid = currentAid,
                 cid = currentCid,
-                preferApiType = Prefs.apiType
+                preferApiType = settings.apiType
             )
             withContext(Dispatchers.Main) { this@VideoPlayerV3ViewModel.videoShot = videoShot }
             logger.fInfo { "Load video shot success" }
@@ -2528,7 +2546,7 @@ class VideoPlayerV3ViewModel(
      * @param roomId 直播间ID
      * @param qn 请求的画质编号，默认使用用户配置的直播清晰度
      */
-    fun loadLiveStreamWithQuality(roomId: Int, qn: Int = Prefs.defaultLiveQn) {
+    fun loadLiveStreamWithQuality(roomId: Int, qn: Int = settings.defaultLiveQn) {
         cancelVodPlayUrlAutoRefresh()
         // 取消之前的重连任务
         liveRetryJob?.cancel()
@@ -2830,7 +2848,15 @@ class VideoPlayerV3ViewModel(
         }
         
         logger.fInfo { "Starting live danmaku for room $roomId" }
+        val shouldClearMessages = currentLiveDanmakuRoomId != roomId
+        currentLiveDanmakuRoomId = roomId
         stopLiveDanmaku()
+        if (shouldClearMessages) {
+            viewModelScope.launch(Dispatchers.Main) {
+                liveDanmakuMessages.clear()
+                nextLiveDanmakuMessageId = 0L
+            }
+        }
         
         // 连接 WebSocket
         liveWebSocket = viewModelScope.launch(Dispatchers.IO) {
@@ -2872,7 +2898,7 @@ class VideoPlayerV3ViewModel(
                     token = danmuInfo.data!!.token,
                     hostList = danmuInfo.data!!.hostList,
                     uid = Prefs.uid,
-                    parseEmoji = Prefs.showLiveDanmakuEmoji,
+                    parseEmoji = settings.showLiveDanmakuEmoji,
                 ) { event ->
                     when (event) {
                         is DanmakuEvent -> channel.trySend(event)
@@ -2898,6 +2924,11 @@ class VideoPlayerV3ViewModel(
         }
 
         logger.fInfo { "Live danmaku started" }
+    }
+
+    fun resumeLiveDanmakuIfNeeded() {
+        if (!isLive || liveRoomId <= 0 || liveWebSocket != null) return
+        startLiveDanmaku(liveRoomId)
     }
     
     /**
@@ -2928,10 +2959,6 @@ class VideoPlayerV3ViewModel(
             return
         }
 
-        if (!showDanmaku) {
-            return
-        }
-
         val danmakuItem = DanmakuItemData(
             danmakuId = System.currentTimeMillis(),
             position = 0L,
@@ -2948,7 +2975,26 @@ class VideoPlayerV3ViewModel(
 
         // 直播模式
         viewModelScope.launch(Dispatchers.Main) {
-            liveDanmakuPlayer?.emit(danmakuItem)
+            liveDanmakuMessages.add(
+                LiveDanmakuMessage(
+                    id = nextLiveDanmakuMessageId++,
+                    username = event.username,
+                    content = event.content,
+                    medalName = event.medalName,
+                    medalLevel = event.medalLevel,
+                    userLevel = event.userLevel,
+                    color = 0xFF000000.toInt() or event.color,
+                    timestampMs = System.currentTimeMillis(),
+                    emojiMap = event.emojiMap
+                )
+            )
+            while (liveDanmakuMessages.size > LIVE_DANMAKU_MESSAGE_LIMIT) {
+                liveDanmakuMessages.removeAt(0)
+            }
+
+            if (showDanmaku) {
+                liveDanmakuPlayer?.emit(danmakuItem)
+            }
         }
     }
 }

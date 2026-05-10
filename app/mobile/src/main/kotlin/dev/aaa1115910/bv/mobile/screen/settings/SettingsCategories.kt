@@ -35,7 +35,7 @@ fun SettingsCategories(
         modifier = modifier,
         topBar = {
             LargeTopAppBar(
-                title = { Text(text = "Settings") },
+                title = { Text(text = "设置") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -58,8 +58,10 @@ fun SettingsCategories(
             preferenceGroups(
                 null to {
                     listOf(
+                        MobileSettings.Appearance,
                         MobileSettings.Play,
-                        MobileSettings.Advance
+                        MobileSettings.Advance,
+                        MobileSettings.Debug
                     ).forEach { item ->
                         textPreference(
                             title = item.title,
@@ -76,14 +78,6 @@ fun SettingsCategories(
                         onClick = { onSelectedSettings(MobileSettings.About) },
                         selected = selectedSettings == MobileSettings.About
                     )
-                },
-                null to {
-                    textPreference(
-                        title = MobileSettings.Debug.title,
-                        summary = MobileSettings.Debug.summary,
-                        onClick = { onSelectedSettings(MobileSettings.Debug) },
-                        selected = selectedSettings == MobileSettings.Debug
-                    )
                 }
             )
         }
@@ -96,7 +90,7 @@ private fun SettingsCategoriesPreview() {
     BVMobileTheme {
         Surface {
             SettingsCategories(
-                selectedSettings = MobileSettings.Play,
+                selectedSettings = MobileSettings.Appearance,
                 onSelectedSettings = {},
                 showNavBack = false,
                 onBack = {},

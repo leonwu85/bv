@@ -29,6 +29,7 @@ import dev.aaa1115910.biliapi.http.entity.reply.CommentData
 import dev.aaa1115910.biliapi.http.entity.reply.CommentReplyData
 import dev.aaa1115910.biliapi.http.entity.search.AppSearchSquareData
 import dev.aaa1115910.biliapi.http.entity.search.KeywordSuggest
+import dev.aaa1115910.biliapi.http.entity.search.SearchRecommendData
 import dev.aaa1115910.biliapi.http.entity.search.SearchResultData
 import dev.aaa1115910.biliapi.http.entity.search.SearchTendingData
 import dev.aaa1115910.biliapi.http.entity.search.WebSearchSquareData
@@ -1597,6 +1598,21 @@ object BiliHttpApi {
             parameter("limit", limit)
             //platform?.let { parameter("platform", platform) }
             //parameter("build", BiliAppConf.APP_BUILD_CODE)
+        }.body()
+
+    /**
+     * 获取搜索发现（App）
+     */
+    suspend fun getSearchRecommend(): BiliResponse<SearchRecommendData> =
+        client.get("https://app.bilibili.com/x/v2/search/recommend") {
+            parameter("build", BiliAppConf.APP_BUILD_CODE)
+            parameter("channel", "master")
+            parameter("version", "8.43.0")
+            parameter("c_locale", "zh_CN")
+            parameter("mobi_app", "android")
+            parameter("platform", "android")
+            parameter("s_locale", "zh_CN")
+            parameter("from", 2)
         }.body()
 
     /**

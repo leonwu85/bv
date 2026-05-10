@@ -395,6 +395,7 @@
     <string name="title_mobile_activity_history">历史记录</string>
     <string name="title_mobile_activity_login">用户登录</string>
     <string name="title_mobile_activity_settings">设置</string>
+    <string name="title_mobile_activity_toview">稍后再看</string>
     <string name="title_mobile_activity_user_space">用户空间</string>
     <string name="title_mobile_activity_video_player">视频播放</string>
 

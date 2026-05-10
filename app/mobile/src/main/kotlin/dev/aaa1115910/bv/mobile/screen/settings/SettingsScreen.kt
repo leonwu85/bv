@@ -62,7 +62,7 @@ fun SettingsScreen() {
             ) {
                 SettingsCategories(
                     selectedSettings = if (singlePart) null else selectedSettings
-                        ?: MobileSettings.Play,
+                        ?: MobileSettings.Appearance,
                     onSelectedSettings = {
                         selectedSettings = it
                         scope.launch {
@@ -81,7 +81,7 @@ fun SettingsScreen() {
                 exitTransition = fadeOut() + slideOutHorizontally { it / 2 }
             ) {
                 SettingsDetails(
-                    selectedSettings = selectedSettings ?: MobileSettings.Play,
+                    selectedSettings = selectedSettings ?: MobileSettings.Appearance,
                     showNavBack = scaffoldNavigator.canNavigateBack(),
                     onBack = { scope.launch { scaffoldNavigator.navigateBack() } }
                 )
@@ -116,10 +116,11 @@ enum class MobileSettings(
     val title: String,
     val summary: String? = null
 ) {
+    Appearance(title = "外观设置", summary = "主题模式、动态取色、主色"),
     Play(title = "播放设置", summary = "画质编码、音频、循环模式"),
-    About(title = "关于", summary = "一般不会有人点"),
     Advance(title = "更多设置", summary = "接口"),
-    Debug(title = "调试", "瞅啥瞅");
+    Debug(title = "调试", "播放器信息显示"),
+    About(title = "关于", summary = "版本和项目说明");
 }
 
 private val PaneExpansionAnchors = listOf(

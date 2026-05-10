@@ -11,13 +11,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.aaa1115910.bv.entity.LiveQualityPreference
 import dev.aaa1115910.bv.mobile.component.preferences.items.radioPreference
+import dev.aaa1115910.bv.mobile.component.preferences.items.switchPreference
 import dev.aaa1115910.bv.mobile.component.preferences.preferenceGroups
+import dev.aaa1115910.bv.mobile.settings.MobilePrefKeys
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.player.entity.Audio
+import dev.aaa1115910.bv.player.entity.LiveCodec
+import dev.aaa1115910.bv.player.entity.PlayMode
+import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
+import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
 import dev.aaa1115910.bv.player.entity.Resolution
+import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.player.entity.VideoCodec
-import dev.aaa1115910.bv.util.PrefKeys
 
 @Composable
 fun PlayContent(
@@ -33,23 +40,132 @@ fun PlayContent(
             "画面" to {
                 radioPreference(
                     title = "默认画质",
-                    prefReq = PrefKeys.prefDefaultQualityRequest,
+                    prefReq = MobilePrefKeys.defaultQualityRequest,
                     values = Resolution.entries.associate { it.code to it.getDisplayName(context) }
                         .toSortedMap { a, b -> a.compareTo(b) }
                 )
                 radioPreference(
                     title = "默认视频编码",
-                    prefReq = PrefKeys.prefDefaultVideoCodecRequest,
-                    values = VideoCodec.entries.associate { it.codecId to it.getDisplayName(context) }
+                    prefReq = MobilePrefKeys.defaultVideoCodecRequest,
+                    values = VideoCodec.entries.associate { it.ordinal to it.getDisplayName(context) }
                         .toSortedMap { a, b -> a.compareTo(b) }
+                )
+                radioPreference(
+                    title = "竖屏视频修复",
+                    prefReq = MobilePrefKeys.portraitVideoFixModeRequest,
+                    values = PortraitVideoFixMode.entries.associate { it.value to it.displayName(context) }
                 )
             },
             "音频" to {
                 radioPreference(
                     title = "默认音频",
-                    prefReq = PrefKeys.prefDefaultAudioRequest,
+                    prefReq = MobilePrefKeys.defaultAudioRequest,
                     values = Audio.entries.associate { it.code to it.getDisplayName(context) }
                         .toSortedMap { a, b -> a.compareTo(b) }
+                )
+            },
+            "播放" to {
+                radioPreference(
+                    title = "默认倍速",
+                    prefReq = MobilePrefKeys.currentPlaySpeedRequest,
+                    values = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+                        .associateWith { "${it}x" }
+                )
+                radioPreference(
+                    title = "连播模式",
+                    prefReq = MobilePrefKeys.defaultPlayModeRequest,
+                    values = PlayMode.entries.associate { it.ordinal to it.getDisplayName(context) }
+                )
+                radioPreference(
+                    title = "默认起播位置",
+                    prefReq = MobilePrefKeys.playerDefaultStartPositionRequest,
+                    values = PlayerDefaultStartPosition.entries.associate { it.value to it.displayName(context) }
+                )
+                switchPreference(
+                    title = "循环播放",
+                    prefReq = MobilePrefKeys.isLoopRequest,
+                    onCheckedChange = { true }
+                )
+                switchPreference(
+                    title = "隐藏观看记录",
+                    prefReq = MobilePrefKeys.incognitoModeRequest,
+                    onCheckedChange = { true }
+                )
+            },
+            "弹幕" to {
+                switchPreference(
+                    title = "默认显示弹幕",
+                    prefReq = MobilePrefKeys.defaultDanmakuEnabledRequest,
+                    onCheckedChange = { true }
+                )
+                radioPreference(
+                    title = "弹幕大小",
+                    prefReq = MobilePrefKeys.defaultMobileDanmakuScaleRequest,
+                    values = mapOf(
+                        0.6f to "小",
+                        0.8f to "默认",
+                        1f to "大",
+                        1.2f to "特大"
+                    )
+                )
+                radioPreference(
+                    title = "弹幕透明度",
+                    prefReq = MobilePrefKeys.defaultDanmakuOpacityRequest,
+                    values = mapOf(
+                        0.4f to "40%",
+                        0.6f to "60%",
+                        0.8f to "80%",
+                        1f to "100%"
+                    )
+                )
+                radioPreference(
+                    title = "弹幕区域",
+                    prefReq = MobilePrefKeys.defaultDanmakuAreaRequest,
+                    values = mapOf(
+                        0.25f to "1/4 屏",
+                        0.5f to "半屏",
+                        0.75f to "3/4 屏",
+                        1f to "全屏"
+                    )
+                )
+            },
+            "直播" to {
+                radioPreference(
+                    title = "默认清晰度",
+                    prefReq = MobilePrefKeys.defaultLiveQnRequest,
+                    values = LiveQualityPreference.entries.associate { it.qn to it.getDisplayName(context) }
+                )
+                radioPreference(
+                    title = "默认直播流",
+                    prefReq = MobilePrefKeys.defaultLiveCodecRequest,
+                    values = LiveCodec.entries.associate { it.ordinal to it.getDisplayName(context) }
+                )
+                switchPreference(
+                    title = "直播弹幕表情",
+                    prefReq = MobilePrefKeys.showLiveDanmakuEmojiRequest,
+                    onCheckedChange = { true }
+                )
+                switchPreference(
+                    title = "直播隐藏观看记录",
+                    prefReq = MobilePrefKeys.liveIncognitoModeRequest,
+                    onCheckedChange = { true }
+                )
+            },
+            "SponsorBlock" to {
+                switchPreference(
+                    title = "启用 SponsorBlock",
+                    prefReq = MobilePrefKeys.enableSponsorBlockRequest,
+                    onCheckedChange = { true }
+                )
+                radioPreference(
+                    title = "跳过方式",
+                    prefReq = MobilePrefKeys.sponsorBlockSkipModeRequest,
+                    values = SponsorBlockSkipMode.entries.associate {
+                        it.value to when (it) {
+                            SponsorBlockSkipMode.Manual -> "手动跳过"
+                            SponsorBlockSkipMode.Auto -> "自动跳过"
+                        }
+                    }
                 )
             }
         )

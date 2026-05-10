@@ -811,7 +811,7 @@ fun VideoPlayerV3Screen(
                     playerViewModel.currentDanmakuTypes.swapList(enabledDanmakuTypes)
                 },
                 onDanmakuSizeChange = { scale ->
-                    Prefs.defaultDanmakuScale = scale
+                    Prefs.defaultTvDanmakuScale = scale
                     playerViewModel.currentDanmakuScale = scale
                 },
                 onDanmakuOpacityChange = { opacity ->

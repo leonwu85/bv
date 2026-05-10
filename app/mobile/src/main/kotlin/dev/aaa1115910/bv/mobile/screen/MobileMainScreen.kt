@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Segment
 import androidx.compose.material.icons.rounded.FiberNew
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Person
@@ -83,16 +82,17 @@ import com.origeek.imageViewer.previewer.ImagePreviewer
 import com.origeek.imageViewer.previewer.VerticalDragType
 import com.origeek.imageViewer.previewer.rememberPreviewerState
 import dev.aaa1115910.biliapi.entity.Picture
-import dev.aaa1115910.bv.component.DevelopingTipContent
 import dev.aaa1115910.bv.mobile.activities.FavoriteActivity
 import dev.aaa1115910.bv.mobile.activities.FollowingSeasonActivity
 import dev.aaa1115910.bv.mobile.activities.FollowingUserActivity
 import dev.aaa1115910.bv.mobile.activities.HistoryActivity
 import dev.aaa1115910.bv.mobile.activities.LoginActivity
 import dev.aaa1115910.bv.mobile.activities.SettingsActivity
+import dev.aaa1115910.bv.mobile.activities.ToViewActivity
 import dev.aaa1115910.bv.mobile.component.home.UserDialog
 import dev.aaa1115910.bv.mobile.screen.home.DynamicScreen
 import dev.aaa1115910.bv.mobile.screen.home.HomeScreen
+import dev.aaa1115910.bv.mobile.screen.home.MineScreen
 import dev.aaa1115910.bv.mobile.screen.home.SearchScreen
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.swapList
@@ -141,13 +141,12 @@ fun MobileMainScreen(
         }
 
     val verticalNavOrder = listOf(
-        MobileMainScreenNav.Search, MobileMainScreenNav.Home,
-        MobileMainScreenNav.Zone, MobileMainScreenNav.Dynamic
+        MobileMainScreenNav.Home,
+        MobileMainScreenNav.Search,
+        MobileMainScreenNav.Dynamic,
+        MobileMainScreenNav.Setting
     ).map { it.name }
-    val horizontalNavOrder = listOf(
-        MobileMainScreenNav.Home, MobileMainScreenNav.Zone,
-        MobileMainScreenNav.Search, MobileMainScreenNav.Dynamic,
-    ).map { it.name }
+    val horizontalNavOrder = verticalNavOrder
 
     val compareNavIndex: (String?, String?) -> Boolean = { a, b ->
         if (navSuiteType == NavigationSuiteType.NavigationBar) {
@@ -244,6 +243,7 @@ fun MobileMainScreen(
                         rcmdGridState = state.rcmdGridState,
                         popularGridState = state.popularGridState,
                         windowSize = state.windowSizeClass.widthSizeClass,
+                        onOpenSearch = { state.navigate(MobileMainScreenNav.Search) },
                         onShowUserDialog = state::showUserDialog
                     )
                 }
@@ -266,8 +266,11 @@ fun MobileMainScreen(
                 composable(MobileMainScreenNav.Search.name) {
                     SearchScreen()
                 }
-                composable(MobileMainScreenNav.Zone.name) {
-                    DevelopingTipContent()
+                composable(MobileMainScreenNav.Mine.name) {
+                    MineScreen(
+                        windowSize = state.windowSizeClass.widthSizeClass,
+                        userSwitchViewModel = userSwitchViewModel
+                    )
                 }
             }
         }
@@ -323,7 +326,7 @@ fun MobileMainScreen(
                 Intent(context, FollowingSeasonActivity::class.java)
             )
         },
-        onOpenToView = {},
+        onOpenToView = { context.startActivity(Intent(context, ToViewActivity::class.java)) },
         onOpenSettings = { context.startActivity(Intent(context, SettingsActivity::class.java)) }
     )
 }
@@ -344,9 +347,8 @@ private fun NavigationSuit(
             ) {
                 listOf(
                     MobileMainScreenNav.Home,
-                    MobileMainScreenNav.Zone,
-                    MobileMainScreenNav.Search,
                     MobileMainScreenNav.Dynamic,
+                    MobileMainScreenNav.Setting,
                 ).forEach { navItem ->
                     item(
                         icon = { Icon(navItem.icon, contentDescription = navItem.displayName) },
@@ -386,22 +388,22 @@ private fun NavigationSuit(
                     selected = false,
                     onClick = onShowUserDialog
                 )
+                NavigationRailItem(
+                    icon = {
+                        Icon(
+                            imageVector = MobileMainScreenNav.Search.icon,
+                            contentDescription = MobileMainScreenNav.Search.displayName
+                        )
+                    },
+                    selected = mobileMainScreenState.currentNavItem == MobileMainScreenNav.Search,
+                    onClick = { onNavigate(MobileMainScreenNav.Search) }
+                )
                 Spacer(Modifier.weight(1f))
                 listOf(
-                    MobileMainScreenNav.Search,
                     MobileMainScreenNav.Home,
-                    MobileMainScreenNav.Zone,
                     MobileMainScreenNav.Dynamic,
+                    MobileMainScreenNav.Setting,
                 ).forEach { navItem ->
-                    NavigationRailItem(
-                        icon = { Icon(navItem.icon, contentDescription = navItem.displayName) },
-                        label = { Text(navItem.displayName) },
-                        selected = mobileMainScreenState.currentNavItem == navItem,
-                        onClick = { onNavigate(navItem) }
-                    )
-                }
-                Spacer(Modifier.weight(1f))
-                listOf(MobileMainScreenNav.Setting).forEach { navItem ->
                     NavigationRailItem(
                         icon = { Icon(navItem.icon, contentDescription = navItem.displayName) },
                         label = { Text(navItem.displayName) },
@@ -482,7 +484,7 @@ data class MobileMainScreenState(
                 }
             }
 
-            MobileMainScreenNav.Zone -> {
+            MobileMainScreenNav.Mine -> {
                 if (notCurrentNavItem) {
                     navigateToRoute()
                 }
@@ -598,9 +600,9 @@ fun rememberMobileMainScreenState(
 
 enum class MobileMainScreenNav(val displayName: String, val icon: ImageVector) {
     Home("首页", Icons.Rounded.Home),
-    Zone("分区", Icons.AutoMirrored.Rounded.Segment),
     Search("搜索", Icons.Rounded.Search),
     Dynamic("动态", Icons.Rounded.FiberNew),
+    Mine("我的", Icons.Rounded.Person),
     Setting("设置", Icons.Rounded.Settings), ;
 
     companion object {

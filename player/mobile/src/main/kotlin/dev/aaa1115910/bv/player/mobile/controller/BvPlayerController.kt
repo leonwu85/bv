@@ -361,9 +361,11 @@ fun BvPlayerControllerVideoContent(
     }
 
     val onHorizontalDrag: (Float) -> Unit = { move ->
-        Log.i("BvPlayerController", "Screen horizontal drag: $move")
-        isMovingSeek = true
-        moveMs = move.toLong() * 50
+        if (!videoPlayerConfigData.isLive) {
+            Log.i("BvPlayerController", "Screen horizontal drag: $move")
+            isMovingSeek = true
+            moveMs = move.toLong() * 50
+        }
     }
 
     val onMovingBrightness: (Float) -> Unit = { move ->
@@ -464,6 +466,7 @@ fun BvPlayerControllerVideoContent(
                                 Log.i("BvPlayerController", "Stop move brightness")
                             } else {
                                 isMovingSeek = false
+                                if (videoPlayerConfigData.isLive) return@detectPlayerGestures
                                 if (moveStartInSafetyArea) {
                                     moveStartInSafetyArea = false
                                     return@detectPlayerGestures
