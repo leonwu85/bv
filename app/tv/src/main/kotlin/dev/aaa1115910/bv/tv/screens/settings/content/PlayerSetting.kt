@@ -239,8 +239,8 @@ fun PlayerSetting(
             }
             item {
                 SettingSwitchListItem(
-                    title = "弹幕蒙版 180p 降采样",
-                    supportText = "降低普通模式 GL 弹幕蒙版上传尺寸，可能改善低性能设备掉帧",
+                    title = "弹幕蒙版 180p 短边降采样",
+                    supportText = "降低普通模式 GL 弹幕蒙版上传尺寸，竖屏视频会按短边保留蒙版精度",
                     checked = debugDanmakuMaskDownsample180p,
                     onCheckedChange = {
                         debugDanmakuMaskDownsample180p = it
