@@ -1359,10 +1359,18 @@ class VideoPlayerV3ViewModel(
             normalizedPosition - lastDanmakuCatchUpPositionMs < 15_000L
         if (shouldSkip) return
 
+        val previousCatchUpPositionMs = lastDanmakuCatchUpPositionMs
+        val catchUpJobActive = danmakuCatchUpJob?.isActive == true
+
         lastDanmakuCatchUpPositionMs = normalizedPosition
         lastDanmakuCatchUpSegment = currentSegment
 
-        if (danmakuCatchUpJob?.isActive == true) return
+        if (catchUpJobActive) {
+            logger.fInfo {
+                "Danmaku coverage catch-up skipped because previous job is active positionMs=$normalizedPosition, currentSegment=$currentSegment, lastPosition=$previousCatchUpPositionMs"
+            }
+            return
+        }
 
         val loadToken = danmakuLoadToken
         val durationMs = playData?.timeLength
@@ -1370,10 +1378,22 @@ class VideoPlayerV3ViewModel(
             ?: videoPlayer?.duration
             ?: 0L
         val maxSegments = calculateDanmakuMaxSegments(durationMs)
-        val loadSession = danmakuLoadSession?.takeIf { it.token == loadToken } ?: return
+        val loadSession = danmakuLoadSession?.takeIf { it.token == loadToken }
+        if (loadSession == null) {
+            logger.fInfo {
+                "Danmaku coverage catch-up skipped because load session is missing positionMs=$normalizedPosition, currentSegment=$currentSegment, lastPosition=$previousCatchUpPositionMs, loadToken=$loadToken"
+            }
+            return
+        }
+
+        logger.fInfo {
+            "Danmaku coverage catch-up start positionMs=$normalizedPosition, currentSegment=$currentSegment, lastPosition=$previousCatchUpPositionMs, jobActive=$catchUpJobActive"
+        }
 
         danmakuCatchUpJob = viewModelScope.launch(Dispatchers.Default) {
+            val catchUpStartMs = System.currentTimeMillis()
             runCatching {
+                var totalEmitted = 0
                 val targetSegments = buildList {
                     add(currentSegment.coerceIn(1, maxSegments.coerceAtLeast(1)))
                     val nextSegment = currentSegment + 1
@@ -1382,17 +1402,27 @@ class VideoPlayerV3ViewModel(
                 targetSegments.forEachIndexed { index, segmentIndex ->
                     ensureDanmakuLoadActive(loadToken)
                     val anchorPosition = if (index == 0) normalizedPosition else segmentStartPositionMs(segmentIndex)
-                    emitDanmakuSlicesAroundPosition(
+                    val segmentStartMs = System.currentTimeMillis()
+                    val emittedCount = emitDanmakuSlicesAroundPosition(
                         cid = currentCid,
                         segmentIndex = segmentIndex,
                         positionMs = anchorPosition,
                         loadToken = loadToken,
                         loadSession = loadSession
                     )
+                    totalEmitted += emittedCount
+                    logger.fInfo {
+                        "Danmaku coverage segment done segmentIndex=$segmentIndex, anchorPosition=$anchorPosition, emittedCount=$emittedCount, costMs=${System.currentTimeMillis() - segmentStartMs}"
+                    }
+                }
+                logger.fInfo {
+                    "Danmaku coverage catch-up done totalEmitted=$totalEmitted, costMs=${System.currentTimeMillis() - catchUpStartMs}"
                 }
             }.onFailure {
                 if (it !is CancellationException) {
-                    logger.fDebug { "Danmaku catch-up skipped: ${it.message}" }
+                    logger.fDebug {
+                        "Danmaku catch-up skipped: ${it.message}, costMs=${System.currentTimeMillis() - catchUpStartMs}"
+                    }
                 }
             }
         }

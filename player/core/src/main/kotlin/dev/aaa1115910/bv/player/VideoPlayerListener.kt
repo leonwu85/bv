@@ -42,4 +42,6 @@ interface VideoPlayerListener {
     /** 视频尺寸变化 */
     fun onVideoSizeChanged(width: Int, height: Int) {}
 
+    fun onVideoFrameRateChanged(frameRate: Float?) {}
+
 }

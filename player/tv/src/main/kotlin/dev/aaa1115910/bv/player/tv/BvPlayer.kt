@@ -1044,6 +1044,11 @@ fun BvPlayer(
             }
         }
 
+        override fun onVideoFrameRateChanged(frameRate: Float?) {
+            logger.info { "onVideoFrameRateChanged: $frameRate" }
+            mDanmakuPlayer?.updateSurfaceFrameRate(frameRate)
+        }
+
         override fun onProgress(position: Long, duration: Long, buffered: Int) {
             if (videoPlayerConfigData.isLive) return
 

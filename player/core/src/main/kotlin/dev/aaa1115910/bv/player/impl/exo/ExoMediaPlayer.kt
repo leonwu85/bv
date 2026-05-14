@@ -15,6 +15,7 @@ import androidx.media3.common.Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM
 import androidx.media3.common.Player.Commands
 import androidx.media3.common.Player.DISCONTINUITY_REASON_SEEK
 import androidx.media3.common.Player.PositionInfo
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -30,6 +31,7 @@ import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.OkHttpUtil
 import dev.aaa1115910.bv.player.VideoPlayerOptions
 import dev.aaa1115910.bv.util.formatHourMinSec
+import kotlin.math.abs
 
 /**
  * 智能缓冲配置
@@ -62,6 +64,7 @@ class ExoMediaPlayer(
 ) : AbstractVideoPlayer(), Player.Listener {
     var mPlayer: ExoPlayer? = null
     protected var mMediaSource: MediaSource? = null
+    private var lastVideoFrameRate: Float? = null
 
     // 进度更新 Handler，用于定期触发 onProgress 回调
     private val progressHandler = Handler(Looper.getMainLooper())
@@ -288,10 +291,15 @@ class ExoMediaPlayer(
             Player.STATE_BUFFERING -> mPlayerEventListener?.onBuffering()
             Player.STATE_READY -> {
                 mPlayerEventListener?.onReady()
+                dispatchVideoFrameRate(mPlayer?.videoFormat?.frameRate)
                 dispatchProgress()
             }
             Player.STATE_ENDED -> mPlayerEventListener?.onEnd()
         }
+    }
+
+    override fun onTracksChanged(tracks: Tracks) {
+        dispatchVideoFrameRate(mPlayer?.videoFormat?.frameRate)
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -335,6 +343,7 @@ class ExoMediaPlayer(
                 time: ${currentPosition.formatHourMinSec()} / ${duration.formatHourMinSec()}
                 buffered: $bufferedPercentage%
                 resolution: ${mPlayer?.videoSize?.width} x ${mPlayer?.videoSize?.height}
+                video fps: ${mPlayer?.videoFormat?.frameRate ?: 0f}
                 audio: ${mPlayer?.audioFormat?.bitrate ?: 0} kbps
                 video codec: ${mPlayer?.videoFormat?.sampleMimeType ?: "null"}
                 audio codec: ${mPlayer?.audioFormat?.sampleMimeType ?: "null"} (${getAudioRendererName()})
@@ -359,10 +368,27 @@ class ExoMediaPlayer(
 
     override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
         mPlayerEventListener?.onVideoSizeChanged(videoSize.width, videoSize.height)
+        dispatchVideoFrameRate(mPlayer?.videoFormat?.frameRate)
     }
 
     override fun onPlayerError(error: PlaybackException) {
         mPlayerEventListener?.onError(error)
+    }
+
+    private fun dispatchVideoFrameRate(frameRate: Float?) {
+        val usableFrameRate = frameRate?.takeIf { it.isFinite() && it > 0f }
+        if (lastVideoFrameRate.isSameFrameRate(usableFrameRate)) return
+        lastVideoFrameRate = usableFrameRate
+        Log.d("ExoMediaPlayer", "Video frame rate changed: $usableFrameRate")
+        mPlayerEventListener?.onVideoFrameRateChanged(usableFrameRate)
+    }
+
+    private fun Float?.isSameFrameRate(other: Float?): Boolean {
+        return when {
+            this == null && other == null -> true
+            this == null || other == null -> false
+            else -> abs(this - other) <= 0.001f
+        }
     }
 
     /**
