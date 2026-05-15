@@ -31,6 +31,9 @@ class DataStoreManager(val dataStore: DataStore<Preferences>) {
         }
     }
 
+    suspend fun <T> containsPreference(key: Preferences.Key<T>) =
+        key in preferenceFlow.first()
+
     suspend fun clearPreferences() {
         dataStore.edit { preferences -> preferences.clear() }
     }

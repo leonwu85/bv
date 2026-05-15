@@ -137,6 +137,8 @@ class BVApp : Application() {
         if (lastVersionCode >= BuildConfig.VERSION_CODE) return
         Log.i("BVApp", "updateMigration from $lastVersionCode")
 
+        Prefs.migrateTvTunnelingDefault(lastVersionCode)
+
         // 新安装时，根据接口偏好设置防遮挡默认值
         if (lastVersionCode == 0) {
             // 如果用户选择了 APP 接口，则关闭防遮挡

@@ -680,6 +680,28 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableTvTunnelingRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableTvTunneling, value) }
 
+    private val hasEnableTvTunnelingPreference: Boolean
+        get() = runBlocking { dsm.containsPreference(PrefKeys.prefEnableTvTunneling) }
+
+    private var tvTunnelingDefaultMigrationDone: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefTvTunnelingDefaultMigrationDoneRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefTvTunnelingDefaultMigrationDone, value) }
+
+    fun migrateTvTunnelingDefault(lastVersionCode: Int) {
+        val migrationDone = tvTunnelingDefaultMigrationDone
+        val valueToWrite = TvTunnelingDefaultMigration.valueToWrite(
+            lastVersionCode = lastVersionCode,
+            migrationDone = migrationDone,
+            hasTvTunnelingPreference = hasEnableTvTunnelingPreference
+        )
+        if (valueToWrite != null) {
+            enableTvTunneling = valueToWrite
+        }
+        if (!migrationDone) {
+            tvTunnelingDefaultMigrationDone = true
+        }
+    }
+
     var enableAudioPlaybackParams: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableAudioPlaybackParamsRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableAudioPlaybackParams, value) }
@@ -731,6 +753,17 @@ object Prefs {
     var sponsorBlockApiServer: String
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefSponsorBlockApiServerRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefSponsorBlockApiServerKey, value) }
+}
+
+internal object TvTunnelingDefaultMigration {
+    fun valueToWrite(
+        lastVersionCode: Int,
+        migrationDone: Boolean,
+        hasTvTunnelingPreference: Boolean
+    ): Boolean? {
+        if (migrationDone || hasTvTunnelingPreference) return null
+        return lastVersionCode > 0
+    }
 }
 
 object PrefKeys {
@@ -822,6 +855,7 @@ object PrefKeys {
     val prefEnableTunneling = booleanPreferencesKey("enable_tunneling")
     val prefEnableMobileTunneling = booleanPreferencesKey("enable_mobile_tunneling")
     val prefEnableTvTunneling = booleanPreferencesKey("enable_tv_tunneling")
+    val prefTvTunnelingDefaultMigrationDone = booleanPreferencesKey("tv_tunneling_default_migration_done")
     val prefEnableAudioPlaybackParams = booleanPreferencesKey("enable_audio_playback_params")
     val prefVlcLibsVersionKey = stringPreferencesKey("vlc_libs_version")
     val prefDefaultDanmakuFilterLevelKey = intPreferencesKey("default_danmaku_filter_level")
@@ -939,7 +973,8 @@ object PrefKeys {
     val prefEnableAsyncQueueingRequest = PreferenceRequest(prefEnableAsyncQueueing, true)
     val prefEnableTunnelingRequest = PreferenceRequest(prefEnableTunneling, true)
     val prefEnableMobileTunnelingRequest = PreferenceRequest(prefEnableMobileTunneling, false)
-    val prefEnableTvTunnelingRequest = PreferenceRequest(prefEnableTvTunneling, true)
+    val prefEnableTvTunnelingRequest = PreferenceRequest(prefEnableTvTunneling, false)
+    val prefTvTunnelingDefaultMigrationDoneRequest = PreferenceRequest(prefTvTunnelingDefaultMigrationDone, false)
     val prefEnableAudioPlaybackParamsRequest = PreferenceRequest(prefEnableAudioPlaybackParams, true)
     val prefVlcLibsVersionRequest = PreferenceRequest(prefVlcLibsVersionKey, "")
     val prefDefaultDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultDanmakuFilterLevelKey, 1)
