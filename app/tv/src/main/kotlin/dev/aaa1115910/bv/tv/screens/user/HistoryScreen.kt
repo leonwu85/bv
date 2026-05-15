@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -76,7 +77,8 @@ import org.koin.androidx.compose.koinViewModel
 fun HistoryScreen(
     modifier: Modifier = Modifier,
     historyViewModel: HistoryViewModel = koinViewModel(),
-    showPageTitle: Boolean = true
+    showPageTitle: Boolean = true,
+    lazyGridState: LazyGridState = rememberLazyGridState()
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -91,7 +93,6 @@ fun HistoryScreen(
     var selectedVideo by remember { mutableStateOf<VideoCardData?>(null) }
     val menuFocusRequester = remember { FocusRequester() }
     val emptyFocusRequester = remember { FocusRequester() }
-    val lazyGridState = rememberLazyGridState()
     val focusRequesters = remember { mutableMapOf<String, FocusRequester>() }
     val historyItemKey: (VideoCardData) -> String = remember {
         { item ->

@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
@@ -118,6 +119,9 @@ fun NewDynamicsScreen(
     var selectedTabIndex by remember { mutableIntStateOf(initialSelectedTabIndex) }
     var currentFocusedIndex by remember { mutableIntStateOf(-1) }
     var focusLayer by remember { mutableStateOf<DynamicFocusLayer?>(null) }
+    val allStaggeredGridState = rememberLazyStaggeredGridState()
+    val pgcStaggeredGridState = rememberLazyStaggeredGridState()
+    val articleStaggeredGridState = rememberLazyStaggeredGridState()
 
     // 当子 Tab 切换时通知父组件记住选择
     LaunchedEffect(selectedTabIndex) {
@@ -125,6 +129,22 @@ fun NewDynamicsScreen(
     }
 
     val selectedTabType = DynamicTabType.entries[selectedTabIndex]
+
+    fun staggeredGridStateFor(tabType: DynamicTabType): LazyStaggeredGridState? = when (tabType) {
+        DynamicTabType.All -> allStaggeredGridState
+        DynamicTabType.Pgc -> pgcStaggeredGridState
+        DynamicTabType.Article -> articleStaggeredGridState
+        DynamicTabType.Video -> null
+    }
+
+    fun scrollToTabTop(tabType: DynamicTabType) {
+        scope.launch {
+            when (tabType) {
+                DynamicTabType.Video -> lazyGridState.scrollToItem(0)
+                else -> staggeredGridStateFor(tabType)?.scrollToItem(0)
+            }
+        }
+    }
 
     // 根据选中的 Tab 获取对应的数据列表
     val currentList: List<DynamicItem> = when (selectedTabType) {
@@ -253,6 +273,8 @@ fun NewDynamicsScreen(
                 onTabClick = { index ->
                     if (index == selectedTabIndex) {
                         // 再次点击当前 Tab，触发刷新
+                        currentFocusedIndex = -1
+                        scrollToTabTop(selectedTabType)
                         scope.launch(Dispatchers.IO) {
                             dynamicViewModel.refreshByType(selectedTabType)
                             dynamicViewModel.loadMoreByType(selectedTabType)
@@ -305,6 +327,7 @@ fun NewDynamicsScreen(
                     // 视频页使用旧的 grid 布局和 SmallVideoCard
                     VideoDynamicContent(
                         videoList = dynamicViewModel.dynamicVideoList,
+                        lazyGridState = lazyGridState,
                         onClickVideo = onClickVideo,
                         onLongClickVideo = onLongClickVideo,
                         onFocus = { currentFocusedIndex = it },
@@ -316,6 +339,7 @@ fun NewDynamicsScreen(
                     // 其他页面使用瀑布流布局
                     StaggeredDynamicContent(
                         filteredList = currentList,
+                        staggeredGridState = staggeredGridStateFor(selectedTabType) ?: allStaggeredGridState,
                         onClickDynamicItem = onClickDynamicItem,
                         onLongClickDynamicItem = onLongClickDynamicItem,
                         onFocus = { currentFocusedIndex = it },
@@ -394,6 +418,7 @@ private fun DynamicTabRow(
 @Composable
 private fun VideoDynamicContent(
     videoList: List<DynamicVideo>,
+    lazyGridState: LazyGridState,
     onClickVideo: (DynamicVideo) -> Unit,
     onLongClickVideo: (DynamicVideo) -> Unit,
     onFocus: (Int) -> Unit,
@@ -435,6 +460,7 @@ private fun VideoDynamicContent(
                     }
                     false
                 },
+            state = lazyGridState,
             columns = GridCells.Fixed(gridColumns),
             contentPadding = PaddingValues(padding),
             verticalArrangement = Arrangement.spacedBy(spacedBy),
@@ -491,6 +517,7 @@ private fun VideoDynamicContent(
 @Composable
 private fun StaggeredDynamicContent(
     filteredList: List<DynamicItem>,
+    staggeredGridState: LazyStaggeredGridState,
     onClickDynamicItem: (DynamicItem) -> Unit,
     onLongClickDynamicItem: (DynamicItem) -> Unit,
     onFocus: (Int) -> Unit,
@@ -498,7 +525,6 @@ private fun StaggeredDynamicContent(
     hasMore: Boolean
 ) {
     val context = LocalContext.current
-    val staggeredGridState = rememberLazyStaggeredGridState()
 
     if (filteredList.isEmpty()) {
         Box(

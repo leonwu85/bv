@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -51,7 +53,8 @@ import org.koin.androidx.compose.koinViewModel
 fun FollowingSeasonScreen(
     modifier: Modifier = Modifier,
     followingSeasonViewModel: FollowingSeasonViewModel = koinViewModel(),
-    showPageTitle: Boolean = true
+    showPageTitle: Boolean = true,
+    lazyGridState: LazyGridState = rememberLazyGridState()
 ) {
     val context = LocalContext.current
     val logger = KotlinLogging.logger { }
@@ -182,6 +185,7 @@ fun FollowingSeasonScreen(
         ProvideListBringIntoViewSpec {
             LazyVerticalGrid(
                 modifier = Modifier.padding(innerPadding),
+                state = lazyGridState,
                 columns = GridCells.Fixed(6),
                 contentPadding = PaddingValues(24.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp),

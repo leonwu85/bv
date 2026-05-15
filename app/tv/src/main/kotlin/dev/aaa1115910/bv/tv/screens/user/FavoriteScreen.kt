@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -65,7 +66,8 @@ import org.koin.androidx.compose.koinViewModel
 fun FavoriteScreen(
     modifier: Modifier = Modifier,
     favoriteViewModel: FavoriteViewModel = koinViewModel(),
-    showPageTitle: Boolean = true
+    showPageTitle: Boolean = true,
+    lazyGridState: LazyGridState = rememberLazyGridState()
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -79,8 +81,6 @@ fun FavoriteScreen(
     val defaultFocusRequester = remember { FocusRequester() }
     var focusOnTabs by remember { mutableStateOf(true) }
     var focusOnGrid by remember { mutableStateOf(false) }
-    val lazyGridState = rememberLazyGridState()
-
     val currentTabIndex by remember {
         derivedStateOf {
             if (favoriteViewModel.favoriteFolderMetadataList.indexOf(favoriteViewModel.currentFavoriteFolderMetadata) >= 0) favoriteViewModel.favoriteFolderMetadataList.indexOf(

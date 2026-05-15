@@ -13,6 +13,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -127,6 +128,22 @@ fun HomeContent(
     var focusedTopNavItem by remember { mutableStateOf(selectedTab) }
     var pendingDynamicSubTabFocus by remember { mutableStateOf(false) }
 
+    fun lazyGridStateFor(tab: HomeTopNavItem): LazyGridState = when (tab) {
+        HomeTopNavItem.Recommend -> recommendState
+        HomeTopNavItem.Popular -> popularState
+        HomeTopNavItem.Dynamics -> dynamicState
+        HomeTopNavItem.Favorite -> favoriteState
+        HomeTopNavItem.FollowingSeason -> followingSeasonState
+        HomeTopNavItem.History -> historyState
+        HomeTopNavItem.ToView -> toViewState
+    }
+
+    fun scrollToTabTop(tab: HomeTopNavItem) {
+        scope.launch {
+            lazyGridStateFor(tab).scrollToItem(0)
+        }
+    }
+
     fun initData () {
         scope.launch {
             when (selectedTab) {
@@ -196,19 +213,9 @@ fun HomeContent(
         }
     }
 
-    val currentListOnTop by remember {
+    val currentListOnTop by remember(selectedTab) {
         derivedStateOf {
-            with(
-                when (selectedTab) {
-                    HomeTopNavItem.Recommend -> recommendState
-                    HomeTopNavItem.Popular -> popularState
-                    HomeTopNavItem.Dynamics -> dynamicState
-                    HomeTopNavItem.Favorite -> favoriteState
-                    HomeTopNavItem.FollowingSeason -> followingSeasonState
-                    HomeTopNavItem.History -> historyState
-                    HomeTopNavItem.ToView -> toViewState
-                }
-            ) {
+            with(lazyGridStateFor(selectedTab)) {
                 firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0
             }
         }
@@ -284,8 +291,10 @@ fun HomeContent(
                 },
                 onClick = { nav ->
                     loadJob?.cancel()
+                    val homeNav = nav as HomeTopNavItem
+                    scrollToTabTop(homeNav)
                     
-                    when (nav) {
+                    when (homeNav) {
                         HomeTopNavItem.Recommend -> {
                             logger.fInfo { "clear recommend data" }
                             recommendViewModel.clearData()
@@ -424,21 +433,30 @@ fun HomeContent(
                     }
                     HomeTopNavItem.Favorite -> {
                         if (userViewModel.isLogin) {
-                            FavoriteScreen(showPageTitle = false)
+                            FavoriteScreen(
+                                showPageTitle = false,
+                                lazyGridState = favoriteState
+                            )
                         } else {
                             LoginRequiredScreen()
                         }
                     }
                     HomeTopNavItem.FollowingSeason -> {
                         if (userViewModel.isLogin) {
-                            FollowingSeasonScreen(showPageTitle = false)
+                            FollowingSeasonScreen(
+                                showPageTitle = false,
+                                lazyGridState = followingSeasonState
+                            )
                         } else {
                             LoginRequiredScreen()
                         }
                     }
                     HomeTopNavItem.History -> {
                         if (userViewModel.isLogin) {
-                            HistoryScreen(showPageTitle = false)
+                            HistoryScreen(
+                                showPageTitle = false,
+                                lazyGridState = historyState
+                            )
                         } else {
                             LoginRequiredScreen()
                         }
@@ -447,6 +465,7 @@ fun HomeContent(
                         if (userViewModel.isLogin) {
                             ToViewScreen(
                                 showPageTitle = false,
+                                lazyGridState = toViewState,
                                 onListEmpty = {
                                     navFocusRequester.requestFocus()
                                 }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -76,6 +77,7 @@ fun ToViewScreen(
     modifier: Modifier = Modifier,
     ToViewViewModel: ToViewViewModel = koinViewModel(),
     showPageTitle: Boolean = true,
+    lazyGridState: LazyGridState = rememberLazyGridState(),
     onListEmpty: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -92,7 +94,6 @@ fun ToViewScreen(
     var selectedVideo by remember { mutableStateOf<VideoCardData?>(null) }
     val menuFocusRequester = remember { FocusRequester() }
 
-    val lazyGridState = rememberLazyGridState()
     val focusRequesters = remember { mutableMapOf<Long, FocusRequester>() }
     var pendingRestoreFocusIndex by remember { mutableIntStateOf(-1) }
 
