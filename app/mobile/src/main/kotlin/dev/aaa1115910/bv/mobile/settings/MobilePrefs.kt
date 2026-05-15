@@ -322,7 +322,7 @@ object MobilePrefKeys {
     val defaultSecondarySubtitleBottomPaddingRequest = PreferenceRequest(defaultSecondarySubtitleBottomPaddingKey, 12)
     val defaultPlayModeRequest = PreferenceRequest(defaultPlayModeKey, PlayMode.Sequential.ordinal)
     val defaultLiveQnRequest = PreferenceRequest(defaultLiveQnKey, LiveQualityPreference.Origin.qn)
-    val defaultLiveCodecRequest = PreferenceRequest(defaultLiveCodecKey, LiveCodec.HLS.ordinal)
+    val defaultLiveCodecRequest = PreferenceRequest(defaultLiveCodecKey, LiveCodec.FLV.ordinal)
     val isLoopRequest = PreferenceRequest(isLoopKey, false)
     val showDanmakuRequest = PreferenceRequest(showDanmakuKey, true)
     val enableSponsorBlockRequest = PreferenceRequest(enableSponsorBlockKey, false)

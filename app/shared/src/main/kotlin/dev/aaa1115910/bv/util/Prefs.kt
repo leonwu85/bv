@@ -952,7 +952,7 @@ object PrefKeys {
     val prefIsLoopRequest = PreferenceRequest(prefIsLoopKey, false)
     val prefShowDanmakuRequest = PreferenceRequest(prefShowDanmakuKey, true)
     val prefDefaultLiveQnRequest = PreferenceRequest(prefDefaultLiveQnKey, LiveQualityPreference.Origin.qn)
-    val prefDefaultLiveCodecRequest = PreferenceRequest(prefDefaultLiveCodecKey, LiveCodec.HLS.ordinal)
+    val prefDefaultLiveCodecRequest = PreferenceRequest(prefDefaultLiveCodecKey, LiveCodec.FLV.ordinal)
     val prefPlayerLoadNextActionRequest = PreferenceRequest(prefPlayerLoadNextActionKey, PlayerLoadNextAction.DoNothing.value)
     val prefPlayerDefaultStartPositionRequest = PreferenceRequest(prefPlayerDefaultStartPositionKey, PlayerDefaultStartPosition.History.value)
     val prefPlayerEnableStartPositionSwitchRequest = PreferenceRequest(prefPlayerEnableStartPositionSwitchKey, false)
