@@ -49,6 +49,7 @@ fun Replies(
     onRefreshReplies: () -> Unit,
     onSwitchReplySort: (CommentSort) -> Unit,
     onShowPreviewer: (List<Picture>, () -> Unit) -> Unit,
+    onReplyComment: (Comment, Long) -> Unit = { _, _ -> },
 ) {
     val listState = rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
@@ -82,7 +83,8 @@ fun Replies(
                         comment = rootComment,
                         previewerState = previewerState,
                         onShowPreviewer = onShowPreviewer,
-                        showReplies = false
+                        showReplies = false,
+                        onReply = { onReplyComment(it, it.rpid) }
                     )
                 }
             }
@@ -125,7 +127,8 @@ fun Replies(
                         comment = reply,
                         previewerState = previewerState,
                         onShowPreviewer = onShowPreviewer,
-                        showReplies = false
+                        showReplies = false,
+                        onReply = { onReplyComment(it, rootComment?.rpid ?: it.rpid) }
                     )
 
                     if (BuildConfig.DEBUG) {

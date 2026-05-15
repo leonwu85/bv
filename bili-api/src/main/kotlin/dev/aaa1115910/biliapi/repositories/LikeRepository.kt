@@ -71,6 +71,32 @@ class LikeRepository(
         }
     }
 
+    suspend fun addVideoDislike(
+        aid: Long
+    ) {
+        val (success, message) = BiliHttpApi.sendVideoDislike(
+            avid = aid,
+            dislike = true,
+            accessKey = authRepository.accessToken
+        )
+        if (!success) {
+            throw Exception("点踩失败: $message")
+        }
+    }
+
+    suspend fun delVideoDislike(
+        aid: Long
+    ) {
+        val (success, message) = BiliHttpApi.sendVideoDislike(
+            avid = aid,
+            dislike = false,
+            accessKey = authRepository.accessToken
+        )
+        if (!success) {
+            throw Exception("取消点踩失败: $message")
+        }
+    }
+
     suspend fun addDynamicLike(
         dynamicId: String,
         preferApiType: ApiType = ApiType.Web

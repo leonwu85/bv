@@ -2,16 +2,26 @@ package dev.aaa1115910.bv.mobile.screen
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import androidx.activity.compose.BackHandler
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,9 +30,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -31,14 +45,44 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerSize
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Comment
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Paid
+import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.OpenInBrowser
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Paid
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.ThumbDown
+import androidx.compose.material.icons.rounded.ThumbUp
+import androidx.compose.material.icons.rounded.WatchLater
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -66,6 +110,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,6 +126,7 @@ import com.origeek.imageViewer.previewer.ImagePreviewer
 import com.origeek.imageViewer.previewer.ImagePreviewerState
 import com.origeek.imageViewer.previewer.VerticalDragType
 import com.origeek.imageViewer.previewer.rememberPreviewerState
+import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
 import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
@@ -90,6 +137,7 @@ import dev.aaa1115910.bv.mobile.component.reply.CommentItem
 import dev.aaa1115910.bv.mobile.component.reply.ReplySheetScaffold
 import dev.aaa1115910.bv.mobile.component.videocard.RelatedVideoItem
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
+import dev.aaa1115910.bv.mobile.util.saveImageToGallery
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerDanmakuMasksData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerHistoryData
@@ -113,11 +161,15 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerSeekThumbData
 import dev.aaa1115910.bv.player.entity.VideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerVideoShotData
 import dev.aaa1115910.bv.player.mobile.BvPlayer
+import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.settings.PlayerSettingsProvider
+import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.formatPubTimeString
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.swapList
+import dev.aaa1115910.bv.util.toast
+import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.viewmodel.CommentViewModel
 import dev.aaa1115910.bv.viewmodel.LiveDanmakuMessage
 import dev.aaa1115910.bv.viewmodel.SeasonViewModel
@@ -126,7 +178,15 @@ import dev.aaa1115910.bv.viewmodel.video.VideoDetailViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
+
+private data class ReplyDraftTarget(
+    val title: String,
+    val placeholder: String,
+    val root: Long? = null,
+    val parent: Long? = null
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -153,6 +213,11 @@ fun VideoPlayerScreen(
         getKey = { pictures[it].key }
     )
     val replySheetState = rememberBottomSheetScaffoldState()
+    var replyDraftTarget by remember { mutableStateOf<ReplyDraftTarget?>(null) }
+    var liveDanmakuDraft by remember { mutableStateOf("") }
+    var showLiveDanmakuDialog by remember { mutableStateOf(false) }
+    var savingPreviewImage by remember { mutableStateOf(false) }
+    var savingCoverImage by remember { mutableStateOf(false) }
 
     val setPreviewerPictures: (List<Picture>, () -> Unit) -> Unit =
         { newPictures, afterSetPictures ->
@@ -160,6 +225,118 @@ fun VideoPlayerScreen(
             pictures.addAll(newPictures)
             afterSetPictures()
         }
+    val launchVideoAction: (suspend () -> Result<String>) -> Unit = { action ->
+        scope.launch(Dispatchers.IO) {
+            val result = action()
+            withContext(Dispatchers.Main) {
+                result
+                    .onSuccess { it.toast(context) }
+                    .onFailure { (it.localizedMessage ?: "操作失败").toast(context) }
+            }
+        }
+    }
+    val openVideoReplyInput = {
+        replyDraftTarget = ReplyDraftTarget(
+            title = "评论视频",
+            placeholder = "发一条友善的评论"
+        )
+    }
+    val openCommentReplyInput: (Comment, Long) -> Unit = { comment, root ->
+        replyDraftTarget = ReplyDraftTarget(
+            title = "回复 ${comment.member.name}",
+            placeholder = "回复 @${comment.member.name}",
+            root = root,
+            parent = comment.rpid
+        )
+    }
+    val shareVideo: () -> Unit = share@{
+        val detail = videoDetailViewModel.videoDetail ?: return@share
+        val url = detail.bvid
+            .takeIf { it.isNotBlank() }
+            ?.let { "https://www.bilibili.com/video/$it" }
+            ?: "https://www.bilibili.com/video/av${detail.aid}"
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, "${detail.title} $url")
+        }
+        context.startActivity(Intent.createChooser(intent, "分享视频"))
+    }
+    val saveCover: () -> Unit = saveCover@{
+        val coverUrl = videoDetailViewModel.videoDetail?.cover?.takeIf { it.isNotBlank() }
+        if (coverUrl == null) {
+            "封面不存在".toast(context)
+            return@saveCover
+        }
+        if (savingCoverImage) return@saveCover
+        scope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) {
+                savingCoverImage = true
+            }
+            runCatching {
+                saveImageToGallery(context, coverUrl)
+            }.onSuccess {
+                withContext(Dispatchers.Main) {
+                    "封面已保存到相册".toast(context)
+                }
+            }.onFailure {
+                logger.warn(it) { "Save cover image failed" }
+                withContext(Dispatchers.Main) {
+                    "保存失败：${it.localizedMessage ?: "未知错误"}".toast(context)
+                }
+            }
+            withContext(Dispatchers.Main) {
+                savingCoverImage = false
+            }
+        }
+    }
+    val liveRoomUrl: () -> String = {
+        "https://live.bilibili.com/${playerViewModel.liveRoomId}"
+    }
+    val copyLiveRoomUrl: () -> Unit = {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("直播间链接", liveRoomUrl()))
+        "已复制直播间链接".toast(context)
+    }
+    val shareLiveRoom: () -> Unit = {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(
+                Intent.EXTRA_TEXT,
+                "${playerViewModel.title.ifBlank { "直播间" }} ${liveRoomUrl()}"
+            )
+        }
+        context.startActivity(Intent.createChooser(intent, "分享直播间"))
+    }
+    val openLiveInBrowser: () -> Unit = {
+        context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(liveRoomUrl())))
+    }
+    val sendLiveDanmaku: () -> Unit = {
+        val message = liveDanmakuDraft
+        scope.launch(Dispatchers.IO) {
+            val result = playerViewModel.sendLiveDanmaku(message)
+            withContext(Dispatchers.Main) {
+                result
+                    .onSuccess {
+                        it.toast(context)
+                        liveDanmakuDraft = ""
+                        showLiveDanmakuDialog = false
+                    }
+                    .onFailure { (it.localizedMessage ?: "发送失败").toast(context) }
+            }
+        }
+    }
+    val likeLiveRoom: () -> Unit = {
+        playerViewModel.liveLikeClickCount += 1
+        val clickTime = playerViewModel.liveLikeClickCount
+        scope.launch(Dispatchers.IO) {
+            val result = playerViewModel.likeLiveRoom(clickTime)
+            withContext(Dispatchers.Main) {
+                result
+                    .onSuccess { it.toast(context) }
+                    .onFailure { (it.localizedMessage ?: "点赞失败").toast(context) }
+            }
+        }
+    }
 
     SideEffect {
         val window = (context as Activity).window
@@ -252,13 +429,25 @@ fun VideoPlayerScreen(
                             errorMessage = playerViewModel.errorMessage,
                         ),
                         LocalVideoPlayerConfigData provides VideoPlayerConfigData(
-                            availableResolutions = playerViewModel.availableQuality,
+                            availableResolutions = if (playerViewModel.isLive) {
+                                playerViewModel.availableLiveQualities
+                                    .mapNotNull { Resolution.fromCode(it.first) }
+                                    .distinctBy { it.code }
+                            } else {
+                                playerViewModel.availableQuality
+                            },
                             availableVideoCodec = playerViewModel.availableVideoCodec,
                             availableAudio = playerViewModel.availableAudio,
                             availableSubtitleTracks = playerViewModel.availableSubtitle,
                             availableVideoList = playerViewModel.availableVideoList,
                             currentVideoCid = playerViewModel.currentCid,
-                            currentResolution = playerViewModel.currentQuality,
+                            currentResolution = if (playerViewModel.isLive) {
+                                Resolution.fromCode(playerViewModel.currentLiveQn)
+                                    ?: playerViewModel.availableQuality.firstOrNull()
+                                    ?: Resolution.R1080P
+                            } else {
+                                playerViewModel.currentQuality
+                            },
                             currentVideoCodec = playerViewModel.currentVideoCodec,
                             currentVideoAspectRatio = playerViewModel.currentVideoAspectRatio,
                             currentVideoSpeed = playerViewModel.currentPlaySpeed,
@@ -277,7 +466,11 @@ fun VideoPlayerScreen(
                             currentPlayMode = playerViewModel.currentPlayMode,
                             incognitoMode = playerSettings.incognitoMode,
                             defaultStartPosition = playerSettings.playerDefaultStartPosition.toPlayerType(),
-                            isLive = playerViewModel.isLive
+                            isLive = playerViewModel.isLive,
+                            availableLiveQualities = playerViewModel.availableLiveQualities,
+                            currentLiveQn = playerViewModel.currentLiveQn,
+                            currentLiveQualityDescription = playerViewModel.currentLiveQualityDescription,
+                            currentLiveCodec = playerViewModel.currentLiveCodec
                         ),
                         LocalVideoPlayerDanmakuMasksData provides VideoPlayerDanmakuMasksData(
                             danmakuMasks = playerViewModel.danmakuMasks,
@@ -313,8 +506,12 @@ fun VideoPlayerScreen(
                             onBack = { (context as Activity).finish() },
                             onChangeResolution = { code, afterChange ->
                                 scope.launch(Dispatchers.IO) {
-                                    playerViewModel.currentQuality = code
-                                    playerViewModel.playQuality(code)
+                                    if (playerViewModel.isLive) {
+                                        playerViewModel.changeLiveQuality(code.code)
+                                    } else {
+                                        playerViewModel.currentQuality = code
+                                        playerViewModel.playQuality(code)
+                                    }
                                     afterChange()
                                 }
                             },
@@ -337,6 +534,7 @@ fun VideoPlayerScreen(
                             },
                             onToggleDanmaku = { enabled ->
                                 playerViewModel.currentDanmakuEnabled = enabled
+                                if (playerViewModel.isLive) playerViewModel.showDanmaku = enabled
                                 playerSettings.defaultDanmakuEnabledMutable = enabled
                             },
                             onEnabledDanmakuTypesChange = { types ->
@@ -399,9 +597,19 @@ fun VideoPlayerScreen(
                 }
                 if (playerViewModel.isLive) {
                     if (windowSizeClass.widthSizeClass != WindowWidthSizeClass.Expanded) {
-                        LiveDanmakuList(
+                        LiveRoomPanel(
                             modifier = Modifier.fillMaxSize(),
-                            messages = playerViewModel.liveDanmakuMessages
+                            playerViewModel = playerViewModel,
+                            onSendDanmakuClick = { showLiveDanmakuDialog = true },
+                            onLikeClick = likeLiveRoom,
+                            onRefresh = { playerViewModel.loadLiveStreamWithQuality(playerViewModel.liveRoomId, playerViewModel.currentLiveQn) },
+                            onQualitySelected = playerViewModel::changeLiveQuality,
+                            onCodecSelected = playerViewModel::changeLiveCodec,
+                            onCopyLink = copyLiveRoomUrl,
+                            onShare = shareLiveRoom,
+                            onOpenBrowser = openLiveInBrowser,
+                            showHeader = true,
+                            backgroundColor = Color.Black
                         )
                     } else {
                         LazyColumn(
@@ -419,7 +627,26 @@ fun VideoPlayerScreen(
                                     popularityText = playerViewModel.livePopularityText,
                                     onlineCountText = playerViewModel.liveOnlineCount,
                                     qualityText = playerViewModel.currentLiveQualityDescription,
+                                    watchedText = playerViewModel.liveWatchedShow,
+                                    liveTime = playerViewModel.liveTime,
+                                    cover = playerViewModel.liveCover,
                                     backgroundColor = MaterialTheme.colorScheme.surfaceContainer
+                                )
+                            }
+                            item {
+                                LiveRoomInputBar(
+                                    modifier = Modifier
+                                        .padding(horizontal = 12.dp)
+                                        .padding(bottom = 12.dp),
+                                    playerViewModel = playerViewModel,
+                                    onSendDanmakuClick = { showLiveDanmakuDialog = true },
+                                    onLikeClick = likeLiveRoom,
+                                    onQualitySelected = playerViewModel::changeLiveQuality,
+                                    onCodecSelected = playerViewModel::changeLiveCodec,
+                                    onRefresh = { playerViewModel.loadLiveStreamWithQuality(playerViewModel.liveRoomId, playerViewModel.currentLiveQn) },
+                                    onCopyLink = copyLiveRoomUrl,
+                                    onShare = shareLiveRoom,
+                                    onOpenBrowser = openLiveInBrowser
                                 )
                             }
                             item {
@@ -442,7 +669,8 @@ fun VideoPlayerScreen(
                         repliesCount = commentVideModel.rpCount,
                         sheetState = replySheetState,
                         previewerState = previewerState,
-                        onShowPreviewer = setPreviewerPictures
+                        onShowPreviewer = setPreviewerPictures,
+                        onReplyComment = openCommentReplyInput
                     ) {
                         Column {
                             PrimaryTabRow(
@@ -477,7 +705,8 @@ fun VideoPlayerScreen(
                                                         ?: "",
                                                     upName = videoDetailViewModel.videoDetail?.author?.name
                                                         ?: "",
-                                                    upFansCount = 0,
+                                                    upFollowerCount = videoDetailViewModel.upOwnerStats?.followerCount,
+                                                    upArchiveCount = videoDetailViewModel.upOwnerStats?.archiveCount,
                                                     title = videoDetailViewModel.videoDetail?.title
                                                         ?: "",
                                                     description = videoDetailViewModel.videoDetail?.description
@@ -486,10 +715,40 @@ fun VideoPlayerScreen(
                                                         ?: 0,
                                                     danmakuCount = videoDetailViewModel.videoDetail?.stat?.danmaku
                                                         ?: 0,
+                                                    likeCount = videoDetailViewModel.videoDetail?.stat?.like
+                                                        ?: 0,
+                                                    coinCount = videoDetailViewModel.videoDetail?.stat?.coin
+                                                        ?: 0,
+                                                    favoriteCount = videoDetailViewModel.videoDetail?.stat?.favorite
+                                                        ?: 0,
+                                                    shareCount = videoDetailViewModel.videoDetail?.stat?.share
+                                                        ?: 0,
                                                     date = videoDetailViewModel.videoDetail?.publishDate
                                                         ?.formatPubTimeString(context) ?: "",
                                                     avid = videoDetailViewModel.videoDetail?.aid
-                                                        ?: 0
+                                                        ?: 0,
+                                                    liked = videoDetailViewModel.videoDetail?.userActions?.like == true,
+                                                    disliked = videoDetailViewModel.videoDetail?.userActions?.dislike == true,
+                                                    coined = videoDetailViewModel.videoDetail?.userActions?.coin == true,
+                                                    favorited = videoDetailViewModel.videoDetail?.userActions?.favorite == true,
+                                                    inToView = videoDetailViewModel.inToView,
+                                                    favoriteFolders = videoDetailViewModel.favoriteFolders,
+                                                    favoriteFolderIds = videoDetailViewModel.favoriteFolderIds,
+                                                    userActionUpdating = videoDetailViewModel.userActionUpdating,
+                                                    savingCover = savingCoverImage,
+                                                    onToggleLike = { launchVideoAction { videoDetailViewModel.toggleLike() } },
+                                                    onTripleLike = { launchVideoAction { videoDetailViewModel.tripleLike() } },
+                                                    onToggleDislike = { launchVideoAction { videoDetailViewModel.toggleDislike() } },
+                                                    onAddCoin = { launchVideoAction { videoDetailViewModel.addCoin() } },
+                                                    onAddToDefaultFavoriteFolder = {
+                                                        launchVideoAction { videoDetailViewModel.addToDefaultFavoriteFolder() }
+                                                    },
+                                                    onUpdateFavoriteFolders = { folderIds ->
+                                                        launchVideoAction { videoDetailViewModel.updateFavoriteFolders(folderIds) }
+                                                    },
+                                                    onToggleToView = { launchVideoAction { videoDetailViewModel.toggleToView() } },
+                                                    onShare = shareVideo,
+                                                    onSaveCover = saveCover
                                                 )
                                             }
                                             item {
@@ -571,6 +830,10 @@ fun VideoPlayerScreen(
                                                 }
                                             },
                                             onShowPreviewer = setPreviewerPictures,
+                                            onReplyVideo = openVideoReplyInput,
+                                            onReplyComment = { comment ->
+                                                openCommentReplyInput(comment, comment.rpid)
+                                            },
                                             onShowReplies = { rpId, repliesCount ->
                                                 //logger.info { "show reply sheet: rpid=$replyId" }
                                                 commentVideModel.rpid = rpId
@@ -596,16 +859,43 @@ fun VideoPlayerScreen(
                                 upAvatar = videoDetailViewModel.videoDetail?.author?.face
                                     ?: "",
                                 upName = videoDetailViewModel.videoDetail?.author?.name ?: "",
-                                upFansCount = 0,
+                                upFollowerCount = videoDetailViewModel.upOwnerStats?.followerCount,
+                                upArchiveCount = videoDetailViewModel.upOwnerStats?.archiveCount,
                                 title = videoDetailViewModel.videoDetail?.title ?: "",
                                 description = videoDetailViewModel.videoDetail?.description
                                     ?: "",
                                 playCount = videoDetailViewModel.videoDetail?.stat?.view ?: 0,
                                 danmakuCount = videoDetailViewModel.videoDetail?.stat?.danmaku
                                     ?: 0,
+                                likeCount = videoDetailViewModel.videoDetail?.stat?.like ?: 0,
+                                coinCount = videoDetailViewModel.videoDetail?.stat?.coin ?: 0,
+                                favoriteCount = videoDetailViewModel.videoDetail?.stat?.favorite ?: 0,
+                                shareCount = videoDetailViewModel.videoDetail?.stat?.share ?: 0,
                                 date = videoDetailViewModel.videoDetail?.publishDate
                                     ?.formatPubTimeString(context) ?: "",
                                 avid = videoDetailViewModel.videoDetail?.aid ?: 0,
+                                liked = videoDetailViewModel.videoDetail?.userActions?.like == true,
+                                disliked = videoDetailViewModel.videoDetail?.userActions?.dislike == true,
+                                coined = videoDetailViewModel.videoDetail?.userActions?.coin == true,
+                                favorited = videoDetailViewModel.videoDetail?.userActions?.favorite == true,
+                                inToView = videoDetailViewModel.inToView,
+                                favoriteFolders = videoDetailViewModel.favoriteFolders,
+                                favoriteFolderIds = videoDetailViewModel.favoriteFolderIds,
+                                userActionUpdating = videoDetailViewModel.userActionUpdating,
+                                savingCover = savingCoverImage,
+                                onToggleLike = { launchVideoAction { videoDetailViewModel.toggleLike() } },
+                                onTripleLike = { launchVideoAction { videoDetailViewModel.tripleLike() } },
+                                onToggleDislike = { launchVideoAction { videoDetailViewModel.toggleDislike() } },
+                                onAddCoin = { launchVideoAction { videoDetailViewModel.addCoin() } },
+                                onAddToDefaultFavoriteFolder = {
+                                    launchVideoAction { videoDetailViewModel.addToDefaultFavoriteFolder() }
+                                },
+                                onUpdateFavoriteFolders = { folderIds ->
+                                    launchVideoAction { videoDetailViewModel.updateFavoriteFolders(folderIds) }
+                                },
+                                onToggleToView = { launchVideoAction { videoDetailViewModel.toggleToView() } },
+                                onShare = shareVideo,
+                                onSaveCover = saveCover,
                                 backgroundColor = MaterialTheme.colorScheme.surfaceContainer
                             )
                         }
@@ -696,11 +986,21 @@ fun VideoPlayerScreen(
             }
             if (windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded) {
                 if (playerViewModel.isLive) {
-                    LiveDanmakuList(
+                    LiveRoomPanel(
                         modifier = Modifier
                             .padding(end = 12.dp)
                             .fillMaxHeight(),
-                        messages = playerViewModel.liveDanmakuMessages
+                        playerViewModel = playerViewModel,
+                        onSendDanmakuClick = { showLiveDanmakuDialog = true },
+                        onLikeClick = likeLiveRoom,
+                        onRefresh = { playerViewModel.loadLiveStreamWithQuality(playerViewModel.liveRoomId, playerViewModel.currentLiveQn) },
+                        onQualitySelected = playerViewModel::changeLiveQuality,
+                        onCodecSelected = playerViewModel::changeLiveCodec,
+                        onCopyLink = copyLiveRoomUrl,
+                        onShare = shareLiveRoom,
+                        onOpenBrowser = openLiveInBrowser,
+                        showHeader = false,
+                        backgroundColor = MaterialTheme.colorScheme.surface
                     )
                 } else {
                     // 大屏幕下的右侧评论
@@ -714,7 +1014,8 @@ fun VideoPlayerScreen(
                             repliesCount = commentVideModel.rpCount,
                             sheetState = replySheetState,
                             previewerState = previewerState,
-                            onShowPreviewer = setPreviewerPictures
+                            onShowPreviewer = setPreviewerPictures,
+                            onReplyComment = openCommentReplyInput
                         ) {
                             VideoComments(
                                 modifier = Modifier.fillMaxWidth(),
@@ -734,6 +1035,10 @@ fun VideoPlayerScreen(
                                     }
                                 },
                                 onShowPreviewer = setPreviewerPictures,
+                                onReplyVideo = openVideoReplyInput,
+                                onReplyComment = { comment ->
+                                    openCommentReplyInput(comment, comment.rpid)
+                                },
                                 onShowReplies = { rpId, repliesCount ->
                                     //logger.info { "show reply sheet: rpid=$replyId" }
                                     commentVideModel.rpid = rpId
@@ -760,8 +1065,146 @@ fun VideoPlayerScreen(
             // 获取图片的初始大小
             rememberAsyncImagePainter(imageRequest)
             //rememberAsyncImagePainter(pictures[index].url)
+        },
+        previewerLayer = {
+            foreground = { page ->
+                ImagePreviewerActions(
+                    saving = savingPreviewImage,
+                    onClose = {
+                        if (previewerState.canClose) {
+                            scope.launch {
+                                previewerState.closeTransform()
+                            }
+                        }
+                    },
+                    onSave = {
+                        val picture = pictures.getOrNull(page)
+                        if (picture == null) {
+                            "图片不存在".toast(context)
+                            return@ImagePreviewerActions
+                        }
+                        if (savingPreviewImage) return@ImagePreviewerActions
+                        scope.launch(Dispatchers.IO) {
+                            withContext(Dispatchers.Main) {
+                                savingPreviewImage = true
+                            }
+                            runCatching {
+                                saveImageToGallery(context, picture.url)
+                            }.onSuccess {
+                                withContext(Dispatchers.Main) {
+                                    "图片已保存到相册".toast(context)
+                                }
+                            }.onFailure {
+                                logger.warn(it) { "Save preview image failed" }
+                                withContext(Dispatchers.Main) {
+                                    "保存失败：${it.localizedMessage ?: "未知错误"}".toast(context)
+                                }
+                            }
+                            withContext(Dispatchers.Main) {
+                                savingPreviewImage = false
+                            }
+                        }
+                    }
+                )
+            }
         }
     )
+
+    replyDraftTarget?.let { target ->
+        ReplyInputDialog(
+            title = target.title,
+            placeholder = target.placeholder,
+            sending = commentVideModel.sendingComment,
+            onDismiss = { replyDraftTarget = null },
+            onSend = { message ->
+                scope.launch(Dispatchers.IO) {
+                    val result = commentVideModel.sendComment(
+                        message = message,
+                        root = target.root,
+                        parent = target.parent
+                    )
+                    if (result.isSuccess) {
+                        withContext(Dispatchers.Main) {
+                            replyDraftTarget = null
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    if (showLiveDanmakuDialog) {
+        LiveSendDanmakuDialog(
+            value = liveDanmakuDraft,
+            sending = playerViewModel.sendingLiveDanmaku,
+            onValueChange = { liveDanmakuDraft = it },
+            onDismiss = { showLiveDanmakuDialog = false },
+            onSend = sendLiveDanmaku
+        )
+    }
+}
+
+@Composable
+private fun ImagePreviewerActions(
+    saving: Boolean,
+    onClose: () -> Unit,
+    onSave: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        PreviewerActionButton(
+            icon = Icons.Filled.Close,
+            contentDescription = "关闭预览",
+            onClick = onClose
+        )
+        PreviewerActionButton(
+            icon = Icons.Rounded.Download,
+            contentDescription = "保存图片",
+            enabled = !saving,
+            loading = saving,
+            onClick = onSave
+        )
+    }
+}
+
+@Composable
+private fun PreviewerActionButton(
+    icon: ImageVector,
+    contentDescription: String,
+    enabled: Boolean = true,
+    loading: Boolean = false,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.size(44.dp),
+        shape = CircleShape,
+        color = Color.Black.copy(alpha = 0.46f)
+    ) {
+        IconButton(
+            enabled = enabled,
+            onClick = onClick
+        ) {
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = Color.White
+                )
+            } else {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = contentDescription,
+                    tint = Color.White
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -769,13 +1212,36 @@ fun VideoPlayerInfo(
     modifier: Modifier = Modifier,
     upAvatar: String,
     upName: String,
-    upFansCount: Int,
+    upFollowerCount: Int?,
+    upArchiveCount: Int?,
     title: String,
     description: String,
     playCount: Long,
     danmakuCount: Int,
+    likeCount: Int = 0,
+    coinCount: Int = 0,
+    favoriteCount: Int = 0,
+    shareCount: Int = 0,
     date: String,
     avid: Long,
+    liked: Boolean = false,
+    disliked: Boolean = false,
+    coined: Boolean = false,
+    favorited: Boolean = false,
+    inToView: Boolean = false,
+    favoriteFolders: List<FavoriteFolderMetadata> = emptyList(),
+    favoriteFolderIds: List<Long> = emptyList(),
+    userActionUpdating: Boolean = false,
+    savingCover: Boolean = false,
+    onToggleLike: () -> Unit = {},
+    onTripleLike: () -> Unit = {},
+    onToggleDislike: () -> Unit = {},
+    onAddCoin: () -> Unit = {},
+    onAddToDefaultFavoriteFolder: () -> Unit = {},
+    onUpdateFavoriteFolders: (List<Long>) -> Unit = {},
+    onToggleToView: () -> Unit = {},
+    onShare: () -> Unit = {},
+    onSaveCover: () -> Unit = {},
     backgroundColor: Color = MaterialTheme.colorScheme.surface
 ) {
     val summaryTextStyle = MaterialTheme.typography.bodySmall.copy(
@@ -824,7 +1290,7 @@ fun VideoPlayerInfo(
                         style = MaterialTheme.typography.labelLarge
                     )
                     Text(
-                        text = "$upFansCount",
+                        text = formatUpStatsText(upFollowerCount, upArchiveCount),
                         style = summaryTextStyle,
                         fontSize = 10.sp
                     )
@@ -873,7 +1339,538 @@ fun VideoPlayerInfo(
                 Text(text = date)
                 Text(text = "av$avid")
             }
+            VideoActionGrid(
+                liked = liked,
+                disliked = disliked,
+                coined = coined,
+                favorited = favorited,
+                likeCount = likeCount,
+                coinCount = coinCount,
+                favoriteCount = favoriteCount,
+                shareCount = shareCount,
+                inToView = inToView,
+                favoriteFolders = favoriteFolders,
+                favoriteFolderIds = favoriteFolderIds,
+                enabled = !userActionUpdating,
+                savingCover = savingCover,
+                onToggleLike = onToggleLike,
+                onTripleLike = onTripleLike,
+                onToggleDislike = onToggleDislike,
+                onAddCoin = onAddCoin,
+                onAddToDefaultFavoriteFolder = onAddToDefaultFavoriteFolder,
+                onUpdateFavoriteFolders = onUpdateFavoriteFolders,
+                onToggleToView = onToggleToView,
+                onShare = onShare,
+                onSaveCover = onSaveCover
+            )
             Text(text = description)
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun VideoActionGrid(
+    liked: Boolean,
+    disliked: Boolean,
+    coined: Boolean,
+    favorited: Boolean,
+    likeCount: Int,
+    coinCount: Int,
+    favoriteCount: Int,
+    shareCount: Int,
+    inToView: Boolean,
+    favoriteFolders: List<FavoriteFolderMetadata>,
+    favoriteFolderIds: List<Long>,
+    enabled: Boolean,
+    savingCover: Boolean,
+    onToggleLike: () -> Unit,
+    onTripleLike: () -> Unit,
+    onToggleDislike: () -> Unit,
+    onAddCoin: () -> Unit,
+    onAddToDefaultFavoriteFolder: () -> Unit,
+    onUpdateFavoriteFolders: (List<Long>) -> Unit,
+    onToggleToView: () -> Unit,
+    onShare: () -> Unit,
+    onSaveCover: () -> Unit
+) {
+    var showFavoriteDialog by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        VideoActionItem(
+            modifier = Modifier.weight(1f),
+            selected = liked,
+            enabled = enabled,
+            icon = Icons.Outlined.ThumbUp,
+            selectedIcon = Icons.Rounded.ThumbUp,
+            label = formatStatCount(likeCount),
+            onClick = onToggleLike,
+            onLongClick = onTripleLike
+        )
+        VideoActionItem(
+            modifier = Modifier.weight(1f),
+            selected = disliked,
+            enabled = enabled,
+            icon = Icons.Outlined.ThumbDown,
+            selectedIcon = Icons.Rounded.ThumbDown,
+            label = "点踩",
+            onClick = onToggleDislike
+        )
+        VideoActionItem(
+            modifier = Modifier.weight(1f),
+            selected = coined,
+            enabled = enabled,
+            icon = Icons.Outlined.Paid,
+            selectedIcon = Icons.Rounded.Paid,
+            label = formatStatCount(coinCount),
+            onClick = onAddCoin
+        )
+        VideoActionItem(
+            modifier = Modifier.weight(1f),
+            selected = favorited,
+            enabled = enabled,
+            icon = Icons.Outlined.Star,
+            selectedIcon = Icons.Rounded.Star,
+            label = formatStatCount(favoriteCount),
+            onClick = {
+                if (favorited || favoriteFolders.size > 1) {
+                    showFavoriteDialog = true
+                } else {
+                    onAddToDefaultFavoriteFolder()
+                }
+            }
+        )
+        VideoActionItem(
+            modifier = Modifier.weight(1f),
+            selected = inToView,
+            enabled = enabled,
+            icon = Icons.Rounded.WatchLater,
+            selectedIcon = Icons.Rounded.WatchLater,
+            label = "再看",
+            onClick = onToggleToView
+        )
+        VideoActionItem(
+            modifier = Modifier.weight(1f),
+            selected = false,
+            enabled = true,
+            icon = Icons.Rounded.Share,
+            selectedIcon = Icons.Rounded.Share,
+            label = formatStatCount(shareCount),
+            onClick = onShare
+        )
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            VideoActionItem(
+                modifier = Modifier.fillMaxWidth(),
+                selected = false,
+                enabled = true,
+                icon = Icons.Rounded.MoreVert,
+                selectedIcon = Icons.Rounded.MoreVert,
+                label = "更多",
+                onClick = { showMoreMenu = true }
+            )
+            DropdownMenu(
+                expanded = showMoreMenu,
+                onDismissRequest = { showMoreMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Text(text = if (savingCover) "保存中..." else "保存封面")
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Download,
+                            contentDescription = null
+                        )
+                    },
+                    enabled = !savingCover,
+                    onClick = {
+                        showMoreMenu = false
+                        onSaveCover()
+                    }
+                )
+            }
+        }
+    }
+
+    FavoriteFolderDialog(
+        show = showFavoriteDialog,
+        folders = favoriteFolders,
+        selectedFolderIds = favoriteFolderIds,
+        enabled = enabled,
+        onDismiss = { showFavoriteDialog = false },
+        onConfirm = {
+            showFavoriteDialog = false
+            onUpdateFavoriteFolders(it)
+        }
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun VideoActionItem(
+    modifier: Modifier = Modifier,
+    selected: Boolean,
+    enabled: Boolean,
+    icon: ImageVector,
+    selectedIcon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null
+) {
+    val selectedColor = Color(0xfffb7299)
+    val contentColor = when {
+        selected -> selectedColor
+        enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+    }
+
+    Column(
+        modifier = modifier
+            .height(52.dp)
+            .clip(MaterialTheme.shapes.small)
+            .combinedClickable(
+                enabled = enabled,
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            modifier = Modifier.size(22.dp),
+            imageVector = if (selected) selectedIcon else icon,
+            contentDescription = null,
+            tint = contentColor
+        )
+        Text(
+            text = label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelSmall,
+            color = contentColor
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FavoriteFolderDialog(
+    show: Boolean,
+    folders: List<FavoriteFolderMetadata>,
+    selectedFolderIds: List<Long>,
+    enabled: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (List<Long>) -> Unit
+) {
+    if (!show) return
+
+    val selectedIds = remember { mutableStateListOf<Long>() }
+    LaunchedEffect(show, selectedFolderIds) {
+        selectedIds.clear()
+        selectedIds.addAll(selectedFolderIds)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = "添加到收藏夹") },
+        text = {
+            if (folders.isEmpty()) {
+                Text(
+                    text = if (Prefs.isLogin) "正在获取收藏夹，稍后再试" else "账号未登录",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                FlowRow(
+                    modifier = Modifier
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    folders.forEach { folder ->
+                        val selected = selectedIds.contains(folder.id)
+                        FilterChip(
+                            selected = selected,
+                            enabled = enabled,
+                            onClick = {
+                                if (selected) {
+                                    selectedIds.remove(folder.id)
+                                } else {
+                                    selectedIds.add(folder.id)
+                                }
+                            },
+                            label = {
+                                Text(
+                                    text = folder.title,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = enabled && folders.isNotEmpty(),
+                onClick = { onConfirm(selectedIds.toList()) }
+            ) {
+                Text(text = "确定")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "取消")
+            }
+        }
+    )
+}
+
+@Composable
+private fun LiveRoomPanel(
+    modifier: Modifier = Modifier,
+    playerViewModel: VideoPlayerV3ViewModel,
+    onSendDanmakuClick: () -> Unit,
+    onLikeClick: () -> Unit,
+    onRefresh: () -> Unit,
+    onQualitySelected: (Int) -> Unit,
+    onCodecSelected: (LiveCodec) -> Unit,
+    onCopyLink: () -> Unit,
+    onShare: () -> Unit,
+    onOpenBrowser: () -> Unit,
+    showHeader: Boolean,
+    backgroundColor: Color
+) {
+    Box(
+        modifier = modifier.background(backgroundColor)
+    ) {
+        val liveBackgroundModel: Any = playerViewModel.liveBackground.takeIf { it.isNotBlank() }
+            ?: R.drawable.live_default_bg
+        AsyncImage(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            model = liveBackgroundModel,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            alpha = 0.6f
+        )
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (showHeader) {
+                LivePlayerInfo(
+                    modifier = Modifier.padding(12.dp),
+                    upAvatar = playerViewModel.upFace,
+                    upName = playerViewModel.upName,
+                    title = playerViewModel.title,
+                    roomId = playerViewModel.liveRoomId,
+                    popularityText = playerViewModel.livePopularityText,
+                    onlineCountText = playerViewModel.liveOnlineCount,
+                    qualityText = playerViewModel.currentLiveQualityDescription,
+                    watchedText = playerViewModel.liveWatchedShow,
+                    liveTime = playerViewModel.liveTime,
+                    cover = playerViewModel.liveCover,
+                    backgroundColor = Color.Transparent
+                )
+            }
+            LiveDanmakuList(
+                modifier = Modifier.weight(1f),
+                messages = playerViewModel.liveDanmakuMessages
+            )
+            LiveRoomInputBar(
+                modifier = Modifier.navigationBarsPadding(),
+                playerViewModel = playerViewModel,
+                onSendDanmakuClick = onSendDanmakuClick,
+                onLikeClick = onLikeClick,
+                onQualitySelected = onQualitySelected,
+                onCodecSelected = onCodecSelected,
+                onRefresh = onRefresh,
+                onCopyLink = onCopyLink,
+                onShare = onShare,
+                onOpenBrowser = onOpenBrowser
+            )
+        }
+    }
+}
+
+@Composable
+private fun LiveRoomInputBar(
+    modifier: Modifier = Modifier,
+    playerViewModel: VideoPlayerV3ViewModel,
+    onSendDanmakuClick: () -> Unit,
+    onLikeClick: () -> Unit,
+    onQualitySelected: (Int) -> Unit,
+    onCodecSelected: (LiveCodec) -> Unit,
+    onRefresh: () -> Unit,
+    onCopyLink: () -> Unit,
+    onShare: () -> Unit,
+    onOpenBrowser: () -> Unit
+) {
+    var showQualityMenu by remember { mutableStateOf(false) }
+    var showCodecMenu by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = Color(0x1AFFFFFF),
+        shape = MaterialTheme.shapes.large.copy(
+            bottomStart = CornerSize(0.dp),
+            bottomEnd = CornerSize(0.dp)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            IconButton(onClick = {
+                playerViewModel.currentDanmakuEnabled = !playerViewModel.currentDanmakuEnabled
+                playerViewModel.showDanmaku = playerViewModel.currentDanmakuEnabled
+            }) {
+                Icon(
+                    imageVector = if (playerViewModel.currentDanmakuEnabled) {
+                        Icons.AutoMirrored.Filled.Comment
+                    } else {
+                        Icons.AutoMirrored.Filled.Comment
+                    },
+                    contentDescription = "切换弹幕",
+                    tint = Color(0xFFEEEEEE)
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(40.dp)
+                    .clip(MaterialTheme.shapes.extraLarge)
+                    .background(Color(0x22FFFFFF))
+                    .clickable(onClick = onSendDanmakuClick)
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "发送弹幕",
+                    color = Color(0xFFEEEEEE),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            Box {
+                TextButton(onClick = { showQualityMenu = true }) {
+                    Text(
+                        text = playerViewModel.currentLiveQualityDescription.ifBlank { "画质" },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = Color(0xFFEEEEEE)
+                    )
+                }
+                DropdownMenu(
+                    expanded = showQualityMenu,
+                    onDismissRequest = { showQualityMenu = false }
+                ) {
+                    playerViewModel.availableLiveQualities.forEach { (qn, desc) ->
+                        DropdownMenuItem(
+                            text = { Text(desc) },
+                            onClick = {
+                                showQualityMenu = false
+                                onQualitySelected(qn)
+                            }
+                        )
+                    }
+                }
+            }
+            IconButton(onClick = onLikeClick) {
+                Box {
+                    Icon(
+                        imageVector = Icons.Rounded.ThumbUp,
+                        contentDescription = "点赞",
+                        tint = Color(0xFFEEEEEE)
+                    )
+                    if (playerViewModel.liveLikeClickCount > 0) {
+                        Text(
+                            modifier = Modifier.align(Alignment.TopEnd),
+                            text = "x${playerViewModel.liveLikeClickCount}",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+            Box {
+                IconButton(onClick = { showMoreMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = "更多",
+                        tint = Color(0xFFEEEEEE)
+                    )
+                }
+                DropdownMenu(
+                    expanded = showMoreMenu,
+                    onDismissRequest = { showMoreMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        leadingIcon = { Icon(Icons.Rounded.Refresh, contentDescription = null) },
+                        text = { Text("刷新") },
+                        onClick = {
+                            showMoreMenu = false
+                            onRefresh()
+                        }
+                    )
+                    DropdownMenuItem(
+                        leadingIcon = { Icon(Icons.Rounded.Share, contentDescription = null) },
+                        text = { Text("分享直播间") },
+                        onClick = {
+                            showMoreMenu = false
+                            onShare()
+                        }
+                    )
+                    DropdownMenuItem(
+                        leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },
+                        text = { Text("复制链接") },
+                        onClick = {
+                            showMoreMenu = false
+                            onCopyLink()
+                        }
+                    )
+                    DropdownMenuItem(
+                        leadingIcon = { Icon(Icons.Rounded.OpenInBrowser, contentDescription = null) },
+                        text = { Text("浏览器打开") },
+                        onClick = {
+                            showMoreMenu = false
+                            onOpenBrowser()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("编码：${playerViewModel.currentLiveCodec.getDisplayName(LocalContext.current)}") },
+                        onClick = {
+                            showMoreMenu = false
+                            showCodecMenu = true
+                        }
+                    )
+                }
+                DropdownMenu(
+                    expanded = showCodecMenu,
+                    onDismissRequest = { showCodecMenu = false }
+                ) {
+                    LiveCodec.entries.forEach { codec ->
+                        DropdownMenuItem(
+                            text = { Text(codec.getDisplayName(LocalContext.current)) },
+                            onClick = {
+                                showCodecMenu = false
+                                onCodecSelected(codec)
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -888,14 +1885,19 @@ private fun LivePlayerInfo(
     popularityText: String,
     onlineCountText: String,
     qualityText: String,
+    watchedText: String = "",
+    liveTime: Int? = null,
+    cover: String = "",
     backgroundColor: Color = MaterialTheme.colorScheme.surface
 ) {
     val summaryTextStyle = MaterialTheme.typography.bodySmall.copy(
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
     )
     val stats = listOfNotNull(
+        watchedText.takeIf { it.isNotBlank() },
         popularityText.takeIf { it.isNotBlank() },
         onlineCountText.takeIf { it.isNotBlank() },
+        liveTime?.let { formatLiveDuration(it) },
         qualityText.takeIf { it.isNotBlank() },
         roomId.takeIf { it > 0 }?.let { "房间 $it" }
     )
@@ -935,12 +1937,30 @@ private fun LivePlayerInfo(
                 )
             }
         }
-        Text(
-            text = title.ifBlank { "直播间" },
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.titleMedium
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (cover.isNotBlank()) {
+                AsyncImage(
+                    modifier = Modifier
+                        .width(96.dp)
+                        .aspectRatio(16f / 9f)
+                        .clip(MaterialTheme.shapes.small)
+                        .background(Color.Gray),
+                    model = cover,
+                    contentDescription = null
+                )
+            }
+            Text(
+                modifier = Modifier.weight(1f),
+                text = title.ifBlank { "直播间" },
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
         ProvideTextStyle(summaryTextStyle) {
             Text(
                 text = stats.joinToString("  ·  "),
@@ -958,6 +1978,8 @@ private fun LiveDanmakuList(
 ) {
     val listState = rememberLazyListState()
     var followLatest by remember { mutableStateOf(true) }
+    var autoScrolling by remember { mutableStateOf(false) }
+    val latestMessageId = messages.lastOrNull()?.id
     val isAtLatest by remember {
         derivedStateOf {
             val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
@@ -966,24 +1988,29 @@ private fun LiveDanmakuList(
         }
     }
 
-    LaunchedEffect(listState.isScrollInProgress, isAtLatest) {
+    LaunchedEffect(listState.isScrollInProgress, isAtLatest, autoScrolling) {
         if (isAtLatest) {
             followLatest = true
-        } else if (listState.isScrollInProgress) {
+        } else if (listState.isScrollInProgress && !autoScrolling) {
             followLatest = false
         }
     }
 
-    LaunchedEffect(messages.size, followLatest) {
-        if (followLatest && messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size)
+    LaunchedEffect(latestMessageId, followLatest) {
+        if (followLatest && latestMessageId != null) {
+            autoScrolling = true
+            try {
+                listState.scrollToItem(messages.size)
+            } finally {
+                autoScrolling = false
+            }
         }
     }
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface),
+            .background(Color.Transparent),
         state = listState,
         contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -991,7 +2018,8 @@ private fun LiveDanmakuList(
         item {
             Text(
                 text = "直播弹幕",
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White
             )
         }
         if (messages.isEmpty()) {
@@ -999,7 +2027,7 @@ private fun LiveDanmakuList(
                 Text(
                     text = "暂无弹幕",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    color = Color.White.copy(alpha = 0.68f)
                 )
             }
         }
@@ -1019,9 +2047,9 @@ private fun LiveDanmakuItem(
 ) {
     Column(
         modifier = modifier
-            .fillMaxWidth()
+            .fillMaxWidth(0.96f)
             .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .background(Color.Black.copy(alpha = 0.38f))
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -1035,23 +2063,196 @@ private fun LiveDanmakuItem(
                     text = if (message.medalLevel != null) "$medalName ${message.medalLevel}" else medalName,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.inversePrimary
+            )
             }
             Text(
                 text = message.username.ifBlank { "匿名用户" },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+                color = Color.White.copy(alpha = 0.72f)
             )
         }
         Text(
             text = message.content,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface
+            color = Color.White
         )
+    }
+}
+
+@Composable
+private fun LiveSendDanmakuDialog(
+    value: String,
+    sending: Boolean,
+    onValueChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onSend: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = "发送弹幕") },
+        text = {
+            OutlinedTextField(
+                value = value,
+                onValueChange = onValueChange,
+                minLines = 1,
+                maxLines = 3,
+                singleLine = false,
+                placeholder = { Text("输入弹幕内容") }
+            )
+        },
+        confirmButton = {
+            TextButton(
+                enabled = value.isNotBlank() && !sending,
+                onClick = onSend
+            ) {
+                Text(text = if (sending) "发送中" else "发送")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "取消")
+            }
+        }
+    )
+}
+
+private fun formatLiveDuration(liveTime: Int): String {
+    val seconds = (System.currentTimeMillis() / 1000 - liveTime).coerceAtLeast(0)
+    val hours = seconds / 3600
+    val minutes = seconds % 3600 / 60
+    return when {
+        hours > 0 -> "开播${hours}小时${minutes}分"
+        minutes > 0 -> "开播${minutes}分"
+        else -> "刚刚开播"
+    }
+}
+
+private fun formatStatCount(value: Int): String {
+    return when {
+        value >= 100_000_000 -> "${value / 100_000_000}亿"
+        value >= 10_000 -> String.format("%.1f万", value / 10_000.0)
+        value > 0 -> value.toString()
+        else -> "-"
+    }
+}
+
+private fun formatUpStatsText(
+    followerCount: Int?,
+    archiveCount: Int?
+): String {
+    fun formatUpStat(value: Int): String {
+        return when {
+            value >= 100_000_000 -> "${value / 100_000_000}亿"
+            value >= 10_000 -> String.format("%.1f万", value / 10_000.0)
+            else -> value.toString()
+        }
+    }
+
+    val followers = followerCount?.let { formatUpStat(it) } ?: "-"
+    val archives = archiveCount?.let { formatUpStat(it) } ?: "-"
+    return "${followers}粉丝 · ${archives}视频"
+}
+
+@Composable
+private fun ReplyInputDialog(
+    title: String,
+    placeholder: String,
+    sending: Boolean,
+    onDismiss: () -> Unit,
+    onSend: (String) -> Unit
+) {
+    var text by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = {
+            if (!sending) onDismiss()
+        },
+        title = { Text(text = title) },
+        text = {
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = text,
+                onValueChange = { text = it },
+                enabled = !sending,
+                minLines = 3,
+                maxLines = 6,
+                placeholder = { Text(text = placeholder) }
+            )
+        },
+        confirmButton = {
+            Button(
+                enabled = !sending && text.isNotBlank(),
+                onClick = { onSend(text) }
+            ) {
+                if (sending) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        modifier = Modifier.size(18.dp),
+                        imageVector = Icons.AutoMirrored.Rounded.Send,
+                        contentDescription = null
+                    )
+                }
+                Text(
+                    modifier = Modifier.padding(start = 6.dp),
+                    text = "发送"
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                enabled = !sending,
+                onClick = onDismiss
+            ) {
+                Text(text = "取消")
+            }
+        }
+    )
+}
+
+@Composable
+private fun ReplyEntryBar(
+    modifier: Modifier = Modifier,
+    text: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        onClick = onClick,
+        enabled = enabled
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                modifier = Modifier.size(20.dp),
+                imageVector = Icons.AutoMirrored.Filled.Comment,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = text,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -1067,6 +2268,8 @@ fun VideoComments(
     onRefreshComments: () -> Unit,
     onSwitchCommentSort: (CommentSort) -> Unit,
     onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit,
+    onReplyVideo: () -> Unit,
+    onReplyComment: (Comment) -> Unit,
     onShowReplies: (rpId: Long, repliesCount: Int) -> Unit
 ) {
     val listState = rememberLazyListState()
@@ -1085,70 +2288,82 @@ fun VideoComments(
         if (shouldLoadMore) onLoadMoreComments()
     }
 
-    Box(
+    Column(
         modifier = modifier
             .fillMaxSize()
-            .pullRefresh(state = pullRefreshState)
     ) {
-        LazyColumn(
-            state = listState
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .pullRefresh(state = pullRefreshState)
         ) {
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = when (commentSort) {
-                            CommentSort.Hot -> "热门评论"
-                            CommentSort.Time -> "最新评论"
-                            else -> ""
-                        },
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    TextButton(onClick = {
-                        onSwitchCommentSort(
-                            when (commentSort) {
-                                CommentSort.Hot -> CommentSort.Time
-                                CommentSort.Time -> CommentSort.Hot
-                                else -> CommentSort.Hot
-                            }
-                        )
-                    }) {
+            LazyColumn(
+                state = listState
+            ) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
                             text = when (commentSort) {
-                                CommentSort.Hot -> "按热度"
-                                CommentSort.Time -> "按时间"
+                                CommentSort.Hot -> "热门评论"
+                                CommentSort.Time -> "最新评论"
                                 else -> ""
+                            },
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        TextButton(onClick = {
+                            onSwitchCommentSort(
+                                when (commentSort) {
+                                    CommentSort.Hot -> CommentSort.Time
+                                    CommentSort.Time -> CommentSort.Hot
+                                    else -> CommentSort.Hot
+                                }
+                            )
+                        }) {
+                            Text(
+                                text = when (commentSort) {
+                                    CommentSort.Hot -> "按热度"
+                                    CommentSort.Time -> "按时间"
+                                    else -> ""
+                                }
+                            )
+                        }
+                    }
+                }
+
+                itemsIndexed(items = comments) { _, comment ->
+                    Box {
+                        CommentItem(
+                            comment = comment,
+                            previewerState = previewerState,
+                            onShowPreviewer = onShowPreviewer,
+                            onReply = { onReplyComment(comment) },
+                            onShowReply = { rpId ->
+                                onShowReplies(rpId, comment.repliesCount)
                             }
                         )
                     }
                 }
-            }
-
-            itemsIndexed(items = comments) { _, comment ->
-                Box {
-                    CommentItem(
-                        comment = comment,
-                        previewerState = previewerState,
-                        onShowPreviewer = onShowPreviewer,
-                        onShowReply = { rpId ->
-                            onShowReplies(rpId, comment.repliesCount)
-                        }
-                    )
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
-            item {
-                Spacer(modifier = Modifier.navigationBarsPadding())
-            }
+            PullRefreshIndicator(
+                refreshingComments,
+                pullRefreshState,
+                Modifier.align(Alignment.TopCenter)
+            )
         }
-        PullRefreshIndicator(
-            refreshingComments,
-            pullRefreshState,
-            Modifier.align(Alignment.TopCenter)
+        ReplyEntryBar(
+            text = if (Prefs.isLogin) "发一条友善的评论" else "登录后发表评论",
+            enabled = Prefs.isLogin,
+            onClick = onReplyVideo
         )
     }
 }
@@ -1162,7 +2377,8 @@ private fun VideoPlayerInfoPreview() {
                 modifier = Modifier.padding(24.dp),
                 upAvatar = "https://i0.hdslb.com/bfs/article/b6b843d84b84a3ba5526b09ebf538cd4b4c8c3f3.jpg@450w_450h_progressive.webp",
                 upName = "bishi",
-                upFansCount = 1400000000,
+                upFollowerCount = 1400000000,
+                upArchiveCount = 233,
                 title = "This is the video title... repeat, this is the video title.",
                 description = "descriptions....descriptions....descriptions....descriptions....descriptions....descriptions....descriptions....descriptions....descriptions....",
                 playCount = 2434,

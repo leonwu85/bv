@@ -29,6 +29,7 @@ import coil.compose.AsyncImage
 import dev.aaa1115910.biliapi.entity.user.Author
 import dev.aaa1115910.biliapi.entity.video.RelatedVideo
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.util.formatHourMinSec
 
@@ -38,6 +39,7 @@ fun RelatedVideoItem(
     relatedVideo: RelatedVideo,
     onClick: (RelatedVideo) -> Unit = {}
 ) {
+    val videoCardData = relatedVideo.toVideoCardData()
     Surface(
         modifier = modifier,
         onClick = { onClick(relatedVideo) },
@@ -78,17 +80,24 @@ fun RelatedVideoItem(
             }
 
             Column(
-                modifier = Modifier.fillMaxHeight(),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    text = relatedVideo.title,
-                    //style = MaterialTheme.typography.titleMedium,
-                    minLines = 2,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        modifier = Modifier.weight(1f),
+                        text = relatedVideo.title,
+                        minLines = 2,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    VideoCardMoreMenu(data = videoCardData)
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -145,6 +154,22 @@ fun RelatedVideoItem(
     }
 
 }
+
+private fun RelatedVideo.toVideoCardData() = VideoCardData(
+    avid = aid,
+    title = title,
+    cover = cover,
+    upName = author?.name.orEmpty(),
+    upId = author?.mid ?: 0L,
+    upFace = author?.face.orEmpty(),
+    play = view,
+    danmaku = danmaku,
+    time = duration * 1000L,
+    jumpToSeason = jumpToSeason,
+    epId = epid,
+    pubTime = pubTime,
+    isChargingArc = isChargingArchive
+)
 
 @Preview
 @Composable

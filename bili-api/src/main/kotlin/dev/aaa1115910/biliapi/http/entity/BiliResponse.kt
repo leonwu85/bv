@@ -46,7 +46,7 @@ data class BiliResponse<T>(
 data class BiliResponseWithoutData(
     val code: Int,
     val message: String,
-    val ttl: Int
+    val ttl: Int? = null
 ) {
     companion object {
         private val logger = KotlinLogging.logger {}

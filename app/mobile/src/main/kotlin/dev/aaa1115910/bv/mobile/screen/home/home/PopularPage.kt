@@ -16,14 +16,11 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,7 +38,9 @@ import coil.compose.AsyncImage
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.biliapi.entity.ugc.UgcItem
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
+import dev.aaa1115910.bv.entity.carddata.VideoCardFeedOption
 import dev.aaa1115910.bv.mobile.component.videocard.UpIcon
+import dev.aaa1115910.bv.mobile.component.videocard.VideoCardMoreMenu
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.OnBottomReached
 import dev.aaa1115910.bv.util.fInfo
@@ -169,15 +168,7 @@ private fun PopularVideoListCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    IconButton(
-                        modifier = Modifier.height(28.dp),
-                        onClick = {}
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = null
-                        )
-                    }
+                    VideoCardMoreMenu(data = data)
                 }
 
                 Row(
@@ -242,12 +233,19 @@ private fun PopularMetaText(
 private fun UgcItem.toPopularVideoCardData(): VideoCardData {
     return VideoCardData(
         avid = aid,
+        bvid = bvid,
         title = title.removeHtmlTags(),
         cover = cover,
         play = play,
         danmaku = danmaku,
         upName = author,
+        upId = authorId,
+        upFace = authorFace,
         time = duration * 1000L,
-        isInteractive = isInteractive
+        isInteractive = isInteractive,
+        feedGoto = feedGoto,
+        feedParam = feedParam,
+        dislikeReasons = dislikeReasons.map { VideoCardFeedOption(it.id, it.name, it.toast) },
+        feedbacks = feedbacks.map { VideoCardFeedOption(it.id, it.name, it.toast) }
     )
 }

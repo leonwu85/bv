@@ -116,6 +116,29 @@ class CommentRepository(
         }
     }
 
+    suspend fun addComment(
+        type: Long,
+        oid: Long,
+        message: String,
+        root: Long? = null,
+        parent: Long? = null,
+        syncToDynamic: Boolean = false
+    ) {
+        val (success, responseMessage) = BiliHttpApi.addReply(
+            oid = oid,
+            type = type,
+            message = message,
+            root = root,
+            parent = parent,
+            csrf = authRepository.biliJct,
+            sessData = authRepository.sessionData,
+            syncToDynamic = syncToDynamic
+        )
+        if (!success) {
+            throw Exception("发送评论失败: $responseMessage")
+        }
+    }
+
     suspend fun translateReply(comment: Comment): Comment? {
         if (!comment.canTranslate) return null
         return runCatching {

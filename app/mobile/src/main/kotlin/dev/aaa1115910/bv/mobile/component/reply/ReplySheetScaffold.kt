@@ -3,7 +3,6 @@ package dev.aaa1115910.bv.mobile.component.reply
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -11,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.material3.BottomSheetScaffold
@@ -40,7 +39,6 @@ import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentReplyPage
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
 import dev.aaa1115910.biliapi.repositories.VideoDetailRepository
-import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.mobile.settings.MobilePrefs
 import dev.aaa1115910.bv.util.OnBottomReached
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -58,6 +56,7 @@ fun ReplySheetScaffold(
     sheetState: BottomSheetScaffoldState,
     previewerState: ImagePreviewerState,
     onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit,
+    onReplyComment: (Comment, Long) -> Unit = { _, _ -> },
     videoDetailRepository: VideoDetailRepository = getKoin().get(),
     content: @Composable () -> Unit
 ) {
@@ -165,6 +164,7 @@ fun ReplySheetScaffold(
                             onShowPreviewer = onShowPreviewer,
                             showReplies = false,
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            onReply = { onReplyComment(it, it.rpid) }
                         )
                     }
                 }
@@ -201,20 +201,15 @@ fun ReplySheetScaffold(
                     }
                 }
 
-                itemsIndexed(items = replies) { index, reply ->
-                    Box {
-                        CommentItem(
-                            comment = reply,
-                            previewerState = previewerState,
-                            onShowPreviewer = onShowPreviewer,
-                            showReplies = false,
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                        )
-
-                        if (BuildConfig.DEBUG) {
-                            Text(text = "$index")
-                        }
-                    }
+                items(items = replies) { reply ->
+                    CommentItem(
+                        comment = reply,
+                        previewerState = previewerState,
+                        onShowPreviewer = onShowPreviewer,
+                        showReplies = false,
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        onReply = { onReplyComment(it, rpid) }
+                    )
                 }
 
                 item {

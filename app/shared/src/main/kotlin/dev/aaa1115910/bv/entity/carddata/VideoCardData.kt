@@ -1,10 +1,17 @@
 package dev.aaa1115910.bv.entity.carddata
 
+import dev.aaa1115910.biliapi.util.toBv
 import dev.aaa1115910.bv.util.formatHourMinSec
-import java.text.SimpleDateFormat
+
+data class VideoCardFeedOption(
+    val id: Int,
+    val name: String,
+    val toast: String
+)
 
 data class VideoCardData(
     val avid: Long,
+    val bvid: String = "",
     val title: String,
     val cover: String,
     val upName: String,
@@ -27,8 +34,17 @@ data class VideoCardData(
     // var pubTimeString: String = "",
     val isInteractive: Boolean = false,
     val isChargingArc: Boolean = false,
-    val badgeText: String = ""
+    val badgeText: String = "",
+    val feedGoto: String = "",
+    val feedParam: String = "",
+    val dislikeReasons: List<VideoCardFeedOption> = emptyList(),
+    val feedbacks: List<VideoCardFeedOption> = emptyList()
 ) {
+    val resolvedBvid: String
+        get() = bvid.ifBlank {
+            avid.takeIf { it > 0L }?.toBv().orEmpty()
+        }
+
     val coverBadges: List<String>
         get() = listOfNotNull(
             "互动视频".takeIf { isInteractive },

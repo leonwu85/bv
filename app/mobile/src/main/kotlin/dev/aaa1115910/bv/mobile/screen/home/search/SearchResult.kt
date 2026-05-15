@@ -321,11 +321,14 @@ private fun VideoSearchResult(
                     UgcListItem(
                         data = VideoCardData(
                             avid = video.aid,
+                            bvid = video.bvid,
                             title = video.title.removeHtmlTags(),
                             cover = video.cover,
                             play = video.play,
                             danmaku = video.danmaku,
                             upName = video.author,
+                            upId = video.upId,
+                            upFace = video.upFace,
                             time = video.duration * 1000L,
                             pubTime = video.pubDate.toLong().toSmartDate()
                         ),
@@ -358,11 +361,14 @@ private fun VideoSearchResult(
                     SmallVideoCard(
                         data = VideoCardData(
                             avid = video.aid,
+                            bvid = video.bvid,
                             title = video.title.removeHtmlTags(),
                             cover = video.cover,
                             play = video.play,
                             danmaku = video.danmaku,
                             upName = video.author,
+                            upId = video.upId,
+                            upFace = video.upFace,
                             time = video.duration * 1000L,
                             pubTime = video.pubDate.toLong().toSmartDate()
                         ),

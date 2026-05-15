@@ -105,6 +105,7 @@ class FavoriteViewModel(
                     favorites.addWithMainContext(
                         VideoCardData(
                             avid = favoriteItem.id,
+                            bvid = favoriteItem.bvid,
                             title = favoriteItem.title,
                             cover = favoriteItem.cover,
                             play = favoriteItem.cntInfo.play,

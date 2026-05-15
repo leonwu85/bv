@@ -43,6 +43,7 @@ data class VideoLaunchArgs(
     val aid: Long,
     val cid: Long,
     val fromSeason: Boolean,
+    val fromToView: Boolean,
     val epid: Int?,
     val seasonId: Int?,
     val liveRoomId: Int,
@@ -59,6 +60,7 @@ data class VideoLaunchArgs(
                 aid = intent.getLongExtra("aid", 0),
                 cid = intent.getLongExtra("cid", 0),
                 fromSeason = intent.getBooleanExtra("fromSeason", false),
+                fromToView = intent.getBooleanExtra("fromToView", false),
                 epid = intent.getIntExtra("epid", 0).takeIf { it != 0 },
                 seasonId = intent.getIntExtra("seasonId", 0).takeIf { it != 0 },
                 liveRoomId = intent.getIntExtra("liveRoomId", 0),
@@ -87,6 +89,7 @@ class VideoPlayerActivity : ComponentActivity() {
             aid: Long,
             //cid: Long,
             fromSeason: Boolean = false,
+            fromToView: Boolean = false,
             epid: Int? = null,
             seasonId: Int? = null,
         ) {
@@ -95,6 +98,7 @@ class VideoPlayerActivity : ComponentActivity() {
                     putExtra("aid", aid)
                     //putExtra("cid", cid)
                     putExtra("fromSeason", fromSeason)
+                    putExtra("fromToView", fromToView)
                     epid?.let { putExtra("epid", it) }
                     seasonId?.let { putExtra("seasonId", it) }
                 }
@@ -233,6 +237,7 @@ class VideoPlayerActivity : ComponentActivity() {
             commentViewModel.commentId = aid
 
             runCatching {
+                videoDetailViewModel.setInToView(launchArgs.fromToView)
                 videoDetailViewModel.loadDetail(aid, fromSeason)
             }.onFailure {
                 withContext(Dispatchers.Main) {

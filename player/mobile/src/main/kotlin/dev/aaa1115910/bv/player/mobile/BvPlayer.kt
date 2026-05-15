@@ -592,6 +592,7 @@ fun BvPlayer(
                     AkDanmakuPlayer(
                         modifier = Modifier.fillMaxSize(),
                         danmakuPlayer = mDanmakuPlayer,
+                        visible = !isLive || isFullScreen,
                         isLiveMode = isLive,
                         onLiveDanmakuPlayerReady = { player ->
                             mLiveDanmakuPlayer = player

@@ -6,6 +6,7 @@ import dev.aaa1115910.biliapi.entity.live.LiveFollowResponse
 import dev.aaa1115910.biliapi.entity.live.LiveRoomListResponse
 import dev.aaa1115910.biliapi.entity.live.LiveRoomPlayInfoResponse
 import dev.aaa1115910.biliapi.http.BiliLiveHttpApi
+import dev.aaa1115910.biliapi.http.entity.live.LiveRoomInfoH5Data
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
 import dev.aaa1115910.biliapi.http.util.encAppGet
 import dev.aaa1115910.biliapi.http.util.encWebAppGet
@@ -104,6 +105,11 @@ class LiveRepository(
             }.body()
         }
 
+    suspend fun getLiveRoomInfoH5(roomId: Int): LiveRoomInfoH5Data =
+        withContext(Dispatchers.IO) {
+            BiliLiveHttpApi.getLiveRoomInfoH5(roomId).getResponseData()
+        }
+
     /**
      * 获取直播推荐列表
      * @param parentAreaId 一级分区ID（0=推荐全部）
@@ -161,6 +167,50 @@ class LiveRepository(
             sessData = sessData,
             buvid3 = authRepository.buvid3,
             platform = platform
+        )
+        check(response.code == 0) { response.message }
+    }
+
+    suspend fun sendLiveMsg(
+        roomId: Int,
+        message: String,
+        replyMid: Long = 0,
+        replayDmid: String = ""
+    ) {
+        val sessData = authRepository.sessionData
+            ?: throw IllegalStateException("账号未登录")
+        val csrf = authRepository.biliJct
+            ?: throw IllegalStateException("账号未登录")
+        val response = BiliLiveHttpApi.sendLiveMsg(
+            roomId = roomId,
+            message = message,
+            csrf = csrf,
+            sessData = sessData,
+            buvid3 = authRepository.buvid3,
+            replyMid = replyMid,
+            replayDmid = replayDmid
+        )
+        check(response.code == 0) { response.message }
+    }
+
+    suspend fun likeLiveRoom(
+        roomId: Int,
+        clickTime: Int,
+        anchorId: Long? = null
+    ) {
+        val sessData = authRepository.sessionData
+            ?: throw IllegalStateException("账号未登录")
+        val csrf = authRepository.biliJct
+            ?: throw IllegalStateException("账号未登录")
+        val uid = authRepository.mid ?: throw IllegalStateException("账号未登录")
+        val response = BiliLiveHttpApi.liveLikeReport(
+            clickTime = clickTime,
+            roomId = roomId,
+            uid = uid,
+            anchorId = anchorId,
+            csrf = csrf,
+            sessData = sessData,
+            buvid3 = authRepository.buvid3
         )
         check(response.code == 0) { response.message }
     }

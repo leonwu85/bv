@@ -126,6 +126,34 @@ suspend fun HttpRequestBuilder.encWbi() {
     parameter("w_rid", wRid)
 }
 
+suspend fun Parameters.signWbi(): Parameters {
+    val getMixinKey: (orig: String) -> String = { orig ->
+        val mixinKey = mixinKeyEncTab.fold("") { s, i -> s + orig[i] }
+        mixinKey.substring(0, 32)
+    }
+
+    if (BiliHttpApi.wbiImgKey == null || BiliHttpApi.wbiSubKey == null) BiliHttpApi.updateWbi()
+    require(BiliHttpApi.wbiImgKey != null && BiliHttpApi.wbiSubKey != null) { "Wbi keys can't be null!" }
+    val mixinKey = getMixinKey(BiliHttpApi.wbiImgKey + BiliHttpApi.wbiSubKey)
+
+    val signedParams = this + Parameters.build {
+        append("wts", (System.currentTimeMillis() / 1000).toInt().toString())
+    }
+
+    val sortedParams = signedParams.entries()
+        .associate { it.key to it.value.first() }
+        .toSortedMap()
+        .map { (key, value) ->
+            val filteredValue = value.filter { c -> c !in setOf('!', '\'', '(', ')', '*') }
+            "$key=$filteredValue"
+        }
+        .joinToString("&")
+
+    val wRid = MessageDigest.getInstance("MD5").digest((sortedParams + mixinKey).toByteArray())
+        .joinToString("") { "%02x".format(it) }
+    return signedParams + Parameters.build { append("w_rid", wRid) }
+}
+
 fun HttpClient.encApiSign() = plugin(HttpSend)
     .intercept { request ->
         // skip when using grpc proxy
@@ -192,4 +220,3 @@ fun HttpClient.encApiSign() = plugin(HttpSend)
         }
         execute(request)
     }
-

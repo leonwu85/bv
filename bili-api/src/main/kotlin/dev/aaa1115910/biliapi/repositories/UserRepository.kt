@@ -9,6 +9,7 @@ import bilibili.app.dynamic.v2.dynVideoReq
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.user.DynamicData
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
+import dev.aaa1115910.biliapi.entity.user.DynamicUpData
 import dev.aaa1115910.biliapi.entity.user.DynamicVideoData
 import dev.aaa1115910.biliapi.entity.user.FollowedUser
 import dev.aaa1115910.biliapi.entity.user.ArticleParagraph
@@ -86,6 +87,30 @@ class UserRepository(
         mid: Long,
         preferApiType: ApiType = ApiType.Web
     ): Boolean = modifyFollow(mid, FollowAction.DelFollow, preferApiType)
+
+    suspend fun blacklistUser(
+        mid: Long,
+        preferApiType: ApiType = ApiType.Web
+    ): Boolean = modifyFollow(mid, FollowAction.AddBlackList, preferApiType)
+
+    suspend fun reportDynamic(
+        accusedUid: Long,
+        dynamicId: String,
+        reasonType: Int,
+        reasonDesc: String? = null
+    ) {
+        val response = BiliHttpApi.reportDynamic(
+            accusedUid = accusedUid,
+            dynamicId = dynamicId,
+            reasonType = reasonType,
+            reasonDesc = reasonDesc,
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        )
+        if (response.code != 0) {
+            throw Exception("举报失败: ${response.message}")
+        }
+    }
 
     suspend fun checkIsFollowing(
         mid: Long,
@@ -301,6 +326,60 @@ class UserRepository(
 //                }
 //                result!!
 //            }
+        }
+    }
+
+    suspend fun getDynamicsByUp(
+        mid: Long,
+        page: Int,
+        offset: String,
+        updateBaseline: String,
+        preferApiType: ApiType = ApiType.Web
+    ): DynamicData {
+        return when (preferApiType) {
+            ApiType.Web, ApiType.App -> {
+                val responseData = BiliHttpApi.getDynamicList(
+                    page = page,
+                    offset = offset,
+                    hostMid = mid,
+                    sessData = authRepository.sessionData,
+                    dedeUserID = authRepository.mid,
+                    buvid3 = authRepository.buvid3
+                ).getResponseData()
+                DynamicData.fromDynamicData(responseData)
+            }
+        }
+    }
+
+    suspend fun getDynamicFollowUp(
+        preferApiType: ApiType = ApiType.Web
+    ): DynamicUpData {
+        return when (preferApiType) {
+            ApiType.Web, ApiType.App -> {
+                val responseData = BiliHttpApi.getDynamicFollowUp(
+                    sessData = authRepository.sessionData,
+                    dedeUserID = authRepository.mid,
+                    buvid3 = authRepository.buvid3
+                ).getResponseData()
+                DynamicUpData.fromFollowUpData(responseData)
+            }
+        }
+    }
+
+    suspend fun getDynamicUpList(
+        offset: String,
+        preferApiType: ApiType = ApiType.Web
+    ): DynamicUpData {
+        return when (preferApiType) {
+            ApiType.Web, ApiType.App -> {
+                val responseData = BiliHttpApi.getDynamicUpList(
+                    offset = offset,
+                    sessData = authRepository.sessionData,
+                    dedeUserID = authRepository.mid,
+                    buvid3 = authRepository.buvid3
+                ).getResponseData()
+                DynamicUpData.fromUpListData(responseData)
+            }
         }
     }
 

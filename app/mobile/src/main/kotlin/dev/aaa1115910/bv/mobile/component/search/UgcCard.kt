@@ -34,6 +34,7 @@ import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.mobile.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.mobile.component.videocard.UpIcon
+import dev.aaa1115910.bv.mobile.component.videocard.VideoCardMoreMenu
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.resizedImageUrl
@@ -112,15 +113,24 @@ fun UgcListItem(
             }
 
             Column(
-                modifier = Modifier.fillMaxHeight(),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = data.title,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleSmall
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        modifier = Modifier.weight(1f),
+                        text = data.title,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    VideoCardMoreMenu(data = data)
+                }
                 CompositionLocalProvider(
                     LocalTextStyle provides MaterialTheme.typography.bodySmall
                 ) {
@@ -129,7 +139,11 @@ fun UgcListItem(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             UpIcon(modifier = Modifier.size(16.dp))
-                            Text(text = "bishi")
+                            Text(
+                                text = data.upName,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                         Row(
                             verticalAlignment = Alignment.CenterVertically,

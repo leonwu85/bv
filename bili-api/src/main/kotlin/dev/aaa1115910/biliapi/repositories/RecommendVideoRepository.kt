@@ -98,4 +98,36 @@ class RecommendVideoRepository(
             nextPage = nextPage
         )
     }
+
+    suspend fun dislikeRecommendation(
+        goto: String,
+        id: String,
+        reasonId: Int? = null,
+        feedbackId: Int? = null
+    ) {
+        val response = BiliHttpApi.feedDislike(
+            goto = goto,
+            id = id,
+            reasonId = reasonId,
+            feedbackId = feedbackId,
+            accessKey = authRepository.accessToken ?: error("请退出账号后重新登录")
+        )
+        if (response.code != 0) {
+            throw Exception(response.message)
+        }
+    }
+
+    suspend fun cancelDislikeRecommendation(
+        goto: String,
+        id: String
+    ) {
+        val response = BiliHttpApi.feedDislikeCancel(
+            goto = goto,
+            id = id,
+            accessKey = authRepository.accessToken ?: error("请退出账号后重新登录")
+        )
+        if (response.code != 0) {
+            throw Exception(response.message)
+        }
+    }
 }

@@ -53,6 +53,7 @@ class CommentViewModel(
     var refreshingReplies by mutableStateOf(false)
     var updatingComments by mutableStateOf(false)
     var updatingReplies by mutableStateOf(false)
+    var sendingComment by mutableStateOf(false)
 
     suspend fun loadMoreComment() {
         if (updatingComments) return
@@ -165,5 +166,45 @@ class CommentViewModel(
         hasMoreReplies = true
         replies.clear()
         loadMoreReplies()
+    }
+
+    suspend fun sendComment(
+        message: String,
+        root: Long? = null,
+        parent: Long? = null
+    ): Result<Unit> {
+        val content = message.trim()
+        if (content.isBlank()) {
+            return Result.failure(IllegalArgumentException("评论不能为空"))
+        }
+        if (!Prefs.isLogin) {
+            return Result.failure(IllegalStateException("账号未登录"))
+        }
+        if (sendingComment) {
+            return Result.failure(IllegalStateException("正在发送中"))
+        }
+
+        return runCatching {
+            withContext(Dispatchers.Main) { sendingComment = true }
+            commentRepository.addComment(
+                type = commentType,
+                oid = commentId,
+                message = content,
+                root = root?.takeIf { it != 0L },
+                parent = parent?.takeIf { it != 0L },
+            )
+            refreshComments()
+        }.onSuccess {
+            withContext(Dispatchers.Main) {
+                "发送成功".toast(BVApp.context)
+            }
+        }.onFailure {
+            logger.fException(it) { "Send comment failed" }
+            withContext(Dispatchers.Main) {
+                "发送失败：${it.localizedMessage}".toast(BVApp.context)
+            }
+        }.also {
+            withContext(Dispatchers.Main) { sendingComment = false }
+        }
     }
 }

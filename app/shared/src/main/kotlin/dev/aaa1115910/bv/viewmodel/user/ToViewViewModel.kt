@@ -65,6 +65,7 @@ class ToViewViewModel(
                 histories.addWithMainContext(
                     VideoCardData(
                         avid = ToViewItem.oid,
+                        bvid = ToViewItem.bvid,
                         title = ToViewItem.title,
                         cover = ToViewItem.cover,
                         play = ToViewItem.play,

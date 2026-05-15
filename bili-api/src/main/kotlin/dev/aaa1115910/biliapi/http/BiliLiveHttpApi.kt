@@ -5,9 +5,11 @@ import dev.aaa1115910.biliapi.http.entity.BiliResponse
 import dev.aaa1115910.biliapi.http.entity.BiliResponseWithoutData
 import dev.aaa1115910.biliapi.http.entity.live.DanmuInfoData
 import dev.aaa1115910.biliapi.http.entity.live.HistoryDanmaku
+import dev.aaa1115910.biliapi.http.entity.live.LiveRoomInfoH5Data
 import dev.aaa1115910.biliapi.http.entity.live.RoomPlayInfoData
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
 import dev.aaa1115910.biliapi.http.util.encWbi
+import dev.aaa1115910.biliapi.http.util.signWbi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -22,8 +24,10 @@ import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.request.forms.FormDataContent
+import io.ktor.http.ContentType
 import io.ktor.http.URLProtocol
 import io.ktor.http.Parameters
+import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
@@ -81,6 +85,14 @@ object BiliLiveHttpApi {
         }.body()
 
     /**
+     * 获取直播间 H5 信息，包括标题、主播、封面、观看人数文案等。
+     */
+    suspend fun getLiveRoomInfoH5(roomId: Int): BiliResponse<LiveRoomInfoH5Data> =
+        client.get("/xlive/web-room/v1/index/getH5InfoByRoom") {
+            parameter("room_id", roomId)
+        }.body()
+
+    /**
      * 获取直播间[roomId]的历史弹幕
      */
     suspend fun getLiveDanmuHistory(roomId: Int): BiliResponse<HistoryDanmaku> =
@@ -109,6 +121,114 @@ object BiliLiveHttpApi {
                     append("csrf", csrf)
                     append("visit_id", visitId)
                 }
+            )
+        )
+        header("Origin", "https://live.bilibili.com")
+        header("Referer", "https://live.bilibili.com/$roomId")
+        header(
+            "Cookie",
+            buildString {
+                buvid3?.takeIf { it.isNotBlank() }?.let {
+                    append("buvid3=")
+                    append(it)
+                    append("; ")
+                }
+                append("bili_jct=")
+                append(csrf)
+                append("; SESSDATA=")
+                append(sessData)
+                append(";")
+            }
+        )
+    }.body()
+
+    /**
+     * 发送直播弹幕。
+     */
+    suspend fun sendLiveMsg(
+        roomId: Int,
+        message: String,
+        csrf: String,
+        sessData: String,
+        buvid3: String? = null,
+        dmType: Int? = null,
+        emoticonOptions: String? = null,
+        replyMid: Long = 0,
+        replayDmid: String = ""
+    ): BiliResponseWithoutData = client.post("/msg/send") {
+        parameter("web_location", "444.8")
+        encWbi()
+        contentType(ContentType.Application.FormUrlEncoded)
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("bubble", "0")
+                    append("msg", message)
+                    append("color", "16777215")
+                    append("mode", "1")
+                    dmType?.let { append("dm_type", it.toString()) }
+                    if (emoticonOptions != null) {
+                        append("emoticonOptions", emoticonOptions)
+                    } else {
+                        append("room_type", "0")
+                        append("jumpfrom", "0")
+                        append("reply_mid", replyMid.toString())
+                        append("reply_attr", "0")
+                        append("replay_dmid", replayDmid)
+                        append("statistics", "{\"appId\":100,\"platform\":5}")
+                        append("reply_type", "0")
+                        append("reply_uname", "")
+                    }
+                    append("fontsize", "25")
+                    append("rnd", (System.currentTimeMillis() / 1000).toString())
+                    append("roomid", roomId.toString())
+                    append("csrf", csrf)
+                    append("csrf_token", csrf)
+                }
+            )
+        )
+        header("Origin", "https://live.bilibili.com")
+        header("Referer", "https://live.bilibili.com/$roomId")
+        header(
+            "Cookie",
+            buildString {
+                buvid3?.takeIf { it.isNotBlank() }?.let {
+                    append("buvid3=")
+                    append(it)
+                    append("; ")
+                }
+                append("bili_jct=")
+                append(csrf)
+                append("; SESSDATA=")
+                append(sessData)
+                append(";")
+            }
+        )
+    }.body()
+
+    /**
+     * 直播间点赞上报。
+     */
+    suspend fun liveLikeReport(
+        clickTime: Int,
+        roomId: Int,
+        uid: Long,
+        anchorId: Long? = null,
+        csrf: String,
+        sessData: String,
+        buvid3: String? = null
+    ): BiliResponseWithoutData = client.post("/xlive/app-ucenter/v1/like_info_v3/like/likeReportV3") {
+        contentType(ContentType.Application.FormUrlEncoded)
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("click_time", clickTime.toString())
+                    append("room_id", roomId.toString())
+                    append("uid", uid.toString())
+                    anchorId?.takeIf { it > 0 }?.let { append("anchor_id", it.toString()) }
+                    append("web_location", "444.8")
+                    append("csrf", csrf)
+                }.signWbi()
             )
         )
         header("Origin", "https://live.bilibili.com")

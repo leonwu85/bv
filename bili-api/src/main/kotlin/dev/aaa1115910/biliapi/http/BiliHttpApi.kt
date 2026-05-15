@@ -10,6 +10,8 @@ import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuResponse
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicData
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicDetailData
+import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicFollowUpData
+import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicUpListData
 import dev.aaa1115910.biliapi.http.entity.dynamic.ArticleViewData
 import dev.aaa1115910.biliapi.http.entity.dynamic.OpusDetailData
 import dev.aaa1115910.biliapi.http.entity.history.HistoryData
@@ -455,14 +457,55 @@ object BiliHttpApi {
         type: String = "all",
         page: Int = 1,
         offset: String? = null,
+        hostMid: Long? = null,
+        features: String? = "itemOpusStyle,listOnlyfans,onlyfansQaCard",
         sessData: String? = null,
         dedeUserID: Long? = null,
         buvid3: String? = null
     ): BiliResponse<DynamicData> = client.get("/x/polymer/web-dynamic/v1/feed/all") {
-        parameter("timezone_offset", timezoneOffset)
-        parameter("type", type)
-        parameter("page", page)
+        if (hostMid != null && hostMid > 0L) {
+            parameter("host_mid", hostMid)
+        } else {
+            parameter("timezone_offset", timezoneOffset)
+            parameter("type", type)
+            parameter("page", page)
+        }
         offset?.let { parameter("offset", offset) }
+        features?.let { parameter("features", it) }
+        val cookieParts = mutableListOf<String>()
+        sessData?.takeIf { it.isNotBlank() }?.let { cookieParts.add("SESSDATA=$it") }
+        dedeUserID?.let { cookieParts.add("DedeUserID=$it") }
+        buvid3?.takeIf { it.isNotBlank() }?.let { cookieParts.add("buvid3=$it") }
+        if (cookieParts.isNotEmpty()) {
+            header("Cookie", cookieParts.joinToString(";") + ";")
+        }
+    }.body()
+
+    suspend fun getDynamicFollowUp(
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<DynamicFollowUpData> = client.get("/x/polymer/web-dynamic/v1/portal") {
+        parameter("up_list_more", 1)
+        parameter("web_location", "333.1365")
+        val cookieParts = mutableListOf<String>()
+        sessData?.takeIf { it.isNotBlank() }?.let { cookieParts.add("SESSDATA=$it") }
+        dedeUserID?.let { cookieParts.add("DedeUserID=$it") }
+        buvid3?.takeIf { it.isNotBlank() }?.let { cookieParts.add("buvid3=$it") }
+        if (cookieParts.isNotEmpty()) {
+            header("Cookie", cookieParts.joinToString(";") + ";")
+        }
+    }.body()
+
+    suspend fun getDynamicUpList(
+        offset: String? = null,
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<DynamicUpListData> = client.get("/x/polymer/web-dynamic/v1/uplist") {
+        offset?.let { parameter("offset", it) }
+        parameter("platform", "web")
+        parameter("web_location", "333.1365")
         val cookieParts = mutableListOf<String>()
         sessData?.takeIf { it.isNotBlank() }?.let { cookieParts.add("SESSDATA=$it") }
         dedeUserID?.let { cookieParts.add("DedeUserID=$it") }
@@ -625,6 +668,31 @@ object BiliHttpApi {
         // parameter("ps", pageSize)
         header("Cookie", "SESSDATA=$sessData;")
     }.body()
+
+    /**
+     * 添加视频[avid]或[bvid]到稍后再看。
+     */
+    suspend fun addToView(
+        avid: Long? = null,
+        bvid: String? = null,
+        csrf: String,
+        sessData: String
+    ): BiliResponseWithoutData {
+        require(avid != null || bvid != null) { "avid and bvid cannot be null at the same time" }
+
+        return client.post("/x/v2/history/toview/add") {
+            header("Cookie", "SESSDATA=$sessData;")
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        avid?.let { append("aid", "$it") }
+                        bvid?.takeIf { it.isNotBlank() }?.let { append("bvid", it) }
+                        append("csrf", csrf)
+                    }
+                )
+            )
+        }.body()
+    }
 
     /**
      * 从稍后再看列表中删除视频[avid]
@@ -979,6 +1047,76 @@ object BiliHttpApi {
     }
 
     /**
+     * 为视频[avid]或[bvid]点踩或取消点踩。
+     *
+     * B 站 Web 端没有对应接口，这里使用 App 端接口。
+     *
+     * @param dislike true=点踩，false=取消点踩
+     */
+    suspend fun sendVideoDislike(
+        avid: Long? = null,
+        bvid: String? = null,
+        dislike: Boolean = true,
+        accessKey: String? = null
+    ): Pair<Boolean, String> {
+        checkToken(accessKey, null)
+        require(avid != null || bvid != null) { "avid and bvid cannot be null at the same time" }
+
+        val response = client.post("https://app.bilibili.com/x/v2/view/dislike") {
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        avid?.let { append("aid", "$it") }
+                        bvid?.let { append("bvid", it) }
+                        append("dislike", if (dislike) "0" else "1")
+                        accessKey?.let { append("access_key", it) }
+                    }
+                )
+            )
+        }.body<BiliResponseWithoutData>()
+        return Pair(response.code == 0, response.message)
+    }
+
+    /**
+     * 推荐流“不感兴趣”反馈。
+     */
+    suspend fun feedDislike(
+        goto: String,
+        id: String,
+        reasonId: Int? = null,
+        feedbackId: Int? = null,
+        accessKey: String? = null
+    ): BiliResponseWithoutData {
+        require((reasonId == null) != (feedbackId == null)) {
+            "reasonId and feedbackId must have exactly one value"
+        }
+        return client.get("https://app.bilibili.com/x/feed/dislike") {
+            parameter("goto", goto)
+            parameter("id", id)
+            reasonId?.let { parameter("reason_id", it) }
+            feedbackId?.let { parameter("feedback_id", it) }
+            parameter("build", 1)
+            parameter("mobi_app", "android")
+            accessKey?.let { parameter("access_key", it) }
+        }.body()
+    }
+
+    /**
+     * 取消推荐流“不感兴趣”反馈。
+     */
+    suspend fun feedDislikeCancel(
+        goto: String,
+        id: String,
+        accessKey: String? = null
+    ): BiliResponseWithoutData = client.get("https://app.bilibili.com/x/feed/dislike/cancel") {
+        parameter("goto", goto)
+        parameter("id", id)
+        parameter("build", 1)
+        parameter("mobi_app", "android")
+        accessKey?.let { parameter("access_key", it) }
+    }.body()
+
+    /**
      * 检查视频[avid]或[bvid]是否已点赞
      */
     suspend fun checkVideoLiked(
@@ -1065,6 +1203,33 @@ object BiliHttpApi {
             json.decodeFromString<BiliResponse<Int>>(response.bodyAsText()).getResponseData() == 1
         }.getOrDefault(false)
     }
+
+    /**
+     * 举报动态。
+     */
+    suspend fun reportDynamic(
+        accusedUid: Long,
+        dynamicId: String,
+        reasonType: Int,
+        reasonDesc: String? = null,
+        csrf: String,
+        sessData: String
+    ): BiliResponseWithoutData = client.post("/x/dynamic/feed/dynamic_report/add") {
+        parameter("csrf", csrf)
+        header("Cookie", "SESSDATA=$sessData;")
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("accused_uid", "$accusedUid")
+                    append("dynamic_id", dynamicId)
+                    append("reason_type", "$reasonType")
+                    if (reasonType == 0) {
+                        append("reason_desc", reasonDesc.orEmpty())
+                    }
+                }
+            )
+        )
+    }.body()
 
     /**
      * 为视频[avid]或[bvid]点赞或取消赞
@@ -2246,6 +2411,36 @@ object BiliHttpApi {
             header("Cookie", cookieParts.joinToString(";") + ";")
         }
     }.body()
+
+    suspend fun addReply(
+        oid: Long,
+        type: Long,
+        message: String,
+        root: Long? = null,
+        parent: Long? = null,
+        csrf: String? = null,
+        sessData: String? = null,
+        syncToDynamic: Boolean = false
+    ): Pair<Boolean, String> {
+        checkToken(null, sessData)
+        val response = client.post("/x/v2/reply/add") {
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        append("oid", "$oid")
+                        append("type", "$type")
+                        root?.takeIf { it != 0L }?.let { append("root", "$it") }
+                        parent?.takeIf { it != 0L }?.let { append("parent", "$it") }
+                        append("message", message)
+                        if (syncToDynamic) append("sync_to_dynamic", "1")
+                        csrf?.let { append("csrf", it) }
+                    }
+                )
+            )
+            sessData?.let { header("Cookie", "SESSDATA=$it;") }
+        }.body<BiliResponseWithoutData>()
+        return Pair(response.code == 0, response.message)
+    }
 
     suspend fun getSeasonIdByAvid(
         avid: Long

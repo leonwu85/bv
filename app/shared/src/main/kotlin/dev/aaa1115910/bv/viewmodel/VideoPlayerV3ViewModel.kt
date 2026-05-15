@@ -279,6 +279,14 @@ class VideoPlayerV3ViewModel(
     var isLive by mutableStateOf(false)
     var liveRoomId by mutableIntStateOf(0)
     var liveStreamUrl by mutableStateOf("")
+    var liveCover by mutableStateOf("")
+    var liveBackground by mutableStateOf("")
+    var liveWatchedShow by mutableStateOf("")
+    var liveTime by mutableStateOf<Int?>(null)
+    var liveAnchorId by mutableLongStateOf(0L)
+    var liveLikeClickCount by mutableIntStateOf(0)
+    var sendingLiveDanmaku by mutableStateOf(false)
+    var likingLiveRoom by mutableStateOf(false)
 
     // 直播画质管理
     var availableLiveQualities = mutableStateListOf<Pair<Int, String>>() // qn -> description
@@ -2590,6 +2598,7 @@ class VideoPlayerV3ViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             logger.fInfo { "Load live stream with quality: roomId=$roomId, qn=$qn" }
             withContext(Dispatchers.Main) { loadState = RequestState.Doing }
+            loadLiveRoomInfo(roomId)
 
             // 仅在首次加载时初始化弹幕播放器，画质切换时不重复创建
             if (danmakuPlayer == null) {
@@ -2645,6 +2654,65 @@ class VideoPlayerV3ViewModel(
                 withContext(Dispatchers.Main) {
                     loadState = RequestState.Failed
                     errorMessage = "加载直播流失败: ${e.message}"
+                }
+            }
+        }
+    }
+
+    suspend fun loadLiveRoomInfo(roomId: Int = liveRoomId) {
+        if (roomId <= 0) return
+        runCatching {
+            val data = liveRepository.getLiveRoomInfoH5(roomId)
+            withContext(Dispatchers.Main) {
+                data.roomInfo?.let { room ->
+                    liveAnchorId = room.uid
+                    if (room.title.isNotBlank()) title = room.title
+                    liveCover = room.cover
+                    liveBackground = room.appBackground
+                }
+                data.anchorInfo?.baseInfo?.let { anchor ->
+                    if (anchor.uname.isNotBlank()) upName = anchor.uname
+                    if (anchor.face.isNotBlank()) upFace = anchor.face
+                }
+                liveWatchedShow = data.watchedShow?.textLarge.orEmpty()
+            }
+        }.onFailure {
+            logger.fWarn { "Load live room info failed: ${it.message}" }
+        }
+    }
+
+    suspend fun sendLiveDanmaku(message: String): Result<String> {
+        val text = message.trim()
+        if (text.isBlank()) return Result.failure(IllegalArgumentException("弹幕内容不能为空"))
+        if (liveRoomId <= 0) return Result.failure(IllegalStateException("直播间不存在"))
+        if (sendingLiveDanmaku) return Result.failure(IllegalStateException("正在发送弹幕"))
+        return runCatching {
+            withContext(Dispatchers.Main) { sendingLiveDanmaku = true }
+            try {
+                liveRepository.sendLiveMsg(liveRoomId, text)
+                "发送成功"
+            } finally {
+                withContext(Dispatchers.Main) { sendingLiveDanmaku = false }
+            }
+        }
+    }
+
+    suspend fun likeLiveRoom(clickTime: Int = 1): Result<String> {
+        if (liveRoomId <= 0) return Result.failure(IllegalStateException("直播间不存在"))
+        if (likingLiveRoom) return Result.failure(IllegalStateException("正在点赞"))
+        return runCatching {
+            withContext(Dispatchers.Main) { likingLiveRoom = true }
+            try {
+                liveRepository.likeLiveRoom(
+                    roomId = liveRoomId,
+                    clickTime = clickTime.coerceAtLeast(1),
+                    anchorId = liveAnchorId.takeIf { it > 0 }
+                )
+                "点赞成功"
+            } finally {
+                withContext(Dispatchers.Main) {
+                    likingLiveRoom = false
+                    liveLikeClickCount = 0
                 }
             }
         }
@@ -2908,6 +2976,9 @@ class VideoPlayerV3ViewModel(
                 if (realRoomId == null) {
                     logger.fError { "Failed to get real room id: data.roomId is null" }
                     return@launch
+                }
+                withContext(Dispatchers.Main) {
+                    liveTime = playInfo.data?.liveTime?.takeIf { it > 0 }
                 }
                 
                 logger.fInfo { "Real room id: $realRoomId, starting WebSocket connection" }

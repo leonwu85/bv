@@ -115,8 +115,18 @@ fun NewDynamicsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val dynamicTabs = remember {
+        listOf(
+            DynamicTabType.All,
+            DynamicTabType.Video,
+            DynamicTabType.Pgc,
+            DynamicTabType.Article
+        )
+    }
 
-    var selectedTabIndex by remember { mutableIntStateOf(initialSelectedTabIndex) }
+    var selectedTabIndex by remember {
+        mutableIntStateOf(initialSelectedTabIndex.coerceIn(0, dynamicTabs.lastIndex))
+    }
     var currentFocusedIndex by remember { mutableIntStateOf(-1) }
     var focusLayer by remember { mutableStateOf<DynamicFocusLayer?>(null) }
     val allStaggeredGridState = rememberLazyStaggeredGridState()
@@ -128,13 +138,14 @@ fun NewDynamicsScreen(
         onSelectedTabChanged(selectedTabIndex)
     }
 
-    val selectedTabType = DynamicTabType.entries[selectedTabIndex]
+    val selectedTabType = dynamicTabs[selectedTabIndex]
 
     fun staggeredGridStateFor(tabType: DynamicTabType): LazyStaggeredGridState? = when (tabType) {
         DynamicTabType.All -> allStaggeredGridState
         DynamicTabType.Pgc -> pgcStaggeredGridState
         DynamicTabType.Article -> articleStaggeredGridState
         DynamicTabType.Video -> null
+        DynamicTabType.Up -> allStaggeredGridState
     }
 
     fun scrollToTabTop(tabType: DynamicTabType) {
@@ -152,6 +163,7 @@ fun NewDynamicsScreen(
         DynamicTabType.Video -> emptyList() // 视频标签页单独处理
         DynamicTabType.Pgc -> dynamicViewModel.dynamicPgcList
         DynamicTabType.Article -> dynamicViewModel.dynamicArticleList
+        DynamicTabType.Up -> dynamicViewModel.dynamicUpList
     }
 
     // 获取当前标签的加载状态
@@ -160,6 +172,7 @@ fun NewDynamicsScreen(
         DynamicTabType.Video -> dynamicViewModel.loadingVideo to dynamicViewModel.videoHasMore
         DynamicTabType.Pgc -> dynamicViewModel.loadingPgc to dynamicViewModel.pgcHasMore
         DynamicTabType.Article -> dynamicViewModel.loadingArticle to dynamicViewModel.articleHasMore
+        DynamicTabType.Up -> dynamicViewModel.loadingUp to dynamicViewModel.upHasMore
     }
 
     val showTip = (selectedTabType == DynamicTabType.Video && dynamicViewModel.dynamicVideoList.isNotEmpty() || currentList.isNotEmpty()) && currentFocusedIndex >= 0
@@ -264,6 +277,7 @@ fun NewDynamicsScreen(
         Column(modifier = modifier.fillMaxSize()) {
             // Tab Row
             DynamicTabRow(
+                tabs = dynamicTabs,
                 tabRowFocusRequester = tabRowFocusRequester,
                 selectedTabIndex = selectedTabIndex,
                 onTabSelected = { index ->
@@ -363,6 +377,7 @@ fun NewDynamicsScreen(
 @Composable
 private fun DynamicTabRow(
     modifier: Modifier = Modifier,
+    tabs: List<DynamicTabType>,
     tabRowFocusRequester: FocusRequester,
     selectedTabIndex: Int,
     onTabSelected: (Int) -> Unit,
@@ -387,7 +402,7 @@ private fun DynamicTabRow(
                         return@onPreviewKeyEvent true
                     }
                     // 在最后一个子 tab 按右键，跳转到父级下一个 tab
-                    if (it.key == Key.DirectionRight && selectedTabIndex == DynamicTabType.entries.lastIndex) {
+                    if (it.key == Key.DirectionRight && selectedTabIndex == tabs.lastIndex) {
                         onRightKeyEvent()
                         return@onPreviewKeyEvent true
                     }
@@ -396,7 +411,7 @@ private fun DynamicTabRow(
             },
         selectedTabIndex = selectedTabIndex
     ) {
-        DynamicTabType.entries.forEachIndexed { index, tab ->
+        tabs.forEachIndexed { index, tab ->
             Tab(
                 modifier = if (index == selectedTabIndex) Modifier.focusRequester(tabRowFocusRequester) else Modifier,
                 selected = index == selectedTabIndex,

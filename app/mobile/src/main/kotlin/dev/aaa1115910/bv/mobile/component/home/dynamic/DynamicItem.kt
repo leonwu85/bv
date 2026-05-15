@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,11 +20,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,6 +36,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -53,14 +53,18 @@ import com.origeek.imageViewer.previewer.TransformItemState
 import com.origeek.imageViewer.previewer.rememberPreviewerState
 import com.origeek.imageViewer.previewer.rememberTransformItemState
 import dev.aaa1115910.biliapi.entity.Picture
+import dev.aaa1115910.biliapi.entity.user.ArticleParagraph
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.entity.user.DynamicType
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.component.DynamicRichText
 import dev.aaa1115910.bv.mobile.component.user.UserAvatar
+import dev.aaa1115910.bv.mobile.component.videocard.shareText
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.notYetImplemented
 import dev.aaa1115910.bv.util.resizedImageUrl
+import dev.aaa1115910.bv.util.toast
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -70,8 +74,10 @@ fun DynamicItem(
     dynamicItem: DynamicItem,
     previewerState: ImagePreviewerState = rememberPreviewerState(pageCount = { 0 }),
     onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit = { _, _ -> },
+    onTempBlockAuthor: ((DynamicItem.DynamicAuthorModule) -> Unit)? = null,
     onClick: (DynamicItem) -> Unit = {}
 ) {
+    val context = LocalContext.current
     val paddingSize = 12.dp
 
     Surface(
@@ -85,7 +91,9 @@ fun DynamicItem(
         ) {
             DynamicHeader(
                 modifier = Modifier.padding(horizontal = paddingSize),
-                author = dynamicItem.author
+                author = dynamicItem.author,
+                dynamicItem = dynamicItem,
+                onTempBlockAuthor = onTempBlockAuthor
             )
             DynamicContent(
                 dynamicItem = dynamicItem,
@@ -94,23 +102,23 @@ fun DynamicItem(
                 onShowPreviewer = onShowPreviewer,
                 onClick = onClick
             )
-            DynamicFooter(
-                modifier = Modifier.padding(horizontal = paddingSize),
-                footer = dynamicItem.footer!!,
-                isLike = false,
-                onShare = {
-                    //TODO 动态分享按钮
-                    notYetImplemented()
-                },
-                onShowComment = {
-                    //TODO 动态查看评论按钮
-                    notYetImplemented()
-                },
-                onLike = {
-                    //TODO 动态点赞按钮
-                    notYetImplemented()
-                }
-            )
+            dynamicItem.footer?.let { footer ->
+                DynamicFooter(
+                    modifier = Modifier.padding(horizontal = paddingSize),
+                    footer = footer,
+                    isLike = footer.isLiked,
+                    onShare = {
+                        dynamicItem.shareDynamicOrToast(context)
+                    },
+                    onShowComment = {
+                        onClick(dynamicItem)
+                    },
+                    onLike = {
+                        //TODO 动态点赞按钮
+                        notYetImplemented()
+                    }
+                )
+            }
         }
     }
 }
@@ -122,6 +130,7 @@ fun DynamicContent(
     horizontalPadding: Dp = 12.dp,
     previewerState: ImagePreviewerState = rememberPreviewerState(pageCount = { 0 }),
     onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit = { _, _ -> },
+    articleParagraphs: List<ArticleParagraph> = emptyList(),
     onClick: (DynamicItem) -> Unit
 
 ) {
@@ -145,6 +154,7 @@ fun DynamicContent(
             dynamicItem = dynamicItem.orig!!,
             previewerState = previewerState,
             onShowPreviewer = onShowPreviewer,
+            articleParagraphs = articleParagraphs,
             onClick = { onClick(dynamicItem.orig!!) }
         )
 
@@ -169,7 +179,10 @@ fun DynamicContent(
 
         DynamicType.Article -> DynamicArticle(
             modifier = contentModifier,
-            article = dynamicItem.article!!
+            article = dynamicItem.article!!,
+            articleParagraphs = articleParagraphs,
+            previewerState = previewerState,
+            onShowPreviewer = onShowPreviewer
         )
 
         DynamicType.None -> DynamicNone(
@@ -285,7 +298,9 @@ fun DynamicVideoContent(
 @Composable
 fun DynamicHeader(
     modifier: Modifier = Modifier,
-    author: DynamicItem.DynamicAuthorModule
+    author: DynamicItem.DynamicAuthorModule,
+    dynamicItem: DynamicItem? = null,
+    onTempBlockAuthor: ((DynamicItem.DynamicAuthorModule) -> Unit)? = null
 ) {
     Box(
         modifier = modifier
@@ -321,17 +336,13 @@ fun DynamicHeader(
             }
         }
 
-        IconButton(
+        if (dynamicItem != null) DynamicMoreMenu(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .size(30.dp),
-            onClick = {
-                //TODO 动态右上角按钮
-                notYetImplemented()
-            }
-        ) {
-            Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Menu")
-        }
+            dynamicItem = dynamicItem,
+            onTempBlockAuthor = onTempBlockAuthor
+        )
     }
 }
 
@@ -427,7 +438,6 @@ fun DynamicFooterButton(
     }
 }
 
-//TODO 富文本
 @Composable
 fun DynamicDraw(
     modifier: Modifier = Modifier,
@@ -445,7 +455,14 @@ fun DynamicDraw(
                 fontWeight = FontWeight.Bold
             )
         }
-        Text(text = draw.text)
+        if (draw.text.isNotBlank() || draw.richTextNodes.isNotEmpty()) {
+            DynamicRichText(
+                richTextNodes = draw.richTextNodes,
+                fallbackText = draw.text,
+                style = MaterialTheme.typography.bodyLarge,
+                fontSize = 16.sp
+            )
+        }
         DynamicPictures(
             pictures = draw.images,
             previewerState = previewerState,
@@ -463,7 +480,6 @@ fun DynamicPictures(
     onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    val imageBaseShape = MaterialTheme.shapes.medium
 
     val onClickPicture: (index: Int, itemState: TransformItemState) -> Unit = { index, itemState ->
         onShowPreviewer(pictures) {
@@ -476,118 +492,75 @@ fun DynamicPictures(
         }
     }
 
-    Box(
-        modifier = modifier
+    if (pictures.isEmpty()) return
+
+    if (pictures.size == 1) {
+        val picture = pictures.first()
+        val itemState = rememberTransformItemState()
+        val width = picture.width.takeIf { it > 0 } ?: 1
+        val height = picture.height.takeIf { it > 0 } ?: 1
+        val ratio = (width.toFloat() / height.toFloat()).coerceIn(0.7f, 2.2f)
+        val widthFraction = when {
+            ratio < 0.85f -> 0.62f
+            ratio < 1.1f -> 0.72f
+            else -> 1f
+        }
+        Card(
+            modifier = modifier
+                .fillMaxWidth(widthFraction)
+                .aspectRatio(ratio),
+            shape = MaterialTheme.shapes.medium,
+            onClick = { onClickPicture(0, itemState) }
+        ) {
+            TransformImageView(
+                painter = rememberAsyncImagePainter(picture.url),
+                key = picture.key,
+                itemState = itemState,
+                previewerState = previewerState,
+            )
+        }
+        return
+    }
+
+    val columns = when (pictures.size) {
+        2 -> 2
+        4 -> 2
+        else -> 3
+    }
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        when {
-            pictures.size == 1 -> {
-                Row {
+        pictures.chunked(columns).forEachIndexed { rowIndex, rowPictures ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                rowPictures.forEachIndexed { columnIndex, picture ->
+                    val index = rowIndex * columns + columnIndex
                     val itemState = rememberTransformItemState()
                     Card(
                         modifier = Modifier
                             .weight(1f)
-                            .aspectRatio(2f),
-                        shape = imageBaseShape,
-                        onClick = {
-                            onClickPicture(0, itemState)
-                        }
+                            .aspectRatio(1f),
+                        shape = dynamicPictureShape(
+                            columns = columns,
+                            count = pictures.size,
+                            index = index
+                        ),
+                        onClick = { onClickPicture(index, itemState) }
                     ) {
                         TransformImageView(
-                            painter = rememberAsyncImagePainter(pictures.first().url),
-                            key = pictures.first().key,
+                            painter = rememberAsyncImagePainter(picture.url),
+                            key = picture.key,
                             itemState = itemState,
                             previewerState = previewerState,
                         )
                     }
                 }
-            }
-
-            pictures.size == 2 -> {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    pictures.forEachIndexed { index, picture ->
-                        val itemState = rememberTransformItemState()
-                        Card(
-                            modifier = Modifier
-                                .weight(1f)
-                                .aspectRatio(1f),
-                            shape = when (index) {
-                                0 -> imageBaseShape.copy(
-                                    topEnd = CornerSize(0.dp), bottomEnd = CornerSize(0.dp)
-                                )
-
-                                1 -> imageBaseShape.copy(
-                                    topStart = CornerSize(0.dp), bottomStart = CornerSize(0.dp)
-                                )
-
-                                else -> RoundedCornerShape(0.dp)
-                            },
-                            onClick = {
-                                onClickPicture(index, itemState)
-                            }
-                        ) {
-                            TransformImageView(
-                                painter = rememberAsyncImagePainter(picture.url),
-                                key = picture.key,
-                                itemState = itemState,
-                                previewerState = previewerState,
-                            )
-                        }
-                    }
-                }
-            }
-
-            pictures.size >= 3 -> {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    pictures.take(3).forEachIndexed { index, picture ->
-                        val itemState = rememberTransformItemState()
-                        Card(
-                            modifier = Modifier
-                                .weight(1f)
-                                .aspectRatio(1f),
-                            shape = when (index) {
-                                0 -> imageBaseShape.copy(
-                                    topEnd = CornerSize(0.dp), bottomEnd = CornerSize(0.dp)
-                                )
-
-                                2 -> imageBaseShape.copy(
-                                    topStart = CornerSize(0.dp), bottomStart = CornerSize(0.dp)
-                                )
-
-                                else -> RoundedCornerShape(0.dp)
-                            },
-                            onClick = {
-                                onClickPicture(index, itemState)
-                            }
-                        ) {
-                            TransformImageView(
-                                painter = rememberAsyncImagePainter(picture.url),
-                                key = picture.key,
-                                itemState = itemState,
-                                previewerState = previewerState,
-                            )
-                        }
-                    }
-                }
-
-                if (pictures.size > 3) {
-                    Text(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .clip(
-                                MaterialTheme.shapes.medium.copy(
-                                    topEnd = CornerSize(0.dp),
-                                    bottomStart = CornerSize(0.dp)
-                                )
-                            )
-                            .background(Color.Black.copy(alpha = 0.2f))
-                            .padding(horizontal = 8.dp),
-                        text = "+${pictures.size - 3}",
-                        color = Color.White
-                    )
+                repeat(columns - rowPictures.size) {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -599,9 +572,12 @@ fun DynamicWord(
     modifier: Modifier = Modifier,
     word: DynamicItem.DynamicWordModule
 ) {
-    Text(
+    DynamicRichText(
         modifier = modifier,
-        text = word.text
+        richTextNodes = word.richTextNodes,
+        fallbackText = word.text,
+        style = MaterialTheme.typography.bodyLarge,
+        fontSize = 16.sp
     )
 }
 
@@ -613,15 +589,19 @@ fun DynamicForward(
     previewerState: ImagePreviewerState,
     horizontalPadding: Dp = 12.dp,
     onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit,
+    articleParagraphs: List<ArticleParagraph> = emptyList(),
     onClick: () -> Unit
 ) {
     Column(
         modifier = modifier,
     ) {
         if (word != null) {
-            Text(
+            DynamicRichText(
                 modifier = Modifier.padding(horizontal = horizontalPadding),
-                text = word.text
+                richTextNodes = word.richTextNodes,
+                fallbackText = word.text,
+                style = MaterialTheme.typography.bodyLarge,
+                fontSize = 16.sp
             )
         }
         Surface(
@@ -645,6 +625,7 @@ fun DynamicForward(
                         horizontalPadding = 0.dp,
                         previewerState = previewerState,
                         onShowPreviewer = onShowPreviewer,
+                        articleParagraphs = articleParagraphs,
                         onClick = {}
                     )
                 }
@@ -743,7 +724,10 @@ fun DynamicPgc(
 @Composable
 fun DynamicArticle(
     modifier: Modifier = Modifier,
-    article: DynamicItem.DynamicArticleModule
+    article: DynamicItem.DynamicArticleModule,
+    articleParagraphs: List<ArticleParagraph> = emptyList(),
+    previewerState: ImagePreviewerState = rememberPreviewerState(pageCount = { 0 }),
+    onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit = { _, _ -> },
 ) {
     Column(
         modifier = modifier,
@@ -753,8 +737,53 @@ fun DynamicArticle(
             text = article.title,
             fontWeight = FontWeight.Bold
         )
-        Text(text = article.text)
-        if (article.covers.isNotEmpty()) {
+        if (articleParagraphs.isEmpty()) {
+            Text(text = article.text)
+        } else {
+            articleParagraphs.forEach { paragraph ->
+                when (paragraph) {
+                    is ArticleParagraph.TextParagraph -> {
+                        Text(
+                            text = paragraph.nodes.joinToString("") { it.text },
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+
+                    is ArticleParagraph.PicturesParagraph -> {
+                        DynamicPictures(
+                            pictures = paragraph.pictures.map { picture ->
+                                Picture(
+                                    url = picture.url,
+                                    width = picture.width,
+                                    height = picture.height,
+                                    key = picture.url.ifBlank { UUID.randomUUID().toString() }
+                                )
+                            },
+                            previewerState = previewerState,
+                            onShowPreviewer = onShowPreviewer
+                        )
+                    }
+
+                    is ArticleParagraph.LineParagraph -> {
+                        paragraph.picture?.let { picture ->
+                            DynamicPictures(
+                                pictures = listOf(
+                                    Picture(
+                                        url = picture.url,
+                                        width = picture.width,
+                                        height = picture.height,
+                                        key = picture.url.ifBlank { UUID.randomUUID().toString() }
+                                    )
+                                ),
+                                previewerState = previewerState,
+                                onShowPreviewer = onShowPreviewer
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        if (articleParagraphs.isEmpty() && article.covers.isNotEmpty()) {
             AsyncImage(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -764,6 +793,40 @@ fun DynamicArticle(
                 contentScale = ContentScale.FillBounds
             )
         }
+    }
+}
+
+private fun dynamicPictureShape(
+    columns: Int,
+    count: Int,
+    index: Int
+): RoundedCornerShape {
+    val corner = CornerSize(8.dp)
+    val row = index / columns
+    val column = index % columns
+    val rows = (count + columns - 1) / columns
+    val isTop = row == 0
+    val isBottom = row == rows - 1
+    val isStart = column == 0
+    val isEnd = column == columns - 1 || index == count - 1
+
+    return RoundedCornerShape(
+        topStart = if (isTop && isStart) corner else CornerSize(0.dp),
+        topEnd = if (isTop && isEnd) corner else CornerSize(0.dp),
+        bottomStart = if (isBottom && isStart) corner else CornerSize(0.dp),
+        bottomEnd = if (isBottom && isEnd) corner else CornerSize(0.dp)
+    )
+}
+
+private fun DynamicItem.shareDynamicOrToast(context: android.content.Context) {
+    val link = id
+        ?.takeIf { it.isNotBlank() }
+        ?.let { "https://t.bilibili.com/$it" }
+        ?: jumpUrl
+    if (link.isNullOrBlank()) {
+        "当前动态没有可分享链接".toast(context)
+    } else {
+        shareText(context, link, "分享动态")
     }
 }
 

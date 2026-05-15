@@ -129,32 +129,31 @@ private fun BottomControllers(
         ) {
             val (playButton, seekSlider, positionText, fullscreenButton) = createRefs()
 
-            IconButton(
-                modifier = Modifier
-                    .constrainAs(playButton) {
-                        top.linkTo(parent.top)
-                        start.linkTo(parent.start)
-                        bottom.linkTo(parent.bottom)
-                    },
-                onClick = { if (videoPlayerStateData.isPlaying) onPause() else onPlay() },
-                colors = IconButtonDefaults.iconButtonColors(
-                    contentColor = Color.White
-                )
-            ) {
-                if (videoPlayerStateData.isPlaying) {
-                    Icon(
-                        imageVector = Icons.Rounded.Pause,
-                        contentDescription = null,
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Rounded.PlayArrow,
-                        contentDescription = null,
-                    )
-                }
-            }
-
             if (!videoPlayerConfigData.isLive) {
+                IconButton(
+                    modifier = Modifier
+                        .constrainAs(playButton) {
+                            top.linkTo(parent.top)
+                            start.linkTo(parent.start)
+                            bottom.linkTo(parent.bottom)
+                        },
+                    onClick = { if (videoPlayerStateData.isPlaying) onPause() else onPlay() },
+                    colors = IconButtonDefaults.iconButtonColors(
+                        contentColor = Color.White
+                    )
+                ) {
+                    if (videoPlayerStateData.isPlaying) {
+                        Icon(
+                            imageVector = Icons.Rounded.Pause,
+                            contentDescription = null,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.PlayArrow,
+                            contentDescription = null,
+                        )
+                    }
+                }
                 VideoSeekBar(
                     modifier = Modifier.constrainAs(seekSlider) {
                         top.linkTo(parent.top)
@@ -174,13 +173,25 @@ private fun BottomControllers(
             }
 
             Text(
-                modifier = Modifier.constrainAs(positionText) {
-                    top.linkTo(parent.top)
-                    bottom.linkTo(parent.bottom)
-                    end.linkTo(fullscreenButton.start)
+                modifier = Modifier
+                    .padding(horizontal = if (videoPlayerConfigData.isLive) 12.dp else 0.dp)
+                    .constrainAs(positionText) {
+                        top.linkTo(parent.top)
+                        bottom.linkTo(parent.bottom)
+                        end.linkTo(fullscreenButton.start)
+                        if (videoPlayerConfigData.isLive) {
+                            start.linkTo(parent.start)
+                            width = Dimension.fillToConstraints
+                        }
+                    },
+                text = if (videoPlayerConfigData.isLive) {
+                    "直播中"
+                } else {
+                    "${videoPlayerSeekData.position.formatHourMinSec()}/${videoPlayerSeekData.duration.formatHourMinSec()}"
                 },
-                text = "${videoPlayerSeekData.position.formatHourMinSec()}/${videoPlayerSeekData.duration.formatHourMinSec()}",
-                color = Color.White
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
             IconButton(

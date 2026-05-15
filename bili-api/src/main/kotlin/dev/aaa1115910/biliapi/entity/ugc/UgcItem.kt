@@ -9,6 +9,12 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 
+data class UgcFeedOption(
+    val id: Int,
+    val name: String,
+    val toast: String
+)
+
 data class UgcItem(
     val aid: Long,
     val bvid: String = "",
@@ -23,11 +29,16 @@ data class UgcItem(
     val idx: Int = -1,
     val pubTime: String? = null,
     val isInteractive: Boolean = false,
+    val feedGoto: String = "",
+    val feedParam: String = "",
+    val dislikeReasons: List<UgcFeedOption> = emptyList(),
+    val feedbacks: List<UgcFeedOption> = emptyList()
 ) {
     companion object {
         fun fromRcmdItem(rcmdItem: RcmdIndexData.RcmdItem) =
             UgcItem(
                 aid = rcmdItem.args.aid ?: 0,
+                bvid = "",
                 title = rcmdItem.title!!,
                 cover = rcmdItem.cover!!,
                 author = rcmdItem.args.upName ?: "",
@@ -53,7 +64,17 @@ data class UgcItem(
                     }.getOrDefault(-1)
                 },
                 duration = rcmdItem.coverRightText?.convertStringTimeToSeconds() ?: 0,
-                idx = rcmdItem.idx
+                idx = rcmdItem.idx,
+                feedGoto = rcmdItem.goto ?: rcmdItem.cardGoto,
+                feedParam = rcmdItem.param ?: rcmdItem.args.aid?.toString().orEmpty(),
+                dislikeReasons = rcmdItem.threePoint
+                    ?.dislikeReasons
+                    ?.map { UgcFeedOption(it.id, it.name, it.toast) }
+                    ?: emptyList(),
+                feedbacks = rcmdItem.threePoint
+                    ?.feedbacks
+                    ?.map { UgcFeedOption(it.id, it.name, it.toast) }
+                    ?: emptyList()
             )
 
         fun fromRcmdItem(rcmdItem: RcmdTopData.RcmdItem) =
@@ -74,6 +95,7 @@ data class UgcItem(
         fun fromVideoInfo(videoInfo: dev.aaa1115910.biliapi.http.entity.video.VideoInfo) =
             UgcItem(
                 aid = videoInfo.aid,
+                bvid = videoInfo.bvid,
                 title = videoInfo.title,
                 duration = videoInfo.duration,
                 author = videoInfo.owner.name,

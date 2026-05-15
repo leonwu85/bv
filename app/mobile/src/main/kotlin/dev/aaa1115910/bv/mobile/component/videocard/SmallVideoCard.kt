@@ -158,13 +158,20 @@ fun SmallVideoCard(
             Column(
                 modifier = Modifier.padding(8.dp)
             ) {
-                Text(
-                    text = data.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 2,
-                    minLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        modifier = Modifier.weight(1f),
+                        text = data.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 2,
+                        minLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    VideoCardMoreMenu(data = data)
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {

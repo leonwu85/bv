@@ -233,44 +233,53 @@ private fun BottomControllers(
                         Modifier.height(48.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        IconButton(
-                            modifier = Modifier
-                                .width(80.dp)
-                                .height(48.dp),
-                            onClick = if (isPlaying) onPause else onPlay,
-                            shape = if (isPlaying) MaterialTheme.shapes.medium else MaterialTheme.shapes.extraLarge,
-                            colors = if (isPlaying) {
-                                iconButtonColors(
-                                    containerColor = Color.Black.copy(0.6f),
-                                    contentColor = Color.White
-                                )
-                            } else {
-                                iconButtonColors(
-                                    containerColor = Color.White,
-                                    contentColor = Color.Black
-                                )
-                            }
-                        ) {
-                            if (isPlaying) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Pause,
-                                    contentDescription = null,
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Rounded.PlayArrow,
-                                    contentDescription = null,
-                                )
-                            }
-                        }
                         ControllerButtonGroup {
-                            Text(
-                                modifier = Modifier
-                                    .padding(horizontal = 8.dp),
-                                text = "${currentTime.formatHourMinSec()}/${totalTime.formatHourMinSec()}",
-                                color = Color.White,
-                                textAlign = TextAlign.Center
-                            )
+                            if (isLive) {
+                                Text(
+                                    modifier = Modifier.padding(horizontal = 8.dp),
+                                    text = "直播中",
+                                    color = Color.White,
+                                    textAlign = TextAlign.Center
+                                )
+                            } else {
+                                IconButton(
+                                    modifier = Modifier
+                                        .width(80.dp)
+                                        .height(48.dp),
+                                    onClick = if (isPlaying) onPause else onPlay,
+                                    shape = if (isPlaying) MaterialTheme.shapes.medium else MaterialTheme.shapes.extraLarge,
+                                    colors = if (isPlaying) {
+                                        iconButtonColors(
+                                            containerColor = Color.Black.copy(0.6f),
+                                            contentColor = Color.White
+                                        )
+                                    } else {
+                                        iconButtonColors(
+                                            containerColor = Color.White,
+                                            contentColor = Color.Black
+                                        )
+                                    }
+                                ) {
+                                    if (isPlaying) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Pause,
+                                            contentDescription = null,
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Rounded.PlayArrow,
+                                            contentDescription = null,
+                                        )
+                                    }
+                                }
+                                Text(
+                                    modifier = Modifier
+                                        .padding(horizontal = 8.dp),
+                                    text = "${currentTime.formatHourMinSec()}/${totalTime.formatHourMinSec()}",
+                                    color = Color.White,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                         ControllerButtonGroup {
                             IconButton(
@@ -314,8 +323,10 @@ private fun BottomControllers(
                                     Text(text = "选集")
                                 }
                             }
-                            TextButton(onClick = onShowSpeedController) {
-                                Text(text = "倍速")
+                            if (!isLive) {
+                                TextButton(onClick = onShowSpeedController) {
+                                    Text(text = "倍速")
+                                }
                             }
                             TextButton(onClick = onShowResolutionController) {
                                 Text(text = currentResolutionName)

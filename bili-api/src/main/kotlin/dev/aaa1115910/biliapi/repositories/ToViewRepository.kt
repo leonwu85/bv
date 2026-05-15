@@ -52,4 +52,32 @@ class ToViewRepository(
             ).code == 0
         }.getOrElse { false }
     }
+
+    suspend fun addToView(
+        avid: Long? = null,
+        bvid: String? = null
+    ) {
+        val response = BiliHttpApi.addToView(
+            avid = avid,
+            bvid = bvid,
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        )
+        if (response.code != 0) {
+            throw Exception("添加稍后再看失败: ${response.message}")
+        }
+    }
+
+    suspend fun deleteToViewOrThrow(
+        avid: Long
+    ) {
+        val response = BiliHttpApi.deleteToView(
+            avid = avid,
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        )
+        if (response.code != 0) {
+            throw Exception("移出稍后再看失败: ${response.message}")
+        }
+    }
 }

@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
+import dev.aaa1115910.biliapi.entity.user.DynamicUpUser
 import dev.aaa1115910.biliapi.entity.user.DynamicVideo
 import dev.aaa1115910.biliapi.http.entity.AuthFailureException
 import dev.aaa1115910.biliapi.repositories.UserRepository
@@ -43,6 +44,7 @@ class DynamicViewModel(
 
     // 全部动态
     val dynamicAllList = mutableStateListOf<DynamicItem>()
+    private val tempBlockedMids = mutableStateListOf<Long>()
     private var currentAllPage = 0
     var loadingAll by mutableStateOf(false)
     var allHasMore by mutableStateOf(true)
@@ -65,7 +67,29 @@ class DynamicViewModel(
     private var articleHistoryOffset: String? = null
     private var articleUpdateBaseline: String? = null
 
+    // UP 主筛选动态
+    val dynamicUpList = mutableStateListOf<DynamicItem>()
+    val followUpList = mutableStateListOf<DynamicUpUser>()
+    val liveUpList = mutableStateListOf<DynamicUpUser>()
+    var selectedUp by mutableStateOf<DynamicUpUser?>(null)
+    var liveUpCount by mutableStateOf(0)
+    private var currentUpPage = 0
+    var loadingUp by mutableStateOf(false)
+    var upHasMore by mutableStateOf(true)
+    private var upHistoryOffset: String? = null
+    private var upUpdateBaseline: String? = null
+    var loadingFollowUp by mutableStateOf(false)
+    var followUpHasMore by mutableStateOf(true)
+    private var followUpOffset: String? = null
+
     val isLogin get() = bvUserRepository.isLogin
+    val selfUp
+        get() = DynamicUpUser(
+            face = bvUserRepository.avatar,
+            hasUpdate = false,
+            mid = bvUserRepository.uid,
+            uname = bvUserRepository.username.ifBlank { "我" }
+        )
 
     init {
         println("=====init DynamicViewModel")
@@ -79,6 +103,16 @@ class DynamicViewModel(
         if (!loadingAll) loadAllData()
     }
 
+    fun tempBlockAuthor(mid: Long) {
+        if (mid <= 0L) return
+        if (!tempBlockedMids.contains(mid)) tempBlockedMids.add(mid)
+        dynamicAllList.removeAll { it.author.mid == mid }
+        dynamicVideoList.removeAll { it.authorId == mid }
+        dynamicPgcList.removeAll { it.author.mid == mid }
+        dynamicArticleList.removeAll { it.author.mid == mid }
+        dynamicUpList.removeAll { it.author.mid == mid }
+    }
+
     suspend fun loadMorePgc() {
         if (!loadingPgc) loadPgcData()
     }
@@ -87,12 +121,22 @@ class DynamicViewModel(
         if (!loadingArticle) loadArticleData()
     }
 
+    suspend fun loadMoreUp() {
+        if (!loadingUp) loadUpData()
+    }
+
+    fun selectUp(up: DynamicUpUser) {
+        selectedUp = up
+        clearUpData()
+    }
+
     suspend fun loadMoreByType(type: DynamicTabType) {
         when (type) {
             DynamicTabType.All -> loadMoreAll()
             DynamicTabType.Video -> loadMoreVideo()
             DynamicTabType.Pgc -> loadMorePgc()
             DynamicTabType.Article -> loadMoreArticle()
+            DynamicTabType.Up -> loadMoreUp()
         }
     }
 
@@ -107,7 +151,9 @@ class DynamicViewModel(
                 updateBaseline = videoUpdateBaseline ?: "",
                 preferApiType = Prefs.apiType
             )
-            dynamicVideoList.addAllWithMainContext(dynamicVideoData.videos)
+            dynamicVideoList.addAllWithMainContext(
+                dynamicVideoData.videos.filter { it.authorId !in tempBlockedMids }
+            )
             videoHistoryOffset = dynamicVideoData.historyOffset
             videoUpdateBaseline = dynamicVideoData.updateBaseline
             videoHasMore = dynamicVideoData.hasMore
@@ -153,7 +199,7 @@ class DynamicViewModel(
                 updateBaseline = allUpdateBaseline ?: "",
                 preferApiType = Prefs.apiType
             )
-            dynamicAllList.addAll(dynamicData.dynamics)
+            dynamicAllList.addAll(dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids })
             allHistoryOffset = dynamicData.historyOffset
             allUpdateBaseline = dynamicData.updateBaseline
             allHasMore = dynamicData.hasMore
@@ -214,12 +260,22 @@ class DynamicViewModel(
         articleHistoryOffset = null
     }
 
+    fun clearUpData() {
+        dynamicUpList.clear()
+        currentUpPage = 0
+        loadingUp = false
+        upHasMore = true
+        upHistoryOffset = null
+        upUpdateBaseline = null
+    }
+
     fun refreshByType(type: DynamicTabType) {
         when (type) {
             DynamicTabType.All -> clearAllData()
             DynamicTabType.Video -> clearVideoData()
             DynamicTabType.Pgc -> clearPgcData()
             DynamicTabType.Article -> clearArticleData()
+            DynamicTabType.Up -> clearUpData()
         }
     }
 
@@ -235,7 +291,7 @@ class DynamicViewModel(
                 updateBaseline = pgcUpdateBaseline ?: "",
                 preferApiType = Prefs.apiType
             )
-            dynamicPgcList.addAll(dynamicData.dynamics)
+            dynamicPgcList.addAll(dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids })
             pgcHistoryOffset = dynamicData.historyOffset
             pgcUpdateBaseline = dynamicData.updateBaseline
             pgcHasMore = dynamicData.hasMore
@@ -282,7 +338,7 @@ class DynamicViewModel(
                 updateBaseline = articleUpdateBaseline ?: "",
                 preferApiType = Prefs.apiType
             )
-            dynamicArticleList.addAll(dynamicData.dynamics)
+            dynamicArticleList.addAll(dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids })
             articleHistoryOffset = dynamicData.historyOffset
             articleUpdateBaseline = dynamicData.updateBaseline
             articleHasMore = dynamicData.hasMore
@@ -314,6 +370,111 @@ class DynamicViewModel(
         }
         withContext(Dispatchers.Main) {
             loadingArticle = false
+        }
+    }
+
+    suspend fun refreshFollowUpPanel() {
+        followUpList.clear()
+        liveUpList.clear()
+        liveUpCount = 0
+        followUpOffset = null
+        followUpHasMore = true
+        loadFollowUpPanel()
+    }
+
+    suspend fun loadFollowUpPanel() {
+        if (!bvUserRepository.isLogin || loadingFollowUp || !followUpHasMore && followUpList.isNotEmpty()) return
+        loadingFollowUp = true
+        runCatching {
+            val data = if (followUpOffset == null) {
+                userRepository.getDynamicFollowUp(preferApiType = Prefs.apiType)
+            } else {
+                userRepository.getDynamicUpList(
+                    offset = followUpOffset.orEmpty(),
+                    preferApiType = Prefs.apiType
+                )
+            }
+            withContext(Dispatchers.Main) {
+                if (followUpOffset == null) {
+                    liveUpList.clear()
+                    liveUpList.addAll(data.liveUsers)
+                    liveUpCount = data.liveCount
+                }
+                val existingMids = followUpList.map { it.mid }.toHashSet()
+                followUpList.addAll(data.upList.filter { it.mid !in existingMids })
+                followUpOffset = data.offset
+                followUpHasMore = data.hasMore && !data.offset.isNullOrBlank()
+            }
+        }.onFailure {
+            logger.fWarn { "Load dynamic follow up failed: ${it.stackTraceToString()}" }
+        }
+        withContext(Dispatchers.Main) {
+            loadingFollowUp = false
+        }
+    }
+
+    private suspend fun loadUpData() {
+        val up = selectedUp ?: return
+        if (!upHasMore || !bvUserRepository.isLogin) return
+        loadingUp = true
+        logger.fInfo { "Load more dynamic by up [mid=${up.mid}, offset=$upHistoryOffset, page=${currentUpPage + 1}]" }
+        runCatching {
+            val dynamicData = userRepository.getDynamicsByUp(
+                mid = up.mid,
+                page = ++currentUpPage,
+                offset = upHistoryOffset ?: "",
+                updateBaseline = upUpdateBaseline ?: "",
+                preferApiType = Prefs.apiType
+            )
+            dynamicUpList.addAll(dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids })
+            upHistoryOffset = dynamicData.historyOffset
+            upUpdateBaseline = dynamicData.updateBaseline
+            upHasMore = dynamicData.hasMore
+        }.onFailure {
+            if (it.message?.contains("4101132") == true || it.message == "请求数据发生错误，请刷新或稍后重试") {
+                upHasMore = false
+                logger.fInfo { "No more up dynamic data available" }
+            } else {
+                logger.fWarn { "Load dynamic by up failed: ${it.stackTraceToString()}" }
+                when (it) {
+                    is AuthFailureException -> {
+                        withContext(Dispatchers.Main) {
+                            BVApp.context.getString(R.string.exception_auth_failure)
+                                .toast(BVApp.context)
+                        }
+                        logger.fInfo { "User auth failure" }
+                    }
+
+                    else -> {
+                        withContext(Dispatchers.Main) {
+                            "加载动态失败: ${it.localizedMessage}".toast(BVApp.context)
+                        }
+                    }
+                }
+            }
+        }
+        withContext(Dispatchers.Main) {
+            loadingUp = false
+        }
+    }
+
+    fun isLoading(type: DynamicTabType): Boolean {
+        return when (type) {
+            DynamicTabType.All -> loadingAll
+            DynamicTabType.Video -> loadingVideo
+            DynamicTabType.Pgc -> loadingPgc
+            DynamicTabType.Article -> loadingArticle
+            DynamicTabType.Up -> loadingUp
+        }
+    }
+
+    fun itemCount(type: DynamicTabType): Int {
+        return when (type) {
+            DynamicTabType.All -> dynamicAllList.size
+            DynamicTabType.Video -> dynamicVideoList.size
+            DynamicTabType.Pgc -> dynamicPgcList.size
+            DynamicTabType.Article -> dynamicArticleList.size
+            DynamicTabType.Up -> dynamicUpList.size
         }
     }
 }

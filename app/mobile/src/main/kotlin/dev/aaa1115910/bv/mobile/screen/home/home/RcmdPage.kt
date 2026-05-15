@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.aaa1115910.biliapi.entity.ugc.UgcItem
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
+import dev.aaa1115910.bv.entity.carddata.VideoCardFeedOption
 import dev.aaa1115910.bv.mobile.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.util.OnBottomReached
 import dev.aaa1115910.bv.util.fInfo
@@ -66,13 +67,20 @@ fun RcmdPage(
                 SmallVideoCard(
                     data = VideoCardData(
                         avid = video.aid,
+                        bvid = video.bvid,
                         title = video.title,
                         cover = video.cover,
                         play = video.play,
                         danmaku = video.danmaku,
                         upName = video.author,
+                        upId = video.authorId,
+                        upFace = video.authorFace,
                         time = video.duration * 1000L,
-                        isInteractive = video.isInteractive
+                        isInteractive = video.isInteractive,
+                        feedGoto = video.feedGoto,
+                        feedParam = video.feedParam,
+                        dislikeReasons = video.dislikeReasons.map { VideoCardFeedOption(it.id, it.name, it.toast) },
+                        feedbacks = video.feedbacks.map { VideoCardFeedOption(it.id, it.name, it.toast) }
                     ),
                     onClick = { onClickVideo(video.aid) }
                 )

@@ -89,13 +89,16 @@ import dev.aaa1115910.bv.mobile.activities.HistoryActivity
 import dev.aaa1115910.bv.mobile.activities.LoginActivity
 import dev.aaa1115910.bv.mobile.activities.SettingsActivity
 import dev.aaa1115910.bv.mobile.activities.ToViewActivity
+import dev.aaa1115910.bv.mobile.component.ImagePreviewerActions
 import dev.aaa1115910.bv.mobile.component.home.UserDialog
 import dev.aaa1115910.bv.mobile.screen.home.DynamicScreen
 import dev.aaa1115910.bv.mobile.screen.home.HomeScreen
 import dev.aaa1115910.bv.mobile.screen.home.MineScreen
 import dev.aaa1115910.bv.mobile.screen.home.SearchScreen
+import dev.aaa1115910.bv.mobile.util.saveImageToGallery
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.swapList
+import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.viewmodel.UserSwitchViewModel
 import dev.aaa1115910.bv.viewmodel.UserViewModel
 import dev.aaa1115910.bv.viewmodel.home.PopularViewModel
@@ -103,6 +106,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
@@ -127,6 +131,7 @@ fun MobileMainScreen(
         NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(currentWindowAdaptiveInfo())
 
     val pictures = remember { mutableStateListOf<Picture>() }
+    var savingPreviewImage by remember { mutableStateOf(false) }
     val previewerState = rememberPreviewerState(
         verticalDragType = VerticalDragType.UpAndDown,
         pageCount = { pictures.size },
@@ -286,6 +291,48 @@ fun MobileMainScreen(
                 .size(Size.ORIGINAL)
                 .build()
             rememberAsyncImagePainter(imageRequest)
+        },
+        previewerLayer = {
+            foreground = { page ->
+                ImagePreviewerActions(
+                    saving = savingPreviewImage,
+                    onClose = {
+                        if (previewerState.canClose) {
+                            scope.launch {
+                                previewerState.closeTransform()
+                            }
+                        }
+                    },
+                    onSave = {
+                        val picture = pictures.getOrNull(page)
+                        if (picture == null) {
+                            "图片不存在".toast(context)
+                            return@ImagePreviewerActions
+                        }
+                        if (savingPreviewImage) return@ImagePreviewerActions
+                        scope.launch(Dispatchers.IO) {
+                            withContext(Dispatchers.Main) {
+                                savingPreviewImage = true
+                            }
+                            runCatching {
+                                saveImageToGallery(context, picture.url)
+                            }.onSuccess {
+                                withContext(Dispatchers.Main) {
+                                    "图片已保存到相册".toast(context)
+                                }
+                            }.onFailure {
+                                logger.warn(it) { "Save dynamic preview image failed" }
+                                withContext(Dispatchers.Main) {
+                                    "保存失败：${it.localizedMessage ?: "未知错误"}".toast(context)
+                                }
+                            }
+                            withContext(Dispatchers.Main) {
+                                savingPreviewImage = false
+                            }
+                        }
+                    }
+                )
+            }
         }
     )
 

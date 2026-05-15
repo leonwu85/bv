@@ -74,6 +74,7 @@ class HistoryViewModel(
                 histories.addWithMainContext(
                     VideoCardData(
                         avid = historyItem.oid,
+                        bvid = historyItem.bvid,
                         title = historyItem.title,
                         cover = historyItem.cover,
                         upName = historyItem.author,

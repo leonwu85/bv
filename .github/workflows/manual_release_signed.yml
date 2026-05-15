@@ -1,4 +1,4 @@
-name: Manual Signed Release Build
+name: bv3 包名手动打包
 
 on:
   workflow_dispatch:

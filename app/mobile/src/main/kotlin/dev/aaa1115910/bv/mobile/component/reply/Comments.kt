@@ -52,6 +52,7 @@ fun Comments(
     onRefreshComments: () -> Unit,
     onSwitchCommentSort: (CommentSort) -> Unit,
     onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit,
+    onReplyComment: (Comment) -> Unit = {},
     onShowReplies: (comment: Comment) -> Unit
 ) {
     val listState = rememberLazyListState()
@@ -125,6 +126,7 @@ fun Comments(
                         comment = comment,
                         previewerState = previewerState,
                         onShowPreviewer = onShowPreviewer,
+                        onReply = { onReplyComment(comment) },
                         onShowReply = { _ ->
                             onShowReplies(comment)
                         }

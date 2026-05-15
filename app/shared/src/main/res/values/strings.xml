@@ -885,9 +885,10 @@
 
     <!-- Dynamic Tab -->
     <string name="dynamic_tab_all">全部</string>
-    <string name="dynamic_tab_video">视频</string>
-    <string name="dynamic_tab_pgc">追番</string>
+    <string name="dynamic_tab_video">投稿</string>
+    <string name="dynamic_tab_pgc">番剧</string>
     <string name="dynamic_tab_article">专栏</string>
+    <string name="dynamic_tab_up">UP</string>
 
     <!-- Dynamic Page Style -->
     <string name="dynamic_style_new">新版（带分类）</string>

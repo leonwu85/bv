@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,9 +21,14 @@ import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Comment
+import androidx.compose.material.icons.outlined.ThumbUp
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -63,6 +69,7 @@ fun CommentItem(
     showReplies: Boolean = true,
     containerColor: Color = MaterialTheme.colorScheme.surface,
     onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit,
+    onReply: (Comment) -> Unit = {},
     onShowReply: (rpid: Long) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
@@ -161,6 +168,43 @@ fun CommentItem(
                         repliesCount = comment.repliesCount,
                         onOpenCommentSheet = { onShowReply(comment.rpid) }
                     )
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        modifier = Modifier.height(32.dp),
+                        onClick = { onReply(comment) }
+                    ) {
+                        Icon(
+                            modifier = Modifier.size(16.dp),
+                            imageVector = Icons.AutoMirrored.Filled.Comment,
+                            contentDescription = null
+                        )
+                        Text(
+                            modifier = Modifier.padding(start = 4.dp),
+                            text = "回复"
+                        )
+                    }
+                    if (comment.like > 0) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                modifier = Modifier.size(16.dp),
+                                imageVector = Icons.Outlined.ThumbUp,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = comment.like.toString(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
         }
