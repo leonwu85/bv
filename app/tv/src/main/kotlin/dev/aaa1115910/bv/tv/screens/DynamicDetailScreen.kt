@@ -25,12 +25,14 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.ModeComment
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,6 +46,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -76,6 +79,7 @@ import dev.aaa1115910.bv.tv.activities.dynamic.DynamicDetailActivity
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.component.ArticleContent
+import dev.aaa1115910.bv.tv.component.CommentImagePreviewDialog
 import dev.aaa1115910.bv.tv.component.CommentPanel
 import dev.aaa1115910.bv.util.fInfo
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -100,6 +104,10 @@ fun DynamicDetailScreen(
     var dynamicItem by remember { mutableStateOf<DynamicItem?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var showCommentPanel by remember { mutableStateOf(false) }
+    var showImagePreview by remember { mutableStateOf(false) }
+    var imagePreviewPictures by remember { mutableStateOf<List<Picture>>(emptyList()) }
+    var imagePreviewIndex by remember { mutableIntStateOf(0) }
+    var suppressConfirmKeyUp by remember { mutableStateOf(false) }
 
     LaunchedEffect(dynamicId) {
         logger.fInfo { "Loading dynamic detail for id: $dynamicId" }
@@ -116,10 +124,18 @@ fun DynamicDetailScreen(
 
     val contentFocusRequester = remember { FocusRequester() }
     val commentButtonFocusRequester = remember { FocusRequester() }
+    val imageButtonFocusRequester = remember { FocusRequester() }
     val likeButtonFocusRequester = remember { FocusRequester() }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+    val requestBottomButtonFocus = {
+        if (dynamicDetailViewModel.isLiking) {
+            commentButtonFocusRequester.requestFocus()
+        } else {
+            likeButtonFocusRequester.requestFocus()
+        }
+    }
 
     // 初始焦点请求到内容区域
     LaunchedEffect(isLoading) {
@@ -136,8 +152,49 @@ fun DynamicDetailScreen(
         }
     }
 
+    LaunchedEffect(showImagePreview) {
+        if (!showImagePreview && imagePreviewPictures.isNotEmpty() && !isLoading && dynamicItem != null) {
+            delay(100)
+            imageButtonFocusRequester.requestFocus()
+        }
+    }
+
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent { event ->
+                val isConfirmKey = event.key == Key.DirectionCenter || event.key == Key.Enter
+
+                if (suppressConfirmKeyUp && isConfirmKey) {
+                    if (event.type == KeyEventType.KeyUp) {
+                        suppressConfirmKeyUp = false
+                    }
+                    return@onPreviewKeyEvent true
+                }
+
+                if (isLoading || dynamicItem == null || showCommentPanel || showImagePreview) {
+                    return@onPreviewKeyEvent false
+                }
+
+                when {
+                    event.key == Key.Menu -> {
+                        if (event.type == KeyEventType.KeyUp) {
+                            requestBottomButtonFocus()
+                        }
+                        true
+                    }
+
+                    event.type == KeyEventType.KeyDown &&
+                        event.nativeKeyEvent.repeatCount > 0 &&
+                        isConfirmKey -> {
+                        suppressConfirmKeyUp = true
+                        requestBottomButtonFocus()
+                        true
+                    }
+
+                    else -> false
+                }
+            },
         topBar = {
             TopAppBar(
                 title = {
@@ -284,6 +341,8 @@ fun DynamicDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val dynamicPictures = dynamicItem!!.imagePreviewPictures()
+
                     // 点赞按钮
                     Button(
                         modifier = Modifier
@@ -369,6 +428,45 @@ fun DynamicDetailScreen(
                     }
 
                     // 跳转原动态视频按钮（仅转发类型的动态且有原视频时显示）
+                    if (dynamicPictures.isNotEmpty()) {
+                        Button(
+                            modifier = Modifier
+                                .focusRequester(imageButtonFocusRequester),
+                            onClick = {
+                                imagePreviewPictures = dynamicPictures
+                                imagePreviewIndex = 0
+                                showImagePreview = true
+                            },
+                            colors = ButtonDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
+                                focusedContentColor = Color.Black
+                            )
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Image,
+                                    contentDescription = "图片模式",
+                                    modifier = Modifier.size(20.dp),
+                                    tint = LocalContentColor.current
+                                )
+                                Text(
+                                    text = "图片模式",
+                                    fontSize = 14.sp,
+                                    color = LocalContentColor.current
+                                )
+                                Text(
+                                    text = dynamicPictures.size.toString(),
+                                    fontSize = 14.sp,
+                                    color = LocalContentColor.current
+                                )
+                            }
+                        }
+                    }
+
                     if (dynamicItem!!.type == DynamicType.Forward &&
                         dynamicItem!!.orig?.type == DynamicType.Av &&
                         dynamicItem!!.orig?.video != null) {
@@ -454,7 +552,22 @@ fun DynamicDetailScreen(
             onHide = { showCommentPanel = false }
         )
     }
+
+    CommentImagePreviewDialog(
+        show = showImagePreview,
+        pictures = imagePreviewPictures,
+        initialIndex = imagePreviewIndex,
+        onDismissRequest = { showImagePreview = false }
+    )
 }
+
+private fun DynamicItem.imagePreviewPictures(): List<Picture> =
+    when (type) {
+        DynamicType.Draw -> draw?.images.orEmpty()
+        DynamicType.Forward -> (draw?.images.orEmpty() + orig?.draw?.images.orEmpty())
+            .distinctBy { it.url }
+        else -> emptyList()
+    }
 
 @Composable
 private fun DynamicContentSection(

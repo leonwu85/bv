@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,10 +14,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -35,7 +42,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +57,7 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -92,7 +99,6 @@ import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.viewmodel.home.DynamicViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
@@ -100,6 +106,9 @@ private enum class DynamicFocusLayer {
     SubTab,
     Content,
 }
+
+private val DynamicAccent = Color(0xFFFB7299)
+private val DynamicCardShape = RoundedCornerShape(8.dp)
 
 @Composable
 fun NewDynamicsScreen(
@@ -130,7 +139,7 @@ fun NewDynamicsScreen(
     var currentFocusedIndex by remember { mutableIntStateOf(-1) }
     var focusLayer by remember { mutableStateOf<DynamicFocusLayer?>(null) }
     val allStaggeredGridState = rememberLazyStaggeredGridState()
-    val pgcStaggeredGridState = rememberLazyStaggeredGridState()
+    val pgcGridState = rememberLazyGridState()
     val articleStaggeredGridState = rememberLazyStaggeredGridState()
 
     // 当子 Tab 切换时通知父组件记住选择
@@ -140,19 +149,13 @@ fun NewDynamicsScreen(
 
     val selectedTabType = dynamicTabs[selectedTabIndex]
 
-    fun staggeredGridStateFor(tabType: DynamicTabType): LazyStaggeredGridState? = when (tabType) {
-        DynamicTabType.All -> allStaggeredGridState
-        DynamicTabType.Pgc -> pgcStaggeredGridState
-        DynamicTabType.Article -> articleStaggeredGridState
-        DynamicTabType.Video -> null
-        DynamicTabType.Up -> allStaggeredGridState
-    }
-
     fun scrollToTabTop(tabType: DynamicTabType) {
         scope.launch {
             when (tabType) {
                 DynamicTabType.Video -> lazyGridState.scrollToItem(0)
-                else -> staggeredGridStateFor(tabType)?.scrollToItem(0)
+                DynamicTabType.All, DynamicTabType.Up -> allStaggeredGridState.scrollToItem(0)
+                DynamicTabType.Pgc -> pgcGridState.scrollToItem(0)
+                DynamicTabType.Article -> articleStaggeredGridState.scrollToItem(0)
             }
         }
     }
@@ -345,32 +348,57 @@ fun NewDynamicsScreen(
                         textAlign = TextAlign.End
                     )
                 }
-            when (selectedTabType) {
-                DynamicTabType.Video -> {
-                    // 视频页使用旧的 grid 布局和 SmallVideoCard
-                    VideoDynamicContent(
-                        videoList = dynamicViewModel.dynamicVideoList,
-                        lazyGridState = lazyGridState,
-                        onClickVideo = onClickVideo,
-                        onLongClickVideo = onLongClickVideo,
-                        onFocus = { currentFocusedIndex = it },
-                        isLoading = isLoading,
-                        hasMore = hasMore
-                    )
+                when (selectedTabType) {
+                    DynamicTabType.Video -> {
+                        // 视频页使用旧的 grid 布局和 SmallVideoCard
+                        VideoDynamicContent(
+                            videoList = dynamicViewModel.dynamicVideoList,
+                            lazyGridState = lazyGridState,
+                            onClickVideo = onClickVideo,
+                            onLongClickVideo = onLongClickVideo,
+                            onFocus = { currentFocusedIndex = it },
+                            isLoading = isLoading,
+                            hasMore = hasMore
+                        )
+                    }
+
+                    DynamicTabType.Pgc -> {
+                        PgcDynamicContent(
+                            filteredList = currentList,
+                            gridState = pgcGridState,
+                            onClickDynamicItem = onClickDynamicItem,
+                            onLongClickDynamicItem = onLongClickDynamicItem,
+                            onFocus = { currentFocusedIndex = it },
+                            isLoading = isLoading,
+                            hasMore = hasMore
+                        )
+                    }
+
+                    DynamicTabType.Article -> {
+                        ArticleDynamicContent(
+                            filteredList = currentList,
+                            staggeredGridState = articleStaggeredGridState,
+                            onClickDynamicItem = onClickDynamicItem,
+                            onLongClickDynamicItem = onLongClickDynamicItem,
+                            onFocus = { currentFocusedIndex = it },
+                            isLoading = isLoading,
+                            hasMore = hasMore
+                        )
+                    }
+
+                    DynamicTabType.All,
+                    DynamicTabType.Up -> {
+                        AllDynamicContent(
+                            filteredList = currentList,
+                            staggeredGridState = allStaggeredGridState,
+                            onClickDynamicItem = onClickDynamicItem,
+                            onLongClickDynamicItem = onLongClickDynamicItem,
+                            onFocus = { currentFocusedIndex = it },
+                            isLoading = isLoading,
+                            hasMore = hasMore
+                        )
+                    }
                 }
-                else -> {
-                    // 其他页面使用瀑布流布局
-                    StaggeredDynamicContent(
-                        filteredList = currentList,
-                        staggeredGridState = staggeredGridStateFor(selectedTabType) ?: allStaggeredGridState,
-                        onClickDynamicItem = onClickDynamicItem,
-                        onLongClickDynamicItem = onLongClickDynamicItem,
-                        onFocus = { currentFocusedIndex = it },
-                        isLoading = isLoading,
-                        hasMore = hasMore
-                    )
-                }
-            }
             }
         }
     } else {
@@ -537,9 +565,9 @@ private fun VideoDynamicContent(
     }
 }
 
-// 其他页面内容 - 使用瀑布流布局
+// 全部页内容 - 保留瀑布流，但放大卡片信息密度和焦点态
 @Composable
-private fun StaggeredDynamicContent(
+private fun AllDynamicContent(
     filteredList: List<DynamicItem>,
     staggeredGridState: LazyStaggeredGridState,
     onClickDynamicItem: (DynamicItem) -> Unit,
@@ -582,12 +610,12 @@ private fun StaggeredDynamicContent(
                 },
             columns = StaggeredGridCells.Fixed(2),
             state = staggeredGridState,
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 28.dp),
             verticalItemSpacing = 16.dp,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             itemsIndexed(filteredList) { index, item ->
-                StaggeredDynamicCard(
+                AllDynamicCard(
                     dynamicItem = item,
                     onClick = { onClickDynamicItem(item) },
                     onLongClick = { onLongClickDynamicItem(item) },
@@ -622,33 +650,158 @@ private fun StaggeredDynamicContent(
     }
 }
 
-// 瀑布流卡片
 @Composable
-private fun StaggeredDynamicCard(
+private fun PgcDynamicContent(
+    filteredList: List<DynamicItem>,
+    gridState: LazyGridState,
+    onClickDynamicItem: (DynamicItem) -> Unit,
+    onLongClickDynamicItem: (DynamicItem) -> Unit,
+    onFocus: (Int) -> Unit,
+    isLoading: Boolean,
+    hasMore: Boolean
+) {
+    val context = LocalContext.current
+
+    if (filteredList.isEmpty()) {
+        DynamicEmptyContent(isLoading = isLoading)
+        return
+    }
+
+    ProvideListBringIntoViewSpec {
+        LazyVerticalGrid(
+            modifier = Modifier
+                .fillMaxSize()
+                .onFocusChanged {
+                    if (!it.isFocused) {
+                        onFocus(-1)
+                    }
+                }
+                .onPreviewKeyEvent {
+                    if (it.type == KeyEventType.KeyUp && it.key == Key.Menu) {
+                        context.startActivity(Intent(context, FollowActivity::class.java))
+                        return@onPreviewKeyEvent true
+                    }
+                    false
+                },
+            columns = GridCells.Fixed(2),
+            state = gridState,
+            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            itemsIndexed(filteredList) { index, item ->
+                PgcDynamicCard(
+                    dynamicItem = item,
+                    onClick = { onClickDynamicItem(item) },
+                    onLongClick = { onLongClickDynamicItem(item) },
+                    onFocus = { onFocus(index) }
+                )
+            }
+
+            if (isLoading) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    DynamicLoadingLine()
+                }
+            }
+
+            if (!hasMore && filteredList.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    DynamicEndLine()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArticleDynamicContent(
+    filteredList: List<DynamicItem>,
+    staggeredGridState: LazyStaggeredGridState,
+    onClickDynamicItem: (DynamicItem) -> Unit,
+    onLongClickDynamicItem: (DynamicItem) -> Unit,
+    onFocus: (Int) -> Unit,
+    isLoading: Boolean,
+    hasMore: Boolean
+) {
+    val context = LocalContext.current
+
+    if (filteredList.isEmpty()) {
+        DynamicEmptyContent(isLoading = isLoading)
+        return
+    }
+
+    ProvideListBringIntoViewSpec {
+        LazyVerticalStaggeredGrid(
+            modifier = Modifier
+                .fillMaxSize()
+                .onFocusChanged {
+                    if (!it.isFocused) {
+                        onFocus(-1)
+                    }
+                }
+                .onPreviewKeyEvent {
+                    if (it.type == KeyEventType.KeyUp && it.key == Key.Menu) {
+                        context.startActivity(Intent(context, FollowActivity::class.java))
+                        return@onPreviewKeyEvent true
+                    }
+                    false
+                },
+            columns = StaggeredGridCells.Fixed(2),
+            state = staggeredGridState,
+            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 28.dp),
+            verticalItemSpacing = 16.dp,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            itemsIndexed(filteredList) { index, item ->
+                ArticleListCard(
+                    dynamicItem = item,
+                    onClick = { onClickDynamicItem(item) },
+                    onLongClick = { onLongClickDynamicItem(item) },
+                    onFocus = { onFocus(index) }
+                )
+            }
+
+            if (isLoading) {
+                item(span = StaggeredGridItemSpan.FullLine) {
+                    DynamicLoadingLine()
+                }
+            }
+
+            if (!hasMore && filteredList.isNotEmpty()) {
+                item(span = StaggeredGridItemSpan.FullLine) {
+                    DynamicEndLine()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AllDynamicCard(
     modifier: Modifier = Modifier,
     dynamicItem: DynamicItem,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onFocus: () -> Unit
 ) {
-    var isFocused by remember { mutableIntStateOf(0) }
+    var isFocused by remember { mutableStateOf(false) }
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .onFocusChanged {
                 if (it.isFocused) {
-                    isFocused = 1
+                    isFocused = true
                     onFocus()
                 } else {
-                    isFocused = 0
+                    isFocused = false
                 }
             },
         onClick = onClick,
         onLongClick = onLongClick,
-        shape = CardDefaults.shape(RoundedCornerShape(8.dp)),
+        shape = CardDefaults.shape(DynamicCardShape),
         colors = CardDefaults.colors(
-            containerColor = if (isFocused == 1) MaterialTheme.colorScheme.surfaceVariant
+            containerColor = if (isFocused) MaterialTheme.colorScheme.surfaceVariant
             else MaterialTheme.colorScheme.surfaceContainerLow
         ),
         scale = CardDefaults.scale(focusedScale = 1f)
@@ -656,7 +809,8 @@ private fun StaggeredDynamicCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // 作者信息头部
             DynamicCardHeader(author = dynamicItem.author)
@@ -665,7 +819,10 @@ private fun StaggeredDynamicCard(
             when (dynamicItem.type) {
                 DynamicType.Av -> DynamicVideoContent(video = dynamicItem.video)
                 DynamicType.UgcSeason -> DynamicUgcSeasonContent(ugcSeason = dynamicItem.ugcSeason)
-                DynamicType.Pgc -> DynamicPgcContent(pgc = dynamicItem.pgc)
+                DynamicType.Pgc -> DynamicPgcContent(
+                    pgc = dynamicItem.pgc,
+                    author = dynamicItem.author
+                )
                 DynamicType.Draw -> DynamicDrawContent(draw = dynamicItem.draw)
                 DynamicType.Word -> DynamicWordContent(word = dynamicItem.word)
                 DynamicType.Article -> DynamicArticleContent(article = dynamicItem.article)
@@ -674,6 +831,193 @@ private fun StaggeredDynamicCard(
                     orig = dynamicItem.orig
                 )
                 else -> DynamicUnknownContent(type = dynamicItem.type)
+            }
+
+            DynamicFooterInfo(footer = dynamicItem.footer)
+        }
+    }
+}
+
+@Composable
+private fun PgcDynamicCard(
+    modifier: Modifier = Modifier,
+    dynamicItem: DynamicItem,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onFocus: () -> Unit
+) {
+    val pgc = dynamicItem.pgc
+    if (pgc == null) {
+        AllDynamicCard(
+            modifier = modifier,
+            dynamicItem = dynamicItem,
+            onClick = onClick,
+            onLongClick = onLongClick,
+            onFocus = onFocus
+        )
+        return
+    }
+
+    var isFocused by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 156.dp)
+            .onFocusChanged {
+                if (it.isFocused) {
+                    isFocused = true
+                    onFocus()
+                } else {
+                    isFocused = false
+                }
+            },
+        onClick = onClick,
+        onLongClick = onLongClick,
+        shape = CardDefaults.shape(DynamicCardShape),
+        colors = CardDefaults.colors(
+            containerColor = if (isFocused) MaterialTheme.colorScheme.surfaceVariant
+            else MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        scale = CardDefaults.scale(focusedScale = 1f)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 156.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(277.dp)
+                    .aspectRatio(16f / 9f)
+            ) {
+                DynamicMediaImage(
+                    url = pgc.cover,
+                    modifier = Modifier.fillMaxSize()
+                )
+                DynamicBadge(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp),
+                    text = "番剧"
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Text(
+                    text = pgc.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Row(
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Schedule,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.48f),
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .size(17.dp)
+                    )
+                    Text(
+                        text = dynamicItem.author.pubTime.ifBlank { dynamicItem.author.pubAction.ifBlank { "更新" } },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArticleListCard(
+    modifier: Modifier = Modifier,
+    dynamicItem: DynamicItem,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onFocus: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    val article = dynamicItem.article
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .onFocusChanged {
+                if (it.isFocused) {
+                    isFocused = true
+                    onFocus()
+                } else {
+                    isFocused = false
+                }
+            },
+        onClick = onClick,
+        onLongClick = onLongClick,
+        shape = CardDefaults.shape(DynamicCardShape),
+        colors = CardDefaults.colors(
+            containerColor = if (isFocused) MaterialTheme.colorScheme.surfaceVariant
+            else MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        scale = CardDefaults.scale(focusedScale = 1f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            article?.covers?.firstOrNull()?.let {
+                DynamicMediaImage(
+                    url = it,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(2.08f)
+                )
+            }
+            Text(
+                text = article?.title?.takeIf(String::isNotBlank) ?: "专栏动态",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!article?.text.isNullOrBlank()) {
+                Text(
+                    text = article.text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                DynamicBadge(text = article?.label?.ifBlank { "专栏" } ?: "专栏")
+                Text(
+                    text = dynamicItem.author.author,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = dynamicItem.author.pubTime,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.56f),
+                    maxLines = 1
+                )
             }
         }
     }
@@ -690,25 +1034,18 @@ private fun DynamicCardHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // 头像
-        AsyncImage(
-            model = author.avatar,
-            contentDescription = null,
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape),
-            contentScale = ContentScale.Crop
-        )
-        Column {
+        AvatarImage(url = author.avatar)
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = author.author,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = author.pubTime,
+                text = listOf(author.pubTime, author.pubAction)
+                    .filter(String::isNotBlank)
+                    .joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 maxLines = 1
@@ -720,119 +1057,126 @@ private fun DynamicCardHeader(
 @Composable
 private fun DynamicVideoContent(video: DynamicItem.DynamicVideoModule?) {
     video ?: return
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // 封面
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        DynamicVideoCover(
+            video = video,
+            modifier = Modifier
+                .width(204.dp)
+                .aspectRatio(16f / 9f)
+        )
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 114.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = video.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (video.text.isNotBlank()) {
+                Text(
+                    text = video.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DynamicVideoCover(
+    video: DynamicItem.DynamicVideoModule,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(DynamicCardShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+    ) {
+        AsyncImage(
+            model = video.cover,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(200.dp)
-                .clip(RoundedCornerShape(4.dp))
-        ) {
-            AsyncImage(
-                model = video.cover,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            // 底部渐变遮罩
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(40.dp)
-                    .align(Alignment.BottomCenter)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
-                        )
+                .height(40.dp)
+                .align(Alignment.BottomCenter)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
                     )
-            )
-            // 充电专属标识
-            if (video.isChargingArc) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .background(
-                            Color(0xFFFFB400).copy(alpha = 0.9f),
-                            RoundedCornerShape(4.dp)
-                        )
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = if (video.chargingArcBadge.isNotBlank()) "⚡${video.chargingArcBadge}" else "⚡充电专属",
-                        color = Color.White,
-                        fontSize = 11.sp
-                    )
-                }
-            }
-            // 时长和播放信息
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = video.duration,
-                    color = Color.White,
-                    fontSize = 12.sp
                 )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (video.play.isNotBlank()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_play_count),
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(Modifier.width(2.dp))
-                            Text(
-                                text = video.play,
-                                color = Color.White,
-                                fontSize = 12.sp
-                            )
-                        }
+        )
+        if (video.isChargingArc) {
+            DynamicBadge(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp),
+                text = if (video.chargingArcBadge.isNotBlank()) video.chargingArcBadge else "充电专属"
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = video.duration,
+                color = Color.White,
+                style = MaterialTheme.typography.bodySmall
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (video.play.isNotBlank()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_play_count),
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        Text(
+                            text = video.play,
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
-                    if (video.danmaku.isNotBlank()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_danmaku_count),
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(Modifier.width(2.dp))
-                            Text(
-                                text = video.danmaku,
-                                color = Color.White,
-                                fontSize = 12.sp
-                            )
-                        }
+                }
+                if (video.danmaku.isNotBlank()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_danmaku_count),
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        Text(
+                            text = video.danmaku,
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }
-        }
-        // 标题
-        Text(
-            text = video.title,
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        // 描述文字
-        if (video.text.isNotBlank()) {
-            Text(
-                text = video.text,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
         }
     }
 }
@@ -840,73 +1184,23 @@ private fun DynamicVideoContent(video: DynamicItem.DynamicVideoModule?) {
 @Composable
 private fun DynamicUgcSeasonContent(ugcSeason: DynamicItem.DynamicUgcSeasonModule?) {
     ugcSeason ?: return
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp)
-                .clip(RoundedCornerShape(4.dp))
-        ) {
-            AsyncImage(
-                model = ugcSeason.cover,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(40.dp)
-                    .align(Alignment.BottomCenter)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
-                        )
-                    )
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = ugcSeason.duration,
-                    color = Color.White,
-                    fontSize = 12.sp
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (ugcSeason.play.isNotBlank()) {
-                        Text(
-                            text = ugcSeason.play,
-                            color = Color.White,
-                            fontSize = 12.sp
-                        )
-                    }
-                    if (ugcSeason.danmaku.isNotBlank()) {
-                        Text(
-                            text = ugcSeason.danmaku,
-                            color = Color.White,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-            }
-        }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             text = ugcSeason.title,
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 1,
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis
+        )
+        DynamicMediaImage(
+            url = ugcSeason.cover,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(156.dp)
         )
         if (ugcSeason.desc.isNotBlank()) {
             Text(
                 text = ugcSeason.desc,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -916,54 +1210,53 @@ private fun DynamicUgcSeasonContent(ugcSeason: DynamicItem.DynamicUgcSeasonModul
 }
 
 @Composable
-private fun DynamicPgcContent(pgc: DynamicItem.DynamicPgcModule?) {
+private fun DynamicPgcContent(
+    pgc: DynamicItem.DynamicPgcModule?,
+    author: DynamicItem.DynamicAuthorModule
+) {
     pgc ?: return
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // 封面
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.Top
+    ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp)
-                .clip(RoundedCornerShape(4.dp))
+                .width(204.dp)
+                .aspectRatio(16f / 9f)
         ) {
-            AsyncImage(
-                model = pgc.cover,
-                contentDescription = null,
+            DynamicMediaImage(
+                url = pgc.cover,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
             )
-            // 番剧标签
-            Box(
+            DynamicBadge(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-                    .background(
-                        Color(0xFFFB7299).copy(alpha = 0.9f),
-                        RoundedCornerShape(4.dp)
-                    )
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = "番剧",
-                    color = Color.White,
-                    fontSize = 11.sp
-                )
-            }
+                    .align(Alignment.TopStart)
+                    .padding(8.dp),
+                text = "番剧"
+            )
         }
-        // 标题
-        Text(
-            text = pgc.title,
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 114.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = pgc.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            DynamicMetaRow(text = author.pubTime.ifBlank { author.pubAction.ifBlank { "更新" } })
+        }
     }
 }
 
 @Composable
 private fun DynamicDrawContent(draw: DynamicItem.DynamicDrawModule?) {
     draw ?: return
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // 标题
         val title = draw.title
         if (!title.isNullOrBlank()) {
@@ -974,30 +1267,8 @@ private fun DynamicDrawContent(draw: DynamicItem.DynamicDrawModule?) {
                 overflow = TextOverflow.Ellipsis
             )
         }
-        // 图片 - 瀑布流中图片纵向排列
         if (draw.images.isNotEmpty()) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                draw.images.take(1).forEach { image ->
-                    AsyncImage(
-                        model = image.url,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .clip(RoundedCornerShape(4.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                if (draw.images.size > 1) {
-                    Text(
-                        text = "+${draw.images.size - 1} 张图片",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-            }
+            DynamicImageStrip(images = draw.images.map { it.url })
         }
         // 文字
         if (draw.text.isNotBlank()) {
@@ -1015,63 +1286,54 @@ private fun DynamicDrawContent(draw: DynamicItem.DynamicDrawModule?) {
 private fun DynamicWordContent(word: DynamicItem.DynamicWordModule?) {
     word ?: return
     if (word.text.isNotBlank()) {
-        Text(
-            text = word.text,
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.52f),
+                    shape = DynamicCardShape
+                )
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+        ) {
+            Text(
+                text = word.text,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f),
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
 @Composable
 private fun DynamicArticleContent(article: DynamicItem.DynamicArticleModule?) {
     article ?: return
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // 标题
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             text = article.title,
             style = MaterialTheme.typography.titleSmall,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        // 封面
         if (article.covers.isNotEmpty()) {
-            AsyncImage(
-                model = article.covers.first(),
-                contentDescription = null,
+            DynamicMediaImage(
+                url = article.covers.first(),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp)
-                    .clip(RoundedCornerShape(4.dp)),
-                contentScale = ContentScale.Crop
+                    .height(144.dp)
             )
         }
-        // 摘要
         if (article.text.isNotBlank()) {
             Text(
                 text = article.text,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
         }
-        // 专栏标签
-        Box(
-            modifier = Modifier
-                .background(
-                    MaterialTheme.colorScheme.primaryContainer,
-                    RoundedCornerShape(4.dp)
-                )
-                .padding(horizontal = 6.dp, vertical = 2.dp)
-        ) {
-            Text(
-                text = article.label.ifBlank { "专栏" },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-        }
+        DynamicBadge(text = article.label.ifBlank { "专栏" })
     }
 }
 
@@ -1080,12 +1342,12 @@ private fun DynamicForwardContent(
     word: DynamicItem.DynamicWordModule?,
     orig: DynamicItem?
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // 转发文字
         if (word != null && word.text.isNotBlank()) {
             Text(
-                text = word.text,
-                style = MaterialTheme.typography.bodyMedium,
+                text = "转发：${word.text}",
+                style = MaterialTheme.typography.titleSmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -1126,12 +1388,7 @@ private fun DynamicForwardContent(
                     // 原内容
                     when (orig.type) {
                         DynamicType.Av -> orig.video?.let {
-                            Text(
-                                text = it.title,
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            DynamicVideoContent(video = it)
                         }
                         DynamicType.UgcSeason -> orig.ugcSeason?.let {
                             Text(
@@ -1198,4 +1455,228 @@ private fun DynamicUnknownContent(type: DynamicType) {
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
         )
     }
+}
+
+@Composable
+private fun DynamicEmptyContent(isLoading: Boolean) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isLoading) {
+            LoadingTip()
+        } else {
+            ContentStatusCard(text = stringResource(R.string.no_data))
+        }
+    }
+}
+
+@Composable
+private fun DynamicLoadingLine() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        LoadingTip()
+    }
+}
+
+@Composable
+private fun DynamicEndLine() {
+    Text(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        text = "没有更多了捏",
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+        textAlign = TextAlign.Center
+    )
+}
+
+@Composable
+private fun AvatarImage(
+    url: String,
+    modifier: Modifier = Modifier.size(36.dp)
+) {
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+    ) {
+        AsyncImage(
+            model = url,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+    }
+}
+
+@Composable
+private fun DynamicMediaImage(
+    url: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(DynamicCardShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+        contentAlignment = Alignment.Center
+    ) {
+        if (url.isBlank()) {
+            Text(
+                text = "暂无封面",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.48f)
+            )
+        } else {
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+    }
+}
+
+@Composable
+private fun DynamicImageStrip(images: List<String>) {
+    val visibleImages = images.take(2)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        visibleImages.forEach { imageUrl ->
+            DynamicMediaImage(
+                url = imageUrl,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(126.dp)
+            )
+        }
+    }
+    if (images.size > visibleImages.size) {
+        Text(
+            text = "+${images.size - visibleImages.size} 张图片",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+    }
+}
+
+@Composable
+private fun DynamicBadge(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .background(
+                color = DynamicAccent.copy(alpha = 0.16f),
+                shape = RoundedCornerShape(5.dp)
+            )
+            .border(
+                width = 1.dp,
+                color = DynamicAccent.copy(alpha = 0.85f),
+                shape = RoundedCornerShape(5.dp)
+            )
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = DynamicAccent,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun DynamicMetaRow(text: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Schedule,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.48f),
+            modifier = Modifier.size(17.dp)
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun DynamicFooterInfo(
+    footer: DynamicItem.DynamicFooterModule?,
+    prominent: Boolean = false
+) {
+    footer ?: return
+
+    val stats = listOf(
+        Icons.Rounded.ChatBubbleOutline to footer.comment,
+        Icons.Rounded.ThumbUp to footer.like,
+        Icons.Rounded.FavoriteBorder to footer.share
+    ).filter { it.second > 0 }
+
+    if (stats.isEmpty()) return
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (prominent) 20.dp else 14.dp)
+    ) {
+        stats.forEach { (icon, count) ->
+            DynamicStatItem(
+                icon = icon,
+                text = formatDynamicCount(count),
+                prominent = prominent
+            )
+        }
+    }
+}
+
+@Composable
+private fun DynamicStatItem(
+    icon: ImageVector,
+    text: String,
+    prominent: Boolean
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (prominent) 0.76f else 0.52f),
+            modifier = Modifier.size(if (prominent) 21.dp else 17.dp)
+        )
+        Text(
+            text = text,
+            style = if (prominent) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (prominent) 0.76f else 0.56f),
+            maxLines = 1
+        )
+    }
+}
+
+private fun formatDynamicCount(count: Int): String = when {
+    count >= 10000 -> {
+        val value = count / 10000f
+        if (count >= 100000) "${count / 10000}万" else String.format("%.1f万", value)
+    }
+    else -> count.toString()
 }
