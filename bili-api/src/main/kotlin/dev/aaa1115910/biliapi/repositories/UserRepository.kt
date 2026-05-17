@@ -391,8 +391,8 @@ class UserRepository(
             ApiType.Web -> {
                 val responseData = BiliHttpApi.getDynamicDetail(
                     id = dynamicId,
-                    features = "itemOpusStyle",
-                    sessData = authRepository.sessionData ?: ""
+                    sessData = authRepository.sessionData ?: "",
+                    csrf = authRepository.biliJct
                 ).getResponseData()
                 DynamicItem.fromDynamicItem(responseData.item)
             }

@@ -2,112 +2,126 @@ package dev.aaa1115910.biliapi.http.entity.dynamic
 
 import dev.aaa1115910.biliapi.http.entity.user.Pendant
 import dev.aaa1115910.biliapi.http.entity.user.Vip
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 
 @Serializable
 data class DynamicData(
     @SerialName("has_more")
-    val hasMore: Boolean,
-    val offset: String,
+    val hasMore: Boolean = false,
+    val offset: String = "",
     @SerialName("update_baseline")
-    val updateBaseline: String,
+    val updateBaseline: String = "",
     @SerialName("update_num")
-    val updateNum: Int,
+    val updateNum: Int = 0,
+    val total: Int = 0,
     val items: List<DynamicItem> = emptyList()
 )
 
-/**
- * @param basic 基础信息
- * @param idStr 动态 id
- * @param modules 动态内容
- * @param orig 转发内容
- * @param type 动态类型
- * @param visible 是否可见
- */
 @Serializable
 data class DynamicItem(
-    val basic: Basic,
+    val basic: Basic = Basic(),
     @SerialName("id_str")
-    val idStr: String? = null,
-    val modules: Modules,
+    @Serializable(with = FlexibleStringSerializer::class)
+    val idStr: String = "",
+    val modules: Modules = Modules(),
     val orig: DynamicItem? = null,
-    val type: String,
-    val visible: Boolean,
+    val type: String = "",
+    val visible: Boolean = true,
     @SerialName("jump_url")
     val jumpUrl: String? = null
 ) {
     @Serializable
     data class Basic(
         @SerialName("comment_id_str")
-        val commentIdStr: String,
+        @Serializable(with = FlexibleStringSerializer::class)
+        val commentIdStr: String = "",
         @SerialName("comment_type")
-        val commentType: Long,
+        @Serializable(with = FlexibleLongSerializer::class)
+        val commentType: Long = 0L,
         @SerialName("jump_url")
         val jumpUrl: String? = null,
         @SerialName("like_icon")
-        val likeIcon: LikeIcon,
+        val likeIcon: LikeIcon? = null,
         @SerialName("rid_str")
-        val ridStr: String
+        @Serializable(with = FlexibleStringSerializer::class)
+        val ridStr: String = ""
     ) {
         @Serializable
         data class LikeIcon(
             @SerialName("action_url")
-            val actionUrl: String,
+            val actionUrl: String = "",
             @SerialName("end_url")
-            val endUrl: String,
-            val id: Long,
+            val endUrl: String = "",
+            @Serializable(with = FlexibleLongSerializer::class)
+            val id: Long = 0L,
             @SerialName("start_url")
-            val startUrl: String
+            val startUrl: String = ""
         )
     }
 
-    /**
-     * @param moduleAuthor 作者信息
-     * @param moduleDynamic 动态内容
-     * @param moduleMore 更多菜单按钮信息 当位于转发内容 [DynamicItem.orig] 时，该项为 null
-     * @param moduleStat 动态底部按钮信息 当位于转发内容 [DynamicItem.orig] 时，该项为 null
-     */
     @Serializable
     data class Modules(
         @SerialName("module_author")
-        val moduleAuthor: Author,
+        val moduleAuthor: Author? = null,
         @SerialName("module_dynamic")
-        val moduleDynamic: Dynamic,
+        val moduleDynamic: Dynamic = Dynamic(),
         @SerialName("module_more")
         val moduleMore: More? = null,
         @SerialName("module_stat")
-        val moduleStat: Stat? = null
+        val moduleStat: Stat? = null,
+        @SerialName("module_tag")
+        val moduleTag: ModuleTag? = null,
+        @SerialName("module_interaction")
+        val moduleInteraction: JsonElement? = null,
+        @SerialName("module_dispute")
+        val moduleDispute: JsonElement? = null,
+        @SerialName("module_fold")
+        val moduleFold: JsonElement? = null
     ) {
         @Serializable
         data class Author(
-            val face: String,
+            val face: String = "",
             @SerialName("face_nft")
-            val faceNft: Boolean,
+            val faceNft: Boolean = false,
             val following: Boolean = false,
             @SerialName("jump_url")
-            val jumpUrl: String,
-            val label: String,
-            val mid: Long,
-            val name: String,
+            val jumpUrl: String = "",
+            val label: String = "",
+            @Serializable(with = FlexibleLongSerializer::class)
+            val mid: Long = 0L,
+            val name: String = "",
             @SerialName("official_verify")
             val officialVerify: OfficialVerify? = null,
             val pendant: Pendant? = null,
             @SerialName("pub_action")
-            val pubAction: String,
+            val pubAction: String = "",
             @SerialName("pub_location_text")
             val pubLocationText: String? = null,
             @SerialName("pub_time")
-            val pubTime: String,
+            val pubTime: String = "",
             @SerialName("pub_ts")
-            val pubTs: Int,
-            val type: String,
+            @Serializable(with = FlexibleIntSerializer::class)
+            val pubTs: Int = 0,
+            val type: String = "",
             val vip: Vip? = null
         ) {
             @Serializable
             data class OfficialVerify(
-                val desc: String,
-                val type: Int
+                val desc: String = "",
+                val type: Int = 0
             )
         }
 
@@ -122,32 +136,123 @@ data class DynamicItem(
             data class Additional(
                 val common: Common? = null,
                 val reserve: Reserve? = null,
-                val type: String
+                val vote: Vote? = null,
+                val ugc: Ugc? = null,
+                val goods: Goods? = null,
+                @SerialName("upower_lottery")
+                val upowerLottery: UpowerLottery? = null,
+                val match: Match? = null,
+                val type: String = ""
             ) {
                 @Serializable
                 data class Common(
-                    val button: Button,
-                    val cover: String,
-                    val desc1: String,
-                    val desc2: String,
+                    val button: Button? = null,
+                    val cover: String = "",
+                    val desc1: String = "",
+                    val desc2: String = "",
                     @SerialName("head_text")
-                    val headText: String,
+                    val headText: String = "",
                     @SerialName("id_str")
-                    val idStr: String,
+                    val idStr: String = "",
                     @SerialName("jump_url")
-                    val jumpUrl: String,
-                    val style: Int,
+                    val jumpUrl: String = "",
+                    val style: Int = 0,
                     @SerialName("sub_type")
-                    val subType: String,
-                    val title: String
+                    val subType: String = "",
+                    val title: String = ""
                 )
+
+                @Serializable
+                data class Vote(
+                    @SerialName("join_num")
+                    @Serializable(with = FlexibleIntSerializer::class)
+                    val joinNum: Int = 0,
+                    @SerialName("vote_id")
+                    @Serializable(with = FlexibleIntSerializer::class)
+                    val voteId: Int = 0,
+                    val title: String = "",
+                    val desc: String = ""
+                )
+
+                @Serializable
+                data class Ugc(
+                    val cover: String = "",
+                    @SerialName("desc_second")
+                    val descSecond: String = "",
+                    @SerialName("jump_url")
+                    val jumpUrl: String = "",
+                    val title: String = ""
+                )
+
+                @Serializable
+                data class Goods(
+                    val items: List<GoodsItem> = emptyList()
+                ) {
+                    @Serializable
+                    data class GoodsItem(
+                        val cover: String = "",
+                        @SerialName("jump_desc")
+                        val jumpDesc: String = "",
+                        @SerialName("jump_url")
+                        val jumpUrl: String = "",
+                        val name: String = "",
+                        val price: String = ""
+                    )
+                }
+
+                @Serializable
+                data class UpowerLottery(
+                    val button: Button? = null,
+                    val desc: TextLink? = null,
+                    val hint: Hint? = null,
+                    @SerialName("jump_url")
+                    val jumpUrl: String = "",
+                    val title: String = ""
+                ) {
+                    @Serializable
+                    data class Hint(
+                        val text: String = ""
+                    )
+                }
+
+                @Serializable
+                data class Match(
+                    val button: Button? = null,
+                    @SerialName("jump_url")
+                    val jumpUrl: String = "",
+                    @SerialName("match_info")
+                    val matchInfo: MatchInfo? = null
+                ) {
+                    @Serializable
+                    data class MatchInfo(
+                        @SerialName("center_bottom")
+                        val centerBottom: String = "",
+                        @SerialName("center_top")
+                        val centerTop: JsonElement? = null,
+                        @SerialName("left_team")
+                        val leftTeam: Team? = null,
+                        @SerialName("right_team")
+                        val rightTeam: Team? = null,
+                        @SerialName("sub_title")
+                        val subTitle: JsonElement? = null,
+                        val title: String = ""
+                    )
+
+                    @Serializable
+                    data class Team(
+                        val name: String = "",
+                        val pic: String = ""
+                    )
+                }
             }
 
             @Serializable
             data class Button(
                 val check: ButtonItem? = null,
+                val icon: String = "",
                 val status: Int? = null,
-                val type: Int,
+                val text: String = "",
+                val type: Int = 0,
                 val uncheck: ButtonItem? = null,
                 @SerialName("jump_style")
                 val jumpStyle: ButtonItem? = null,
@@ -158,213 +263,338 @@ data class DynamicItem(
                 data class ButtonItem(
                     @SerialName("icon_url")
                     val iconUrl: String? = null,
-                    val text: String
+                    val text: String = "",
+                    val disable: Int = 0
                 )
             }
 
             @Serializable
-            data class Reserve(
-                val button: Button,
-                val desc1: Desc,
-                val desc2: Desc,
+            data class TextLink(
+                val style: Int = 0,
+                val text: String = "",
+                val visible: Boolean? = null,
                 @SerialName("jump_url")
-                val jumpUrl: String,
+                val jumpUrl: String? = null
+            )
+
+            @Serializable
+            data class Reserve(
+                val button: Button? = null,
+                val desc1: TextLink? = null,
+                val desc2: TextLink? = null,
+                val desc3: TextLink? = null,
+                @SerialName("jump_url")
+                val jumpUrl: String = "",
                 @SerialName("reserve_total")
-                val reserveTotal: Int,
-                val rid: Long,
-                val state: Int,
+                val reserveTotal: Int = 0,
+                @Serializable(with = FlexibleLongSerializer::class)
+                val rid: Long = 0L,
+                val state: Int = 0,
                 val stypc: Int? = null,
-                val title: String,
+                val title: String = "",
                 @SerialName("up_mid")
-                val upMid: Long
-            ) {
-                @Serializable
-                data class Desc(
-                    val style: Int,
-                    val text: String,
-                    val visible: Boolean? = null
-                )
-            }
+                @Serializable(with = FlexibleLongSerializer::class)
+                val upMid: Long = 0L
+            )
 
             @Serializable
             data class Desc(
                 @SerialName("rich_text_nodes")
-                val richTextNodes: List<RichTextNodeItem>,
-                val text: String
+                val richTextNodes: List<RichTextNodeItem> = emptyList(),
+                val text: String = ""
             ) {
                 @Serializable
                 data class RichTextNodeItem(
                     val emoji: Emoji? = null,
                     @SerialName("orig_text")
-                    val origText: String,
-                    val text: String,
-                    val type: String
+                    val origText: String = "",
+                    val text: String = "",
+                    val type: String = "",
+                    val rid: String? = null,
+                    val pics: List<Major.Opus.Pic> = emptyList(),
+                    @SerialName("dyn_pic")
+                    val dynPic: List<Major.Opus.Pic> = emptyList(),
+                    @SerialName("jump_url")
+                    val jumpUrl: String? = null
                 ) {
                     @Serializable
                     data class Emoji(
                         @SerialName("icon_url")
-                        val iconUrl: String,
-                        val size: Int,
-                        val text: String,
-                        val type: Int
+                        val iconUrl: String = "",
+                        @SerialName("webp_url")
+                        val webpUrl: String = "",
+                        @SerialName("gif_url")
+                        val gifUrl: String = "",
+                        val size: Int = 1,
+                        val text: String = "",
+                        val type: Int = 0
                     )
                 }
             }
 
-            /**
-             * 在一些情况下会出现数据存放的位置不一样的情况
-             * 例如默认情况下 draw 的文字会放在上一次级类的 desc 中，而浏览器里默认在请求时会带上一些 features，使内容放在 opus 内
-             */
             @Serializable
             data class Major(
                 val archive: Archive? = null,
+                @SerialName("ugc_season")
+                val ugcSeason: UgcSeason? = null,
                 @SerialName("live_rcmd")
                 val liveRcmd: LiveRcmd? = null,
+                val live: Live? = null,
                 val opus: Opus? = null,
                 val draw: Draw? = null,
                 val pgc: Pgc? = null,
                 val article: Article? = null,
+                val courses: Courses? = null,
+                val common: Common? = null,
+                @SerialName("upower_common")
+                val upowerCommon: Common? = null,
+                val music: Music? = null,
+                val blocked: Blocked? = null,
+                val medialist: Medialist? = null,
+                @SerialName("subscription_new")
+                val subscriptionNew: SubscriptionNew? = null,
                 val none: None? = null,
-                @SerialName("ugc_season")
-                val ugcSeason: UgcSeason? = null,
-                val type: String
+                val type: String = ""
             ) {
                 @Serializable
                 data class Archive(
-                    val aid: String,
-                    val badge: Badge,
-                    val bvid: String,
-                    val cover: String,
-                    val desc: String,
+                    @Serializable(with = FlexibleLongSerializer::class)
+                    val aid: Long = 0L,
+                    val badge: Badge? = null,
+                    val bvid: String = "",
+                    val cover: String = "",
+                    val desc: String = "",
                     @SerialName("disable_preview")
-                    val disablePreview: Int,
+                    val disablePreview: Int = 0,
                     @SerialName("duration_text")
-                    val durationText: String,
+                    val durationText: String = "",
                     @SerialName("jump_url")
-                    val jumpUrl: String,
-                    val stat: Stat,
-                    val title: String,
-                    val type: Int
+                    val jumpUrl: String = "",
+                    val stat: Stat? = null,
+                    val title: String = "",
+                    val type: Int = 0
                 ) {
                     @Serializable
                     data class Badge(
                         @SerialName("bg_color")
-                        val bgColor: String,
-                        val color: String,
-                        val text: String
+                        val bgColor: String = "",
+                        val color: String = "",
+                        val text: String = ""
                     )
 
                     @Serializable
                     data class Stat(
-                        val danmaku: String,
-                        val play: String
+                        val danmaku: String = "",
+                        val play: String = ""
                     )
                 }
 
                 @Serializable
-                data class LiveRcmd(
-                    val content: String,
-                    @SerialName("reserve_type")
-                    val reserveType: Int
+                data class UgcSeason(
+                    @Serializable(with = FlexibleLongSerializer::class)
+                    val aid: Long = 0L,
+                    val badge: Archive.Badge? = null,
+                    val bvid: String = "",
+                    val cover: String = "",
+                    val desc: String = "",
+                    @SerialName("disable_preview")
+                    val disablePreview: Int = 0,
+                    @SerialName("duration_text")
+                    val durationText: String = "",
+                    @SerialName("jump_url")
+                    val jumpUrl: String = "",
+                    val stat: Archive.Stat? = null,
+                    val title: String = "",
+                    val type: Int = 0
                 )
 
-                /**
-                 * @param foldAction [展开,收起]
-                 * @param jumpUrl 跳转地址
-                 * @param pics 动态内的图片
-                 * @param summary 动态内的文字
-                 */
+                @Serializable
+                data class LiveRcmd(
+                    val content: String = "",
+                    @SerialName("reserve_type")
+                    val reserveType: Int = 0
+                )
+
+                @Serializable
+                data class Live(
+                    val badge: Archive.Badge? = null,
+                    val cover: String = "",
+                    @SerialName("desc_first")
+                    val descFirst: String = "",
+                    @Serializable(with = FlexibleLongSerializer::class)
+                    val id: Long = 0L,
+                    @SerialName("jump_url")
+                    val jumpUrl: String = "",
+                    @SerialName("live_state")
+                    val liveState: Int = 0,
+                    val title: String = ""
+                )
+
                 @Serializable
                 data class Opus(
                     @SerialName("fold_action")
-                    val foldAction: List<String>,
+                    val foldAction: List<String> = emptyList(),
                     @SerialName("jump_url")
-                    val jumpUrl: String,
-                    val pics: List<Pic>,
-                    val summary: Desc,
+                    val jumpUrl: String = "",
+                    val pics: List<Pic> = emptyList(),
+                    val summary: Desc = Desc(),
                     val title: String? = null
                 ) {
                     @Serializable
                     data class Pic(
-                        val height: Int,
-                        val width: Int,
+                        val height: Int = 0,
+                        val width: Int = 0,
                         val size: Float? = null,
-                        val url: String
+                        val url: String = "",
+                        val src: String = "",
+                        @SerialName("live_url")
+                        val liveUrl: String = ""
                     )
                 }
 
                 @Serializable
                 data class Draw(
-                    val id: Int,
-                    val items: List<Pic>,
+                    val id: Int = 0,
+                    val items: List<Pic> = emptyList()
                 ) {
                     @Serializable
                     data class Pic(
-                        val height: Int,
-                        val width: Int,
+                        val height: Int = 0,
+                        val width: Int = 0,
                         val size: Float? = null,
-                        val src: String,
-                        val tags: List<String>
+                        val src: String = "",
+                        val tags: List<String> = emptyList()
                     )
                 }
 
                 @Serializable
                 data class Pgc(
-                    val badge: Archive.Badge,
-                    val cover: String,
-                    val epid: Int,
+                    @Serializable(with = FlexibleLongSerializer::class)
+                    val aid: Long = 0L,
+                    val badge: Archive.Badge? = null,
+                    val bvid: String = "",
+                    @Serializable(with = FlexibleLongSerializer::class)
+                    val cid: Long = 0L,
+                    val cover: String = "",
+                    @SerialName("duration_text")
+                    val durationText: String = "",
+                    @Serializable(with = FlexibleIntSerializer::class)
+                    val epid: Int = 0,
                     @SerialName("jump_url")
-                    val jumpUrl: String,
+                    val jumpUrl: String = "",
                     @SerialName("season_id")
-                    val seasonId: Int,
-                    val stat: Archive.Stat,
+                    @Serializable(with = FlexibleIntSerializer::class)
+                    val seasonId: Int = 0,
+                    val stat: Archive.Stat? = null,
                     @SerialName("sub_type")
-                    val subType: Int,
-                    val title: String,
-                    val type: Int
+                    val subType: Int = 0,
+                    val title: String = "",
+                    val type: Int = 0
                 )
 
                 @Serializable
                 data class Article(
-                    val covers: List<String>,
-                    val desc: String,
-                    val id: Int,
+                    val covers: List<String> = emptyList(),
+                    val desc: String = "",
+                    @Serializable(with = FlexibleIntSerializer::class)
+                    val id: Int = 0,
                     @SerialName("jump_url")
-                    val jumpUrl: String,
-                    val label: String,
-                    val title: String
+                    val jumpUrl: String = "",
+                    val label: String = "",
+                    val title: String = ""
+                )
+
+                @Serializable
+                data class Courses(
+                    @Serializable(with = FlexibleLongSerializer::class)
+                    val aid: Long = 0L,
+                    val badge: Archive.Badge? = null,
+                    val cover: String = "",
+                    val desc: String = "",
+                    @SerialName("duration_text")
+                    val durationText: String = "",
+                    @Serializable(with = FlexibleLongSerializer::class)
+                    val epid: Long = 0L,
+                    @SerialName("jump_url")
+                    val jumpUrl: String = "",
+                    @SerialName("season_id")
+                    @Serializable(with = FlexibleLongSerializer::class)
+                    val seasonId: Long = 0L,
+                    val title: String = ""
+                )
+
+                @Serializable
+                data class Common(
+                    val badge: Archive.Badge? = null,
+                    val button: Button? = null,
+                    val cover: String = "",
+                    val desc: String = "",
+                    @SerialName("jump_url")
+                    val jumpUrl: String = "",
+                    val label: String = "",
+                    val title: String = ""
+                )
+
+                @Serializable
+                data class Music(
+                    @Serializable(with = FlexibleLongSerializer::class)
+                    val id: Long = 0L,
+                    val cover: String = "",
+                    val label: String = "",
+                    val title: String = ""
+                )
+
+                @Serializable
+                data class Blocked(
+                    @SerialName("bg_img")
+                    val bgImg: BgImg? = null,
+                    @SerialName("blocked_type")
+                    val blockedType: Int = 0,
+                    val button: Button? = null,
+                    val icon: BgImg? = null,
+                    @SerialName("hint_message")
+                    val hintMessage: String = "",
+                    val title: String = ""
+                ) {
+                    @Serializable
+                    data class BgImg(
+                        @SerialName("img_dark")
+                        val imgDark: String = "",
+                        @SerialName("img_day")
+                        val imgDay: String = ""
+                    )
+                }
+
+                @Serializable
+                data class Medialist(
+                    val id: JsonElement? = null,
+                    val badge: Archive.Badge? = null,
+                    val cover: String = "",
+                    @SerialName("jump_url")
+                    val jumpUrl: String = "",
+                    @SerialName("sub_title")
+                    val subTitle: String = "",
+                    val title: String = ""
+                )
+
+                @Serializable
+                data class SubscriptionNew(
+                    @SerialName("live_rcmd")
+                    val liveRcmd: LiveRcmd? = null
                 )
 
                 @Serializable
                 data class None(
-                    val tips: String
-                )
-
-                @Serializable
-                data class UgcSeason(
-                    val aid: Long,
-                    val badge: Archive.Badge,
-                    val bvid: String,
-                    val cover: String,
-                    val desc: String? = null,
-                    @SerialName("disable_preview")
-                    val disablePreview: Int,
-                    @SerialName("duration_text")
-                    val durationText: String,
-                    @SerialName("jump_url")
-                    val jumpUrl: String,
-                    val stat: Archive.Stat,
-                    val title: String,
-                    val type: Int
+                    val tips: String = ""
                 )
             }
 
             @Serializable
             data class Topic(
-                val id: Int,
+                val id: Int = 0,
                 @SerialName("jump_url")
-                val jumpUrl: String,
-                val name: String
+                val jumpUrl: String = "",
+                val name: String = ""
             )
         }
 
@@ -375,23 +605,76 @@ data class DynamicItem(
         ) {
             @Serializable
             data class MoreItem(
-                val label: String,
-                val type: String
+                val label: String = "",
+                val type: String = ""
             )
         }
 
         @Serializable
+        data class ModuleTag(
+            val text: String = ""
+        )
+
+        @Serializable
         data class Stat(
-            val comment: StatItem,
-            val forward: StatItem,
-            val like: StatItem
+            val comment: StatItem? = null,
+            val forward: StatItem? = null,
+            val like: StatItem? = null,
+            val favorite: StatItem? = null
         ) {
             @Serializable
             data class StatItem(
-                val count: Int,
-                val forbidden: Boolean,
+                val count: Int = 0,
+                val forbidden: Boolean = false,
                 val status: Boolean = false
             )
         }
+    }
+}
+
+object FlexibleStringSerializer : KSerializer<String> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleString", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): String {
+        val jsonDecoder = decoder as? JsonDecoder ?: return decoder.decodeString()
+        val element = jsonDecoder.decodeJsonElement()
+        return (element as? JsonPrimitive)?.contentOrNull ?: ""
+    }
+
+    override fun serialize(encoder: Encoder, value: String) {
+        encoder.encodeString(value)
+    }
+}
+
+object FlexibleIntSerializer : KSerializer<Int> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleInt", PrimitiveKind.INT)
+
+    override fun deserialize(decoder: Decoder): Int {
+        val jsonDecoder = decoder as? JsonDecoder ?: return decoder.decodeInt()
+        val element = jsonDecoder.decodeJsonElement()
+        val primitive = element as? JsonPrimitive ?: return 0
+        return primitive.intOrNull ?: primitive.contentOrNull?.toIntOrNull() ?: 0
+    }
+
+    override fun serialize(encoder: Encoder, value: Int) {
+        encoder.encodeInt(value)
+    }
+}
+
+object FlexibleLongSerializer : KSerializer<Long> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleLong", PrimitiveKind.LONG)
+
+    override fun deserialize(decoder: Decoder): Long {
+        val jsonDecoder = decoder as? JsonDecoder ?: return decoder.decodeLong()
+        val element = jsonDecoder.decodeJsonElement()
+        val primitive = element as? JsonPrimitive ?: return 0L
+        return primitive.longOrNull ?: primitive.contentOrNull?.toLongOrNull() ?: 0L
+    }
+
+    override fun serialize(encoder: Encoder, value: Long) {
+        encoder.encodeLong(value)
     }
 }

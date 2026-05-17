@@ -206,6 +206,15 @@ fun NewDynamicsScreen(
                     )
                 }
             }
+            DynamicType.UgcSeason -> {
+                dynamic.ugcSeason?.let { ugcSeason ->
+                    VideoInfoActivity.actionStart(
+                        context = context,
+                        aid = ugcSeason.aid,
+                        proxyArea = ProxyArea.checkProxyArea(ugcSeason.title)
+                    )
+                }
+            }
             DynamicType.Pgc -> {
                 dynamic.pgc?.let { pgc ->
                     SeasonInfoActivity.actionStart(
@@ -655,6 +664,7 @@ private fun StaggeredDynamicCard(
             // 根据类型显示不同内容
             when (dynamicItem.type) {
                 DynamicType.Av -> DynamicVideoContent(video = dynamicItem.video)
+                DynamicType.UgcSeason -> DynamicUgcSeasonContent(ugcSeason = dynamicItem.ugcSeason)
                 DynamicType.Pgc -> DynamicPgcContent(pgc = dynamicItem.pgc)
                 DynamicType.Draw -> DynamicDrawContent(draw = dynamicItem.draw)
                 DynamicType.Word -> DynamicWordContent(word = dynamicItem.word)
@@ -818,6 +828,84 @@ private fun DynamicVideoContent(video: DynamicItem.DynamicVideoModule?) {
         if (video.text.isNotBlank()) {
             Text(
                 text = video.text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun DynamicUgcSeasonContent(ugcSeason: DynamicItem.DynamicUgcSeasonModule?) {
+    ugcSeason ?: return
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .clip(RoundedCornerShape(4.dp))
+        ) {
+            AsyncImage(
+                model = ugcSeason.cover,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
+                        )
+                    )
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = ugcSeason.duration,
+                    color = Color.White,
+                    fontSize = 12.sp
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (ugcSeason.play.isNotBlank()) {
+                        Text(
+                            text = ugcSeason.play,
+                            color = Color.White,
+                            fontSize = 12.sp
+                        )
+                    }
+                    if (ugcSeason.danmaku.isNotBlank()) {
+                        Text(
+                            text = ugcSeason.danmaku,
+                            color = Color.White,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        }
+        Text(
+            text = ugcSeason.title,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (ugcSeason.desc.isNotBlank()) {
+            Text(
+                text = ugcSeason.desc,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 maxLines = 2,
@@ -1038,6 +1126,14 @@ private fun DynamicForwardContent(
                     // 原内容
                     when (orig.type) {
                         DynamicType.Av -> orig.video?.let {
+                            Text(
+                                text = it.title,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        DynamicType.UgcSeason -> orig.ugcSeason?.let {
                             Text(
                                 text = it.title,
                                 style = MaterialTheme.typography.bodySmall,

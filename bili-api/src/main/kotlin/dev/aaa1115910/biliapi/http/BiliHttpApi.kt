@@ -82,6 +82,7 @@ import dev.aaa1115910.biliapi.http.entity.web.NavResponseData
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
 import dev.aaa1115910.biliapi.http.util.BiliAppConf
 import dev.aaa1115910.biliapi.http.util.encApiSign
+import dev.aaa1115910.biliapi.http.util.signWbi
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -523,13 +524,27 @@ object BiliHttpApi {
     suspend fun getDynamicDetail(
         timezoneOffset: Int = -480,
         id: String,
-        features: String? = null,
-        sessData: String = ""
+        rid: String? = null,
+        type: String? = null,
+        features: String? = "itemOpusStyle,listOnlyfans,onlyfansQaCard",
+        sessData: String = "",
+        clearCookie: Boolean = false,
+        csrf: String? = null
     ): BiliResponse<DynamicDetailData> = client.get("/x/polymer/web-dynamic/v1/detail") {
         parameter("timezone_offset", timezoneOffset)
         parameter("id", id)
+        rid?.let { parameter("rid", it) }
+        type?.let { parameter("type", it) }
         features?.let { parameter("features", it) }
-        header("Cookie", "SESSDATA=$sessData;")
+        parameter("gaia_source", "Athena")
+        parameter("web_location", "333.1330")
+        parameter("x-bili-device-req-json", """{"platform":"web","device":"pc","spmid":"333.1330"}""")
+        if (!clearCookie && csrf?.isNotBlank() == true) {
+            parameter("csrf", csrf)
+        }
+        if (!clearCookie && sessData.isNotBlank()) {
+            header("Cookie", "SESSDATA=$sessData;")
+        }
     }.body()
 
     /**
@@ -542,12 +557,22 @@ object BiliHttpApi {
         opusId: String,
         timezoneOffset: Int = -480,
         sessData: String = ""
-    ): BiliResponse<OpusDetailData> = client.get("/x/polymer/web-dynamic/v1/opus/detail") {
-        parameter("timezone_offset", timezoneOffset)
-        parameter("id", opusId)
-        parameter("features", "itemOpusStyle")
-        header("Cookie", "SESSDATA=$sessData;")
-    }.body()
+    ): BiliResponse<OpusDetailData> {
+        val signedParams = Parameters.build {
+            append("timezone_offset", timezoneOffset.toString())
+            append("id", opusId)
+            append("features", "htmlNewStyle")
+        }.signWbi()
+
+        return client.get("/x/polymer/web-dynamic/v1/opus/detail") {
+            signedParams.entries().forEach { (key, values) ->
+                values.forEach { value -> parameter(key, value) }
+            }
+            if (sessData.isNotBlank()) {
+                header("Cookie", "SESSDATA=$sessData;")
+            }
+        }.body()
+    }
 
     /**
      * 获取传统专栏详情
@@ -559,10 +584,22 @@ object BiliHttpApi {
     suspend fun getArticleView(
         cvId: String,
         sessData: String = ""
-    ): BiliResponse<ArticleViewData> = client.get("/x/article/view") {
-        parameter("id", cvId)
-        header("Cookie", "SESSDATA=$sessData;")
-    }.body()
+    ): BiliResponse<ArticleViewData> {
+        val signedParams = Parameters.build {
+            append("id", cvId)
+            append("gaia_source", "main_web")
+            append("web_location", "333.976")
+        }.signWbi()
+
+        return client.get("/x/article/view") {
+            signedParams.entries().forEach { (key, values) ->
+                values.forEach { value -> parameter(key, value) }
+            }
+            if (sessData.isNotBlank()) {
+                header("Cookie", "SESSDATA=$sessData;")
+            }
+        }.body()
+    }
 
     /**
      * 获取用户[uid]的详细信息

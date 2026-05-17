@@ -527,6 +527,61 @@ private fun DynamicContentSection(
                     )
                 }
             }
+            DynamicType.UgcSeason -> {
+                dynamicItem.ugcSeason?.let { ugcSeason ->
+                    if (ugcSeason.desc.isNotBlank()) {
+                        Text(
+                            text = ugcSeason.desc,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontSize = 16.sp
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .height(200.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    ) {
+                        AsyncImage(
+                            model = ugcSeason.cover,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .size(60.dp)
+                                .background(
+                                    Color.Black.copy(alpha = 0.6f),
+                                    CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("▶", color = Color.White, fontSize = 24.sp)
+                        }
+                        Text(
+                            text = ugcSeason.duration,
+                            color = Color.White,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(8.dp)
+                                .background(
+                                    Color.Black.copy(alpha = 0.7f),
+                                    RoundedCornerShape(4.dp)
+                                )
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            fontSize = 14.sp
+                        )
+                    }
+                    Text(
+                        text = ugcSeason.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontSize = 18.sp
+                    )
+                }
+            }
             DynamicType.Pgc -> {
                 dynamicItem.pgc?.let { pgc ->
                     Text(
@@ -708,6 +763,9 @@ private fun DynamicContentSection(
                             }
                             when (orig.type) {
                                 DynamicType.Av -> orig.video?.let {
+                                    Text(it.title, style = MaterialTheme.typography.bodyMedium)
+                                }
+                                DynamicType.UgcSeason -> orig.ugcSeason?.let {
                                     Text(it.title, style = MaterialTheme.typography.bodyMedium)
                                 }
                                 DynamicType.Word -> orig.word?.let {

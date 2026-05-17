@@ -35,7 +35,7 @@ data class Picture(
 
         fun fromPicture(picture: dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Dynamic.Major.Opus.Pic): Picture {
             return Picture(
-                url = normalizeUrl(picture.url),
+                url = normalizeUrl(picture.url.ifBlank { picture.src.ifBlank { picture.liveUrl } }),
                 width = picture.width,
                 height = picture.height,
                 key = UUID.randomUUID().toString()

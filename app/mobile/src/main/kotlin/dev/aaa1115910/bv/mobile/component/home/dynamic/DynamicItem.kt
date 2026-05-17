@@ -189,6 +189,8 @@ fun DynamicContent(
             modifier = contentModifier,
             none = dynamicItem.none!!
         )
+
+        else -> Text("${dynamicItem.type}")
     }
 }
 
