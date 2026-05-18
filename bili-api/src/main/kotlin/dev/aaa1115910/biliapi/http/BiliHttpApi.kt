@@ -10,6 +10,7 @@ import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuResponse
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicData
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicDetailData
+import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicEntranceData
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicFollowUpData
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicUpListData
 import dev.aaa1115910.biliapi.http.entity.dynamic.ArticleViewData
@@ -489,6 +490,20 @@ object BiliHttpApi {
     ): BiliResponse<DynamicFollowUpData> = client.get("/x/polymer/web-dynamic/v1/portal") {
         parameter("up_list_more", 1)
         parameter("web_location", "333.1365")
+        val cookieParts = mutableListOf<String>()
+        sessData?.takeIf { it.isNotBlank() }?.let { cookieParts.add("SESSDATA=$it") }
+        dedeUserID?.let { cookieParts.add("DedeUserID=$it") }
+        buvid3?.takeIf { it.isNotBlank() }?.let { cookieParts.add("buvid3=$it") }
+        if (cookieParts.isNotEmpty()) {
+            header("Cookie", cookieParts.joinToString(";") + ";")
+        }
+    }.body()
+
+    suspend fun getDynamicEntrance(
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<DynamicEntranceData> = client.get("/x/web-interface/dynamic/entrance") {
         val cookieParts = mutableListOf<String>()
         sessData?.takeIf { it.isNotBlank() }?.let { cookieParts.add("SESSDATA=$it") }
         dedeUserID?.let { cookieParts.add("DedeUserID=$it") }

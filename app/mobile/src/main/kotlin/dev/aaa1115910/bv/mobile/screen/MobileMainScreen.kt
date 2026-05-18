@@ -30,6 +30,8 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
@@ -82,6 +84,7 @@ import com.origeek.imageViewer.previewer.ImagePreviewer
 import com.origeek.imageViewer.previewer.VerticalDragType
 import com.origeek.imageViewer.previewer.rememberPreviewerState
 import dev.aaa1115910.biliapi.entity.Picture
+import dev.aaa1115910.biliapi.repositories.UserRepository as BiliUserRepository
 import dev.aaa1115910.bv.mobile.activities.FavoriteActivity
 import dev.aaa1115910.bv.mobile.activities.FollowingSeasonActivity
 import dev.aaa1115910.bv.mobile.activities.FollowingUserActivity
@@ -108,6 +111,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
@@ -115,7 +119,8 @@ fun MobileMainScreen(
     modifier: Modifier = Modifier,
     popularViewModel: PopularViewModel = koinViewModel(),
     userViewModel: UserViewModel = koinViewModel(),
-    userSwitchViewModel: UserSwitchViewModel = koinViewModel()
+    userSwitchViewModel: UserSwitchViewModel = koinViewModel(),
+    biliUserRepository: BiliUserRepository = koinInject()
 ) {
     val logger = KotlinLogging.logger("MobileMainScreen")
     val state = rememberMobileMainScreenState(
@@ -132,11 +137,54 @@ fun MobileMainScreen(
 
     val pictures = remember { mutableStateListOf<Picture>() }
     var savingPreviewImage by remember { mutableStateOf(false) }
+    var dynamicUnreadCount by remember { mutableStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
     val previewerState = rememberPreviewerState(
         verticalDragType = VerticalDragType.UpAndDown,
         pageCount = { pictures.size },
         getKey = { pictures[it].key }
     )
+
+    fun refreshDynamicUnreadCount() {
+        if (!userViewModel.isLogin) {
+            dynamicUnreadCount = 0
+            return
+        }
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                biliUserRepository.getDynamicUnreadCount()
+            }.onSuccess { count ->
+                withContext(Dispatchers.Main) {
+                    dynamicUnreadCount = count
+                }
+            }.onFailure {
+                logger.warn(it) { "Load dynamic unread count failed" }
+            }
+        }
+    }
+
+    LaunchedEffect(userViewModel.isLogin) {
+        refreshDynamicUnreadCount()
+    }
+
+    LaunchedEffect(state.currentNavItem) {
+        if (state.currentNavItem == MobileMainScreenNav.Dynamic) {
+            dynamicUnreadCount = 0
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, userViewModel.isLogin) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                refreshDynamicUnreadCount()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     val onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit =
         { newPictures, afterSetPictures ->
@@ -232,7 +280,13 @@ fun MobileMainScreen(
                     mobileMainScreenState = state,
                     navigationSuiteType = navSuiteType,
                     avatar = userViewModel.face,
-                    onNavigate = state::navigate,
+                    dynamicUnreadCount = dynamicUnreadCount,
+                    onNavigate = { navItem ->
+                        if (navItem == MobileMainScreenNav.Dynamic) {
+                            dynamicUnreadCount = 0
+                        }
+                        state.navigate(navItem)
+                    },
                     onShowUserDialog = state::showUserDialog
                 )
             }
@@ -384,6 +438,7 @@ private fun NavigationSuit(
     mobileMainScreenState: MobileMainScreenState,
     navigationSuiteType: NavigationSuiteType,
     avatar: String,
+    dynamicUnreadCount: Int,
     onNavigate: (MobileMainScreenNav) -> Unit,
     onShowUserDialog: () -> Unit,
 ) {
@@ -398,7 +453,12 @@ private fun NavigationSuit(
                     MobileMainScreenNav.Setting,
                 ).forEach { navItem ->
                     item(
-                        icon = { Icon(navItem.icon, contentDescription = navItem.displayName) },
+                        icon = {
+                            NavigationIcon(
+                                navItem = navItem,
+                                dynamicUnreadCount = dynamicUnreadCount
+                            )
+                        },
                         label = { Text(navItem.displayName) },
                         selected = mobileMainScreenState.currentNavItem == navItem,
                         onClick = { onNavigate(navItem) }
@@ -452,7 +512,12 @@ private fun NavigationSuit(
                     MobileMainScreenNav.Setting,
                 ).forEach { navItem ->
                     NavigationRailItem(
-                        icon = { Icon(navItem.icon, contentDescription = navItem.displayName) },
+                        icon = {
+                            NavigationIcon(
+                                navItem = navItem,
+                                dynamicUnreadCount = dynamicUnreadCount
+                            )
+                        },
                         label = { Text(navItem.displayName) },
                         selected = mobileMainScreenState.currentNavItem == navItem,
                         onClick = { onNavigate(navItem) }
@@ -460,6 +525,26 @@ private fun NavigationSuit(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NavigationIcon(
+    navItem: MobileMainScreenNav,
+    dynamicUnreadCount: Int
+) {
+    if (navItem == MobileMainScreenNav.Dynamic && dynamicUnreadCount > 0) {
+        BadgedBox(
+            badge = {
+                Badge {
+                    Text(text = if (dynamicUnreadCount > 99) "99+" else dynamicUnreadCount.toString())
+                }
+            }
+        ) {
+            Icon(navItem.icon, contentDescription = navItem.displayName)
+        }
+    } else {
+        Icon(navItem.icon, contentDescription = navItem.displayName)
     }
 }
 

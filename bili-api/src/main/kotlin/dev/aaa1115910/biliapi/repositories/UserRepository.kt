@@ -366,6 +366,15 @@ class UserRepository(
         }
     }
 
+    suspend fun getDynamicUnreadCount(): Int {
+        if (authRepository.sessionData.isNullOrBlank()) return 0
+        return BiliHttpApi.getDynamicEntrance(
+            sessData = authRepository.sessionData,
+            dedeUserID = authRepository.mid,
+            buvid3 = authRepository.buvid3
+        ).getResponseData().unreadCount()
+    }
+
     suspend fun getDynamicUpList(
         offset: String,
         preferApiType: ApiType = ApiType.Web
