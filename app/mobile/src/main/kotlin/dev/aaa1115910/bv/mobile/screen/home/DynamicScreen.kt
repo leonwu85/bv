@@ -2126,9 +2126,10 @@ private fun DynamicTabContent(
     val scope = rememberCoroutineScope()
     val lane by remember { derivedStateOf { state.getLane() } }
     val isLoading = dynamicViewModel.isLoading(type)
+    val hasMore = dynamicViewModel.hasMore(type)
     val pullRefreshState = rememberPullToRefreshState()
 
-    state.OnBottomReached(loading = isLoading) {
+    state.OnBottomReached(loading = isLoading || !hasMore) {
         scope.launch(Dispatchers.IO) {
             dynamicViewModel.loadMoreByType(type)
         }

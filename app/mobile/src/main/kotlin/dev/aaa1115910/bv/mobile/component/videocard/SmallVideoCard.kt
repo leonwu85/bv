@@ -1,6 +1,7 @@
 package dev.aaa1115910.bv.mobile.component.videocard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,15 +75,9 @@ fun SmallVideoCard(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         data.coverBadges.forEach { badge ->
-                            Text(
-                                modifier = Modifier
-                                    .clip(MaterialTheme.shapes.extraSmall)
-                                    .background(Color.Black.copy(alpha = 0.65f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                            SmallVideoCardBadge(
                                 text = badge,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
-                                maxLines = 1
+                                isCharging = badge.contains("充电")
                             )
                         }
                     }
@@ -185,6 +180,39 @@ fun SmallVideoCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SmallVideoCardBadge(
+    text: String,
+    isCharging: Boolean
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val isDark = isSystemInDarkTheme()
+    val containerColor = when {
+        isCharging && isDark -> colorScheme.errorContainer
+        isCharging -> colorScheme.error
+        else -> colorScheme.primary
+    }
+    val contentColor = when {
+        isCharging && isDark -> colorScheme.onErrorContainer
+        isCharging -> colorScheme.onError
+        else -> colorScheme.onPrimary
+    }
+
+    Surface(
+        shape = MaterialTheme.shapes.extraSmall,
+        color = containerColor,
+        contentColor = contentColor
+    ) {
+        Text(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

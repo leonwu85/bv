@@ -438,25 +438,31 @@ class DynamicViewModel(
     private suspend fun loadArticleData() {
         if (!articleHasMore || !bvUserRepository.isLogin) return
         loadingArticle = true
-        logger.fInfo { "Load more dynamic article [apiType=${Prefs.apiType}, offset=$articleHistoryOffset, page=${currentArticlePage + 1}]" }
+        val nextPage = currentArticlePage + 1
+        logger.fInfo { "Load more dynamic article [apiType=${Prefs.apiType}, offset=$articleHistoryOffset, page=$nextPage]" }
         runCatching {
             val dynamicData = userRepository.getDynamicsByType(
                 type = "article",
-                page = ++currentArticlePage,
+                page = nextPage,
                 offset = articleHistoryOffset ?: "",
                 updateBaseline = articleUpdateBaseline ?: "",
                 preferApiType = Prefs.apiType
             )
-            dynamicArticleList.addAll(dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids })
+            val articleItems = dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids }
+            dynamicArticleList.addAll(articleItems)
+            currentArticlePage = nextPage
             articleHistoryOffset = dynamicData.historyOffset
             articleUpdateBaseline = dynamicData.updateBaseline
-            articleHasMore = dynamicData.hasMore
+            articleHasMore = dynamicData.hasMore && dynamicData.dynamics.isNotEmpty()
 
             logger.fInfo { "Load dynamic article list page: ${currentArticlePage},size: ${dynamicData.dynamics.size}" }
+            if (dynamicData.dynamics.isEmpty()) {
+                logger.fInfo { "No article data returned, stop auto loading" }
+            }
         }.onFailure {
+            articleHasMore = false
             // 错误码 4101132 表示没有数据，视为正常情况
             if (it.message?.contains("4101132") == true || it.message == "请求数据发生错误，请刷新或稍后重试") {
-                articleHasMore = false
                 logger.fInfo { "No more article data available" }
             } else {
                 logger.fWarn { "Load dynamic article list failed: ${it.stackTraceToString()}" }
@@ -591,6 +597,16 @@ class DynamicViewModel(
             DynamicTabType.Pgc -> loadingPgc
             DynamicTabType.Article -> loadingArticle
             DynamicTabType.Up -> loadingUp
+        }
+    }
+
+    fun hasMore(type: DynamicTabType): Boolean {
+        return when (type) {
+            DynamicTabType.All -> allHasMore
+            DynamicTabType.Video -> videoHasMore
+            DynamicTabType.Pgc -> pgcHasMore
+            DynamicTabType.Article -> articleHasMore
+            DynamicTabType.Up -> upHasMore
         }
     }
 

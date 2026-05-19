@@ -115,8 +115,10 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -290,7 +292,13 @@ fun VideoPlayerScreen(
         pageCount = { pictures.size },
         getKey = { pictures[it].key }
     )
-    val replySheetState = rememberBottomSheetScaffoldState()
+    val replyBottomSheetState = rememberStandardBottomSheetState(
+        initialValue = SheetValue.PartiallyExpanded,
+        skipHiddenState = false
+    )
+    val replySheetState = rememberBottomSheetScaffoldState(
+        bottomSheetState = replyBottomSheetState
+    )
     var replyDraftTarget by remember { mutableStateOf<ReplyDraftTarget?>(null) }
     var liveDanmakuDraft by remember { mutableStateOf("") }
     var liveDanmakuSelection by remember { mutableStateOf(EmoteTextSelection.Zero) }

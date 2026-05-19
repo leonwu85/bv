@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.http.entity.AuthFailureException
 import dev.aaa1115910.biliapi.http.entity.user.MyInfoData
+import dev.aaa1115910.biliapi.http.entity.user.UserNavStatData
 import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.R
@@ -32,6 +33,7 @@ class UserViewModel(
     val face get() = userRepository.avatar
 
     var responseData: MyInfoData? by mutableStateOf(null)
+    var statData: UserNavStatData? by mutableStateOf(null)
 
     init {
         if (userRepository.isLogin) {
@@ -81,6 +83,18 @@ class UserViewModel(
                     }
                 }
             }
+            runCatching {
+                BiliHttpApi.getUserNavStat(
+                    buvid3 = Prefs.buvid3,
+                    sessData = Prefs.sessData
+                ).getResponseData()
+            }.onSuccess { data ->
+                withContext(Dispatchers.Main) {
+                    statData = data
+                }
+            }.onFailure {
+                logger.warn(it) { "Update user nav stat failed" }
+            }
         }
     }
 
@@ -93,5 +107,7 @@ class UserViewModel(
     fun clearUserInfo() {
         userRepository.username = ""
         userRepository.avatar = ""
+        responseData = null
+        statData = null
     }
 }

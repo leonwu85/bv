@@ -46,6 +46,7 @@ private fun SwitchPreference(
         trailingContent = {
             Switch(
                 checked = checked,
+                enabled = enabled,
                 onCheckedChange = onCheckedChange
             )
         },
@@ -142,4 +143,3 @@ fun PreferenceGroupScope.switchPreference(
         )
     }
 }
-

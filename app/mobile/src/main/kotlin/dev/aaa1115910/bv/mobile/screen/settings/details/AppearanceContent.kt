@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -44,6 +45,7 @@ import dev.aaa1115910.bv.mobile.component.preferences.preferenceGroups
 import dev.aaa1115910.bv.mobile.settings.MobilePrefKeys
 import dev.aaa1115910.bv.mobile.settings.MobilePrefs
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
+import dev.aaa1115910.bv.mobile.theme.MobileThemePalette
 
 @Composable
 fun AppearanceContent(
@@ -51,6 +53,8 @@ fun AppearanceContent(
 ) {
     val context = LocalContext.current
     val seedColor by MobilePrefs.seedColorFlow.collectAsState(initial = MobilePrefs.seedColor)
+    val themePalette by MobilePrefs.themePaletteFlow.collectAsState(initial = MobilePrefs.themePalette)
+    val isFixedPalette = themePalette == MobileThemePalette.ChineseTraditional
     var showCustomColorDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -64,9 +68,16 @@ fun AppearanceContent(
                     prefReq = MobilePrefKeys.themeTypeRequest,
                     values = ThemeType.entries.associate { it.ordinal to it.getDisplayName(context) }
                 )
+                radioPreference(
+                    title = "主题配色",
+                    value = themePalette,
+                    values = MobileThemePalette.entries.associateWith { it.displayName },
+                    onValueChange = { MobilePrefs.themePalette = it }
+                )
                 switchPreference(
                     title = "动态取色",
-                    summary = "Android 12 及以上优先使用系统动态色",
+                    summary = if (isFixedPalette) "中国传统色使用固定配色" else "Android 12 及以上优先使用系统动态色",
+                    enabled = !isFixedPalette,
                     prefReq = MobilePrefKeys.dynamicColorRequest,
                     onCheckedChange = { true }
                 )
@@ -77,16 +88,18 @@ fun AppearanceContent(
                     leadingContent = {
                         ColorDot(argb = seedColor)
                     },
+                    enabled = !isFixedPalette,
                     value = seedColor,
                     values = MobileThemeColorPreset.valuesWithCustom(seedColor),
                     onValueChange = { MobilePrefs.seedColor = it }
                 )
                 textPreference(
                     title = "自定义主色",
-                    summary = seedColor.toHexColor(),
+                    summary = if (isFixedPalette) "中国传统色主题不使用自定义主色" else seedColor.toHexColor(),
                     leadingContent = {
                         Icon(imageVector = Icons.Rounded.Palette, contentDescription = null)
                     },
+                    enabled = !isFixedPalette,
                     onClick = { showCustomColorDialog = true }
                 )
             }
@@ -96,8 +109,7 @@ fun AppearanceContent(
             ThemePreview(
                 modifier = Modifier
                     .padding(top = 4.dp, bottom = 16.dp)
-                    .fillMaxWidth(),
-                seedColor = seedColor
+                    .fillMaxWidth()
             )
         }
     }
@@ -116,9 +128,10 @@ fun AppearanceContent(
 
 @Composable
 private fun ThemePreview(
-    modifier: Modifier = Modifier,
-    seedColor: Int
+    modifier: Modifier = Modifier
 ) {
+    val colorScheme = MaterialTheme.colorScheme
+
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
@@ -132,39 +145,68 @@ private fun ThemePreview(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                ColorDot(argb = seedColor)
+                ColorDot(argb = colorScheme.primary.toArgb())
                 Text(
                     text = "主题预览",
                     style = MaterialTheme.typography.titleMedium
                 )
             }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = MaterialTheme.shapes.small
-                ) {
-                    Text(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        text = "Primary"
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PreviewChip(
+                        modifier = Modifier.weight(1f),
+                        label = "主色",
+                        color = colorScheme.primary,
+                        contentColor = colorScheme.onPrimary
+                    )
+                    PreviewChip(
+                        modifier = Modifier.weight(1f),
+                        label = "辅色",
+                        color = colorScheme.secondary,
+                        contentColor = colorScheme.onSecondary
                     )
                 }
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    shape = MaterialTheme.shapes.small
-                ) {
-                    Text(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        text = "Accent"
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PreviewChip(
+                        modifier = Modifier.weight(1f),
+                        label = "点睛",
+                        color = colorScheme.tertiary,
+                        contentColor = colorScheme.onTertiary
+                    )
+                    PreviewChip(
+                        modifier = Modifier.weight(1f),
+                        label = "底色",
+                        color = colorScheme.surfaceContainerHighest,
+                        contentColor = colorScheme.onSurfaceVariant
                     )
                 }
             }
         }
     }
 }
+
+@Composable
+private fun PreviewChip(
+    modifier: Modifier = Modifier,
+    label: String,
+    color: Color,
+    contentColor: Color
+) {
+    Surface(
+        modifier = modifier,
+        color = color,
+        contentColor = contentColor,
+        shape = MaterialTheme.shapes.small
+    ) {
+        Text(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            text = label
+        )
+    }
+}
+
 @Composable
 private fun CustomColorDialog(
     initialColor: Int,

@@ -259,6 +259,7 @@ data class DynamicItem(
     var liveRcmd: DynamicLiveRcmdModule? = null,
     var pgc: DynamicPgcModule? = null,
     var article: DynamicArticleModule? = null,
+    var blocked: DynamicBlockedModule? = null,
     var majorCard: DynamicMajorCardModule? = null,
     var none: DynamicNoneModule? = null,
     var vote: DynamicVoteModule? = null,
@@ -278,6 +279,7 @@ data class DynamicItem(
                 footer = DynamicFooterModule.fromModuleStat(item.modules.moduleStat)
             )
             val major = item.modules.moduleDynamic.major
+            dynamicItem.blocked = major?.blocked?.let(DynamicBlockedModule::fromModuleBlocked)
             when (dynamicType) {
                 DynamicType.Av -> dynamicItem.video =
                     major?.archive?.let(DynamicVideoModule::fromModuleArchive)
@@ -370,12 +372,11 @@ data class DynamicItem(
                 } else {
                     DynamicAuthorModule.fromModuleAuthor(item.getAuthorModule()!!)
                 },
-                video = item.getDynamicModule()
-                    ?.takeIf { it.moduleItemCase == ModuleItemCase.DYN_ARCHIVE }
-                    ?.let {
-                    DynamicVideoModule.fromModuleArchive(it.dynArchive).apply {
+                video = item.getDynamicModule()?.let {
+                    DynamicVideoModule.fromModuleDynamic(
+                        moduleDynamic = it,
                         text = item.getDescModule()?.text ?: ""
-                    }
+                    )
                 },
                 footer = if (!isForwardItem) {
                     // 获取动态详情时 module_list 中没有 module_stat，但 module_bottom 中包含了 module_stat
@@ -386,9 +387,10 @@ data class DynamicItem(
 
             when (dynamicType) {
                 DynamicType.Av -> dynamicItem.video = item.getDynamicModule()?.let {
-                    DynamicVideoModule.fromModuleArchive(it.dynArchive).apply {
+                    DynamicVideoModule.fromModuleDynamic(
+                        moduleDynamic = it,
                         text = item.getDescModule()?.text ?: ""
-                    }
+                    )
                 }
 
                 DynamicType.UgcSeason -> dynamicItem.ugcSeason =
@@ -459,7 +461,8 @@ data class DynamicItem(
         val avatar: String,
         val mid: Long,
         val pubTime: String,
-        val pubAction: String
+        val pubAction: String,
+        val badgeText: String = ""
     ) {
         companion object {
             fun fromModuleAuthor(moduleAuthor: dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Author?) =
@@ -468,7 +471,8 @@ data class DynamicItem(
                     avatar = moduleAuthor?.face.orEmpty(),
                     mid = moduleAuthor?.mid ?: 0L,
                     pubTime = moduleAuthor?.pubTime.orEmpty(),
-                    pubAction = moduleAuthor?.pubAction.orEmpty()
+                    pubAction = moduleAuthor?.pubAction.orEmpty(),
+                    badgeText = moduleAuthor?.iconBadge?.text.orEmpty()
                 )
 
             fun fromModuleAuthor(moduleAuthor: bilibili.app.dynamic.v2.ModuleAuthor) =
@@ -546,6 +550,25 @@ data class DynamicItem(
                     isChargingArc = isChargingArc,
                     chargingArcBadge = if (isChargingArc) badgeText else ""
                 )
+            }
+
+            fun fromModuleDynamic(
+                moduleDynamic: bilibili.app.dynamic.v2.ModuleDynamic,
+                text: String = ""
+            ): DynamicVideoModule? {
+                return when (moduleDynamic.moduleItemCase) {
+                    ModuleItemCase.DYN_ARCHIVE -> fromModuleArchive(moduleDynamic.dynArchive)
+                    ModuleItemCase.DYN_CHARGING_ARCHIVE -> fromModuleArchive(
+                        moduleDynamic.dynChargingArchive.archiveInfo
+                    ).copy(
+                        isChargingArc = true,
+                        chargingArcBadge = "充电专属"
+                    )
+
+                    else -> null
+                }?.apply {
+                    this.text = text
+                }
             }
         }
     }
@@ -962,7 +985,8 @@ data class DynamicItem(
         val url: String,
         val label: String,
         val id: Int,
-        val covers: List<String>
+        val covers: List<String>,
+        val coverPictures: List<Picture> = emptyList()
     ) {
         companion object {
             fun fromModuleArticle(moduleDynamic: dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Dynamic.Major.Article) =
@@ -999,7 +1023,8 @@ data class DynamicItem(
                         url = opus.jumpUrl,
                         label = "",
                         id = 0,
-                        covers = opus.pics.map { pic -> pic.url.ifBlank { pic.src.ifBlank { pic.liveUrl } } }
+                        covers = opus.pics.map { pic -> pic.url.ifBlank { pic.src.ifBlank { pic.liveUrl } } },
+                        coverPictures = opus.pics.map(Picture::fromPicture)
                     )
                 } else {
                     DynamicArticleModule(
@@ -1029,6 +1054,52 @@ data class DynamicItem(
                     text = moduleNone.text
                 )
             }
+        }
+    }
+
+    data class DynamicBlockedModule(
+        val title: String,
+        val hintMessage: String,
+        val blockedType: Int,
+        val bgImage: BlockedImage? = null,
+        val icon: BlockedImage? = null,
+        val button: BlockedButton? = null
+    ) {
+        data class BlockedImage(
+            val imgDay: String,
+            val imgDark: String
+        ) {
+            fun url(isDark: Boolean): String {
+                return if (isDark) {
+                    imgDark.ifBlank { imgDay }
+                } else {
+                    imgDay.ifBlank { imgDark }
+                }
+            }
+        }
+
+        data class BlockedButton(
+            val icon: String,
+            val jumpUrl: String,
+            val text: String
+        )
+
+        companion object {
+            fun fromModuleBlocked(blocked: dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Dynamic.Major.Blocked) =
+                DynamicBlockedModule(
+                    title = blocked.title,
+                    hintMessage = blocked.hintMessage,
+                    blockedType = blocked.blockedType,
+                    bgImage = blocked.bgImg?.let { BlockedImage(imgDay = it.imgDay, imgDark = it.imgDark) },
+                    icon = blocked.icon?.let { BlockedImage(imgDay = it.imgDay, imgDark = it.imgDark) },
+                    button = blocked.button?.let {
+                        BlockedButton(
+                            icon = it.icon,
+                            jumpUrl = it.jumpUrl.orEmpty(),
+                            text = it.text
+                        )
+                    }
+                )
         }
     }
 
@@ -1219,6 +1290,8 @@ data class DynamicVideo(
             when (dynamic.moduleItemCase) {
                 ModuleItemCase.DYN_ARCHIVE -> {
                     val archive = dynamic.dynArchive
+                    val badgeText = archive.badgeList.firstOrNull()?.text ?: ""
+                    val isChargingArc = badgeText.contains("充电") || badgeText.contains("限时免费")
                     return DynamicVideo(
                         aid = archive.avid,
                         bvid = archive.bvid,
@@ -1233,7 +1306,9 @@ data class DynamicVideo(
                         duration = convertStringTimeToSeconds(archive.coverLeftText1),
                         play = convertStringPlayCountToNumberPlayCount(archive.coverLeftText2),
                         danmaku = convertStringPlayCountToNumberPlayCount(archive.coverLeftText3).toInt(),
-                        avatar = author.face
+                        avatar = author.face,
+                        isChargingArc = isChargingArc,
+                        chargingArcBadge = if (isChargingArc) badgeText else ""
                     )
                 }
 
@@ -1267,7 +1342,9 @@ data class DynamicVideo(
                         duration = convertStringTimeToSeconds(chargingArchiveInfo.coverLeftText1),
                         play = convertStringPlayCountToNumberPlayCount(chargingArchiveInfo.coverLeftText2),
                         danmaku = convertStringPlayCountToNumberPlayCount(chargingArchiveInfo.coverLeftText3).toInt(),
-                        avatar = author.face
+                        avatar = author.face,
+                        isChargingArc = true,
+                        chargingArcBadge = "充电专属"
                     )
                 }
 

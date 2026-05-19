@@ -134,8 +134,8 @@ fun ReplySheetScaffold(
     }
 
     BackHandler(
-        sheetState.bottomSheetState.currentValue != SheetValue.PartiallyExpanded
-                && !(previewerState.canClose || previewerState.animating)
+        sheetState.bottomSheetState.currentValue == SheetValue.Expanded &&
+                !(previewerState.canClose || previewerState.animating)
     ) {
         scope.launch { sheetState.bottomSheetState.partialExpand() }
     }

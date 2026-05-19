@@ -49,8 +49,8 @@ data class VideoCardData(
         get() = listOfNotNull(
             "互动视频".takeIf { isInteractive },
             when {
-                isChargingArc && badgeText.isNotBlank() -> "⚡$badgeText"
-                isChargingArc -> "⚡充电专属"
+                isChargingArc && badgeText.isNotBlank() -> badgeText
+                isChargingArc -> "充电专属"
                 else -> null
             }
         )

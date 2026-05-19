@@ -66,7 +66,7 @@ fun HomeScreen(
     userViewModel: UserViewModel = koinViewModel(),
     windowSize: WindowWidthSizeClass,
     onOpenSearch: () -> Unit,
-    onShowUserDialog: () -> Unit
+    onOpenMine: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val pageState = rememberPagerState(
@@ -82,7 +82,7 @@ fun HomeScreen(
                 HomeTopAppBar(
                     avatar = userViewModel.face,
                     onOpenSearch = onOpenSearch,
-                    onShowUserDialog = onShowUserDialog
+                    onOpenMine = onOpenMine
                 )
             }
         }
@@ -256,7 +256,7 @@ private fun HomeTopAppBar(
     modifier: Modifier = Modifier,
     avatar: String,
     onOpenSearch: () -> Unit,
-    onShowUserDialog: () -> Unit,
+    onOpenMine: () -> Unit,
 ) {
     TopAppBar(
         modifier = modifier,
@@ -289,7 +289,7 @@ private fun HomeTopAppBar(
         },
         navigationIcon = {},
         actions = {
-            IconButton(onClick = onShowUserDialog) {
+            IconButton(onClick = onOpenMine) {
                 if (avatar.isBlank()) {
                     Icon(
                         imageVector = Icons.Rounded.Person,

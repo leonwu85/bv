@@ -16,6 +16,7 @@ import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.entity.LiveQualityPreference
 import dev.aaa1115910.bv.entity.PlayerType
 import dev.aaa1115910.bv.entity.ThemeType
+import dev.aaa1115910.bv.mobile.theme.MobileThemePalette
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.DanmakuType
 import dev.aaa1115910.bv.player.entity.LiveCodec
@@ -43,6 +44,18 @@ object MobilePrefs {
     val themeTypeFlow: Flow<ThemeType>
         get() = dsm.getPreferenceFlow(MobilePrefKeys.themeTypeRequest)
             .transform { emit(ThemeType.entries[it]) }
+
+    var themePalette: MobileThemePalette
+        get() = MobileThemePalette.entries.getOrElse(
+            read(MobilePrefKeys.themePaletteRequest)
+        ) { MobileThemePalette.Default }
+        set(value) = write(MobilePrefKeys.themePaletteKey, value.ordinal)
+
+    val themePaletteFlow: Flow<MobileThemePalette>
+        get() = dsm.getPreferenceFlow(MobilePrefKeys.themePaletteRequest)
+            .transform { ordinal ->
+                emit(MobileThemePalette.entries.getOrElse(ordinal) { MobileThemePalette.Default })
+            }
 
     var dynamicColor: Boolean
         get() = read(MobilePrefKeys.dynamicColorRequest)
@@ -245,6 +258,7 @@ object MobilePrefs {
 
 object MobilePrefKeys {
     val themeTypeKey = intPreferencesKey("mobile_theme_type")
+    val themePaletteKey = intPreferencesKey("mobile_theme_palette")
     val dynamicColorKey = booleanPreferencesKey("mobile_theme_dynamic_color")
     val seedColorKey = intPreferencesKey("mobile_theme_seed_color")
     val playerTypeKey = intPreferencesKey("mobile_player_type")
@@ -291,6 +305,7 @@ object MobilePrefKeys {
     val incognitoModeKey = booleanPreferencesKey("mobile_incognito_mode")
 
     val themeTypeRequest = PreferenceRequest(themeTypeKey, ThemeType.Auto.ordinal)
+    val themePaletteRequest = PreferenceRequest(themePaletteKey, MobileThemePalette.Default.ordinal)
     val dynamicColorRequest = PreferenceRequest(dynamicColorKey, false)
     val seedColorRequest = PreferenceRequest(seedColorKey, MobilePrefs.DEFAULT_SEED_COLOR)
     val playerTypeRequest = PreferenceRequest(playerTypeKey, PlayerType.Media3.ordinal)

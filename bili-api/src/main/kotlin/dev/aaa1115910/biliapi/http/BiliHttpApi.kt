@@ -65,6 +65,7 @@ import dev.aaa1115910.biliapi.http.entity.user.RelationStat
 import dev.aaa1115910.biliapi.http.entity.user.UserCardData
 import dev.aaa1115910.biliapi.http.entity.user.UserFollowData
 import dev.aaa1115910.biliapi.http.entity.user.UserInfoData
+import dev.aaa1115910.biliapi.http.entity.user.UserNavStatData
 import dev.aaa1115910.biliapi.http.entity.user.WebSpaceVideoData
 import dev.aaa1115910.biliapi.http.entity.user.favorite.FavoriteFolderInfo
 import dev.aaa1115910.biliapi.http.entity.user.favorite.FavoriteFolderInfoListData
@@ -977,6 +978,17 @@ object BiliHttpApi {
         if (buvid3 != null && sessData.isNotEmpty()) {
             header("Cookie", "buvid3=$buvid3; SESSDATA=$sessData;")
         } else {
+            header("Cookie", "SESSDATA=$sessData;")
+        }
+    }.body()
+
+    suspend fun getUserNavStat(
+        buvid3: String? = null,
+        sessData: String = ""
+    ): BiliResponse<UserNavStatData> = client.get("/x/web-interface/nav/stat") {
+        if (buvid3 != null && sessData.isNotEmpty()) {
+            header("Cookie", "buvid3=$buvid3; SESSDATA=$sessData;")
+        } else if (sessData.isNotEmpty()) {
             header("Cookie", "SESSDATA=$sessData;")
         }
     }.body()

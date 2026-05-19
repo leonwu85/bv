@@ -5,15 +5,18 @@ import android.content.res.Configuration
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -58,6 +61,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
@@ -167,6 +171,13 @@ fun DynamicContent(
 
 ) {
     val contentModifier = modifier.padding(horizontal = horizontalPadding)
+    dynamicItem.blocked?.let { blocked ->
+        DynamicBlocked(
+            modifier = contentModifier,
+            blocked = blocked
+        )
+        return
+    }
     when (dynamicItem.type) {
         DynamicType.Av -> DynamicVideoContent(
             modifier = contentModifier,
@@ -231,6 +242,9 @@ fun DynamicVideoContent(
     modifier: Modifier = Modifier,
     video: DynamicItem.DynamicVideoModule
 ) {
+    val badgeText = video.chargingArcBadge.ifBlank {
+        if (video.isChargingArc) "充电专属" else ""
+    }
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -254,6 +268,13 @@ fun DynamicVideoContent(
                     model = video.cover.resizedImageUrl(ImageSize.SmallVideoCardCover),
                     contentDescription = null,
                     contentScale = ContentScale.FillBounds
+                )
+                DynamicVideoCoverBadge(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 8.dp, end = 10.dp),
+                    text = badgeText,
+                    isCharging = video.isChargingArc || badgeText == "充电专属"
                 )
                 Box(
                     modifier = Modifier
@@ -330,6 +351,45 @@ fun DynamicVideoContent(
 }
 
 @Composable
+private fun DynamicVideoCoverBadge(
+    modifier: Modifier = Modifier,
+    text: String,
+    isCharging: Boolean
+) {
+    if (text.isBlank()) return
+
+    val colorScheme = MaterialTheme.colorScheme
+    val isDark = isSystemInDarkTheme()
+    val containerColor = when {
+        isCharging && isDark -> colorScheme.errorContainer
+        isCharging -> colorScheme.error
+        else -> colorScheme.primary
+    }
+    val contentColor = when {
+        isCharging && isDark -> colorScheme.onErrorContainer
+        isCharging -> colorScheme.onError
+        else -> colorScheme.onPrimary
+    }
+
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.extraSmall,
+        color = containerColor,
+        contentColor = contentColor
+    ) {
+        Text(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            text = text,
+            fontSize = 11.sp,
+            lineHeight = 11.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
 fun DynamicHeader(
     modifier: Modifier = Modifier,
     author: DynamicItem.DynamicAuthorModule,
@@ -358,15 +418,32 @@ fun DynamicHeader(
             ) {
                 Text(
                     text = author.author,
-                    maxLines = 1
-                )
-                Text(
-                    text = author.pubTime + " ${author.pubAction}",
                     maxLines = 1,
-                    color = MaterialTheme.colorScheme.onSurface.copy(0.8f),
-                    fontSize = 14.sp,
-                    lineHeight = 14.sp
+                    overflow = TextOverflow.Ellipsis
                 )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        modifier = Modifier.weight(1f, fill = false),
+                        text = author.pubTime + " ${author.pubAction}",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.8f),
+                        fontSize = 14.sp,
+                        lineHeight = 14.sp
+                    )
+                    if (author.badgeText.isNotBlank()) {
+                        Text(
+                            text = author.badgeText,
+                            maxLines = 1,
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontSize = 14.sp,
+                            lineHeight = 14.sp
+                        )
+                    }
+                }
             }
         }
 
@@ -411,10 +488,20 @@ fun DynamicForwardHeader(
             Text(
                 text = author.pubTime + " ${author.pubAction}",
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurface.copy(0.8f),
                 fontSize = 14.sp,
                 lineHeight = 14.sp
             )
+            if (author.badgeText.isNotBlank()) {
+                Text(
+                    text = author.badgeText,
+                    maxLines = 1,
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontSize = 14.sp,
+                    lineHeight = 14.sp
+                )
+            }
         }
     }
 }
@@ -1116,16 +1203,187 @@ fun DynamicArticle(
                 }
             }
         }
-        if (articleParagraphs.isEmpty() && article.covers.isNotEmpty()) {
+        if (articleParagraphs.isEmpty() && article.coverPictures.isNotEmpty()) {
+            DynamicPictures(
+                pictures = article.coverPictures,
+                previewerState = previewerState,
+                onShowPreviewer = onShowPreviewer
+            )
+        } else if (articleParagraphs.isEmpty() && article.covers.isNotEmpty()) {
             AsyncImage(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(MaterialTheme.shapes.medium),
-                model = article.covers.first().resizedImageUrl(ImageSize.SmallVideoCardCover),
+                model = article.covers.first(),
+                contentDescription = null,
+                contentScale = ContentScale.FillWidth
+            )
+        }
+    }
+}
+
+@Composable
+fun DynamicBlocked(
+    modifier: Modifier = Modifier,
+    blocked: DynamicItem.DynamicBlockedModule
+) {
+    val isDark = isSystemInDarkTheme()
+
+    if (blocked.blockedType == 1) {
+        BoxWithConstraints(
+            modifier = modifier.fillMaxWidth(),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            val cardSize = if (maxWidth <= 255.dp) {
+                maxWidth
+            } else {
+                (maxWidth * 0.8f).coerceAtMost(400.dp)
+            }
+            DynamicBlockedContainer(
+                modifier = Modifier.size(cardSize),
+                blocked = blocked,
+                isDark = isDark,
+                squareLayout = true
+            )
+        }
+    } else {
+        DynamicBlockedContainer(
+            modifier = modifier
+                .fillMaxWidth()
+                .heightIn(min = 82.dp),
+            blocked = blocked,
+            isDark = isDark,
+            squareLayout = false
+        )
+    }
+}
+
+@Composable
+private fun DynamicBlockedContainer(
+    modifier: Modifier,
+    blocked: DynamicItem.DynamicBlockedModule,
+    isDark: Boolean,
+    squareLayout: Boolean
+) {
+    val context = LocalContext.current
+    val shape = MaterialTheme.shapes.medium
+    val bgUrl = blocked.bgImage?.url(isDark).orEmpty()
+    val iconUrl = blocked.icon?.url(isDark).orEmpty()
+
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+    ) {
+        if (bgUrl.isNotBlank()) {
+            AsyncImage(
+                modifier = Modifier.fillMaxSize(),
+                model = bgUrl,
                 contentDescription = null,
                 contentScale = ContentScale.FillBounds
             )
         }
+
+        if (squareLayout) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                DynamicBlockedIcon(iconUrl = iconUrl, size = 42.dp)
+                if (blocked.hintMessage.isNotBlank()) {
+                    Text(
+                        modifier = Modifier.padding(top = 5.dp),
+                        text = blocked.hintMessage,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp
+                    )
+                }
+                DynamicBlockedButton(
+                    modifier = Modifier.padding(top = 8.dp),
+                    button = blocked.button,
+                    onClick = { blocked.button?.jumpUrl?.let { openExternalUrl(context, it) } }
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DynamicBlockedIcon(iconUrl = iconUrl, size = 42.dp)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (blocked.title.isNotBlank()) {
+                        Text(
+                            text = blocked.title,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (blocked.hintMessage.isNotBlank()) {
+                        Text(
+                            text = blocked.hintMessage,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+                DynamicBlockedButton(
+                    button = blocked.button,
+                    onClick = { blocked.button?.jumpUrl?.let { openExternalUrl(context, it) } }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DynamicBlockedIcon(
+    iconUrl: String,
+    size: Dp
+) {
+    if (iconUrl.isNotBlank()) {
+        AsyncImage(
+            modifier = Modifier.size(size),
+            model = iconUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Fit
+        )
+    }
+}
+
+@Composable
+private fun DynamicBlockedButton(
+    modifier: Modifier = Modifier,
+    button: DynamicItem.DynamicBlockedModule.BlockedButton?,
+    onClick: () -> Unit
+) {
+    if (button == null) return
+    Button(
+        modifier = modifier,
+        onClick = onClick
+    ) {
+        if (button.icon.isNotBlank()) {
+            AsyncImage(
+                modifier = Modifier
+                    .padding(end = 4.dp)
+                    .size(16.dp),
+                model = button.icon,
+                contentDescription = null,
+                contentScale = ContentScale.Fit
+            )
+        }
+        Text(text = button.text)
     }
 }
 
@@ -1160,6 +1418,18 @@ private fun DynamicItem.shareDynamicOrToast(context: android.content.Context) {
         "当前动态没有可分享链接".toast(context)
     } else {
         shareText(context, link, "分享动态")
+    }
+}
+
+private fun openExternalUrl(context: android.content.Context, url: String) {
+    val normalizedUrl = when {
+        url.startsWith("//") -> "https:$url"
+        else -> url
+    }
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(normalizedUrl)))
+    }.onFailure {
+        "无法打开链接".toast(context)
     }
 }
 

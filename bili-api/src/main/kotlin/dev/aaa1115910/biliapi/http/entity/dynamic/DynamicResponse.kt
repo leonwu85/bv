@@ -97,6 +97,8 @@ data class DynamicItem(
             @SerialName("face_nft")
             val faceNft: Boolean = false,
             val following: Boolean = false,
+            @SerialName("icon_badge")
+            val iconBadge: IconBadge? = null,
             @SerialName("jump_url")
             val jumpUrl: String = "",
             val label: String = "",
@@ -118,6 +120,14 @@ data class DynamicItem(
             val type: String = "",
             val vip: Vip? = null
         ) {
+            @Serializable
+            data class IconBadge(
+                val icon: String = "",
+                @SerialName("render_img")
+                val renderImg: String = "",
+                val text: String = ""
+            )
+
             @Serializable
             data class OfficialVerify(
                 val desc: String = "",
