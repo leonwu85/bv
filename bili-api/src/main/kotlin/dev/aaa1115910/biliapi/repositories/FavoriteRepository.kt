@@ -5,6 +5,8 @@ import dev.aaa1115910.biliapi.entity.FavoriteFolderData
 import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
 import dev.aaa1115910.biliapi.entity.FavoriteItemType
 import dev.aaa1115910.biliapi.http.BiliHttpApi
+import dev.aaa1115910.biliapi.http.entity.user.favorite.SpaceFavoriteData
+import dev.aaa1115910.biliapi.http.entity.user.favorite.SpaceFavoriteFolderListData
 import org.koin.core.annotation.Single
 
 @Single
@@ -124,6 +126,36 @@ class FavoriteRepository(
         return userFavoriteFoldersData.list.map {
             FavoriteFolderMetadata.fromHttpUserFavoriteFolder(it)
         }
+    }
+
+    suspend fun getSpaceFavoriteGroups(mid: Long): List<SpaceFavoriteData> {
+        return BiliHttpApi.getSpaceFavoriteFolders(mid).getResponseData()
+    }
+
+    suspend fun getCreatedFavoriteFolderPage(
+        mid: Long,
+        pageNumber: Int = 1,
+        pageSize: Int = 20
+    ): SpaceFavoriteFolderListData {
+        return BiliHttpApi.getCreatedFavoriteFolders(
+            mid = mid,
+            pageNumber = pageNumber,
+            pageSize = pageSize,
+            sessData = authRepository.sessionData ?: ""
+        ).getResponseData()
+    }
+
+    suspend fun getCollectedFavoriteFolderPage(
+        mid: Long,
+        pageNumber: Int = 1,
+        pageSize: Int = 20
+    ): SpaceFavoriteFolderListData {
+        return BiliHttpApi.getCollectedFavoriteFolders(
+            mid = mid,
+            pageNumber = pageNumber,
+            pageSize = pageSize,
+            sessData = authRepository.sessionData ?: ""
+        ).getResponseData()
     }
 
     suspend fun getFavoriteFolderData(

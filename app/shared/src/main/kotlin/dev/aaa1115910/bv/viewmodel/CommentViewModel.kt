@@ -11,7 +11,11 @@ import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentPage
 import dev.aaa1115910.biliapi.entity.reply.CommentReplyPage
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
+import dev.aaa1115910.biliapi.entity.user.DynamicImageDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicMentionDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicEmotePackageDraft
 import dev.aaa1115910.biliapi.repositories.CommentRepository
+import dev.aaa1115910.biliapi.repositories.UserRepository
 import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fException
@@ -25,7 +29,8 @@ import org.koin.core.annotation.KoinViewModel
 
 @KoinViewModel
 class CommentViewModel(
-    private val commentRepository: CommentRepository
+    private val commentRepository: CommentRepository,
+    private val userRepository: UserRepository
 ) : ViewModel() {
     companion object {
         val logger = KotlinLogging.logger {}
@@ -54,6 +59,8 @@ class CommentViewModel(
     var updatingComments by mutableStateOf(false)
     var updatingReplies by mutableStateOf(false)
     var sendingComment by mutableStateOf(false)
+    val emotePackages = mutableStateListOf<DynamicEmotePackageDraft>()
+    var loadingEmotes by mutableStateOf(false)
 
     suspend fun loadMoreComment() {
         if (updatingComments) return
@@ -171,10 +178,13 @@ class CommentViewModel(
     suspend fun sendComment(
         message: String,
         root: Long? = null,
-        parent: Long? = null
+        parent: Long? = null,
+        pictures: List<DynamicImageDraft> = emptyList(),
+        atNameToMid: Map<String, Long> = emptyMap(),
+        syncToDynamic: Boolean = false
     ): Result<Unit> {
         val content = message.trim()
-        if (content.isBlank()) {
+        if (content.isBlank() && pictures.isEmpty()) {
             return Result.failure(IllegalArgumentException("评论不能为空"))
         }
         if (!Prefs.isLogin) {
@@ -192,6 +202,9 @@ class CommentViewModel(
                 message = content,
                 root = root?.takeIf { it != 0L },
                 parent = parent?.takeIf { it != 0L },
+                pictures = pictures,
+                atNameToMid = atNameToMid,
+                syncToDynamic = syncToDynamic
             )
             refreshComments()
         }.onSuccess {
@@ -207,4 +220,31 @@ class CommentViewModel(
             withContext(Dispatchers.Main) { sendingComment = false }
         }
     }
+
+    suspend fun loadEmotePackages() {
+        if (loadingEmotes || emotePackages.isNotEmpty()) return
+        runCatching {
+            withContext(Dispatchers.Main) { loadingEmotes = true }
+            userRepository.getDynamicEmotePackages()
+        }.onSuccess { packages ->
+            withContext(Dispatchers.Main) {
+                emotePackages.clear()
+                emotePackages.addAll(packages)
+            }
+        }.onFailure {
+            logger.fException(it) { "Load reply emote packages failed" }
+        }.also {
+            withContext(Dispatchers.Main) { loadingEmotes = false }
+        }
+    }
+
+    suspend fun searchMention(keyword: String): Result<List<DynamicMentionDraft>> =
+        runCatching {
+            userRepository.searchDynamicMention(keyword)
+        }
+
+    suspend fun uploadCommentImage(fileName: String, bytes: ByteArray): Result<DynamicImageDraft> =
+        runCatching {
+            userRepository.uploadDynamicImage(fileName = fileName, bytes = bytes)
+        }
 }

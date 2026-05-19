@@ -8,12 +8,22 @@ import bilibili.app.dynamic.v2.dynDetailReq
 import bilibili.app.dynamic.v2.dynVideoReq
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.user.DynamicData
+import dev.aaa1115910.biliapi.entity.user.DynamicEmoteDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicEmotePackageDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicImageDraft
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
+import dev.aaa1115910.biliapi.entity.user.DynamicMentionDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicPublishDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicReplyOption
+import dev.aaa1115910.biliapi.entity.user.DynamicReserveDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicRichContent
+import dev.aaa1115910.biliapi.entity.user.DynamicTopicDraft
 import dev.aaa1115910.biliapi.entity.user.DynamicUpData
 import dev.aaa1115910.biliapi.entity.user.DynamicVideoData
 import dev.aaa1115910.biliapi.entity.user.FollowedUser
 import dev.aaa1115910.biliapi.entity.user.ArticleParagraph
 import dev.aaa1115910.biliapi.entity.user.ArticlePicture
+import dev.aaa1115910.biliapi.entity.user.DynamicVoteDraft
 import dev.aaa1115910.biliapi.entity.user.ArticleTextNode
 import dev.aaa1115910.biliapi.entity.user.TextNodeType
 import dev.aaa1115910.biliapi.entity.user.SpaceVideoData
@@ -27,14 +37,24 @@ import dev.aaa1115910.biliapi.http.entity.dynamic.ArticleViewData
 import dev.aaa1115910.biliapi.http.entity.user.FollowAction
 import dev.aaa1115910.biliapi.http.entity.user.FollowActionSource
 import dev.aaa1115910.biliapi.http.entity.user.RelationType
+import dev.aaa1115910.biliapi.http.entity.user.AppUserSpaceData
 import dev.aaa1115910.biliapi.http.entity.user.UserCardData
 import dev.aaa1115910.biliapi.http.entity.user.UserInfoData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import org.koin.core.annotation.Single
 import kotlin.math.ceil
+import kotlin.random.Random
 
 @Single
 class UserRepository(
@@ -45,6 +65,31 @@ class UserRepository(
         get() = runCatching {
             DynamicGrpcKt.DynamicCoroutineStub(channelRepository.defaultChannel!!)
         }.getOrNull()
+
+    private fun dynamicTextContent(text: String): JsonObject = buildJsonObject {
+        put("raw_text", text)
+        put("type", 1)
+        put("biz_id", "")
+    }
+
+    private fun dynamicVoteContent(title: String, voteId: Long): JsonObject = buildJsonObject {
+        put("raw_text", title)
+        put("type", 4)
+        put("biz_id", voteId.toString())
+    }
+
+    private fun dynamicRichContent(content: DynamicRichContent): JsonObject = buildJsonObject {
+        put("raw_text", content.rawText)
+        put("type", content.type)
+        put("biz_id", content.bizId)
+    }
+
+    private fun dynamicImage(image: DynamicImageDraft): JsonObject = buildJsonObject {
+        put("img_width", image.imgWidth)
+        put("img_height", image.imgHeight)
+        put("img_size", image.imgSize)
+        put("img_src", image.imgSrc)
+    }
 
     private suspend fun modifyFollow(
         mid: Long,
@@ -93,6 +138,16 @@ class UserRepository(
         preferApiType: ApiType = ApiType.Web
     ): Boolean = modifyFollow(mid, FollowAction.AddBlackList, preferApiType)
 
+    suspend fun unblacklistUser(
+        mid: Long,
+        preferApiType: ApiType = ApiType.Web
+    ): Boolean = modifyFollow(mid, FollowAction.DelBlackList, preferApiType)
+
+    suspend fun removeFan(
+        mid: Long,
+        preferApiType: ApiType = ApiType.Web
+    ): Boolean = modifyFollow(mid, FollowAction.DelFan, preferApiType)
+
     suspend fun reportDynamic(
         accusedUid: Long,
         dynamicId: String,
@@ -111,6 +166,323 @@ class UserRepository(
             throw Exception("举报失败: ${response.message}")
         }
     }
+
+    suspend fun createTextDynamic(
+        text: String,
+        voteDraft: DynamicVoteDraft? = null
+    ): String = createDynamic(
+        DynamicPublishDraft(
+            text = text,
+            voteDraft = voteDraft
+        )
+    )
+
+    suspend fun createDynamic(draft: DynamicPublishDraft): String {
+        val sessData = authRepository.sessionData ?: error("账号未登录")
+        val csrf = authRepository.biliJct ?: error("账号未登录")
+        val mid = authRepository.mid ?: error("账号未登录")
+        val currentVoteDraft = draft.voteDraft
+        val voteId = currentVoteDraft?.let { createDynamicVote(it) }
+        val contents = buildList {
+            val richContents = draft.richContents.filter { it.rawText.isNotBlank() }
+            if (richContents.isNotEmpty()) {
+                richContents.forEach { add(dynamicRichContent(it)) }
+            } else if (draft.text.isNotBlank()) {
+                add(dynamicTextContent(draft.text.trim()))
+            }
+            if (voteId != null) {
+                if (isEmpty()) {
+                    add(dynamicTextContent("我发起了一个投票"))
+                }
+                add(dynamicTextContent(" "))
+                add(dynamicVoteContent(checkNotNull(currentVoteDraft).title, voteId))
+                add(dynamicTextContent(" "))
+            }
+        }
+        require(contents.isNotEmpty() || draft.pictures.isNotEmpty() || draft.reserve != null) {
+            "请输入动态内容"
+        }
+        val attachCard = draft.reserve?.let { reserve ->
+            buildJsonObject {
+                putJsonObject("common_card") {
+                    put("type", 14)
+                    put("biz_id", reserve.id)
+                    put("reserve_source", 0)
+                    put("reserve_lottery", 0)
+                }
+            }
+        } ?: JsonNull
+        val hasOption =
+            draft.privatePub || draft.publishTime != null || draft.replyOption != DynamicReplyOption.Allow
+        val dynReq = buildJsonObject {
+            putJsonObject("content") {
+                put("contents", JsonArray(contents))
+                if (draft.title.isNotBlank()) put("title", draft.title.trim())
+            }
+            if (hasOption) {
+                putJsonObject("option") {
+                    if (draft.privatePub) put("private_pub", 1)
+                    draft.publishTime?.let { put("timer_pub_time", it) }
+                    when (draft.replyOption) {
+                        DynamicReplyOption.Allow -> Unit
+                        DynamicReplyOption.Close -> put("close_comment", 1)
+                        DynamicReplyOption.Choose -> put("up_choose_comment", 1)
+                    }
+                }
+            }
+            put("scene", if (draft.pictures.isNotEmpty()) 2 else 1)
+            if (draft.pictures.isNotEmpty()) {
+                put("pics", JsonArray(draft.pictures.map(::dynamicImage)))
+            }
+            put("attach_card", attachCard)
+            put("upload_id", "${mid}_${System.currentTimeMillis() / 1000}_${Random.nextInt(1000, 10000)}")
+            putJsonObject("meta") {
+                putJsonObject("app_meta") {
+                    put("from", "create.dynamic.web")
+                    put("mobi_app", "web")
+                }
+            }
+            draft.topic?.let { topic ->
+                putJsonObject("topic") {
+                    put("id", topic.id)
+                    put("name", topic.name)
+                    put("from_source", "dyn.web.list")
+                    put("from_topic_id", 0)
+                }
+            }
+        }
+        val response = BiliHttpApi.createDynamic(
+            dynReq = dynReq,
+            csrf = csrf,
+            sessData = sessData,
+            dedeUserID = mid,
+            buvid3 = authRepository.buvid3
+        )
+        if (response.code != 0) throw Exception(response.message)
+        val data = response.getResponseData()
+        return data.dynIdStr.ifBlank { data.dynId.takeIf { it > 0L }?.toString().orEmpty() }
+    }
+
+    suspend fun uploadDynamicImage(fileName: String, bytes: ByteArray): DynamicImageDraft {
+        val response = BiliHttpApi.uploadDynamicImage(
+            fileName = fileName,
+            bytes = bytes,
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录"),
+            dedeUserID = authRepository.mid,
+            buvid3 = authRepository.buvid3
+        )
+        if (response.code != 0) throw Exception(response.message)
+        val data = response.getResponseData()
+        return DynamicImageDraft(
+            imgSrc = data.imageUrl,
+            imgWidth = data.imageWidth,
+            imgHeight = data.imageHeight,
+            imgSize = data.imgSize
+        )
+    }
+
+    suspend fun getDynamicTopicRcmd(): List<DynamicTopicDraft> {
+        val response = BiliHttpApi.getDynamicTopicRcmd(
+            sessData = authRepository.sessionData,
+            dedeUserID = authRepository.mid,
+            buvid3 = authRepository.buvid3
+        )
+        if (response.code != 0) throw Exception(response.message)
+        return response.getResponseData().topicItems
+            .filter { it.id > 0L && it.name.isNotBlank() }
+            .map { DynamicTopicDraft(id = it.id, name = it.name) }
+    }
+
+    suspend fun searchDynamicTopic(keyword: String, content: String = ""): List<DynamicTopicDraft> {
+        val response = BiliHttpApi.searchDynamicTopic(
+            keywords = keyword,
+            content = content,
+            sessData = authRepository.sessionData,
+            dedeUserID = authRepository.mid,
+            buvid3 = authRepository.buvid3
+        )
+        if (response.code != 0) throw Exception(response.message)
+        return response.getResponseData().topicItems
+            .filter { it.id > 0L && it.name.isNotBlank() }
+            .map { DynamicTopicDraft(id = it.id, name = it.name) }
+    }
+
+    suspend fun searchDynamicMention(keyword: String? = null): List<DynamicMentionDraft> {
+        val response = BiliHttpApi.searchDynamicMention(
+            keyword = keyword,
+            sessData = authRepository.sessionData,
+            dedeUserID = authRepository.mid,
+            buvid3 = authRepository.buvid3
+        )
+        if (response.code != 0) throw Exception(response.message)
+        return response.getResponseData().groups
+            .flatMap { it.items }
+            .filter { it.uid.isNotBlank() && it.name.isNotBlank() }
+            .distinctBy { it.uid }
+            .map {
+                DynamicMentionDraft(
+                    uid = it.uid,
+                    name = it.name,
+                    face = it.face,
+                    fans = it.fans
+                )
+            }
+    }
+
+    suspend fun getDynamicEmotePackages(): List<DynamicEmotePackageDraft> {
+        val response = BiliHttpApi.getDynamicEmotes(
+            business = "reply",
+            sessData = authRepository.sessionData,
+            dedeUserID = authRepository.mid,
+            buvid3 = authRepository.buvid3
+        )
+        if (response.code != 0) throw Exception(response.message)
+        return response.getResponseData().packages
+            .map {
+                DynamicEmotePackageDraft(
+                    url = it.url,
+                    type = it.type,
+                    emotes = it.emote
+                        .filter { emote -> emote.text.isNotBlank() }
+                        .distinctBy { emote -> emote.text }
+                        .map { emote ->
+                            DynamicEmoteDraft(
+                                text = emote.text,
+                                url = emote.url,
+                                size = emote.meta.size,
+                                alias = emote.meta.alias
+                            )
+                        }
+                )
+            }
+            .filter { it.emotes.isNotEmpty() }
+    }
+
+    suspend fun createLiveReserve(
+        title: String,
+        livePlanStartTime: Long,
+        subType: Int = 0
+    ): DynamicReserveDraft {
+        val normalizedTitle = title.trim()
+        require(normalizedTitle.isNotBlank()) { "请填写直播预约标题" }
+        val response = BiliHttpApi.createReserve(
+            title = normalizedTitle,
+            livePlanStartTime = livePlanStartTime,
+            subType = subType,
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录"),
+            dedeUserID = authRepository.mid,
+            buvid3 = authRepository.buvid3
+        )
+        if (response.code != 0) throw Exception(response.message)
+        val sid = response.getResponseData().sid
+        check(sid > 0L) { "直播预约创建失败" }
+        return DynamicReserveDraft(
+            id = sid,
+            title = normalizedTitle,
+            livePlanStartTime = livePlanStartTime,
+            subType = subType
+        )
+    }
+
+    suspend fun updateLiveReserve(
+        reserve: DynamicReserveDraft
+    ): DynamicReserveDraft {
+        val response = BiliHttpApi.updateReserve(
+            sid = reserve.id,
+            title = reserve.title.trim(),
+            livePlanStartTime = reserve.livePlanStartTime,
+            subType = reserve.subType,
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录"),
+            dedeUserID = authRepository.mid,
+            buvid3 = authRepository.buvid3
+        )
+        if (response.code != 0) throw Exception(response.message)
+        return reserve.copy(id = response.getResponseData().sid.takeIf { it > 0L } ?: reserve.id)
+    }
+
+    suspend fun getLiveReserveInfo(sid: Long): DynamicReserveDraft {
+        val response = BiliHttpApi.getReserveInfo(
+            sid = sid,
+            sessData = authRepository.sessionData,
+            dedeUserID = authRepository.mid,
+            buvid3 = authRepository.buvid3
+        )
+        if (response.code != 0) throw Exception(response.message)
+        val data = response.getResponseData()
+        return DynamicReserveDraft(
+            id = data.id,
+            title = data.title,
+            livePlanStartTime = data.livePlanStartTime
+        )
+    }
+
+    private suspend fun createDynamicVote(voteDraft: DynamicVoteDraft): Long {
+        val sessData = authRepository.sessionData ?: error("账号未登录")
+        val csrf = authRepository.biliJct ?: error("账号未登录")
+        val mid = authRepository.mid ?: error("账号未登录")
+        val normalizedOptions = voteDraft.options
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+        require(voteDraft.title.isNotBlank()) { "请填写投票标题" }
+        require(normalizedOptions.size >= 2) { "投票至少需要两个选项" }
+        val voteInfo = buildJsonObject {
+            put("title", voteDraft.title.trim())
+            put("desc", voteDraft.desc.trim())
+            put("type", 0)
+            put("choice_cnt", voteDraft.choiceCnt.coerceIn(1, normalizedOptions.size))
+            put("duration", voteDraft.durationSeconds.coerceAtLeast(60))
+            putJsonArray("options") {
+                normalizedOptions.forEach { option ->
+                    add(
+                        buildJsonObject {
+                            put("opt_desc", option)
+                            put("img_url", "")
+                        }
+                    )
+                }
+            }
+            put("only_fans_level", 0)
+            put("vote_publisher", mid)
+        }
+        val response = BiliHttpApi.createVote(
+            voteInfo = voteInfo,
+            csrf = csrf,
+            sessData = sessData,
+            dedeUserID = mid,
+            buvid3 = authRepository.buvid3
+        )
+        if (response.code != 0) throw Exception(response.message)
+        return response.getResponseData().voteId.also {
+            check(it > 0L) { "投票创建失败" }
+        }
+    }
+
+    suspend fun getDynamicVoteInfo(voteId: Long) =
+        BiliHttpApi.getDynamicVoteInfo(
+            voteId = voteId,
+            sessData = authRepository.sessionData,
+            dedeUserID = authRepository.mid,
+            buvid3 = authRepository.buvid3
+        ).getResponseData()
+
+    suspend fun doDynamicVote(
+        voteId: Long,
+        votes: List<Int>,
+        dynamicId: String? = null,
+        anonymous: Boolean = false
+    ) = BiliHttpApi.doDynamicVote(
+        voteId = voteId,
+        votes = votes,
+        dynamicId = dynamicId,
+        anonymous = anonymous,
+        csrf = authRepository.biliJct ?: error("账号未登录"),
+        sessData = authRepository.sessionData ?: error("账号未登录"),
+        dedeUserID = authRepository.mid,
+        buvid3 = authRepository.buvid3
+    ).getResponseData()
 
     suspend fun checkIsFollowing(
         mid: Long,
@@ -619,11 +991,19 @@ class UserRepository(
         return response
     }
 
-    suspend fun getUserCardInfo(mid: Long): UserCardData {
+    suspend fun getUserCardInfo(
+        mid: Long,
+        photo: Boolean = false
+    ): UserCardData {
         val response = BiliHttpApi.getUserCardInfo(
             mid = mid,
+            photo = photo,
             sessData = authRepository.sessionData ?: ""
         ).getResponseData()
         return response
+    }
+
+    suspend fun getAppUserSpace(mid: Long): AppUserSpaceData {
+        return BiliHttpApi.getAppUserSpace(mid).getResponseData()
     }
 }

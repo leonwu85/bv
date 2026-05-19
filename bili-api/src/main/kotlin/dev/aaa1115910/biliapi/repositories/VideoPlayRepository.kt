@@ -279,6 +279,34 @@ class VideoPlayRepository(
         println("send heartbeat result: $result")
     }
 
+    suspend fun sendDanmaku(
+        cid: Long,
+        bvid: String,
+        message: String,
+        progress: Int,
+        mode: Int = 1,
+        fontSize: Int = 25,
+        color: Int = 0xFFFFFF
+    ): Long? {
+        val csrf = authRepository.biliJct ?: error("账号未登录")
+        val sessData = authRepository.sessionData ?: error("账号未登录")
+        val response = BiliHttpApi.postDanmaku(
+            cid = cid,
+            bvid = bvid,
+            message = message,
+            progress = progress,
+            mode = mode,
+            fontSize = fontSize,
+            color = color,
+            csrf = csrf,
+            sessData = sessData,
+            dedeUserID = authRepository.mid,
+            buvid3 = authRepository.buvid3
+        )
+        if (response.code != 0) throw IllegalStateException(response.message)
+        return response.getResponseData().dmid
+    }
+
     suspend fun getDanmakuMask(
         aid: Long,
         cid: Long,

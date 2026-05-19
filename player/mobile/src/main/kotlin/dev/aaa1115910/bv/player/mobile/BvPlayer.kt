@@ -433,6 +433,13 @@ fun BvPlayer(
     }
 
     LaunchedEffect(
+        videoPlayerConfigData.currentDanmakuEnabled,
+        videoPlayerConfigData.currentDanmakuEnabledList
+    ) {
+        toggleDanmakuEnabled(videoPlayerConfigData.currentDanmakuEnabled)
+    }
+
+    LaunchedEffect(
         currentPosition,
         isLive,
         videoPlayerConfigData.currentDanmakuMask,

@@ -1,18 +1,31 @@
 package dev.aaa1115910.biliapi.http
 
 import com.tfowl.ktor.client.plugins.JsoupPlugin
+import dev.aaa1115910.biliapi.entity.user.DynamicImageDraft
 import dev.aaa1115910.biliapi.entity.pgc.PgcType
 import dev.aaa1115910.biliapi.http.BiliHttpApi.getRegionDynamic
+import dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_APP
 import dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_WEB
 import dev.aaa1115910.biliapi.http.entity.BiliResponse
 import dev.aaa1115910.biliapi.http.entity.BiliResponseWithoutData
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
+import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuPostData
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuResponse
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicData
+import dev.aaa1115910.biliapi.http.entity.dynamic.CreateDynamicData
+import dev.aaa1115910.biliapi.http.entity.dynamic.CreateReserveData
+import dev.aaa1115910.biliapi.http.entity.dynamic.CreateVoteData
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicDetailData
+import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicEmotePanelData
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicEntranceData
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicFollowUpData
+import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicImageUploadData
+import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicMentionData
+import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicReserveInfoData
+import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicTopicListData
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicUpListData
+import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicVoteInfoData
+import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicVoteResultData
 import dev.aaa1115910.biliapi.http.entity.dynamic.ArticleViewData
 import dev.aaa1115910.biliapi.http.entity.dynamic.OpusDetailData
 import dev.aaa1115910.biliapi.http.entity.history.HistoryData
@@ -43,6 +56,7 @@ import dev.aaa1115910.biliapi.http.entity.season.SeasonFollowData
 import dev.aaa1115910.biliapi.http.entity.season.WebSeasonData
 import dev.aaa1115910.biliapi.http.entity.toview.ToViewData
 import dev.aaa1115910.biliapi.http.entity.user.AppSpaceVideoData
+import dev.aaa1115910.biliapi.http.entity.user.AppUserSpaceData
 import dev.aaa1115910.biliapi.http.entity.user.FollowAction
 import dev.aaa1115910.biliapi.http.entity.user.FollowActionSource
 import dev.aaa1115910.biliapi.http.entity.user.MyInfoData
@@ -55,6 +69,8 @@ import dev.aaa1115910.biliapi.http.entity.user.WebSpaceVideoData
 import dev.aaa1115910.biliapi.http.entity.user.favorite.FavoriteFolderInfo
 import dev.aaa1115910.biliapi.http.entity.user.favorite.FavoriteFolderInfoListData
 import dev.aaa1115910.biliapi.http.entity.user.favorite.FavoriteItemIdListResponse
+import dev.aaa1115910.biliapi.http.entity.user.favorite.SpaceFavoriteData
+import dev.aaa1115910.biliapi.http.entity.user.favorite.SpaceFavoriteFolderListData
 import dev.aaa1115910.biliapi.http.entity.user.favorite.UserFavoriteFoldersData
 import dev.aaa1115910.biliapi.http.entity.user.garb.Equip
 import dev.aaa1115910.biliapi.http.entity.user.garb.EquipPart
@@ -92,7 +108,10 @@ import io.ktor.client.plugins.UserAgent
 import io.ktor.client.plugins.compression.ContentEncoding
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.forms.FormDataContent
+import io.ktor.client.request.forms.MultiPartFormDataContent
+import io.ktor.client.request.forms.formData
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -101,8 +120,12 @@ import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.client.statement.readRawBytes
+import io.ktor.http.ContentType
+import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
 import io.ktor.http.Parameters
 import io.ktor.http.URLProtocol
+import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.utils.io.InternalAPI
 import io.ktor.utils.io.jvm.javaio.toInputStream
@@ -112,7 +135,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.put
 import org.jsoup.nodes.Document
 import java.util.concurrent.ConcurrentHashMap
 import javax.xml.parsers.DocumentBuilderFactory
@@ -176,6 +204,20 @@ object BiliHttpApi {
             }
         }.apply {
             encApiSign()
+        }
+    }
+
+    private fun HttpRequestBuilder.appendWebCookie(
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ) {
+        val cookieParts = mutableListOf<String>()
+        sessData?.takeIf { it.isNotBlank() }?.let { cookieParts.add("SESSDATA=$it") }
+        dedeUserID?.let { cookieParts.add("DedeUserID=$it") }
+        buvid3?.takeIf { it.isNotBlank() }?.let { cookieParts.add("buvid3=$it") }
+        if (cookieParts.isNotEmpty()) {
+            header("Cookie", cookieParts.joinToString(";") + ";")
         }
     }
 
@@ -448,6 +490,39 @@ object BiliHttpApi {
         }
     }
 
+    suspend fun postDanmaku(
+        cid: Long,
+        bvid: String,
+        message: String,
+        progress: Int,
+        mode: Int = 1,
+        fontSize: Int = 25,
+        color: Int = 0xFFFFFF,
+        csrf: String,
+        sessData: String,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<DanmakuPostData> = client.post("/x/v2/dm/post") {
+        appendWebCookie(sessData, dedeUserID, buvid3)
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("type", "1")
+                    append("oid", cid.toString())
+                    append("msg", message)
+                    append("mode", mode.toString())
+                    append("bvid", bvid)
+                    append("progress", progress.toString())
+                    append("color", color.toString())
+                    append("fontsize", fontSize.toString())
+                    append("pool", "0")
+                    append("rnd", (System.currentTimeMillis() * 1000).toString())
+                    append("csrf", csrf)
+                }
+            )
+        )
+    }.body()
+
     /**
      * 获取动态列表
      *
@@ -481,6 +556,225 @@ object BiliHttpApi {
         if (cookieParts.isNotEmpty()) {
             header("Cookie", cookieParts.joinToString(";") + ";")
         }
+    }.body()
+
+    suspend fun createDynamic(
+        dynReq: JsonObject,
+        webRepostSrc: JsonObject? = null,
+        csrf: String,
+        sessData: String,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<CreateDynamicData> = client.post("/x/dynamic/feed/create/dyn") {
+        parameter("platform", "web")
+        parameter("csrf", csrf)
+        parameter("x-bili-device-req-json", """{"platform":"web","device":"pc"}""")
+        parameter("x-bili-web-req-json", """{"spm_id":"333.999"}""")
+        appendWebCookie(sessData, dedeUserID, buvid3)
+        contentType(ContentType.Application.Json)
+        setBody(
+            buildJsonObject {
+                put("dyn_req", dynReq)
+                webRepostSrc?.let { put("web_repost_src", it) }
+            }
+        )
+    }.body()
+
+    suspend fun createVote(
+        voteInfo: JsonObject,
+        csrf: String,
+        sessData: String,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<CreateVoteData> = client.post("/x/vote/create") {
+        parameter("csrf", csrf)
+        appendWebCookie(sessData, dedeUserID, buvid3)
+        contentType(ContentType.Application.Json)
+        setBody(
+            buildJsonObject {
+                put("vote_info", voteInfo)
+            }
+        )
+    }.body()
+
+    suspend fun getDynamicVoteInfo(
+        voteId: Long,
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<DynamicVoteInfoData> = client.get("/x/vote/vote_info") {
+        parameter("vote_id", voteId)
+        if (!sessData.isNullOrBlank()) appendWebCookie(sessData, dedeUserID, buvid3)
+    }.body()
+
+    suspend fun doDynamicVote(
+        voteId: Long,
+        votes: List<Int>,
+        dynamicId: String? = null,
+        anonymous: Boolean = false,
+        csrf: String,
+        sessData: String,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<DynamicVoteResultData> = client.post("/x/vote/do_vote") {
+        parameter("csrf", csrf)
+        appendWebCookie(sessData, dedeUserID, buvid3)
+        contentType(ContentType.Application.Json)
+        setBody(
+            buildJsonObject {
+                put("vote_id", voteId)
+                put("votes", JsonArray(votes.map(::JsonPrimitive)))
+                put("voter_uid", dedeUserID ?: 0L)
+                put("status", if (anonymous) 1 else 0)
+                put("op_bit", 0)
+                put("dynamic_id", dynamicId?.toLongOrNull() ?: 0L)
+                put("csrf_token", csrf)
+                put("csrf", csrf)
+            }
+        )
+    }.body()
+
+    suspend fun uploadDynamicImage(
+        fileName: String,
+        bytes: ByteArray,
+        csrf: String,
+        sessData: String,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<DynamicImageUploadData> = client.post("/x/dynamic/feed/draw/upload_bfs") {
+        appendWebCookie(sessData, dedeUserID, buvid3)
+        setBody(
+            MultiPartFormDataContent(
+                formData {
+                    append(
+                        "file_up",
+                        bytes,
+                        Headers.build {
+                            append(HttpHeaders.ContentDisposition, "filename=\"$fileName\"")
+                        }
+                    )
+                    append("category", "daily")
+                    append("biz", "new_dyn")
+                    append("csrf", csrf)
+                }
+            )
+        )
+    }.body()
+
+    suspend fun getDynamicTopicRcmd(
+        pageSize: Int = 25,
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<DynamicTopicListData> = client.get("/x/topic/web/dynamic/rcmd") {
+        parameter("source", "Web")
+        parameter("page_size", pageSize)
+        parameter("web_location", "333.1365")
+        if (!sessData.isNullOrBlank()) appendWebCookie(sessData, dedeUserID, buvid3)
+    }.body()
+
+    suspend fun searchDynamicTopic(
+        keywords: String,
+        content: String = "",
+        pageNum: Int = 1,
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<DynamicTopicListData> = client.get("https://app.bilibili.com/x/topic/pub/search") {
+        parameter("keywords", keywords)
+        parameter("content", content)
+        if (pageNum == 1) {
+            parameter("page_size", 20)
+            parameter("page_num", 1)
+        } else {
+            parameter("offset", 20 * (pageNum - 1))
+        }
+        parameter("web_location", "333.1365")
+        if (!sessData.isNullOrBlank()) appendWebCookie(sessData, dedeUserID, buvid3)
+    }.body()
+
+    suspend fun searchDynamicMention(
+        keyword: String? = null,
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<DynamicMentionData> = client.get("/x/polymer/web-dynamic/v1/mention/search") {
+        keyword?.takeIf { it.isNotBlank() }?.let { parameter("keyword", it) }
+        parameter("web_location", "333.1365")
+        if (!sessData.isNullOrBlank()) appendWebCookie(sessData, dedeUserID, buvid3)
+    }.body()
+
+    suspend fun getDynamicEmotes(
+        business: String = "dynamic",
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<DynamicEmotePanelData> = client.get("/x/emote/user/panel/web") {
+        parameter("business", business)
+        parameter("web_location", "333.1245")
+        if (!sessData.isNullOrBlank()) appendWebCookie(sessData, dedeUserID, buvid3)
+    }.body()
+
+    suspend fun createReserve(
+        title: String,
+        livePlanStartTime: Long,
+        subType: Int = 0,
+        csrf: String,
+        sessData: String,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<CreateReserveData> = client.post("/x/new-reserve/up/reserve/create") {
+        appendWebCookie(sessData, dedeUserID, buvid3)
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("type", "2")
+                    append("sub_type", subType.toString())
+                    append("from", "1")
+                    append("title", title)
+                    append("live_plan_start_time", livePlanStartTime.toString())
+                    append("csrf", csrf)
+                }
+            )
+        )
+    }.body()
+
+    suspend fun updateReserve(
+        sid: Long,
+        title: String,
+        livePlanStartTime: Long,
+        subType: Int = 0,
+        csrf: String,
+        sessData: String,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<CreateReserveData> = client.post("/x/new-reserve/up/reserve/update") {
+        appendWebCookie(sessData, dedeUserID, buvid3)
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("type", "2")
+                    append("sub_type", subType.toString())
+                    append("from", "1")
+                    append("title", title)
+                    append("live_plan_start_time", livePlanStartTime.toString())
+                    append("id", sid.toString())
+                    append("csrf", csrf)
+                }
+            )
+        )
+    }.body()
+
+    suspend fun getReserveInfo(
+        sid: Long,
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<DynamicReserveInfoData> = client.get("/x/new-reserve/up/reserve/info") {
+        parameter("from", 1)
+        parameter("id", sid)
+        parameter("web_location", "333.1365")
+        if (!sessData.isNullOrBlank()) appendWebCookie(sessData, dedeUserID, buvid3)
     }.body()
 
     suspend fun getDynamicFollowUp(
@@ -652,6 +946,25 @@ object BiliHttpApi {
         parameter("mid", mid)
         parameter("photo", photo)
         header("Cookie", "SESSDATA=$sessData;")
+    }.body()
+
+    /**
+     * 获取 App 端用户空间资料，包含移动端空间头图 images 字段。
+     */
+    suspend fun getAppUserSpace(
+        mid: Long
+    ): BiliResponse<AppUserSpaceData> = client.get("https://app.bilibili.com/x/v2/space") {
+        parameter("build", 8430300)
+        parameter("version", "8.43.0")
+        parameter("c_locale", "zh_CN")
+        parameter("channel", "master")
+        parameter("mobi_app", "android")
+        parameter("platform", "android")
+        parameter("s_locale", "zh_CN")
+        parameter("statistics", """{"appId":1,"platform":3,"version":"8.43.0","abtest":""}""")
+        parameter("vmid", mid)
+        header("bili-http-engine", "cronet")
+        header("user-agent", USER_AGENT_APP)
     }.body()
 
     /**
@@ -829,6 +1142,56 @@ object BiliHttpApi {
         parameter("type", type)
         parameter("rid", rid)
         accessKey?.let { parameter("access_key", it) }
+        sessData?.let { header("Cookie", "SESSDATA=$it;") }
+    }.body()
+
+    /**
+     * 获取用户空间收藏夹概览，包含创建的收藏夹和收藏的收藏夹首屏数据。
+     */
+    suspend fun getSpaceFavoriteFolders(
+        mid: Long
+    ): BiliResponse<List<SpaceFavoriteData>> = client.get("/x/v3/fav/folder/space") {
+        parameter("build", 8430300)
+        parameter("version", "8.43.0")
+        parameter("c_locale", "zh_CN")
+        parameter("channel", "master")
+        parameter("mobi_app", "android")
+        parameter("platform", "android")
+        parameter("s_locale", "zh_CN")
+        parameter("statistics", """{"appId":1,"platform":3,"version":"8.43.0","abtest":""}""")
+        parameter("up_mid", mid)
+        header("bili-http-engine", "cronet")
+        header("user-agent", USER_AGENT_APP)
+    }.body()
+
+    /**
+     * 分页获取用户创建的收藏夹。
+     */
+    suspend fun getCreatedFavoriteFolders(
+        mid: Long,
+        pageNumber: Int = 1,
+        pageSize: Int = 20,
+        sessData: String? = null
+    ): BiliResponse<SpaceFavoriteFolderListData> = client.get("/x/v3/fav/folder/created/list") {
+        parameter("up_mid", mid)
+        parameter("pn", pageNumber)
+        parameter("ps", pageSize)
+        sessData?.let { header("Cookie", "SESSDATA=$it;") }
+    }.body()
+
+    /**
+     * 分页获取用户收藏的收藏夹/合集。
+     */
+    suspend fun getCollectedFavoriteFolders(
+        mid: Long,
+        pageNumber: Int = 1,
+        pageSize: Int = 20,
+        sessData: String? = null
+    ): BiliResponse<SpaceFavoriteFolderListData> = client.get("/x/v3/fav/folder/collected/list") {
+        parameter("up_mid", mid)
+        parameter("pn", pageNumber)
+        parameter("ps", pageSize)
+        parameter("platform", "web")
         sessData?.let { header("Cookie", "SESSDATA=$it;") }
     }.body()
 
@@ -2470,6 +2833,8 @@ object BiliHttpApi {
         message: String,
         root: Long? = null,
         parent: Long? = null,
+        pictures: List<DynamicImageDraft> = emptyList(),
+        atNameToMid: Map<String, Long> = emptyMap(),
         csrf: String? = null,
         sessData: String? = null,
         syncToDynamic: Boolean = false
@@ -2484,6 +2849,27 @@ object BiliHttpApi {
                         root?.takeIf { it != 0L }?.let { append("root", "$it") }
                         parent?.takeIf { it != 0L }?.let { append("parent", "$it") }
                         append("message", message)
+                        if (atNameToMid.isNotEmpty()) {
+                            append(
+                                "at_name_to_mid",
+                                Json.encodeToString(atNameToMid)
+                            )
+                        }
+                        if (pictures.isNotEmpty()) {
+                            append(
+                                "pictures",
+                                JsonArray(
+                                    pictures.map { picture ->
+                                        buildJsonObject {
+                                            put("img_width", picture.imgWidth)
+                                            put("img_height", picture.imgHeight)
+                                            put("img_size", picture.imgSize)
+                                            put("img_src", picture.imgSrc)
+                                        }
+                                    }
+                                ).toString()
+                            )
+                        }
                         if (syncToDynamic) append("sync_to_dynamic", "1")
                         csrf?.let { append("csrf", it) }
                     }

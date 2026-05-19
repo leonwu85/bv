@@ -24,8 +24,7 @@ fun UserAvatar(
     Surface(
         modifier = modifier.size(size),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        onClick = {}
+        color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         AsyncImage(
             modifier = Modifier

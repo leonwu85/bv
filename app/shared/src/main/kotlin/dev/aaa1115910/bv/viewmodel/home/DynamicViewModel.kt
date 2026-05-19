@@ -1,10 +1,18 @@
 package dev.aaa1115910.bv.viewmodel.home
 
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import dev.aaa1115910.biliapi.entity.user.DynamicEmotePackageDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicImageDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicMentionDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicPublishDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicReserveDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicTopicDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicVoteDraft
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.entity.user.DynamicUpUser
 import dev.aaa1115910.biliapi.entity.user.DynamicVideo
@@ -78,11 +86,14 @@ class DynamicViewModel(
     var upHasMore by mutableStateOf(true)
     private var upHistoryOffset: String? = null
     private var upUpdateBaseline: String? = null
+    private var upLoadGeneration = 0
     var loadingFollowUp by mutableStateOf(false)
     var followUpHasMore by mutableStateOf(true)
     private var followUpOffset: String? = null
 
     val isLogin get() = bvUserRepository.isLogin
+    var creatingDynamic by mutableStateOf(false)
+        private set
     val selfUp
         get() = DynamicUpUser(
             face = bvUserRepository.avatar,
@@ -126,8 +137,17 @@ class DynamicViewModel(
     }
 
     fun selectUp(up: DynamicUpUser) {
-        selectedUp = up
+        Log.i("DynamicViewModel", "select up: mid=${up.mid}, name=${up.uname}")
+        selectedUp = up.copy(hasUpdate = false)
+        clearFollowUpUpdate(up.mid)
         clearUpData()
+    }
+
+    private fun clearFollowUpUpdate(mid: Long) {
+        val index = followUpList.indexOfFirst { it.mid == mid }
+        if (index != -1 && followUpList[index].hasUpdate) {
+            followUpList[index] = followUpList[index].copy(hasUpdate = false)
+        }
     }
 
     suspend fun loadMoreByType(type: DynamicTabType) {
@@ -261,6 +281,7 @@ class DynamicViewModel(
     }
 
     fun clearUpData() {
+        upLoadGeneration += 1
         dynamicUpList.clear()
         currentUpPage = 0
         loadingUp = false
@@ -278,6 +299,94 @@ class DynamicViewModel(
             DynamicTabType.Up -> clearUpData()
         }
     }
+
+    suspend fun publishTextDynamic(
+        text: String,
+        voteDraft: DynamicVoteDraft? = null,
+        refreshType: DynamicTabType = DynamicTabType.All
+    ): Result<String> = publishDynamic(
+        draft = DynamicPublishDraft(
+            text = text,
+            voteDraft = voteDraft
+        ),
+        refreshType = refreshType
+    )
+
+    suspend fun publishDynamic(
+        draft: DynamicPublishDraft,
+        refreshType: DynamicTabType = DynamicTabType.All
+    ): Result<String> {
+        if (creatingDynamic) return Result.failure(IllegalStateException("正在发布"))
+        if (!bvUserRepository.isLogin) return Result.failure(IllegalStateException("账号未登录"))
+        val trimmedText = draft.text.trim()
+        if (
+            trimmedText.isBlank() &&
+            draft.richContents.isEmpty() &&
+            draft.pictures.isEmpty() &&
+            draft.reserve == null &&
+            draft.voteDraft == null
+        ) {
+            return Result.failure(IllegalArgumentException("请输入动态内容"))
+        }
+        withContext(Dispatchers.Main) {
+            creatingDynamic = true
+        }
+        return runCatching {
+            val dynamicId = userRepository.createDynamic(
+                draft = draft.copy(text = trimmedText)
+            )
+            withContext(Dispatchers.Main) {
+                refreshByType(refreshType)
+            }
+            loadMoreByType(refreshType)
+            dynamicId
+        }.also {
+            withContext(Dispatchers.Main) {
+                creatingDynamic = false
+            }
+        }
+    }
+
+    suspend fun uploadDynamicImage(fileName: String, bytes: ByteArray): Result<DynamicImageDraft> =
+        runCatching {
+            userRepository.uploadDynamicImage(fileName = fileName, bytes = bytes)
+        }
+
+    suspend fun loadDynamicTopics(keyword: String, content: String = ""): Result<List<DynamicTopicDraft>> =
+        runCatching {
+            if (keyword.isBlank()) {
+                userRepository.getDynamicTopicRcmd()
+            } else {
+                userRepository.searchDynamicTopic(keyword = keyword, content = content)
+            }
+        }
+
+    suspend fun searchDynamicMention(keyword: String): Result<List<DynamicMentionDraft>> =
+        runCatching {
+            userRepository.searchDynamicMention(keyword = keyword.takeIf { it.isNotBlank() })
+        }
+
+    suspend fun loadDynamicEmotePackages(): Result<List<DynamicEmotePackageDraft>> =
+        runCatching {
+            userRepository.getDynamicEmotePackages()
+        }
+
+    suspend fun createLiveReserve(
+        title: String,
+        livePlanStartTime: Long,
+        subType: Int = 0
+    ): Result<DynamicReserveDraft> = runCatching {
+        userRepository.createLiveReserve(
+            title = title,
+            livePlanStartTime = livePlanStartTime,
+            subType = subType
+        )
+    }
+
+    suspend fun updateLiveReserve(reserve: DynamicReserveDraft): Result<DynamicReserveDraft> =
+        runCatching {
+            userRepository.updateLiveReserve(reserve)
+        }
 
     private suspend fun loadPgcData() {
         if (!pgcHasMore || !bvUserRepository.isLogin) return
@@ -416,7 +525,12 @@ class DynamicViewModel(
     private suspend fun loadUpData() {
         val up = selectedUp ?: return
         if (!upHasMore || !bvUserRepository.isLogin) return
+        val loadGeneration = upLoadGeneration
         loadingUp = true
+        Log.i(
+            "DynamicViewModel",
+            "load up dynamics start: mid=${up.mid}, page=${currentUpPage + 1}, generation=$loadGeneration"
+        )
         logger.fInfo { "Load more dynamic by up [mid=${up.mid}, offset=$upHistoryOffset, page=${currentUpPage + 1}]" }
         runCatching {
             val dynamicData = userRepository.getDynamicsByUp(
@@ -426,15 +540,25 @@ class DynamicViewModel(
                 updateBaseline = upUpdateBaseline ?: "",
                 preferApiType = Prefs.apiType
             )
-            dynamicUpList.addAll(dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids })
-            upHistoryOffset = dynamicData.historyOffset
-            upUpdateBaseline = dynamicData.updateBaseline
-            upHasMore = dynamicData.hasMore
+            if (selectedUp?.mid == up.mid && upLoadGeneration == loadGeneration) {
+                dynamicUpList.addAll(dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids })
+                upHistoryOffset = dynamicData.historyOffset
+                upUpdateBaseline = dynamicData.updateBaseline
+                upHasMore = dynamicData.hasMore
+                Log.i(
+                    "DynamicViewModel",
+                    "load up dynamics success: mid=${up.mid}, size=${dynamicData.dynamics.size}, hasMore=${dynamicData.hasMore}"
+                )
+            }
         }.onFailure {
             if (it.message?.contains("4101132") == true || it.message == "请求数据发生错误，请刷新或稍后重试") {
-                upHasMore = false
-                logger.fInfo { "No more up dynamic data available" }
+                if (selectedUp?.mid == up.mid && upLoadGeneration == loadGeneration) {
+                    upHasMore = false
+                    Log.i("DynamicViewModel", "load up dynamics empty: mid=${up.mid}")
+                    logger.fInfo { "No more up dynamic data available" }
+                }
             } else {
+                Log.w("DynamicViewModel", "load up dynamics failed: mid=${up.mid}", it)
                 logger.fWarn { "Load dynamic by up failed: ${it.stackTraceToString()}" }
                 when (it) {
                     is AuthFailureException -> {
@@ -454,7 +578,9 @@ class DynamicViewModel(
             }
         }
         withContext(Dispatchers.Main) {
-            loadingUp = false
+            if (selectedUp?.mid == up.mid && upLoadGeneration == loadGeneration) {
+                loadingUp = false
+            }
         }
     }
 

@@ -6,6 +6,7 @@ import dev.aaa1115910.biliapi.entity.live.LiveFollowResponse
 import dev.aaa1115910.biliapi.entity.live.LiveRoomListResponse
 import dev.aaa1115910.biliapi.entity.live.LiveRoomPlayInfoResponse
 import dev.aaa1115910.biliapi.http.BiliLiveHttpApi
+import dev.aaa1115910.biliapi.http.entity.live.LiveEmotePackage
 import dev.aaa1115910.biliapi.http.entity.live.LiveRoomInfoH5Data
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
 import dev.aaa1115910.biliapi.http.util.encAppGet
@@ -110,6 +111,18 @@ class LiveRepository(
             BiliLiveHttpApi.getLiveRoomInfoH5(roomId).getResponseData()
         }
 
+    suspend fun getLiveEmoticons(roomId: Int): List<LiveEmotePackage> =
+        withContext(Dispatchers.IO) {
+            val sessData = authRepository.sessionData
+                ?: throw IllegalStateException("账号未登录")
+            BiliLiveHttpApi.getLiveEmoticons(
+                roomId = roomId,
+                sessData = sessData,
+                csrf = authRepository.biliJct.orEmpty(),
+                buvid3 = authRepository.buvid3
+            ).getResponseData().data
+        }
+
     /**
      * 获取直播推荐列表
      * @param parentAreaId 一级分区ID（0=推荐全部）
@@ -174,6 +187,8 @@ class LiveRepository(
     suspend fun sendLiveMsg(
         roomId: Int,
         message: String,
+        dmType: Int? = null,
+        emoticonOptions: String? = null,
         replyMid: Long = 0,
         replayDmid: String = ""
     ) {
@@ -187,11 +202,23 @@ class LiveRepository(
             csrf = csrf,
             sessData = sessData,
             buvid3 = authRepository.buvid3,
+            dmType = dmType,
+            emoticonOptions = emoticonOptions,
             replyMid = replyMid,
             replayDmid = replayDmid
         )
         check(response.code == 0) { response.message }
     }
+
+    suspend fun sendLiveEmoticon(
+        roomId: Int,
+        emoticonUnique: String
+    ) = sendLiveMsg(
+        roomId = roomId,
+        message = emoticonUnique,
+        dmType = 1,
+        emoticonOptions = "[object Object]"
+    )
 
     suspend fun likeLiveRoom(
         roomId: Int,

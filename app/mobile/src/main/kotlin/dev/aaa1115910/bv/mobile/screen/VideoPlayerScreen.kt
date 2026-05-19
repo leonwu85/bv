@@ -7,7 +7,11 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -31,25 +35,40 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.AddCircleOutline
+import androidx.compose.material.icons.filled.AlternateEmail
+import androidx.compose.material.icons.filled.EmojiEmotions
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.ImageNotSupported
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Paid
@@ -73,17 +92,23 @@ import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ProvideTextStyle
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -91,6 +116,7 @@ import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -100,6 +126,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -113,7 +140,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -126,17 +162,28 @@ import com.origeek.imageViewer.previewer.ImagePreviewer
 import com.origeek.imageViewer.previewer.ImagePreviewerState
 import com.origeek.imageViewer.previewer.VerticalDragType
 import com.origeek.imageViewer.previewer.rememberPreviewerState
+import dev.aaa1115910.biliapi.entity.user.DynamicEmoteDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicImageDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicMentionDraft
 import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
 import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
+import dev.aaa1115910.biliapi.http.entity.live.LiveEmotePackage
+import dev.aaa1115910.biliapi.http.entity.live.LiveEmoticon
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.mobile.activities.VideoPlayerActivity
+import dev.aaa1115910.bv.mobile.component.emote.EmoteInputToken
+import dev.aaa1115910.bv.mobile.component.emote.EmoteTextSelection
+import dev.aaa1115910.bv.mobile.component.emote.EmotePanel
+import dev.aaa1115910.bv.mobile.component.emote.EmoteTextEditor
+import dev.aaa1115910.bv.mobile.component.emote.emoteDisplayName
 import dev.aaa1115910.bv.mobile.component.player.VideoPlayerPages
 import dev.aaa1115910.bv.mobile.component.reply.CommentItem
 import dev.aaa1115910.bv.mobile.component.reply.ReplySheetScaffold
 import dev.aaa1115910.bv.mobile.component.videocard.RelatedVideoItem
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
+import dev.aaa1115910.bv.mobile.R as MobileR
 import dev.aaa1115910.bv.mobile.util.saveImageToGallery
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerDanmakuMasksData
@@ -165,6 +212,7 @@ import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.settings.PlayerSettingsProvider
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
+import dev.aaa1115910.bv.util.formatHourMinSec
 import dev.aaa1115910.bv.util.formatPubTimeString
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.swapList
@@ -177,6 +225,7 @@ import dev.aaa1115910.bv.viewmodel.VideoPlayerV3ViewModel
 import dev.aaa1115910.bv.viewmodel.video.VideoDetailViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
@@ -187,6 +236,35 @@ private data class ReplyDraftTarget(
     val root: Long? = null,
     val parent: Long? = null
 )
+
+private data class ReplyLocalImage(
+    val uri: Uri,
+    val fileName: String
+)
+
+private data class ReplyMentionToken(
+    val marker: String,
+    val name: String,
+    val uid: Long,
+    val preferredStart: Int
+)
+
+private data class ReplySendDraft(
+    val message: String,
+    val images: List<ReplyLocalImage>,
+    val atNameToMid: Map<String, Long>,
+    val syncToDynamic: Boolean
+)
+
+private enum class ReplyInputPanel {
+    Emoji,
+    Mention,
+    More
+}
+
+private val DanmakuActionIconFontFamily = FontFamily(Font(MobileR.font.danmaku_action_icon))
+private const val DanmakuOffIcon = "\uE802"
+private const val DanmakuOnIcon = "\uE803"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -215,7 +293,14 @@ fun VideoPlayerScreen(
     val replySheetState = rememberBottomSheetScaffoldState()
     var replyDraftTarget by remember { mutableStateOf<ReplyDraftTarget?>(null) }
     var liveDanmakuDraft by remember { mutableStateOf("") }
+    var liveDanmakuSelection by remember { mutableStateOf(EmoteTextSelection.Zero) }
+    val liveDanmakuEmoteTokens = remember { mutableStateListOf<EmoteInputToken>() }
     var showLiveDanmakuDialog by remember { mutableStateOf(false) }
+    var videoDanmakuDraft by rememberSaveable { mutableStateOf("") }
+    var videoDanmakuMode by rememberSaveable { mutableIntStateOf(1) }
+    var videoDanmakuFontSize by rememberSaveable { mutableIntStateOf(25) }
+    var videoDanmakuColor by rememberSaveable { mutableIntStateOf(0xFFFFFF) }
+    var showVideoDanmakuSheet by remember { mutableStateOf(false) }
     var savingPreviewImage by remember { mutableStateOf(false) }
     var savingCoverImage by remember { mutableStateOf(false) }
 
@@ -310,10 +395,46 @@ fun VideoPlayerScreen(
     val openLiveInBrowser: () -> Unit = {
         context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(liveRoomUrl())))
     }
+    val sendVideoDanmaku: () -> Unit = {
+        val message = videoDanmakuDraft
+        scope.launch(Dispatchers.IO) {
+            val result = playerViewModel.sendVideoDanmaku(
+                message = message,
+                mode = videoDanmakuMode,
+                fontSize = videoDanmakuFontSize,
+                color = videoDanmakuColor
+            )
+            withContext(Dispatchers.Main) {
+                result
+                    .onSuccess {
+                        it.toast(context)
+                        videoDanmakuDraft = ""
+                        showVideoDanmakuSheet = false
+                    }
+                    .onFailure { (it.localizedMessage ?: "发送失败").toast(context) }
+            }
+        }
+    }
     val sendLiveDanmaku: () -> Unit = {
         val message = liveDanmakuDraft
         scope.launch(Dispatchers.IO) {
             val result = playerViewModel.sendLiveDanmaku(message)
+            withContext(Dispatchers.Main) {
+                result
+                    .onSuccess {
+                        it.toast(context)
+                        liveDanmakuDraft = ""
+                        liveDanmakuSelection = EmoteTextSelection.Zero
+                        liveDanmakuEmoteTokens.clear()
+                        showLiveDanmakuDialog = false
+                    }
+                    .onFailure { (it.localizedMessage ?: "发送失败").toast(context) }
+            }
+        }
+    }
+    val sendLiveEmoticon: (LiveEmoticon) -> Unit = { emoticon ->
+        scope.launch(Dispatchers.IO) {
+            val result = playerViewModel.sendLiveEmoticon(emoticon.emoticonUnique)
             withContext(Dispatchers.Main) {
                 result
                     .onSuccess {
@@ -600,6 +721,43 @@ fun VideoPlayerScreen(
                         LiveRoomPanel(
                             modifier = Modifier.fillMaxSize(),
                             playerViewModel = playerViewModel,
+                            showDanmakuInput = showLiveDanmakuDialog,
+                            danmakuInputValue = liveDanmakuDraft,
+                            danmakuInputSelection = liveDanmakuSelection,
+                            danmakuInputEmoteTokens = liveDanmakuEmoteTokens,
+                            sendingDanmaku = playerViewModel.sendingLiveDanmaku,
+                            emotePackages = playerViewModel.liveEmotePackages,
+                            loadingEmoticons = playerViewModel.loadingLiveEmoticons,
+                            emoticonError = playerViewModel.liveEmoticonError,
+                            onDanmakuInputValueChange = { value, selection ->
+                                liveDanmakuDraft = value
+                                liveDanmakuSelection = selection
+                            },
+                            onLoadEmoticons = playerViewModel::loadLiveEmoticons,
+                            onTextEmoticonClick = { emoticon ->
+                                val insertion = emoticon.messageText
+                                val start = liveDanmakuSelection.start.coerceIn(0, liveDanmakuDraft.length)
+                                val end = liveDanmakuSelection.end.coerceIn(0, liveDanmakuDraft.length)
+                                val rangeStart = minOf(start, end)
+                                val rangeEnd = maxOf(start, end)
+                                liveDanmakuDraft = buildString {
+                                    append(liveDanmakuDraft.substring(0, rangeStart))
+                                    append(insertion)
+                                    append(liveDanmakuDraft.substring(rangeEnd))
+                                }
+                                liveDanmakuSelection = EmoteTextSelection.collapsed(rangeStart + insertion.length)
+                                liveDanmakuEmoteTokens.add(
+                                    EmoteInputToken(
+                                        marker = insertion,
+                                        preferredStart = rangeStart,
+                                        emoteUrl = emoticon.url,
+                                        emoteName = emoticon.displayName
+                                    )
+                                )
+                            },
+                            onLiveEmoticonClick = sendLiveEmoticon,
+                            onDismissDanmakuInput = { showLiveDanmakuDialog = false },
+                            onSendDanmaku = sendLiveDanmaku,
                             onSendDanmakuClick = { showLiveDanmakuDialog = true },
                             onLikeClick = likeLiveRoom,
                             onRefresh = { playerViewModel.loadLiveStreamWithQuality(playerViewModel.liveRoomId, playerViewModel.currentLiveQn) },
@@ -673,23 +831,20 @@ fun VideoPlayerScreen(
                         onReplyComment = openCommentReplyInput
                     ) {
                         Column {
-                            PrimaryTabRow(
-                                selectedTabIndex = pagerState.currentPage
-                            ) {
-                                titles.forEachIndexed { index, title ->
-                                    Tab(
-                                        selected = pagerState.currentPage == index,
-                                        onClick = { scope.launch { pagerState.scrollToPage(index) } },
-                                        text = {
-                                            Text(
-                                                text = title,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    )
+                            VideoDetailTabsWithDanmakuControls(
+                                titles = titles,
+                                selectedTabIndex = pagerState.currentPage,
+                                danmakuEnabled = playerViewModel.currentDanmakuEnabled,
+                                onTabClick = { index ->
+                                    scope.launch { pagerState.scrollToPage(index) }
+                                },
+                                onSendDanmakuClick = { showVideoDanmakuSheet = true },
+                                onToggleDanmaku = {
+                                    val enabled = !playerViewModel.currentDanmakuEnabled
+                                    playerViewModel.currentDanmakuEnabled = enabled
+                                    playerSettings.defaultDanmakuEnabledMutable = enabled
                                 }
-                            }
+                            )
                             HorizontalPager(
                                 state = pagerState
                             ) { page ->
@@ -854,6 +1009,18 @@ fun VideoPlayerScreen(
                             .padding(horizontal = 12.dp)
                     ) {
                         item {
+                            VideoDetailDanmakuActionRow(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                danmakuEnabled = playerViewModel.currentDanmakuEnabled,
+                                onSendDanmakuClick = { showVideoDanmakuSheet = true },
+                                onToggleDanmaku = {
+                                    val enabled = !playerViewModel.currentDanmakuEnabled
+                                    playerViewModel.currentDanmakuEnabled = enabled
+                                    playerSettings.defaultDanmakuEnabledMutable = enabled
+                                }
+                            )
+                        }
+                        item {
                             VideoPlayerInfo(
                                 modifier = Modifier.padding(12.dp),
                                 upAvatar = videoDetailViewModel.videoDetail?.author?.face
@@ -991,6 +1158,43 @@ fun VideoPlayerScreen(
                             .padding(end = 12.dp)
                             .fillMaxHeight(),
                         playerViewModel = playerViewModel,
+                        showDanmakuInput = showLiveDanmakuDialog,
+                        danmakuInputValue = liveDanmakuDraft,
+                        danmakuInputSelection = liveDanmakuSelection,
+                        danmakuInputEmoteTokens = liveDanmakuEmoteTokens,
+                        sendingDanmaku = playerViewModel.sendingLiveDanmaku,
+                        emotePackages = playerViewModel.liveEmotePackages,
+                        loadingEmoticons = playerViewModel.loadingLiveEmoticons,
+                        emoticonError = playerViewModel.liveEmoticonError,
+                        onDanmakuInputValueChange = { value, selection ->
+                            liveDanmakuDraft = value
+                            liveDanmakuSelection = selection
+                        },
+                        onLoadEmoticons = playerViewModel::loadLiveEmoticons,
+                        onTextEmoticonClick = { emoticon ->
+                            val insertion = emoticon.messageText
+                            val start = liveDanmakuSelection.start.coerceIn(0, liveDanmakuDraft.length)
+                            val end = liveDanmakuSelection.end.coerceIn(0, liveDanmakuDraft.length)
+                            val rangeStart = minOf(start, end)
+                            val rangeEnd = maxOf(start, end)
+                            liveDanmakuDraft = buildString {
+                                append(liveDanmakuDraft.substring(0, rangeStart))
+                                append(insertion)
+                                append(liveDanmakuDraft.substring(rangeEnd))
+                            }
+                            liveDanmakuSelection = EmoteTextSelection.collapsed(rangeStart + insertion.length)
+                            liveDanmakuEmoteTokens.add(
+                                EmoteInputToken(
+                                    marker = insertion,
+                                    preferredStart = rangeStart,
+                                    emoteUrl = emoticon.url,
+                                    emoteName = emoticon.displayName
+                                )
+                            )
+                        },
+                        onLiveEmoticonClick = sendLiveEmoticon,
+                        onDismissDanmakuInput = { showLiveDanmakuDialog = false },
+                        onSendDanmaku = sendLiveDanmaku,
                         onSendDanmakuClick = { showLiveDanmakuDialog = true },
                         onLikeClick = likeLiveRoom,
                         onRefresh = { playerViewModel.loadLiveStreamWithQuality(playerViewModel.liveRoomId, playerViewModel.currentLiveQn) },
@@ -1111,21 +1315,41 @@ fun VideoPlayerScreen(
     )
 
     replyDraftTarget?.let { target ->
-        ReplyInputDialog(
+        ReplyInputSheet(
+            commentViewModel = commentVideModel,
+            playerViewModel = playerViewModel,
             title = target.title,
             placeholder = target.placeholder,
             sending = commentVideModel.sendingComment,
+            canUploadImages = target.root == null || target.root == 0L,
             onDismiss = { replyDraftTarget = null },
-            onSend = { message ->
+            onSend = { draft ->
                 scope.launch(Dispatchers.IO) {
-                    val result = commentVideModel.sendComment(
-                        message = message,
-                        root = target.root,
-                        parent = target.parent
-                    )
+                    val result = runCatching {
+                        val uploadedImages = draft.images.map { image ->
+                            val bytes = context.replyUriBytes(image.uri)
+                                ?: error("无法读取图片：${image.fileName}")
+                            commentVideModel.uploadCommentImage(
+                                fileName = image.fileName,
+                                bytes = bytes
+                            ).getOrThrow()
+                        }
+                        commentVideModel.sendComment(
+                            message = draft.message,
+                            root = target.root,
+                            parent = target.parent,
+                            pictures = uploadedImages,
+                            atNameToMid = draft.atNameToMid,
+                            syncToDynamic = draft.syncToDynamic
+                        ).getOrThrow()
+                    }
                     if (result.isSuccess) {
                         withContext(Dispatchers.Main) {
                             replyDraftTarget = null
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            (result.exceptionOrNull()?.localizedMessage ?: "发送失败").toast(context)
                         }
                     }
                 }
@@ -1133,15 +1357,22 @@ fun VideoPlayerScreen(
         )
     }
 
-    if (showLiveDanmakuDialog) {
-        LiveSendDanmakuDialog(
-            value = liveDanmakuDraft,
-            sending = playerViewModel.sendingLiveDanmaku,
-            onValueChange = { liveDanmakuDraft = it },
-            onDismiss = { showLiveDanmakuDialog = false },
-            onSend = sendLiveDanmaku
+    if (showVideoDanmakuSheet) {
+        VideoSendDanmakuSheet(
+            value = videoDanmakuDraft,
+            sending = playerViewModel.sendingVideoDanmaku,
+            mode = videoDanmakuMode,
+            fontSize = videoDanmakuFontSize,
+            color = videoDanmakuColor,
+            onValueChange = { videoDanmakuDraft = it },
+            onModeChange = { videoDanmakuMode = it },
+            onFontSizeChange = { videoDanmakuFontSize = it },
+            onColorChange = { videoDanmakuColor = it },
+            onDismiss = { showVideoDanmakuSheet = false },
+            onSend = sendVideoDanmaku
         )
     }
+
 }
 
 @Composable
@@ -1298,7 +1529,7 @@ fun VideoPlayerInfo(
             }
 
             Button(onClick = { /*TODO*/ }) {
-                Text(text = "Follow")
+                Text(text = "关注")
             }
         }
         Text(
@@ -1637,10 +1868,349 @@ private fun FavoriteFolderDialog(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VideoDetailTabsWithDanmakuControls(
+    titles: List<String>,
+    selectedTabIndex: Int,
+    danmakuEnabled: Boolean,
+    onTabClick: (Int) -> Unit,
+    onSendDanmakuClick: () -> Unit,
+    onToggleDanmaku: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(45.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+        ) {
+            PrimaryTabRow(
+                modifier = Modifier.fillMaxSize(),
+                selectedTabIndex = selectedTabIndex
+            ) {
+                titles.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTabIndex == index,
+                        onClick = { onTabClick(index) },
+                        text = {
+                            Text(
+                                text = title,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    )
+                }
+            }
+        }
+        VideoDanmakuActionButtons(
+            danmakuEnabled = danmakuEnabled,
+            onSendDanmakuClick = onSendDanmakuClick,
+            onToggleDanmaku = onToggleDanmaku
+        )
+    }
+}
+
+@Composable
+private fun VideoDetailDanmakuActionRow(
+    modifier: Modifier = Modifier,
+    danmakuEnabled: Boolean,
+    onSendDanmakuClick: () -> Unit,
+    onToggleDanmaku: () -> Unit
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(34.dp),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        VideoDanmakuActionButtons(
+            danmakuEnabled = danmakuEnabled,
+            onSendDanmakuClick = onSendDanmakuClick,
+            onToggleDanmaku = onToggleDanmaku
+        )
+    }
+}
+
+@Composable
+private fun VideoDanmakuActionButtons(
+    danmakuEnabled: Boolean,
+    onSendDanmakuClick: () -> Unit,
+    onToggleDanmaku: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .height(26.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.secondaryContainer)
+            .clickable(onClick = onSendDanmakuClick)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "发弹幕",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer
+        )
+    }
+    IconButton(
+        modifier = Modifier.size(38.dp),
+        onClick = onToggleDanmaku
+    ) {
+        val contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕"
+        Text(
+            modifier = Modifier.clearAndSetSemantics {
+                this.contentDescription = contentDescription
+            },
+            text = if (danmakuEnabled) DanmakuOnIcon else DanmakuOffIcon,
+            fontFamily = DanmakuActionIconFontFamily,
+            fontSize = 22.sp,
+            lineHeight = 22.sp,
+            color = if (danmakuEnabled) {
+                MaterialTheme.colorScheme.secondary
+            } else {
+                MaterialTheme.colorScheme.outline
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VideoSendDanmakuSheet(
+    value: String,
+    sending: Boolean,
+    mode: Int,
+    fontSize: Int,
+    color: Int,
+    onValueChange: (String) -> Unit,
+    onModeChange: (Int) -> Unit,
+    onFontSizeChange: (Int) -> Unit,
+    onColorChange: (Int) -> Unit,
+    onDismiss: () -> Unit,
+    onSend: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val dismissSheet = {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+        onDismiss()
+    }
+    val colorOptions = remember {
+        listOf(
+            0xFFFFFF,
+            0xFE0302,
+            0xFF7204,
+            0xFFFF00,
+            0xA0EE00,
+            0x00CD00,
+            0x89D5FF,
+            0x4266BE,
+            0xCC0273,
+            0x9B9B9B
+        )
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = dismissSheet,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    modifier = Modifier.weight(1f),
+                    text = "发弹幕",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                TextButton(
+                    enabled = !sending,
+                    onClick = dismissSheet
+                ) {
+                    Text(text = "取消")
+                }
+                Button(
+                    enabled = value.isNotBlank() && !sending,
+                    onClick = {
+                        focusManager.clearFocus(force = true)
+                        keyboardController?.hide()
+                        onSend()
+                    }
+                ) {
+                    if (sending) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            modifier = Modifier.size(18.dp),
+                            imageVector = Icons.AutoMirrored.Rounded.Send,
+                            contentDescription = null
+                        )
+                    }
+                    Text(
+                        modifier = Modifier.padding(start = 6.dp),
+                        text = "发送"
+                    )
+                }
+            }
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = value,
+                enabled = !sending,
+                onValueChange = { input ->
+                    onValueChange(input.take(100))
+                },
+                placeholder = { Text(text = "输入弹幕内容") },
+                minLines = 1,
+                maxLines = 3,
+                singleLine = false
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "样式",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                VideoDanmakuOptionChip(
+                    selected = mode == 1,
+                    text = "滚动",
+                    onClick = { onModeChange(1) }
+                )
+                VideoDanmakuOptionChip(
+                    selected = mode == 5,
+                    text = "顶部",
+                    onClick = { onModeChange(5) }
+                )
+                VideoDanmakuOptionChip(
+                    selected = mode == 4,
+                    text = "底部",
+                    onClick = { onModeChange(4) }
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "字号",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                VideoDanmakuOptionChip(
+                    selected = fontSize == 18,
+                    text = "小",
+                    onClick = { onFontSizeChange(18) }
+                )
+                VideoDanmakuOptionChip(
+                    selected = fontSize == 25,
+                    text = "标准",
+                    onClick = { onFontSizeChange(25) }
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    modifier = Modifier.padding(end = 12.dp),
+                    text = "颜色",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    items(colorOptions) { item ->
+                        VideoDanmakuColorSwatch(
+                            color = item,
+                            selected = color == item,
+                            onClick = { onColorChange(item) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoDanmakuOptionChip(
+    selected: Boolean,
+    text: String,
+    onClick: () -> Unit
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(text = text) }
+    )
+}
+
+@Composable
+private fun VideoDanmakuColorSwatch(
+    color: Int,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        color = Color(0xFF000000.toInt() or color),
+        border = BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            }
+        )
+    ) {}
+}
+
 @Composable
 private fun LiveRoomPanel(
     modifier: Modifier = Modifier,
     playerViewModel: VideoPlayerV3ViewModel,
+    showDanmakuInput: Boolean,
+    danmakuInputValue: String,
+    danmakuInputSelection: EmoteTextSelection,
+    danmakuInputEmoteTokens: List<EmoteInputToken>,
+    sendingDanmaku: Boolean,
+    emotePackages: List<LiveEmotePackage>,
+    loadingEmoticons: Boolean,
+    emoticonError: String?,
+    onDanmakuInputValueChange: (String, EmoteTextSelection) -> Unit,
+    onLoadEmoticons: (Boolean) -> Unit,
+    onTextEmoticonClick: (LiveEmoticon) -> Unit,
+    onLiveEmoticonClick: (LiveEmoticon) -> Unit,
+    onDismissDanmakuInput: () -> Unit,
+    onSendDanmaku: () -> Unit,
     onSendDanmakuClick: () -> Unit,
     onLikeClick: () -> Unit,
     onRefresh: () -> Unit,
@@ -1652,9 +2222,18 @@ private fun LiveRoomPanel(
     showHeader: Boolean,
     backgroundColor: Color
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val dismissDanmakuInput = {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+        onDismissDanmakuInput()
+    }
+
     Box(
         modifier = modifier.background(backgroundColor)
     ) {
+        BackHandler(enabled = showDanmakuInput, onBack = dismissDanmakuInput)
         val liveBackgroundModel: Any = playerViewModel.liveBackground.takeIf { it.isNotBlank() }
             ?: R.drawable.live_default_bg
         AsyncImage(
@@ -1680,25 +2259,45 @@ private fun LiveRoomPanel(
                     watchedText = playerViewModel.liveWatchedShow,
                     liveTime = playerViewModel.liveTime,
                     cover = playerViewModel.liveCover,
+                    compact = true,
                     backgroundColor = Color.Transparent
                 )
             }
             LiveDanmakuList(
                 modifier = Modifier.weight(1f),
-                messages = playerViewModel.liveDanmakuMessages
+                messages = playerViewModel.liveDanmakuMessages,
+                shouldKeepLatestVisible = showDanmakuInput
             )
-            LiveRoomInputBar(
-                modifier = Modifier.navigationBarsPadding(),
-                playerViewModel = playerViewModel,
-                onSendDanmakuClick = onSendDanmakuClick,
-                onLikeClick = onLikeClick,
-                onQualitySelected = onQualitySelected,
-                onCodecSelected = onCodecSelected,
-                onRefresh = onRefresh,
-                onCopyLink = onCopyLink,
-                onShare = onShare,
-                onOpenBrowser = onOpenBrowser
-            )
+            if (showDanmakuInput) {
+                LiveSendDanmakuPanel(
+                    value = danmakuInputValue,
+                    selection = danmakuInputSelection,
+                    emoteTokens = danmakuInputEmoteTokens,
+                    sending = sendingDanmaku,
+                    emotePackages = emotePackages,
+                    loadingEmoticons = loadingEmoticons,
+                    emoticonError = emoticonError,
+                    onValueChange = onDanmakuInputValueChange,
+                    onLoadEmoticons = onLoadEmoticons,
+                    onTextEmoticonClick = onTextEmoticonClick,
+                    onLiveEmoticonClick = onLiveEmoticonClick,
+                    onDismiss = dismissDanmakuInput,
+                    onSend = onSendDanmaku
+                )
+            } else {
+                LiveRoomInputBar(
+                    modifier = Modifier.navigationBarsPadding(),
+                    playerViewModel = playerViewModel,
+                    onSendDanmakuClick = onSendDanmakuClick,
+                    onLikeClick = onLikeClick,
+                    onQualitySelected = onQualitySelected,
+                    onCodecSelected = onCodecSelected,
+                    onRefresh = onRefresh,
+                    onCopyLink = onCopyLink,
+                    onShare = onShare,
+                    onOpenBrowser = onOpenBrowser
+                )
+            }
         }
     }
 }
@@ -1888,19 +2487,81 @@ private fun LivePlayerInfo(
     watchedText: String = "",
     liveTime: Int? = null,
     cover: String = "",
+    compact: Boolean = false,
     backgroundColor: Color = MaterialTheme.colorScheme.surface
 ) {
     val summaryTextStyle = MaterialTheme.typography.bodySmall.copy(
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
     )
     val stats = listOfNotNull(
-        watchedText.takeIf { it.isNotBlank() },
         popularityText.takeIf { it.isNotBlank() },
         onlineCountText.takeIf { it.isNotBlank() },
-        liveTime?.let { formatLiveDuration(it) },
-        qualityText.takeIf { it.isNotBlank() },
         roomId.takeIf { it > 0 }?.let { "房间 $it" }
     )
+    val statsText = stats.joinToString("  ·  ")
+
+    if (compact) {
+        val compactSummaryTextStyle = MaterialTheme.typography.bodySmall.copy(
+            color = Color.White.copy(alpha = 0.72f)
+        )
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(backgroundColor),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AsyncImage(
+                modifier = Modifier
+                    .padding(end = 10.dp)
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Color.Gray),
+                model = upAvatar,
+                contentDescription = null
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        modifier = Modifier.weight(1f),
+                        text = upName.ifBlank { "未知主播" },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "正在直播",
+                        style = compactSummaryTextStyle,
+                        fontSize = 10.sp
+                    )
+                }
+                Text(
+                    text = title.ifBlank { "直播间" },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.92f)
+                )
+                if (statsText.isNotBlank()) {
+                    ProvideTextStyle(compactSummaryTextStyle) {
+                        Text(
+                            text = statsText,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+        return
+    }
 
     Column(
         modifier = modifier
@@ -1963,7 +2624,7 @@ private fun LivePlayerInfo(
         }
         ProvideTextStyle(summaryTextStyle) {
             Text(
-                text = stats.joinToString("  ·  "),
+                text = statsText,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -1974,7 +2635,8 @@ private fun LivePlayerInfo(
 @Composable
 private fun LiveDanmakuList(
     modifier: Modifier = Modifier,
-    messages: List<LiveDanmakuMessage>
+    messages: List<LiveDanmakuMessage>,
+    shouldKeepLatestVisible: Boolean = false
 ) {
     val listState = rememberLazyListState()
     var followLatest by remember { mutableStateOf(true) }
@@ -2007,21 +2669,26 @@ private fun LiveDanmakuList(
         }
     }
 
+    LaunchedEffect(shouldKeepLatestVisible, messages.size) {
+        if (shouldKeepLatestVisible && messages.isNotEmpty()) {
+            followLatest = true
+            autoScrolling = true
+            try {
+                listState.scrollToItem(messages.size)
+            } finally {
+                autoScrolling = false
+            }
+        }
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Transparent),
         state = listState,
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        item {
-            Text(
-                text = "直播弹幕",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White
-            )
-        }
         if (messages.isEmpty()) {
             item {
                 Text(
@@ -2050,7 +2717,7 @@ private fun LiveDanmakuItem(
             .fillMaxWidth(0.96f)
             .clip(MaterialTheme.shapes.small)
             .background(Color.Black.copy(alpha = 0.38f))
-            .padding(10.dp),
+            .padding(6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(
@@ -2075,49 +2742,327 @@ private fun LiveDanmakuItem(
                 color = Color.White.copy(alpha = 0.72f)
             )
         }
-        Text(
-            text = message.content,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White
+        LiveDanmakuRichText(
+            content = message.content,
+            emojiMap = message.emojiMap,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }
 
 @Composable
-private fun LiveSendDanmakuDialog(
+private fun LiveDanmakuRichText(
+    content: String,
+    emojiMap: Map<String, String>,
+    modifier: Modifier = Modifier
+) {
+    if (emojiMap.isEmpty()) {
+        Text(
+            modifier = modifier,
+            text = content,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White
+        )
+        return
+    }
+
+    val emojiEntries = emojiMap
+        .filter { (key, url) -> key.isNotBlank() && url.isNotBlank() }
+        .toList()
+        .sortedByDescending { (key, _) -> key.length }
+
+    if (emojiEntries.isEmpty()) {
+        Text(
+            modifier = modifier,
+            text = content,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White
+        )
+        return
+    }
+
+    val inlineContent = emojiEntries.associate { (key, url) ->
+        key to InlineTextContent(
+            Placeholder(
+                width = 28.sp,
+                height = 28.sp,
+                placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter
+            )
+        ) {
+            AsyncImage(
+                model = url,
+                contentDescription = key,
+                contentScale = ContentScale.Fit
+            )
+        }
+    }
+    val annotatedContent = buildAnnotatedString {
+        var index = 0
+        while (index < content.length) {
+            val match = emojiEntries.firstOrNull { (key, _) ->
+                content.regionMatches(index, key, 0, key.length)
+            }
+            if (match != null) {
+                appendInlineContent(match.first, match.first)
+                index += match.first.length
+            } else {
+                append(content[index])
+                index += 1
+            }
+        }
+        if (content.isBlank() && emojiEntries.size == 1) {
+            appendInlineContent(emojiEntries.first().first, emojiEntries.first().first)
+        }
+    }
+
+    Text(
+        modifier = modifier,
+        text = annotatedContent,
+        inlineContent = inlineContent,
+        style = MaterialTheme.typography.bodyMedium,
+        color = Color.White
+    )
+}
+
+@Composable
+private fun LiveSendDanmakuPanel(
     value: String,
+    selection: EmoteTextSelection,
+    emoteTokens: List<EmoteInputToken>,
     sending: Boolean,
-    onValueChange: (String) -> Unit,
+    emotePackages: List<LiveEmotePackage>,
+    loadingEmoticons: Boolean,
+    emoticonError: String?,
+    onValueChange: (String, EmoteTextSelection) -> Unit,
+    onLoadEmoticons: (Boolean) -> Unit,
+    onTextEmoticonClick: (LiveEmoticon) -> Unit,
+    onLiveEmoticonClick: (LiveEmoticon) -> Unit,
     onDismiss: () -> Unit,
     onSend: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = "发送弹幕") },
-        text = {
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                minLines = 1,
-                maxLines = 3,
-                singleLine = false,
-                placeholder = { Text("输入弹幕内容") }
-            )
-        },
-        confirmButton = {
-            TextButton(
-                enabled = value.isNotBlank() && !sending,
-                onClick = onSend
+    var showEmoticons by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showEmoticons) {
+        if (showEmoticons) onLoadEmoticons(false)
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .widthIn(max = 640.dp)
+            .imePadding()
+            .navigationBarsPadding(),
+        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 15.dp, top = 12.dp, end = 15.dp, bottom = 10.dp)
             ) {
-                Text(text = if (sending) "发送中" else "发送")
+                EmoteTextEditor(
+                    modifier = Modifier.fillMaxWidth(),
+                    value = value,
+                    selection = selection,
+                    emoteTokens = emoteTokens,
+                    placeholder = "输入弹幕内容",
+                    label = null,
+                    enabled = !sending,
+                    minLines = 1,
+                    maxLines = 2,
+                    shape = RoundedCornerShape(0.dp),
+                    border = null,
+                    containerColor = Color.Transparent,
+                    contentPadding = PaddingValues(0.dp),
+                    onValueChange = onValueChange
+                )
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = "取消")
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { showEmoticons = !showEmoticons }) {
+                        Icon(
+                            imageVector = if (showEmoticons) Icons.Default.Keyboard else Icons.Default.EmojiEmotions,
+                            contentDescription = if (showEmoticons) "收起表情" else "选择表情"
+                        )
+                    }
+                    TextButton(
+                        enabled = !sending,
+                        onClick = onDismiss
+                    ) {
+                        Text(text = "取消")
+                    }
+                }
+                FilledTonalButton(
+                    enabled = value.isNotBlank() && !sending,
+                    onClick = onSend,
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+                ) {
+                    if (sending) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(text = "发送")
+                    }
+                }
+            }
+            if (showEmoticons) {
+                LiveEmoticonPanel(
+                    packages = emotePackages,
+                    loading = loadingEmoticons,
+                    error = emoticonError,
+                    sending = sending,
+                    onReload = { onLoadEmoticons(true) },
+                    onTextEmoticonClick = onTextEmoticonClick,
+                    onLiveEmoticonClick = onLiveEmoticonClick
+                )
             }
         }
-    )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LiveEmoticonPanel(
+    packages: List<LiveEmotePackage>,
+    loading: Boolean,
+    error: String?,
+    sending: Boolean,
+    onReload: () -> Unit,
+    onTextEmoticonClick: (LiveEmoticon) -> Unit,
+    onLiveEmoticonClick: (LiveEmoticon) -> Unit
+) {
+    var selectedPackageIndex by remember { mutableStateOf(0) }
+    val selectedPackage = packages.getOrNull(selectedPackageIndex)
+
+    LaunchedEffect(packages.size) {
+        if (selectedPackageIndex >= packages.size) {
+            selectedPackageIndex = 0
+        }
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 180.dp, max = 300.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+        tonalElevation = 1.dp
+    ) {
+        when {
+            loading && packages.isEmpty() -> {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(180.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+                }
+            }
+            error != null && packages.isEmpty() -> {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(180.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    TextButton(onClick = onReload) {
+                        Text(text = error.ifBlank { "获取表情失败，点击重试" })
+                    }
+                }
+            }
+            selectedPackage == null -> {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(180.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    TextButton(onClick = onReload) {
+                        Text(text = "暂无可用表情")
+                    }
+                }
+            }
+            else -> {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    LazyVerticalGrid(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        columns = GridCells.Adaptive(48.dp),
+                        contentPadding = PaddingValues(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(selectedPackage.emoticons) { emoticon ->
+                            LiveEmoticonItem(
+                                emoticon = emoticon,
+                                enabled = !sending,
+                                onClick = {
+                                    if (selectedPackage.pkgType == 3) {
+                                        onTextEmoticonClick(emoticon)
+                                    } else {
+                                        onLiveEmoticonClick(emoticon)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    PrimaryScrollableTabRow(
+                        selectedTabIndex = selectedPackageIndex,
+                        edgePadding = 0.dp,
+                        minTabWidth = 48.dp,
+                        divider = {},
+                        containerColor = Color.Transparent
+                    ) {
+                        packages.forEachIndexed { index, item ->
+                            Tab(
+                                selected = index == selectedPackageIndex,
+                                onClick = { selectedPackageIndex = index },
+                                icon = {
+                                    AsyncImage(
+                                        modifier = Modifier.size(24.dp),
+                                        model = item.currentCover,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Fit
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiveEmoticonItem(
+    emoticon: LiveEmoticon,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(5.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        AsyncImage(
+            modifier = Modifier.fillMaxSize(),
+            model = emoticon.url,
+            contentDescription = emoticon.displayName,
+            contentScale = ContentScale.Fit
+        )
+    }
 }
 
 private fun formatLiveDuration(liveTime: Int): String {
@@ -2157,64 +3102,480 @@ private fun formatUpStatsText(
     return "${followers}粉丝 · ${archives}视频"
 }
 
+private fun Context.replyUriFileName(uri: Uri): String {
+    return runCatching {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor ->
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+            }
+    }.getOrNull()?.takeIf { it.isNotBlank() }
+        ?: "reply_${System.currentTimeMillis()}.jpg"
+}
+
+private fun Context.replyUriBytes(uri: Uri): ByteArray? =
+    contentResolver.openInputStream(uri)?.use { it.readBytes() }
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ReplyInputDialog(
+private fun ReplyInputSheet(
+    commentViewModel: CommentViewModel,
+    playerViewModel: VideoPlayerV3ViewModel,
     title: String,
     placeholder: String,
     sending: Boolean,
+    canUploadImages: Boolean,
     onDismiss: () -> Unit,
-    onSend: (String) -> Unit
+    onSend: (ReplySendDraft) -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var text by remember { mutableStateOf("") }
+    var selection by remember { mutableStateOf(EmoteTextSelection.Zero) }
+    var activePanel by remember { mutableStateOf<ReplyInputPanel?>(null) }
+    var mentionKeyword by remember { mutableStateOf("") }
+    var loadingMentions by remember { mutableStateOf(false) }
+    var syncToDynamic by remember { mutableStateOf(false) }
+    val mentionSuggestions = remember { mutableStateListOf<DynamicMentionDraft>() }
+    val selectedImages = remember { mutableStateListOf<ReplyLocalImage>() }
+    val emoteTokens = remember { mutableStateListOf<EmoteInputToken>() }
+    val mentionTokens = remember { mutableStateListOf<ReplyMentionToken>() }
 
-    AlertDialog(
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        val remaining = 9 - selectedImages.size
+        if (remaining <= 0) {
+            "最多选择 9 张图片".toast(context)
+            return@rememberLauncherForActivityResult
+        }
+        selectedImages.addAll(
+            uris.take(remaining).map { uri ->
+                ReplyLocalImage(
+                    uri = uri,
+                    fileName = context.replyUriFileName(uri)
+                )
+            }
+        )
+        if (uris.size > remaining) "已达到 9 张图片上限".toast(context)
+    }
+
+    fun insertText(
+        marker: String,
+        emote: DynamicEmoteDraft? = null,
+        mention: DynamicMentionDraft? = null
+    ) {
+        val start = selection.start.coerceIn(0, text.length)
+        val end = selection.end.coerceIn(0, text.length)
+        val replaceStart = minOf(start, end)
+        val replaceEnd = maxOf(start, end)
+        text = text.replaceRange(replaceStart, replaceEnd, marker)
+        selection = EmoteTextSelection.collapsed(replaceStart + marker.length)
+        if (emote != null && emote.url.isNotBlank()) {
+            emoteTokens.add(
+                EmoteInputToken(
+                    marker = marker,
+                    preferredStart = replaceStart,
+                    emoteUrl = emote.url,
+                    emoteName = emote.emoteDisplayName
+                )
+            )
+        }
+        if (mention != null) {
+            mentionTokens.add(
+                ReplyMentionToken(
+                    marker = marker,
+                    name = mention.name,
+                    uid = mention.uid.toLongOrNull() ?: 0L,
+                    preferredStart = replaceStart
+                )
+            )
+        }
+    }
+
+    LaunchedEffect(activePanel) {
+        if (activePanel == ReplyInputPanel.Emoji) {
+            commentViewModel.loadEmotePackages()
+        }
+    }
+
+    LaunchedEffect(activePanel, mentionKeyword) {
+        if (activePanel != ReplyInputPanel.Mention) return@LaunchedEffect
+        if (mentionKeyword.isNotBlank()) delay(250)
+        loadingMentions = true
+        val result = withContext(Dispatchers.IO) {
+            commentViewModel.searchMention(mentionKeyword)
+        }
+        mentionSuggestions.clear()
+        mentionSuggestions.addAll(result.getOrDefault(emptyList()))
+        loadingMentions = false
+    }
+
+    val canSend = text.isNotBlank() || selectedImages.isNotEmpty()
+
+    ModalBottomSheet(
         onDismissRequest = {
             if (!sending) onDismiss()
         },
-        title = { Text(text = title) },
-        text = {
-            OutlinedTextField(
-                modifier = Modifier.fillMaxWidth(),
-                value = text,
-                onValueChange = { text = it },
-                enabled = !sending,
-                minLines = 3,
-                maxLines = 6,
-                placeholder = { Text(text = placeholder) }
-            )
-        },
-        confirmButton = {
-            Button(
-                enabled = !sending && text.isNotBlank(),
-                onClick = { onSend(text) }
-            ) {
-                if (sending) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Icon(
-                        modifier = Modifier.size(18.dp),
-                        imageVector = Icons.AutoMirrored.Rounded.Send,
-                        contentDescription = null
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    modifier = Modifier.weight(1f),
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                TextButton(
+                    enabled = !sending,
+                    onClick = onDismiss
+                ) {
+                    Text(text = "取消")
+                }
+                Button(
+                    enabled = !sending && canSend,
+                    onClick = {
+                        onSend(
+                            ReplySendDraft(
+                                message = text,
+                                images = selectedImages.toList(),
+                                atNameToMid = mentionTokens
+                                    .filter { token ->
+                                        token.uid > 0L && text.contains(token.marker)
+                                    }
+                                    .associate { it.name to it.uid },
+                                syncToDynamic = syncToDynamic
+                            )
+                        )
+                    }
+                ) {
+                    if (sending) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            modifier = Modifier.size(18.dp),
+                            imageVector = Icons.AutoMirrored.Rounded.Send,
+                            contentDescription = null
+                        )
+                    }
+                    Text(
+                        modifier = Modifier.padding(start = 6.dp),
+                        text = "发送"
                     )
                 }
-                Text(
-                    modifier = Modifier.padding(start = 6.dp),
-                    text = "发送"
-                )
             }
-        },
-        dismissButton = {
-            TextButton(
+
+            EmoteTextEditor(
+                modifier = Modifier.fillMaxWidth(),
+                value = text,
+                selection = selection,
+                emoteTokens = emoteTokens,
+                placeholder = placeholder,
+                label = "回复内容",
                 enabled = !sending,
-                onClick = onDismiss
+                minLines = 4,
+                maxLines = 8,
+                onValueChange = { value, newSelection ->
+                    text = value
+                    selection = newSelection
+                }
+            )
+
+            if (selectedImages.isNotEmpty()) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(selectedImages) { image ->
+                        Box(
+                            modifier = Modifier
+                                .size(76.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                        ) {
+                            AsyncImage(
+                                modifier = Modifier.fillMaxSize(),
+                                model = image.uri,
+                                contentDescription = image.fileName,
+                                contentScale = ContentScale.Crop
+                            )
+                            IconButton(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(28.dp)
+                                    .background(
+                                        color = Color.Black.copy(alpha = 0.45f),
+                                        shape = CircleShape
+                                    ),
+                                onClick = { selectedImages.remove(image) }
+                            ) {
+                                Icon(
+                                    modifier = Modifier.size(16.dp),
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "删除图片",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "取消")
+                ReplyToolButton(
+                    selected = activePanel == ReplyInputPanel.Emoji,
+                    icon = if (activePanel == ReplyInputPanel.Emoji) Icons.Default.Keyboard else Icons.Default.EmojiEmotions,
+                    contentDescription = "表情",
+                    onClick = {
+                        activePanel = if (activePanel == ReplyInputPanel.Emoji) null else ReplyInputPanel.Emoji
+                    }
+                )
+                ReplyToolButton(
+                    enabled = canUploadImages,
+                    selected = selectedImages.isNotEmpty(),
+                    icon = if (canUploadImages) Icons.Default.Image else Icons.Default.ImageNotSupported,
+                    contentDescription = "图片",
+                    onClick = {
+                        if (canUploadImages) {
+                            imagePicker.launch("image/*")
+                        } else {
+                            "当前评论区不支持发送图片".toast(context)
+                        }
+                    }
+                )
+                ReplyToolButton(
+                    selected = activePanel == ReplyInputPanel.Mention,
+                    icon = Icons.Default.AlternateEmail,
+                    contentDescription = "@",
+                    onClick = {
+                        activePanel = if (activePanel == ReplyInputPanel.Mention) null else ReplyInputPanel.Mention
+                    }
+                )
+                ReplyToolButton(
+                    selected = activePanel == ReplyInputPanel.More,
+                    icon = if (activePanel == ReplyInputPanel.More) Icons.Default.Keyboard else Icons.Default.AddCircleOutline,
+                    contentDescription = "更多",
+                    onClick = {
+                        activePanel = if (activePanel == ReplyInputPanel.More) null else ReplyInputPanel.More
+                    }
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                FilledTonalButton(
+                    onClick = { syncToDynamic = !syncToDynamic },
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Checkbox(
+                        modifier = Modifier.size(22.dp),
+                        checked = syncToDynamic,
+                        onCheckedChange = { syncToDynamic = it }
+                    )
+                    Text(text = "转动态")
+                }
+            }
+
+            when (activePanel) {
+                ReplyInputPanel.Emoji -> EmotePanel(
+                    packages = commentViewModel.emotePackages,
+                    loading = commentViewModel.loadingEmotes,
+                    onSelect = { emoji ->
+                        insertText(
+                            marker = emoji.text,
+                            emote = emoji
+                        )
+                    }
+                )
+
+                ReplyInputPanel.Mention -> ReplyMentionPanel(
+                    keyword = mentionKeyword,
+                    onKeywordChange = { mentionKeyword = it },
+                    mentions = mentionSuggestions,
+                    loading = loadingMentions,
+                    onSelect = { mention ->
+                        insertText(
+                            marker = "@${mention.name} ",
+                            mention = mention
+                        )
+                    }
+                )
+
+                ReplyInputPanel.More -> ReplyMorePanel(
+                    canInsertProgress = playerViewModel.videoPlayer?.currentPosition != null,
+                    onInsertProgress = {
+                        val position = playerViewModel.videoPlayer?.currentPosition ?: 0L
+                        insertText(" ${position.formatHourMinSec()} ")
+                    }
+                )
+
+                null -> Unit
             }
         }
-    )
+    }
+}
+
+@Composable
+private fun ReplyToolButton(
+    selected: Boolean,
+    icon: ImageVector,
+    contentDescription: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    IconButton(
+        enabled = enabled,
+        onClick = onClick
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = when {
+                !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                selected -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+        )
+    }
+}
+
+@Composable
+private fun ReplyMentionPanel(
+    keyword: String,
+    onKeywordChange: (String) -> Unit,
+    mentions: List<DynamicMentionDraft>,
+    loading: Boolean,
+    onSelect: (DynamicMentionDraft) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = keyword,
+                onValueChange = onKeywordChange,
+                label = { Text(text = "搜索用户") },
+                singleLine = true
+            )
+            if (loading) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                }
+            }
+            mentions.take(8).forEach { item ->
+                InputChip(
+                    selected = false,
+                    onClick = { onSelect(item) },
+                    label = {
+                        Text(
+                            text = item.name,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReplyMorePanel(
+    canInsertProgress: Boolean,
+    onInsertProgress: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            ReplyMoreItem(
+                title = "视频进度",
+                icon = Icons.Rounded.WatchLater,
+                enabled = canInsertProgress,
+                onClick = onInsertProgress
+            )
+            ReplyMoreItem(
+                title = "插入内容",
+                icon = Icons.AutoMirrored.Filled.Comment,
+                enabled = false,
+                onClick = {}
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReplyMoreItem(
+    title: String,
+    icon: ImageVector,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(72.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(46.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = if (enabled) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                }
+            )
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (enabled) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 @Composable

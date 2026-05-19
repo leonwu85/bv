@@ -33,6 +33,7 @@ import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.http.BiliLiveHttpApi
 import dev.aaa1115910.biliapi.http.entity.live.DanmakuEvent
 import dev.aaa1115910.biliapi.http.entity.live.LiveEvent
+import dev.aaa1115910.biliapi.http.entity.live.LiveEmotePackage
 import dev.aaa1115910.biliapi.http.entity.live.OnlineRankCountEvent
 import dev.aaa1115910.biliapi.http.entity.live.PopularityChangeEvent
 import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment
@@ -274,6 +275,7 @@ class VideoPlayerV3ViewModel(
     var play by mutableLongStateOf(0)
     var danmaku by mutableStateOf(0)
     var like by mutableStateOf(0)
+    var sendingVideoDanmaku by mutableStateOf(false)
     
     // 直播相关属性
     var isLive by mutableStateOf(false)
@@ -286,6 +288,10 @@ class VideoPlayerV3ViewModel(
     var liveAnchorId by mutableLongStateOf(0L)
     var liveLikeClickCount by mutableIntStateOf(0)
     var sendingLiveDanmaku by mutableStateOf(false)
+    var loadingLiveEmoticons by mutableStateOf(false)
+    var liveEmoticonError by mutableStateOf<String?>(null)
+    val liveEmotePackages = mutableStateListOf<LiveEmotePackage>()
+    private var liveEmoticonRoomId: Int? = null
     var likingLiveRoom by mutableStateOf(false)
 
     // 直播画质管理
@@ -2690,6 +2696,109 @@ class VideoPlayerV3ViewModel(
             withContext(Dispatchers.Main) { sendingLiveDanmaku = true }
             try {
                 liveRepository.sendLiveMsg(liveRoomId, text)
+                "发送成功"
+            } finally {
+                withContext(Dispatchers.Main) { sendingLiveDanmaku = false }
+            }
+        }
+    }
+
+    suspend fun sendVideoDanmaku(
+        message: String,
+        mode: Int = 1,
+        fontSize: Int = 25,
+        color: Int = 0xFFFFFF
+    ): Result<String> {
+        val text = message.trim()
+        if (text.isBlank()) return Result.failure(IllegalArgumentException("弹幕内容不能为空"))
+        if (isLive) return Result.failure(IllegalStateException("当前不是点播视频"))
+        if (currentAid <= 0L || currentCid <= 0L) return Result.failure(IllegalStateException("视频不存在"))
+        if (sendingVideoDanmaku) return Result.failure(IllegalStateException("正在发送弹幕"))
+
+        val progress = videoPlayer?.currentPosition?.coerceAtLeast(0L)?.toInt() ?: 0
+        val bvid = AvBvConverter.av2bv(currentAid)
+        return runCatching {
+            withContext(Dispatchers.Main) { sendingVideoDanmaku = true }
+            try {
+                val dmid = videoPlayRepository.sendDanmaku(
+                    cid = currentCid,
+                    bvid = bvid,
+                    message = text,
+                    progress = progress,
+                    mode = mode,
+                    fontSize = fontSize,
+                    color = color
+                )
+                val item = DanmakuItemData(
+                    danmakuId = dmid ?: System.currentTimeMillis(),
+                    position = progress.toLong(),
+                    content = text,
+                    mode = when (mode) {
+                        4 -> DanmakuItemData.DANMAKU_MODE_CENTER_BOTTOM
+                        5 -> DanmakuItemData.DANMAKU_MODE_CENTER_TOP
+                        else -> DanmakuItemData.DANMAKU_MODE_ROLLING
+                    },
+                    textSize = fontSize,
+                    textColor = Color(color).toArgb(),
+                    danmakuStyle = DanmakuItemData.DANMAKU_STYLE_SELF_SEND
+                )
+                withContext(Dispatchers.Main) {
+                    danmakuData.add(item)
+                    danmakuPlayer?.updateData(listOf(item))
+                }
+                "发送成功"
+            } finally {
+                withContext(Dispatchers.Main) { sendingVideoDanmaku = false }
+            }
+        }
+    }
+
+    fun loadLiveEmoticons(forceReload: Boolean = false) {
+        val roomId = liveRoomId
+        if (roomId <= 0) return
+        if (Prefs.sessData.isBlank()) {
+            liveEmoticonError = "账号未登录，无法获取直播表情"
+            return
+        }
+        if (liveEmoticonRoomId != roomId) {
+            liveEmoticonRoomId = roomId
+            liveEmotePackages.clear()
+            liveEmoticonError = null
+        }
+        if (loadingLiveEmoticons) return
+        if (!forceReload && liveEmotePackages.isNotEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) {
+                loadingLiveEmoticons = true
+                liveEmoticonError = null
+            }
+            runCatching {
+                liveRepository.getLiveEmoticons(roomId)
+            }.onSuccess { packages ->
+                withContext(Dispatchers.Main) {
+                    liveEmotePackages.swapList(packages.filter { it.emoticons.isNotEmpty() })
+                }
+            }.onFailure { e ->
+                logger.fWarn { "Load live emoticons failed: ${e.message}" }
+                withContext(Dispatchers.Main) {
+                    liveEmoticonError = e.localizedMessage ?: "获取表情失败"
+                }
+            }
+            withContext(Dispatchers.Main) {
+                loadingLiveEmoticons = false
+            }
+        }
+    }
+
+    suspend fun sendLiveEmoticon(emoticonUnique: String): Result<String> {
+        val unique = emoticonUnique.trim()
+        if (unique.isBlank()) return Result.failure(IllegalArgumentException("表情不存在"))
+        if (liveRoomId <= 0) return Result.failure(IllegalStateException("直播间不存在"))
+        if (sendingLiveDanmaku) return Result.failure(IllegalStateException("正在发送弹幕"))
+        return runCatching {
+            withContext(Dispatchers.Main) { sendingLiveDanmaku = true }
+            try {
+                liveRepository.sendLiveEmoticon(liveRoomId, unique)
                 "发送成功"
             } finally {
                 withContext(Dispatchers.Main) { sendingLiveDanmaku = false }

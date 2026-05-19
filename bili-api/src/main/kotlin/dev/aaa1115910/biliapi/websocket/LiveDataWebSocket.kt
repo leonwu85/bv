@@ -602,7 +602,7 @@ object LiveDataWebSocket {
             }
             if (!emoticonUnique.isNullOrBlank()) {
                 put(emoticonUnique, url)
-                if (displayText.isNullOrBlank() && emoticonUnique.startsWith("upower_[") && emoticonUnique.endsWith("]")) {
+                if (emoticonUnique.startsWith("upower_[") && emoticonUnique.endsWith("]")) {
                     put(emoticonUnique.removePrefix("upower_"), url)
                 }
             }

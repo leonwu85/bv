@@ -12,6 +12,7 @@ import dev.aaa1115910.biliapi.entity.reply.CommentRepliesData
 import dev.aaa1115910.biliapi.entity.reply.CommentReplyPage
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
 import dev.aaa1115910.biliapi.entity.reply.CommentsData
+import dev.aaa1115910.biliapi.entity.user.DynamicImageDraft
 import dev.aaa1115910.biliapi.grpc.utils.handleGrpcException
 import dev.aaa1115910.biliapi.http.BiliHttpApi
 import kotlinx.serialization.json.Json
@@ -122,6 +123,8 @@ class CommentRepository(
         message: String,
         root: Long? = null,
         parent: Long? = null,
+        pictures: List<DynamicImageDraft> = emptyList(),
+        atNameToMid: Map<String, Long> = emptyMap(),
         syncToDynamic: Boolean = false
     ) {
         val (success, responseMessage) = BiliHttpApi.addReply(
@@ -130,6 +133,8 @@ class CommentRepository(
             message = message,
             root = root,
             parent = parent,
+            pictures = pictures,
+            atNameToMid = atNameToMid,
             csrf = authRepository.biliJct,
             sessData = authRepository.sessionData,
             syncToDynamic = syncToDynamic

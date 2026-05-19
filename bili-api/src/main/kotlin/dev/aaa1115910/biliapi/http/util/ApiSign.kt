@@ -51,8 +51,11 @@ fun HttpRequestBuilder.encAppPost() {
 
 fun HttpRequestBuilder.encAppGet() {
     parameter("appkey", APP_KEY)
+    if (!url.parameters.contains("ts")) {
+        parameter("ts", (System.currentTimeMillis() / 1000).toString())
+    }
 
-    val sortedParams = url.encodedParameters.entries()
+    val sortedParams = url.parameters.entries()
         .associate { it.key to it.value.first() }
         .toSortedMap()
         .also {
@@ -61,7 +64,7 @@ fun HttpRequestBuilder.encAppGet() {
         }
 
     val sortedParamsString = sortedParams
-        .map { (key, value) -> "$key=$value" }
+        .map { (key, value) -> "$key=${URLEncoder.encode(value, "utf-8")}" }
         .joinToString("&")
 
     val sign = MessageDigest.getInstance("MD5").digest((sortedParamsString + APP_SEC).toByteArray())

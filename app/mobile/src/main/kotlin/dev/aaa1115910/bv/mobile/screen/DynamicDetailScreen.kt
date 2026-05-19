@@ -39,20 +39,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Comment
-import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material.icons.outlined.ThumbUp
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -96,8 +91,12 @@ import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.bv.mobile.component.ImagePreviewerActions
 import dev.aaa1115910.bv.mobile.component.home.dynamic.DynamicContent
 import dev.aaa1115910.bv.mobile.component.home.dynamic.DynamicHeader
+import dev.aaa1115910.bv.mobile.component.home.dynamic.DynamicVoteCard
 import dev.aaa1115910.bv.mobile.component.reply.Comments
 import dev.aaa1115910.bv.mobile.component.reply.Replies
+import dev.aaa1115910.bv.mobile.component.reply.RichReplyInputSheet
+import dev.aaa1115910.bv.mobile.component.reply.RichReplySendDraft
+import dev.aaa1115910.bv.mobile.component.reply.richReplyUriBytes
 import dev.aaa1115910.bv.mobile.component.videocard.shareText
 import dev.aaa1115910.bv.mobile.util.saveImageToGallery
 import dev.aaa1115910.bv.util.Prefs
@@ -119,7 +118,8 @@ private data class DynamicReplyDraftTarget(
     val title: String,
     val placeholder: String,
     val root: Long? = null,
-    val parent: Long? = null
+    val parent: Long? = null,
+    val replyToName: String? = null
 )
 
 @OptIn(
@@ -254,7 +254,8 @@ fun DynamicDetailMobileContent(
             title = "回复 ${comment.member.name}",
             placeholder = "回复 @${comment.member.name}",
             root = comment.rpid,
-            parent = comment.rpid
+            parent = comment.rpid,
+            replyToName = comment.member.name
         )
     }
     val openChildReplyInput: (Comment, Long) -> Unit = { comment, root ->
@@ -262,7 +263,8 @@ fun DynamicDetailMobileContent(
             title = "回复 ${comment.member.name}",
             placeholder = "回复 @${comment.member.name}",
             root = root,
-            parent = comment.rpid
+            parent = comment.rpid,
+            replyToName = comment.member.name
         )
     }
 
@@ -436,17 +438,25 @@ fun DynamicDetailMobileContent(
     }
 
     replyDraftTarget?.let { target ->
-        DynamicReplyInputDialog(
+        RichReplyInputSheet(
+            commentViewModel = dynamicDetailState.commentViewModel,
             title = target.title,
             placeholder = target.placeholder,
             sending = dynamicDetailState.sendingComment,
+            canUploadImages = target.root == null || target.root == 0L,
             onDismiss = { replyDraftTarget = null },
-            onSend = { message ->
+            onSend = { draft ->
                 dynamicDetailState.sendComment(
-                    message = message,
+                    draft = draft,
                     root = target.root,
                     parent = target.parent,
-                    onSuccess = { replyDraftTarget = null }
+                    replyToName = target.replyToName,
+                    onSuccess = {
+                        replyDraftTarget = null
+                        if (showReplies && target.root != null) {
+                            dynamicDetailState.refreshReplies()
+                        }
+                    }
                 )
             }
         )
@@ -478,7 +488,8 @@ fun DynamicDetailScreenPadContent(
             title = "回复 ${comment.member.name}",
             placeholder = "回复 @${comment.member.name}",
             root = comment.rpid,
-            parent = comment.rpid
+            parent = comment.rpid,
+            replyToName = comment.member.name
         )
     }
     val openChildReplyInput: (Comment, Long) -> Unit = { comment, root ->
@@ -486,7 +497,8 @@ fun DynamicDetailScreenPadContent(
             title = "回复 ${comment.member.name}",
             placeholder = "回复 @${comment.member.name}",
             root = root,
-            parent = comment.rpid
+            parent = comment.rpid,
+            replyToName = comment.member.name
         )
     }
 
@@ -590,17 +602,25 @@ fun DynamicDetailScreenPadContent(
     }
 
     replyDraftTarget?.let { target ->
-        DynamicReplyInputDialog(
+        RichReplyInputSheet(
+            commentViewModel = dynamicDetailState.commentViewModel,
             title = target.title,
             placeholder = target.placeholder,
             sending = dynamicDetailState.sendingComment,
+            canUploadImages = target.root == null || target.root == 0L,
             onDismiss = { replyDraftTarget = null },
-            onSend = { message ->
+            onSend = { draft ->
                 dynamicDetailState.sendComment(
-                    message = message,
+                    draft = draft,
                     root = target.root,
                     parent = target.parent,
-                    onSuccess = { replyDraftTarget = null }
+                    replyToName = target.replyToName,
+                    onSuccess = {
+                        replyDraftTarget = null
+                        if (showReplies && target.root != null) {
+                            dynamicDetailState.refreshReplies()
+                        }
+                    }
                 )
             }
         )
@@ -718,66 +738,6 @@ private fun DynamicDetailActionButton(
     }
 }
 
-@Composable
-private fun DynamicReplyInputDialog(
-    title: String,
-    placeholder: String,
-    sending: Boolean,
-    onDismiss: () -> Unit,
-    onSend: (String) -> Unit
-) {
-    var text by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = {
-            if (!sending) onDismiss()
-        },
-        title = { Text(text = title) },
-        text = {
-            OutlinedTextField(
-                modifier = Modifier.fillMaxWidth(),
-                value = text,
-                onValueChange = { text = it },
-                enabled = !sending,
-                minLines = 3,
-                maxLines = 6,
-                placeholder = { Text(text = placeholder) }
-            )
-        },
-        confirmButton = {
-            Button(
-                enabled = !sending && text.isNotBlank(),
-                onClick = { onSend(text) }
-            ) {
-                if (sending) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Icon(
-                        modifier = Modifier.size(18.dp),
-                        imageVector = Icons.AutoMirrored.Rounded.Send,
-                        contentDescription = null
-                    )
-                }
-                Text(
-                    modifier = Modifier.padding(start = 6.dp),
-                    text = "发送"
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(
-                enabled = !sending,
-                onClick = onDismiss
-            ) {
-                Text(text = "取消")
-            }
-        }
-    )
-}
-
 private fun formatDynamicStatCount(value: Int): String {
     return when {
         value >= 100_000_000 -> "${value / 100_000_000}亿"
@@ -803,7 +763,9 @@ data class DynamicDetailState(
     val isLiked get() = dynamicDetailViewModel.isLiked
     val likeCount get() = dynamicDetailViewModel.likeCount
     val isLiking get() = dynamicDetailViewModel.isLiking
-    val sendingComment get() = commentViewModel.sendingComment
+    var sendingRichComment by mutableStateOf(false)
+        private set
+    val sendingComment get() = commentViewModel.sendingComment || sendingRichComment
     val commentSort get() = commentViewModel.commentSort
     val replySort get() = commentViewModel.replySort
     val isRefreshingComments get() = commentViewModel.refreshingComments
@@ -874,17 +836,58 @@ data class DynamicDetailState(
     }
 
     fun sendComment(
-        message: String,
+        draft: RichReplySendDraft,
         root: Long?,
         parent: Long?,
+        replyToName: String?,
         onSuccess: () -> Unit
     ) {
         scope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) {
+                sendingRichComment = true
+            }
+            val uploadResult = runCatching {
+                draft.images.map { image ->
+                    val bytes = context.richReplyUriBytes(image.uri)
+                        ?: error("无法读取图片：${image.fileName}")
+                    commentViewModel.uploadCommentImage(
+                        fileName = image.fileName,
+                        bytes = bytes
+                    ).getOrThrow()
+                }
+            }
+
+            if (uploadResult.isFailure) {
+                val error = uploadResult.exceptionOrNull()
+                withContext(Dispatchers.Main) {
+                    "发送失败：${error?.localizedMessage ?: "图片读取失败"}".toast(context)
+                    sendingRichComment = false
+                }
+                return@launch
+            }
+            val uploadedImages = uploadResult.getOrThrow()
+
+            val shouldPrefixReply = root != null &&
+                    parent != null &&
+                    root != parent &&
+                    !replyToName.isNullOrBlank()
+            val message = if (shouldPrefixReply) {
+                " 回复 @$replyToName : ${draft.message}"
+            } else {
+                draft.message
+            }
+
             val result = commentViewModel.sendComment(
                 message = message,
                 root = root,
-                parent = parent
+                parent = parent,
+                pictures = uploadedImages,
+                atNameToMid = draft.atNameToMid,
+                syncToDynamic = draft.syncToDynamic
             )
+            withContext(Dispatchers.Main) {
+                sendingRichComment = false
+            }
             if (result.isSuccess) {
                 withContext(Dispatchers.Main) {
                     onSuccess()
@@ -974,6 +977,13 @@ private fun DynamicPart(
                 onShowPreviewer = onShowPreviewer,
                 onClick = { }
             )
+            dynamicItem.vote?.let { vote ->
+                DynamicVoteCard(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    dynamicId = dynamicItem.id,
+                    vote = vote
+                )
+            }
         }
     }
 }

@@ -2,6 +2,7 @@ package dev.aaa1115910.biliapi.entity.user
 
 import bilibili.app.dynamic.v2.DescType
 import bilibili.app.dynamic.v2.DynModuleType
+import bilibili.app.dynamic.v2.LinkNodeType
 import bilibili.app.dynamic.v2.Module
 import bilibili.app.dynamic.v2.ModuleDynamic.ModuleItemCase
 import bilibili.app.dynamic.v2.Paragraph
@@ -29,7 +30,9 @@ enum class RichTextNodeType {
 data class RichTextNode(
     val text: String,
     val type: RichTextNodeType,
-    val emoji: RichTextEmoji? = null
+    val emoji: RichTextEmoji? = null,
+    val rid: String? = null,
+    val uri: String? = null
 )
 
 /**
@@ -61,15 +64,26 @@ private fun dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Dynam
 
             "RICH_TEXT_NODE_TYPE_AT" -> RichTextNode(
                 text = node.origText.ifBlank { node.text },
-                type = RichTextNodeType.At
+                type = RichTextNodeType.At,
+                rid = node.rid,
+                uri = node.jumpUrl
+            )
+
+            "RICH_TEXT_NODE_TYPE_VOTE" -> RichTextNode(
+                text = node.origText.ifBlank { node.text },
+                type = RichTextNodeType.Other,
+                rid = node.rid,
+                uri = node.jumpUrl
             )
 
             else -> RichTextNode(
                 text = node.origText.ifBlank { node.text },
-                type = RichTextNodeType.Text
+                type = RichTextNodeType.Text,
+                rid = node.rid,
+                uri = node.jumpUrl
             )
         }
-    }
+    }.filterNot { it.type == RichTextNodeType.Other && it.rid?.toLongOrNull() != null }
 
 /**
  * 将 gRPC 的 TextNode 列表（来自 ModuleOpusSummary）转换为统一的 RichTextNode 列表
@@ -93,12 +107,23 @@ private fun List<TextNode>.toRichTextNodes(): List<RichTextNode> =
                 type = RichTextNodeType.At
             )
 
+            TextNode.TextNodeType.BIZ_LINK -> RichTextNode(
+                text = node.rawText,
+                type = if (node.link.linkTypeEnum == LinkNodeType.VOTE) {
+                    RichTextNodeType.Other
+                } else {
+                    RichTextNodeType.Text
+                },
+                rid = node.link.bizId,
+                uri = node.link.link
+            )
+
             else -> RichTextNode(
                 text = node.rawText,
                 type = RichTextNodeType.Text
             )
         }
-    }
+    }.filterNot { it.type == RichTextNodeType.Other && it.rid?.toLongOrNull() != null }
 
 /**
  * 将 gRPC 的 Description 列表（来自 ModuleDesc）转换为统一的 RichTextNode 列表
@@ -117,15 +142,26 @@ private fun List<bilibili.app.dynamic.v2.Description>.toRichTextNodesFromDesc():
 
             DescType.desc_type_aite -> RichTextNode(
                 text = desc.text,
-                type = RichTextNodeType.At
+                type = RichTextNodeType.At,
+                rid = desc.rid,
+                uri = desc.uri
+            )
+
+            DescType.desc_type_vote -> RichTextNode(
+                text = desc.text,
+                type = RichTextNodeType.Other,
+                rid = desc.rid,
+                uri = desc.uri
             )
 
             else -> RichTextNode(
                 text = desc.text,
-                type = RichTextNodeType.Text
+                type = RichTextNodeType.Text,
+                rid = desc.rid,
+                uri = desc.uri
             )
         }
-    }
+    }.filterNot { it.type == RichTextNodeType.Other && it.rid?.toLongOrNull() != null }
 
 data class DynamicData(
     val dynamics: List<DynamicItem>,
@@ -225,6 +261,7 @@ data class DynamicItem(
     var article: DynamicArticleModule? = null,
     var majorCard: DynamicMajorCardModule? = null,
     var none: DynamicNoneModule? = null,
+    var vote: DynamicVoteModule? = null,
     val footer: DynamicFooterModule? = null,
     var orig: DynamicItem? = null,
     var jumpUrl: String? = null
@@ -288,6 +325,7 @@ data class DynamicItem(
                     major?.none?.let(DynamicNoneModule::fromModuleDynamic)
                         ?: DynamicNoneModule("unsupported dynamic")
             }
+            dynamicItem.vote = DynamicVoteModule.fromModuleDynamic(item.modules.moduleDynamic)
             return dynamicItem
         }
 
@@ -539,6 +577,44 @@ data class DynamicItem(
 
             fun fromModuleBottom(moduleButtom: bilibili.app.dynamic.v2.ModuleButtom) =
                 fromModuleStat(moduleButtom.moduleStat)
+        }
+    }
+
+    data class DynamicVoteModule(
+        val voteId: Long,
+        val title: String,
+        val desc: String,
+        val joinNum: Int,
+        val url: String? = null
+    ) {
+        companion object {
+            fun fromModuleDynamic(
+                moduleDynamic: dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Dynamic
+            ): DynamicVoteModule? {
+                moduleDynamic.additional?.vote?.let { vote ->
+                    if (vote.voteId > 0) {
+                        return DynamicVoteModule(
+                            voteId = vote.voteId.toLong(),
+                            title = vote.title,
+                            desc = vote.desc,
+                            joinNum = vote.joinNum
+                        )
+                    }
+                }
+
+                val voteNode = moduleDynamic.desc?.richTextNodes
+                    ?.firstOrNull { it.type == "RICH_TEXT_NODE_TYPE_VOTE" || it.rid?.toLongOrNull() != null && it.jumpUrl?.contains("vote") == true }
+                    ?: moduleDynamic.major?.opus?.summary?.richTextNodes
+                        ?.firstOrNull { it.type == "RICH_TEXT_NODE_TYPE_VOTE" || it.rid?.toLongOrNull() != null && it.jumpUrl?.contains("vote") == true }
+                val voteId = voteNode?.rid?.toLongOrNull() ?: return null
+                return DynamicVoteModule(
+                    voteId = voteId,
+                    title = voteNode.origText.ifBlank { voteNode.text },
+                    desc = "",
+                    joinNum = 0,
+                    url = voteNode.jumpUrl
+                )
+            }
         }
     }
 

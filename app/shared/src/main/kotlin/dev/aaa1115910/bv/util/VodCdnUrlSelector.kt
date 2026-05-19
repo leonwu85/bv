@@ -80,7 +80,7 @@ internal object VodCdnUrlSelector {
                 return@forEach
             }
 
-            // Matches PiliPlus: upos-*-302, bcache, and mcdn hosts using upgcxcode path.
+            // Matches common Bilibili mirror hosts using upgcxcode path.
             if (url.contains("/upgcxcode/")) {
                 mcdnUpgcxcode = url
                 return@forEach

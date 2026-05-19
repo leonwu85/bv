@@ -5,6 +5,7 @@ import dev.aaa1115910.biliapi.http.entity.BiliResponse
 import dev.aaa1115910.biliapi.http.entity.BiliResponseWithoutData
 import dev.aaa1115910.biliapi.http.entity.live.DanmuInfoData
 import dev.aaa1115910.biliapi.http.entity.live.HistoryDanmaku
+import dev.aaa1115910.biliapi.http.entity.live.LiveEmoteData
 import dev.aaa1115910.biliapi.http.entity.live.LiveRoomInfoH5Data
 import dev.aaa1115910.biliapi.http.entity.live.RoomPlayInfoData
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
@@ -98,6 +99,40 @@ object BiliLiveHttpApi {
     suspend fun getLiveDanmuHistory(roomId: Int): BiliResponse<HistoryDanmaku> =
         client.get("/xlive/web-room/v1/dM/gethistory") {
             parameter("roomid", roomId)
+        }.body()
+
+    /**
+     * 获取直播间可发送的表情包列表。
+     */
+    suspend fun getLiveEmoticons(
+        roomId: Int,
+        sessData: String = "",
+        csrf: String = "",
+        buvid3: String? = null
+    ): BiliResponse<LiveEmoteData> =
+        client.get("/xlive/web-ucenter/v2/emoticon/GetEmoticons") {
+            parameter("platform", "pc")
+            parameter("room_id", roomId)
+            if (sessData.isNotBlank()) {
+                header(
+                    "Cookie",
+                    buildString {
+                        buvid3?.takeIf { it.isNotBlank() }?.let {
+                            append("buvid3=")
+                            append(it)
+                            append("; ")
+                        }
+                        csrf.takeIf { it.isNotBlank() }?.let {
+                            append("bili_jct=")
+                            append(it)
+                            append("; ")
+                        }
+                        append("SESSDATA=")
+                        append(sessData)
+                        append(";")
+                    }
+                )
+            }
         }.body()
 
     /**

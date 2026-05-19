@@ -64,6 +64,34 @@ class SeasonRepository(
         }
     }
 
+    /**
+     * 获取指定用户公开的追番/追剧列表。
+     *
+     * App 端接口只返回当前登录用户数据，这里固定使用 Web 空间接口。
+     */
+    suspend fun getUserFollowingSeasons(
+        mid: Long,
+        type: FollowingSeasonType = FollowingSeasonType.Bangumi,
+        status: FollowingSeasonStatus = FollowingSeasonStatus.All,
+        pageNumber: Int = 1,
+        pageSize: Int = 30
+    ): FollowingSeasonData {
+        return BiliHttpApi.getFollowingSeasons(
+            type = type.id,
+            status = status.id,
+            pageNumber = pageNumber,
+            pageSize = pageSize,
+            mid = mid,
+            sessData = authRepository.sessionData ?: ""
+        ).getResponseData()
+            .let { responseData ->
+                FollowingSeasonData(
+                    list = responseData.list.map { FollowingSeason.fromFollowingSeason(it) },
+                    total = responseData.total
+                )
+            }
+    }
+
     suspend fun getTimeline(
         filter: TimelineFilter = TimelineFilter.All,
         preferApiType: ApiType = ApiType.Web

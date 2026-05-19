@@ -1,7 +1,12 @@
 package dev.aaa1115910.bv.mobile.component.home.dynamic
 
+import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +16,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,14 +28,26 @@ import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,16 +75,22 @@ import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.user.ArticleParagraph
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.entity.user.DynamicType
+import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicVoteInfo
+import dev.aaa1115910.biliapi.repositories.UserRepository
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.component.DynamicRichText
 import dev.aaa1115910.bv.mobile.component.user.UserAvatar
 import dev.aaa1115910.bv.mobile.component.videocard.shareText
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.util.ImageSize
+import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.notYetImplemented
 import dev.aaa1115910.bv.util.resizedImageUrl
 import dev.aaa1115910.bv.util.toast
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.koin.compose.koinInject
 import java.util.UUID
 
 @Composable
@@ -102,6 +127,13 @@ fun DynamicItem(
                 onShowPreviewer = onShowPreviewer,
                 onClick = onClick
             )
+            dynamicItem.vote?.let { vote ->
+                DynamicVoteCard(
+                    modifier = Modifier.padding(horizontal = paddingSize),
+                    dynamicId = dynamicItem.id,
+                    vote = vote
+                )
+            }
             dynamicItem.footer?.let { footer ->
                 DynamicFooter(
                     modifier = Modifier.padding(horizontal = paddingSize),
@@ -441,6 +473,296 @@ fun DynamicFooterButton(
 }
 
 @Composable
+fun DynamicVoteCard(
+    modifier: Modifier = Modifier,
+    dynamicId: String?,
+    vote: DynamicItem.DynamicVoteModule,
+    userRepository: UserRepository = koinInject()
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { showDialog = true },
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 1.dp,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            VoteGlyph()
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = vote.title.ifBlank { "投票" },
+                    maxLines = 1,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = "${vote.joinNum.formatCompact()}人参与",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp,
+                    maxLines = 1
+                )
+            }
+            OutlinedButton(onClick = { showDialog = true }) {
+                Text(text = "参与")
+            }
+        }
+    }
+
+    if (showDialog) {
+        DynamicVoteDialog(
+            vote = vote,
+            dynamicId = dynamicId,
+            userRepository = userRepository,
+            onDismiss = { showDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun VoteGlyph() {
+    Box(
+        modifier = Modifier
+            .width(70.dp)
+            .height(50.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Row(
+            modifier = Modifier.fillMaxHeight(),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            listOf(0.45f, 0.78f, 0.58f).forEach { fraction ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(fraction)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DynamicVoteDialog(
+    vote: DynamicItem.DynamicVoteModule,
+    dynamicId: String?,
+    userRepository: UserRepository,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var voteInfo by remember(vote.voteId) { mutableStateOf<DynamicVoteInfo?>(null) }
+    var loading by remember(vote.voteId) { mutableStateOf(true) }
+    var error by remember(vote.voteId) { mutableStateOf<String?>(null) }
+    var submitting by remember { mutableStateOf(false) }
+    val selectedVotes = remember(vote.voteId) { mutableStateListOf<Int>() }
+
+    LaunchedEffect(vote.voteId) {
+        loading = true
+        error = null
+        runCatching {
+            withContext(Dispatchers.IO) {
+                userRepository.getDynamicVoteInfo(vote.voteId)
+            }
+        }.onSuccess { data ->
+            voteInfo = data.voteInfo.copy(
+                myVotes = data.myVotes.ifEmpty { data.voteInfo.myVotes }
+            )
+        }.onFailure {
+            error = it.localizedMessage ?: "投票加载失败"
+        }
+        loading = false
+    }
+
+    val info = voteInfo
+    val myVotes = info?.myVotes.orEmpty()
+    val nowSeconds = System.currentTimeMillis() / 1000
+    val voteEnded = info?.endTime?.let { it > 0 && it <= nowSeconds } ?: false
+    val canVote = info != null && Prefs.isLogin && !voteEnded && myVotes.isEmpty()
+    val totalCount = (info?.options?.sumOf { it.cnt } ?: 0).coerceAtLeast(info?.joinNum ?: 0)
+    val maxChoice = (info?.choiceCnt ?: 1).coerceAtLeast(1)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = info?.title?.ifBlank { vote.title } ?: vote.title.ifBlank { "投票" })
+        },
+        text = {
+            when {
+                loading -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(22.dp))
+                        Text(text = "正在加载投票")
+                    }
+                }
+
+                error != null -> Text(text = error.orEmpty())
+
+                info != null -> {
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (info.desc.isNotBlank()) {
+                            Text(
+                                text = info.desc,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            text = buildString {
+                                append(info.joinNum.formatCompact())
+                                append("人参与")
+                                append(" · ")
+                                append(if (voteEnded) "已结束" else "最多选${maxChoice}项")
+                            },
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 13.sp
+                        )
+                        info.options.forEachIndexed { index, option ->
+                            val voteIndex = option.optIdx.takeIf { it > 0 } ?: index + 1
+                            val isSelected = voteIndex in selectedVotes
+                            val isMyVote = voteIndex in myVotes
+                            val progress = if (totalCount > 0) option.cnt / totalCount.toFloat() else 0f
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable(enabled = canVote) {
+                                        if (isSelected) {
+                                            selectedVotes.remove(voteIndex)
+                                        } else if (selectedVotes.size < maxChoice) {
+                                            if (maxChoice == 1) selectedVotes.clear()
+                                            selectedVotes.add(voteIndex)
+                                        }
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (canVote) {
+                                        Checkbox(
+                                            checked = isSelected,
+                                            onCheckedChange = {
+                                                if (isSelected) {
+                                                    selectedVotes.remove(voteIndex)
+                                                } else if (selectedVotes.size < maxChoice) {
+                                                    if (maxChoice == 1) selectedVotes.clear()
+                                                    selectedVotes.add(voteIndex)
+                                                }
+                                            }
+                                        )
+                                    }
+                                    Text(
+                                        modifier = Modifier.weight(1f),
+                                        text = option.optDesc,
+                                        maxLines = 2
+                                    )
+                                    if (!canVote) {
+                                        Text(
+                                            text = "${option.cnt.formatCompact()}票",
+                                            color = if (isMyVote) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                            fontSize = 13.sp
+                                        )
+                                    }
+                                }
+                                if (!canVote) {
+                                    LinearProgressIndicator(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        progress = { progress.coerceIn(0f, 1f) }
+                                    )
+                                }
+                            }
+                        }
+                        if (!Prefs.isLogin) {
+                            Text(
+                                text = "登录后可参与投票",
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (canVote) {
+                Button(
+                    enabled = selectedVotes.isNotEmpty() && !submitting,
+                    onClick = {
+                        submitting = true
+                        scope.launch(Dispatchers.IO) {
+                            runCatching {
+                                userRepository.doDynamicVote(
+                                    voteId = vote.voteId,
+                                    votes = selectedVotes.toList(),
+                                    dynamicId = dynamicId
+                                ).voteInfo
+                            }.onSuccess { result ->
+                                withContext(Dispatchers.Main) {
+                                    voteInfo = result.copy(myVotes = selectedVotes.toList())
+                                    selectedVotes.clear()
+                                    "投票成功".toast(context)
+                                }
+                            }.onFailure {
+                                withContext(Dispatchers.Main) {
+                                    (it.localizedMessage ?: "投票失败").toast(context)
+                                }
+                            }
+                            withContext(Dispatchers.Main) {
+                                submitting = false
+                            }
+                        }
+                    }
+                ) {
+                    Text(text = if (submitting) "投票中" else "投票")
+                }
+            } else {
+                TextButton(
+                    onClick = {
+                        val url = vote.url ?: "https://t.bilibili.com/vote/h5/index?vote_id=${vote.voteId}#/result"
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }
+                ) {
+                    Text(text = "浏览器打开")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "关闭")
+            }
+        }
+    )
+}
+
+@Composable
 fun DynamicDraw(
     modifier: Modifier = Modifier,
     draw: DynamicItem.DynamicDrawModule,
@@ -606,6 +928,7 @@ fun DynamicForward(
                 fontSize = 16.sp
             )
         }
+
         Surface(
             color = MaterialTheme.colorScheme.surfaceContainer,
             onClick = onClick
@@ -621,6 +944,7 @@ fun DynamicForward(
                             author = dynamicItem.author
                         )
                     }
+
                     DynamicContent(
                         modifier = Modifier.fillMaxWidth(),
                         dynamicItem = dynamicItem,
@@ -630,6 +954,13 @@ fun DynamicForward(
                         articleParagraphs = articleParagraphs,
                         onClick = {}
                     )
+                    dynamicItem.vote?.let { vote ->
+                        DynamicVoteCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            dynamicId = dynamicItem.id,
+                            vote = vote
+                        )
+                    }
                 }
             }
         }
@@ -831,6 +1162,17 @@ private fun DynamicItem.shareDynamicOrToast(context: android.content.Context) {
         shareText(context, link, "分享动态")
     }
 }
+
+private fun Int.formatCompact(): String = toLong().formatCompact()
+
+private fun Long.formatCompact(): String = when {
+    this >= 100_000_000L -> String.format("%.1f亿", this / 100_000_000f).trimTrailingZero()
+    this >= 10_000L -> String.format("%.1f万", this / 10_000f).trimTrailingZero()
+    else -> toString()
+}
+
+private fun String.trimTrailingZero(): String =
+    replace(".0亿", "亿").replace(".0万", "万")
 
 @Composable
 fun DynamicNone(
