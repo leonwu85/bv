@@ -184,7 +184,7 @@ fun PgcIndexScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(pgcItems, key = { "${it.seasonId}:${it.title}" }) { pgcItem ->
+                items(pgcItems, key = { it.seasonId }) { pgcItem ->
                     SeasonCard(
                         data = SeasonCardData.fromPgcItem(pgcItem),
                         onClick = {

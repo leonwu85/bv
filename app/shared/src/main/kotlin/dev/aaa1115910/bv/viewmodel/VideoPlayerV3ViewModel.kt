@@ -1,5 +1,7 @@
 package dev.aaa1115910.bv.viewmodel
 
+import android.app.ActivityManager
+import android.content.Context
 import android.net.Uri
 import android.os.Build
 import androidx.compose.runtime.getValue
@@ -106,6 +108,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.annotation.KoinViewModel
+import kotlin.math.abs
 import java.net.URI
 
 data class LiveDanmakuMessage(
@@ -119,6 +122,77 @@ data class LiveDanmakuMessage(
     val timestampMs: Long,
     val emojiMap: Map<String, String>
 )
+
+private const val DANMAKU_BYTES_IN_MB = 1024L * 1024L
+private const val DANMAKU_BYTES_IN_GB = 1024L * DANMAKU_BYTES_IN_MB
+
+internal enum class DanmakuPreloadMode {
+    WINDOW_ONLY,
+    FULL_VIDEO
+}
+
+internal data class DanmakuPreloadPolicy(
+    val mode: DanmakuPreloadMode,
+    val cacheRadius: Int,
+    val maxCachedSegments: Int,
+    val maxRetainedDanmakuItems: Int,
+    val maxLoadedDanmakuIds: Int,
+    val minFreeHeapBytesForFullPreload: Long,
+    val minAvailableMemoryBytesForFullPreload: Long
+) {
+    val fullVideoPreloadEnabled: Boolean
+        get() = mode == DanmakuPreloadMode.FULL_VIDEO
+}
+
+internal fun resolveDanmakuPreloadPolicy(
+    totalMemoryBytes: Long,
+    availableMemoryBytes: Long,
+    isLowRamDevice: Boolean,
+    maxHeapBytes: Long
+): DanmakuPreloadPolicy {
+    val lowMemoryDevice = isLowRamDevice ||
+        (totalMemoryBytes > 0L && totalMemoryBytes < 3L * DANMAKU_BYTES_IN_GB) ||
+        (availableMemoryBytes > 0L && availableMemoryBytes < 512L * DANMAKU_BYTES_IN_MB) ||
+        (maxHeapBytes > 0L && maxHeapBytes < 256L * DANMAKU_BYTES_IN_MB)
+
+    if (lowMemoryDevice) {
+        return DanmakuPreloadPolicy(
+            mode = DanmakuPreloadMode.WINDOW_ONLY,
+            cacheRadius = 1,
+            maxCachedSegments = 3,
+            maxRetainedDanmakuItems = 8_000,
+            maxLoadedDanmakuIds = 20_000,
+            minFreeHeapBytesForFullPreload = 96L * DANMAKU_BYTES_IN_MB,
+            minAvailableMemoryBytesForFullPreload = 384L * DANMAKU_BYTES_IN_MB
+        )
+    }
+
+    val highMemoryDevice = (totalMemoryBytes <= 0L || totalMemoryBytes >= 6L * DANMAKU_BYTES_IN_GB) &&
+        (availableMemoryBytes <= 0L || availableMemoryBytes >= 1536L * DANMAKU_BYTES_IN_MB) &&
+        (maxHeapBytes <= 0L || maxHeapBytes >= 384L * DANMAKU_BYTES_IN_MB)
+
+    return if (highMemoryDevice) {
+        DanmakuPreloadPolicy(
+            mode = DanmakuPreloadMode.FULL_VIDEO,
+            cacheRadius = 1,
+            maxCachedSegments = 4,
+            maxRetainedDanmakuItems = 30_000,
+            maxLoadedDanmakuIds = 80_000,
+            minFreeHeapBytesForFullPreload = 192L * DANMAKU_BYTES_IN_MB,
+            minAvailableMemoryBytesForFullPreload = 768L * DANMAKU_BYTES_IN_MB
+        )
+    } else {
+        DanmakuPreloadPolicy(
+            mode = DanmakuPreloadMode.WINDOW_ONLY,
+            cacheRadius = 1,
+            maxCachedSegments = 3,
+            maxRetainedDanmakuItems = 16_000,
+            maxLoadedDanmakuIds = 40_000,
+            minFreeHeapBytesForFullPreload = 128L * DANMAKU_BYTES_IN_MB,
+            minAvailableMemoryBytesForFullPreload = 512L * DANMAKU_BYTES_IN_MB
+        )
+    }
+}
 
 @KoinViewModel
 class VideoPlayerV3ViewModel(
@@ -416,6 +490,7 @@ class VideoPlayerV3ViewModel(
         val cid: Long,
         val filterLevel: Int,
         val mergeEnabled: Boolean,
+        var preloadPolicy: DanmakuPreloadPolicy,
         val loadedDanmakuIds: LinkedHashSet<Long> = LinkedHashSet(),
         val danmakuSlicesBySegment: LinkedHashMap<Int, List<DanmakuSlice>> = LinkedHashMap(),
         val nextDanmakuSliceIndexBySegment: LinkedHashMap<Int, Int> = LinkedHashMap(),
@@ -1185,7 +1260,7 @@ class VideoPlayerV3ViewModel(
             val startSegment = calculateInitialDanmakuSegment(initialPositionMs)
             val segmentOrder = buildDanmakuSegmentOrder(startSegment, maxSegments)
             if (segmentOrder.isEmpty()) {
-                addLogs("未找到可加载的弹幕分段")
+                addDanmakuLog("未找到可加载的弹幕分段")
                 return@runCatching
             }
 
@@ -1242,14 +1317,21 @@ class VideoPlayerV3ViewModel(
                 }
             }
 
-            addLogs("已缓存 $cachedSegments 个弹幕分段，优先投喂 ${initialEmittedDanmaku} 条")
+            pruneDanmakuSegmentCache(loadSession, startSegment)
+            addDanmakuLog("已缓存 $cachedSegments 个弹幕分段，优先投喂 ${initialEmittedDanmaku} 条")
 
-            if (segmentOrder.isNotEmpty()) {
+            if (loadSession.preloadPolicy.fullVideoPreloadEnabled) {
                 danmakuLoadJob = viewModelScope.launch(Dispatchers.Default) {
                     runCatching {
                         var backgroundEmittedDanmaku = 0
                         segmentOrder.forEach { segmentIndex ->
                             ensureDanmakuLoadActive(loadToken)
+                            if (!hasEnoughMemoryForFullDanmakuPreload(loadSession.preloadPolicy)) {
+                                logger.info {
+                                    "Stop full danmaku preload because memory is tight, segmentIndex=$segmentIndex, emitted=$backgroundEmittedDanmaku"
+                                }
+                                return@runCatching
+                            }
                             val slices = loadDanmakuSegmentSlices(
                                 cid = cid,
                                 segmentIndex = segmentIndex,
@@ -1268,27 +1350,88 @@ class VideoPlayerV3ViewModel(
                             )
                             if (emittedCount > 0) {
                                 backgroundEmittedDanmaku += emittedCount
-                                addLogs("后台已发射第 $segmentIndex 段切片，累计 ${danmakuData.size} 条")
+                                logger.info {
+                                    "Background emitted danmaku segment=$segmentIndex, emitted=$emittedCount, retained=${danmakuData.size}"
+                                }
                             }
+                            pruneDanmakuSegmentCache(loadSession, startSegment)
                         }
                         backgroundEmittedDanmaku += flushPendingMergedDanmaku(loadSession, loadToken)
+                        logger.info { "Full danmaku preload finished, emitted=$backgroundEmittedDanmaku" }
                     }.onFailure {
-                        if (it !is kotlinx.coroutines.CancellationException) {
-                            addLogs("后台补齐弹幕失败：${it.localizedMessage}")
-                            logger.fWarn { "Background danmaku loading failed: ${it.stackTraceToString()}" }
+                        when (it) {
+                            is OutOfMemoryError -> handleDanmakuOutOfMemory(loadSession, loadToken, "后台补齐全片弹幕")
+                            is kotlinx.coroutines.CancellationException -> Unit
+                            else -> {
+                                addDanmakuLog("后台补齐弹幕失败：${it.localizedMessage}")
+                                logger.fWarn { "Background danmaku loading failed: ${it.stackTraceToString()}" }
+                            }
                         }
                     }
                 }
+            } else {
+                logger.info {
+                    "Full danmaku preload disabled by memory policy: ${loadSession.preloadPolicy}"
+                }
             }
         }.onFailure {
-            if (it !is kotlinx.coroutines.CancellationException) {
-                addLogs("加载弹幕失败：${it.localizedMessage}")
-                logger.fWarn { "Load danmaku filed: ${it.stackTraceToString()}" }
+            when (it) {
+                is OutOfMemoryError -> handleDanmakuOutOfMemory(loadSession, loadToken, "加载弹幕")
+                is kotlinx.coroutines.CancellationException -> Unit
+                else -> {
+                    addDanmakuLog("加载弹幕失败：${it.localizedMessage}")
+                    logger.fWarn { "Load danmaku filed: ${it.stackTraceToString()}" }
+                }
             }
         }.onSuccess {
-            addLogs("已启动弹幕切片加载，当前 ${danmakuData.size} 条")
-            logger.fInfo { "Load danmaku slices started, size=${danmakuData.size}" }
+            addDanmakuLog("已启动弹幕切片加载，当前 ${danmakuData.size} 条")
+            logger.info {
+                "Load danmaku slices started, size=${danmakuData.size}, policy=${loadSession.preloadPolicy}"
+            }
         }
+    }
+
+    private fun resolveCurrentDanmakuPreloadPolicy(): DanmakuPreloadPolicy {
+        val activityManager = BVApp.context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        val memoryInfo = ActivityManager.MemoryInfo()
+        activityManager?.getMemoryInfo(memoryInfo)
+        return resolveDanmakuPreloadPolicy(
+            totalMemoryBytes = memoryInfo.totalMem,
+            availableMemoryBytes = memoryInfo.availMem,
+            isLowRamDevice = activityManager?.isLowRamDevice == true,
+            maxHeapBytes = Runtime.getRuntime().maxMemory()
+        )
+    }
+
+    private fun hasEnoughMemoryForFullDanmakuPreload(policy: DanmakuPreloadPolicy): Boolean {
+        val runtime = Runtime.getRuntime()
+        val usedHeap = runtime.totalMemory() - runtime.freeMemory()
+        val freeHeap = runtime.maxMemory() - usedHeap
+        if (freeHeap < policy.minFreeHeapBytesForFullPreload) return false
+
+        val activityManager = BVApp.context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            ?: return true
+        val memoryInfo = ActivityManager.MemoryInfo()
+        activityManager.getMemoryInfo(memoryInfo)
+        return !memoryInfo.lowMemory && memoryInfo.availMem >= policy.minAvailableMemoryBytesForFullPreload
+    }
+
+    private fun handleDanmakuOutOfMemory(
+        loadSession: DanmakuLoadSession?,
+        loadToken: Long,
+        reason: String
+    ) {
+        if (loadToken != danmakuLoadToken) return
+        danmakuLoadToken++
+        loadSession?.loadedDanmakuIds?.clear()
+        loadSession?.danmakuSlicesBySegment?.clear()
+        loadSession?.nextDanmakuSliceIndexBySegment?.clear()
+        loadSession?.vodDanmakuMergeState?.clear()
+        viewModelScope.launch(Dispatchers.Main) {
+            danmakuData.clear()
+            danmakuPlayer?.clearData()
+        }
+        logger.warn { "Danmaku loading stopped after OOM: $reason" }
     }
 
     private fun prepareDanmakuLoadSession(
@@ -1296,6 +1439,7 @@ class VideoPlayerV3ViewModel(
         loadToken: Long,
         reuseSegmentCache: Boolean
     ): DanmakuLoadSession {
+        val preloadPolicy = resolveCurrentDanmakuPreloadPolicy()
         val existingSession = danmakuLoadSession?.takeIf {
             reuseSegmentCache &&
                 it.aid == currentAid &&
@@ -1306,6 +1450,7 @@ class VideoPlayerV3ViewModel(
 
         return if (existingSession != null) {
             existingSession.token = loadToken
+            existingSession.preloadPolicy = preloadPolicy
             existingSession.nextDanmakuSliceIndexBySegment.clear()
             existingSession
         } else {
@@ -1314,7 +1459,8 @@ class VideoPlayerV3ViewModel(
                 aid = currentAid,
                 cid = cid,
                 filterLevel = currentDanmakuFilterLevel,
-                mergeEnabled = currentDanmakuMergeEnabled
+                mergeEnabled = currentDanmakuMergeEnabled,
+                preloadPolicy = preloadPolicy
             )
         }
     }
@@ -1329,7 +1475,7 @@ class VideoPlayerV3ViewModel(
 
         viewModelScope.launch(Dispatchers.Default) {
             runCatching {
-                addLogs("跳转后重载弹幕")
+                addDanmakuLog("跳转后重载弹幕")
                 val reusedExistingPlayer = withContext(Dispatchers.Main) {
                     danmakuPlayer?.let {
                         it.pause()
@@ -1357,7 +1503,7 @@ class VideoPlayerV3ViewModel(
             }.onFailure {
                 if (it !is kotlinx.coroutines.CancellationException) {
                     logger.fWarn { "Reload danmaku after seek failed: ${it.stackTraceToString()}" }
-                    addLogs("跳转后重载弹幕失败：${it.localizedMessage}")
+                    addDanmakuLog("跳转后重载弹幕失败：${it.localizedMessage}")
                 }
             }
         }
@@ -1380,7 +1526,7 @@ class VideoPlayerV3ViewModel(
         lastDanmakuCatchUpSegment = currentSegment
 
         if (catchUpJobActive) {
-            logger.fInfo {
+            logger.info {
                 "Danmaku coverage catch-up skipped because previous job is active positionMs=$normalizedPosition, currentSegment=$currentSegment, lastPosition=$previousCatchUpPositionMs"
             }
             return
@@ -1394,13 +1540,13 @@ class VideoPlayerV3ViewModel(
         val maxSegments = calculateDanmakuMaxSegments(durationMs)
         val loadSession = danmakuLoadSession?.takeIf { it.token == loadToken }
         if (loadSession == null) {
-            logger.fInfo {
+            logger.info {
                 "Danmaku coverage catch-up skipped because load session is missing positionMs=$normalizedPosition, currentSegment=$currentSegment, lastPosition=$previousCatchUpPositionMs, loadToken=$loadToken"
             }
             return
         }
 
-        logger.fInfo {
+        logger.info {
             "Danmaku coverage catch-up start positionMs=$normalizedPosition, currentSegment=$currentSegment, lastPosition=$previousCatchUpPositionMs, jobActive=$catchUpJobActive"
         }
 
@@ -1425,16 +1571,19 @@ class VideoPlayerV3ViewModel(
                         loadSession = loadSession
                     )
                     totalEmitted += emittedCount
-                    logger.fInfo {
+                    logger.info {
                         "Danmaku coverage segment done segmentIndex=$segmentIndex, anchorPosition=$anchorPosition, emittedCount=$emittedCount, costMs=${System.currentTimeMillis() - segmentStartMs}"
                     }
                 }
-                logger.fInfo {
+                pruneDanmakuSegmentCache(loadSession, currentSegment)
+                logger.info {
                     "Danmaku coverage catch-up done totalEmitted=$totalEmitted, costMs=${System.currentTimeMillis() - catchUpStartMs}"
                 }
             }.onFailure {
-                if (it !is CancellationException) {
-                    logger.fDebug {
+                when (it) {
+                    is OutOfMemoryError -> handleDanmakuOutOfMemory(loadSession, loadToken, "按需补齐弹幕")
+                    is CancellationException -> Unit
+                    else -> logger.fDebug {
                         "Danmaku catch-up skipped: ${it.message}, costMs=${System.currentTimeMillis() - catchUpStartMs}"
                     }
                 }
@@ -1495,6 +1644,32 @@ class VideoPlayerV3ViewModel(
         loadToken: Long,
         loadSession: DanmakuLoadSession
     ): List<DanmakuSlice> {
+        return try {
+            loadDanmakuSegmentSlicesInternal(
+                cid = cid,
+                segmentIndex = segmentIndex,
+                loadToken = loadToken,
+                loadSession = loadSession
+            )
+        } catch (error: OutOfMemoryError) {
+            handleDanmakuOutOfMemory(loadSession, loadToken, "加载第 $segmentIndex 段弹幕")
+            throw CancellationException("Danmaku load stopped after OOM")
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            loadSession.danmakuSlicesBySegment[segmentIndex] = emptyList()
+            loadSession.nextDanmakuSliceIndexBySegment[segmentIndex] = 0
+            logger.warn { "Load danmaku segment failed segmentIndex=$segmentIndex: ${error.stackTraceToString()}" }
+            emptyList()
+        }
+    }
+
+    private suspend fun loadDanmakuSegmentSlicesInternal(
+        cid: Long,
+        segmentIndex: Int,
+        loadToken: Long,
+        loadSession: DanmakuLoadSession
+    ): List<DanmakuSlice> {
         loadSession.danmakuSlicesBySegment[segmentIndex]?.let { return it }
 
         ensureDanmakuLoadActive(loadToken)
@@ -1527,11 +1702,12 @@ class VideoPlayerV3ViewModel(
         }
 
         if (deduplicatedCount > 0) {
-            logger.fInfo { "Deduplicated $deduplicatedCount danmaku in segment $segmentIndex" }
+            logger.info { "Deduplicated $deduplicatedCount danmaku in segment $segmentIndex" }
         }
         if (filteredCount > 0) {
-            logger.fInfo { "Filtered $filteredCount danmaku in segment $segmentIndex with level < $currentDanmakuFilterLevel" }
+            logger.info { "Filtered $filteredCount danmaku in segment $segmentIndex with level < $currentDanmakuFilterLevel" }
         }
+        trimLoadedDanmakuIds(loadSession)
         if (newDanmaku.isEmpty()) {
             loadSession.danmakuSlicesBySegment[segmentIndex] = emptyList()
             loadSession.nextDanmakuSliceIndexBySegment[segmentIndex] = 0
@@ -1562,7 +1738,7 @@ class VideoPlayerV3ViewModel(
             loadSession.nextDanmakuSliceIndexBySegment.putIfAbsent(segmentIndex, 0)
         }
         if (slices.isNotEmpty()) {
-            logger.fInfo {
+            logger.info {
                 "Prepared ${slices.size} danmaku slices for segment $segmentIndex, total=${convertedItems.size}, first=${slices.first().startPositionMs}, last=${slices.last().endPositionMs}"
             }
         }
@@ -1721,8 +1897,53 @@ class VideoPlayerV3ViewModel(
         items.chunked(DANMAKU_BATCH_SIZE).forEach { chunk ->
             loadToken?.let { ensureDanmakuLoadActive(it) }
             danmakuData.addAll(chunk)
+            danmakuLoadSession?.let { trimRetainedDanmakuData(it.preloadPolicy) }
             danmakuPlayer?.updateData(chunk)
             delay(8)
+        }
+    }
+
+    private fun pruneDanmakuSegmentCache(
+        loadSession: DanmakuLoadSession,
+        anchorSegment: Int
+    ) {
+        val policy = loadSession.preloadPolicy
+        val firstKeptSegment = anchorSegment - policy.cacheRadius
+        val lastKeptSegment = anchorSegment + policy.cacheRadius
+        val iterator = loadSession.danmakuSlicesBySegment.keys.iterator()
+        while (iterator.hasNext()) {
+            val segmentIndex = iterator.next()
+            if (segmentIndex !in firstKeptSegment..lastKeptSegment) {
+                iterator.remove()
+                loadSession.nextDanmakuSliceIndexBySegment.remove(segmentIndex)
+            }
+        }
+
+        while (loadSession.danmakuSlicesBySegment.size > policy.maxCachedSegments) {
+            val farthestSegment = loadSession.danmakuSlicesBySegment.keys.maxByOrNull {
+                abs(it - anchorSegment)
+            } ?: break
+            loadSession.danmakuSlicesBySegment.remove(farthestSegment)
+            loadSession.nextDanmakuSliceIndexBySegment.remove(farthestSegment)
+        }
+        trimLoadedDanmakuIds(loadSession)
+    }
+
+    private fun trimLoadedDanmakuIds(loadSession: DanmakuLoadSession) {
+        val maxLoadedDanmakuIds = loadSession.preloadPolicy.maxLoadedDanmakuIds
+        if (loadSession.loadedDanmakuIds.size <= maxLoadedDanmakuIds) return
+
+        val iterator = loadSession.loadedDanmakuIds.iterator()
+        while (loadSession.loadedDanmakuIds.size > maxLoadedDanmakuIds && iterator.hasNext()) {
+            iterator.next()
+            iterator.remove()
+        }
+    }
+
+    private fun trimRetainedDanmakuData(policy: DanmakuPreloadPolicy) {
+        val overflow = danmakuData.size - policy.maxRetainedDanmakuItems
+        if (overflow > 0) {
+            danmakuData.subList(0, overflow).clear()
         }
     }
 
@@ -1752,7 +1973,7 @@ class VideoPlayerV3ViewModel(
             startSliceIndex = 0,
             loadToken = loadToken
         )
-        logger.fInfo { "Flushed ${convertedItems.size} pending merged danmaku" }
+        logger.info { "Flushed ${convertedItems.size} pending merged danmaku" }
         return convertedItems.size
     }
 
@@ -1774,7 +1995,7 @@ class VideoPlayerV3ViewModel(
         mergeResult: DanmakuSegmentMergeResult
     ) {
         if (mergeResult.mergedDuplicateCount <= 0) return
-        logger.fInfo {
+        logger.info {
             "Merged ${mergeResult.mergedDuplicateCount} duplicate danmaku in segment $segmentIndex, emitted=${mergeResult.emittedDanmaku.size}"
         }
     }
@@ -1985,8 +2206,19 @@ class VideoPlayerV3ViewModel(
         }
     }
 
-    private suspend fun addLogs(text: String) {
-        logger.fInfo { text }
+    private suspend fun addDanmakuLog(text: String) {
+        addLogs(text, reportToCrashlytics = false)
+    }
+
+    private suspend fun addLogs(
+        text: String,
+        reportToCrashlytics: Boolean = true
+    ) {
+        if (reportToCrashlytics) {
+            logger.fInfo { text }
+        } else {
+            logger.info { text }
+        }
         if (!settings.playerShowDebugInfo) {
             return
         }

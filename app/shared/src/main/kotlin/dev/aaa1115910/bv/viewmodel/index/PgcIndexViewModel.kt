@@ -119,9 +119,13 @@ class PgcIndexViewModel(
                     .associate { it.field to it.keyword },
                 page = nextPage
             )
-            indexResultItems.addAllWithMainContext(result.list)
+            val newItems = deduplicatePgcItemsBySeasonId(
+                existingItems = indexResultItems,
+                newItems = result.list
+            )
+            indexResultItems.addAllWithMainContext(newItems)
             nextPage = result.nextPage
-            logger.info { "load more $pgcType list success, size: ${result.list.size}" }
+            logger.info { "load more $pgcType list success, size: ${result.list.size}, added: ${newItems.size}" }
         }.onFailure {
             logger.fError { "Load $pgcType index list failed: ${it.stackTraceToString()}" }
             withContext(Dispatchers.Main) {
@@ -136,4 +140,12 @@ class PgcIndexViewModel(
         nextPage = PgcIndexData.PgcIndexPage()
         updating = false
     }
+}
+
+internal fun deduplicatePgcItemsBySeasonId(
+    existingItems: List<PgcItem>,
+    newItems: List<PgcItem>
+): List<PgcItem> {
+    val seenSeasonIds = existingItems.mapTo(mutableSetOf()) { it.seasonId }
+    return newItems.filter { seenSeasonIds.add(it.seasonId) }
 }

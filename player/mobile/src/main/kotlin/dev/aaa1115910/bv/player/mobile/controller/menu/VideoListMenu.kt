@@ -38,6 +38,7 @@ import dev.aaa1115910.bv.player.entity.VideoListPgcEpisode
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisode
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisodeTitle
 import dev.aaa1115910.bv.player.entity.VideoPlayerConfigData
+import dev.aaa1115910.bv.player.entity.findCurrentVideoListItem
 import dev.aaa1115910.bv.player.mobile.MaterialDarkTheme
 import dev.aaa1115910.bv.util.ifElse
 
@@ -50,16 +51,9 @@ fun VideoListMenu(
 ) {
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
     val list = videoPlayerConfigData.availableVideoList
-    val selectedVideoListItem by remember(videoPlayerConfigData.currentVideoCid) {
+    val selectedVideoListItem by remember(videoPlayerConfigData.currentVideoCid, list) {
         derivedStateOf {
-            list.first {
-                when (it) {
-                    is VideoListPart -> it.cid == videoPlayerConfigData.currentVideoCid
-                    is VideoListUgcEpisode -> it.cid == videoPlayerConfigData.currentVideoCid
-                    is VideoListPgcEpisode -> it.cid == videoPlayerConfigData.currentVideoCid
-                    else -> false
-                }
-            }
+            list.findCurrentVideoListItem(videoPlayerConfigData.currentVideoCid)
         }
     }
     val isUgcSeason by remember {
