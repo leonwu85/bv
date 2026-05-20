@@ -123,6 +123,12 @@ data class VideoInfo(
     @SerialName("rcmd_reason")
     private val _rcmdReason: JsonElement? = null,
     var rcmdReason: RcmdReason? = null,
+    @SerialName("is_charging_arc")
+    val isChargingArc: Boolean = false,
+    @SerialName("is_charging_archive")
+    val isChargingArchive: Boolean = false,
+    @SerialName("charging_pay")
+    val chargingPay: ChargingPay? = null,
     @SerialName("is_upower_exclusive")
     val isUpowerExclusive: Boolean = false,
     @SerialName("is_upower_play")
@@ -149,6 +155,9 @@ data class VideoInfo(
 
 val VideoInfo.isInteractiveVideo: Boolean
     get() = rights.isSteinGate == 1
+
+val VideoInfo.isChargingArcVideo: Boolean
+    get() = isUpowerExclusive || isChargingArc || isChargingArchive || chargingPay?.level != null
 
 /**
  * 视频属性标志
@@ -334,5 +343,5 @@ data class HonorReplyItem(
 
 @Serializable
 data class ChargingPay(
-    val level: Int = 0
+    val level: Int? = null
 )

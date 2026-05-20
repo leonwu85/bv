@@ -26,6 +26,7 @@ internal fun VideoDetail.toRelatedVideoCardDataList(): List<VideoCardData> {
             upId = it.author?.mid ?: 0L,
             upFace = it.author?.face ?: "",
             isChargingArc = it.isChargingArchive,
+            badgeText = it.chargingArchiveBadge
         )
     }
 }

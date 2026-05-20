@@ -47,8 +47,18 @@ data class VideoDetail(
     var playerIcon: PlayerIcon? = null,
     var isChargingArc: Boolean = false,
     var chargingArcBadge: String = "",
-    val isUpowerPlay: Boolean? = null
+    var isUpowerPlay: Boolean? = null
 ) {
+    fun applyChargingArcInfo(
+        isChargingArc: Boolean,
+        chargingArcBadge: String,
+        isUpowerPlay: Boolean?
+    ) {
+        this.isChargingArc = isChargingArc
+        this.chargingArcBadge = chargingArcBadge
+        this.isUpowerPlay = isUpowerPlay
+    }
+
     companion object {
         fun fromViewReply(viewReply: ViewReply): VideoDetail {
             if (!viewReply.hasActivitySeason()) {

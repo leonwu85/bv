@@ -16,6 +16,8 @@ import dev.aaa1115910.biliapi.entity.reply.CommentsData
 import dev.aaa1115910.biliapi.entity.video.VideoDetail
 import dev.aaa1115910.biliapi.entity.video.InteractiveNode
 import dev.aaa1115910.biliapi.entity.video.season.SeasonDetail
+import dev.aaa1115910.biliapi.entity.video.upowerBadgeText
+import dev.aaa1115910.biliapi.entity.video.upowerPlayState
 import dev.aaa1115910.biliapi.http.entity.video.isInteractiveVideo
 import dev.aaa1115910.biliapi.grpc.utils.handleGrpcException
 import dev.aaa1115910.biliapi.http.BiliHttpApi
@@ -229,6 +231,22 @@ class VideoDetailRepository(
                     }) ?: throw IllegalStateException("Player stub is not initialized")
                 }.onFailure { handleGrpcException(it) }.getOrThrow()
                 VideoDetail.fromViewReply(viewReply).apply {
+                    runCatching {
+                        val webVideoInfo = BiliHttpApi.getVideoInfo(
+                            bv = this.bvid.takeIf { it.isNotBlank() },
+                            sessData = authRepository.sessionData ?: ""
+                        ).getResponseData()
+                        applyChargingArcInfo(
+                            isChargingArc = webVideoInfo.isUpowerExclusive,
+                            chargingArcBadge = upowerBadgeText(webVideoInfo.isUpowerExclusive),
+                            isUpowerPlay = upowerPlayState(
+                                isUpowerExclusive = webVideoInfo.isUpowerExclusive,
+                                isUpowerPlay = webVideoInfo.isUpowerPlay
+                            )
+                        )
+                    }.onFailure {
+                        println("Get video charging arc info failed: $it")
+                    }
                     fillInteractiveInfo(this)
                     if (playerIcon?.idle?.isBlank() != false && authRepository.sessionData != null) {
                         println("player icon not found in view reply, try to get it from garb api")

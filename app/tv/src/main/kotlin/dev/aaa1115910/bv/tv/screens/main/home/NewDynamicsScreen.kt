@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -72,9 +73,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.LocalContentColor
+import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
@@ -82,6 +85,7 @@ import coil.compose.AsyncImage
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.entity.user.DynamicType
 import dev.aaa1115910.biliapi.entity.user.DynamicVideo
+import dev.aaa1115910.bv.component.QrImage
 import dev.aaa1115910.bv.entity.DynamicTabType
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
@@ -94,6 +98,7 @@ import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.activities.dynamic.DynamicDetailActivity
 import dev.aaa1115910.bv.tv.component.ContentStatusCard
 import dev.aaa1115910.bv.tv.component.LoadingTip
+import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.util.Prefs
@@ -109,6 +114,7 @@ private enum class DynamicFocusLayer {
 
 private val DynamicAccent = Color(0xFFFB7299)
 private val DynamicCardShape = RoundedCornerShape(8.dp)
+private const val DynamicChargingUrlPrefix = "https://www.bilibili.com/h5/upower/index?mid="
 
 @Composable
 fun NewDynamicsScreen(
@@ -138,6 +144,7 @@ fun NewDynamicsScreen(
     }
     var currentFocusedIndex by remember { mutableIntStateOf(-1) }
     var focusLayer by remember { mutableStateOf<DynamicFocusLayer?>(null) }
+    var chargingQrContent by remember { mutableStateOf("") }
     val allStaggeredGridState = rememberLazyStaggeredGridState()
     val pgcGridState = rememberLazyGridState()
     val articleStaggeredGridState = rememberLazyStaggeredGridState()
@@ -199,38 +206,43 @@ fun NewDynamicsScreen(
     }
 
     val onClickDynamicItem: (DynamicItem) -> Unit = { dynamic ->
-        when (dynamic.type) {
-            DynamicType.Av -> {
-                dynamic.video?.let { video ->
-                    VideoInfoActivity.actionStart(
-                        context = context,
-                        aid = video.aid,
-                        proxyArea = ProxyArea.checkProxyArea(dynamic.video?.title ?: "")
-                    )
+        val chargingUrl = dynamic.chargingQrContent()
+        if (dynamic.isChargingBlocked() && chargingUrl.isNotBlank()) {
+            chargingQrContent = chargingUrl
+        } else {
+            when (dynamic.type) {
+                DynamicType.Av -> {
+                    dynamic.video?.let { video ->
+                        VideoInfoActivity.actionStart(
+                            context = context,
+                            aid = video.aid,
+                            proxyArea = ProxyArea.checkProxyArea(dynamic.video?.title ?: "")
+                        )
+                    }
                 }
-            }
-            DynamicType.UgcSeason -> {
-                dynamic.ugcSeason?.let { ugcSeason ->
-                    VideoInfoActivity.actionStart(
-                        context = context,
-                        aid = ugcSeason.aid,
-                        proxyArea = ProxyArea.checkProxyArea(ugcSeason.title)
-                    )
+                DynamicType.UgcSeason -> {
+                    dynamic.ugcSeason?.let { ugcSeason ->
+                        VideoInfoActivity.actionStart(
+                            context = context,
+                            aid = ugcSeason.aid,
+                            proxyArea = ProxyArea.checkProxyArea(ugcSeason.title)
+                        )
+                    }
                 }
-            }
-            DynamicType.Pgc -> {
-                dynamic.pgc?.let { pgc ->
-                    SeasonInfoActivity.actionStart(
-                        context = context,
-                        epId = pgc.epid,
-                        seasonId = pgc.seasonId
-                    )
+                DynamicType.Pgc -> {
+                    dynamic.pgc?.let { pgc ->
+                        SeasonInfoActivity.actionStart(
+                            context = context,
+                            epId = pgc.epid,
+                            seasonId = pgc.seasonId
+                        )
+                    }
                 }
-            }
-            else -> {
-                // 其他类型跳转到动态详情页
-                dynamic.id?.let { dynamicId ->
-                    DynamicDetailActivity.actionStart(context, dynamicId)
+                else -> {
+                    // 其他类型跳转到动态详情页
+                    dynamic.id?.let { dynamicId ->
+                        DynamicDetailActivity.actionStart(context, dynamicId)
+                    }
                 }
             }
         }
@@ -408,6 +420,13 @@ fun NewDynamicsScreen(
         ) {
             Text(text = "请先登录")
         }
+    }
+
+    if (chargingQrContent.isNotBlank()) {
+        DynamicChargingQrDialog(
+            qrContent = chargingQrContent,
+            onDismissRequest = { chargingQrContent = "" }
+        )
     }
 }
 
@@ -816,7 +835,9 @@ private fun AllDynamicCard(
             DynamicCardHeader(author = dynamicItem.author)
 
             // 根据类型显示不同内容
-            when (dynamicItem.type) {
+            if (dynamicItem.isChargingBlocked()) {
+                DynamicChargingBlockedContent(blocked = dynamicItem.blocked)
+            } else when (dynamicItem.type) {
                 DynamicType.Av -> DynamicVideoContent(video = dynamicItem.video)
                 DynamicType.UgcSeason -> DynamicUgcSeasonContent(ugcSeason = dynamicItem.ugcSeason)
                 DynamicType.Pgc -> DynamicPgcContent(
@@ -947,6 +968,7 @@ private fun ArticleListCard(
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val article = dynamicItem.article
+    val isChargingBlocked = dynamicItem.isChargingBlocked()
 
     Card(
         modifier = modifier
@@ -974,36 +996,49 @@ private fun ArticleListCard(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            article?.covers?.firstOrNull()?.let {
-                DynamicMediaImage(
-                    url = it,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(2.08f)
+            if (isChargingBlocked) {
+                DynamicChargingBlockedContent(
+                    blocked = dynamicItem.blocked,
+                    compact = true
                 )
-            }
-            Text(
-                text = article?.title?.takeIf(String::isNotBlank) ?: "专栏动态",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (!article?.text.isNullOrBlank()) {
+            } else {
+                article?.covers?.firstOrNull()?.let {
+                    DynamicMediaImage(
+                        url = it,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(2.08f)
+                    )
+                }
                 Text(
-                    text = article.text,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
+                    text = article?.title?.takeIf(String::isNotBlank) ?: "专栏动态",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (!article?.text.isNullOrBlank()) {
+                    Text(
+                        text = article.text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                DynamicBadge(text = article?.label?.ifBlank { "专栏" } ?: "专栏")
+                DynamicBadge(
+                    text = if (isChargingBlocked) {
+                        "充电专属"
+                    } else {
+                        article?.label?.ifBlank { "专栏" } ?: "专栏"
+                    }
+                )
                 Text(
                     text = dynamicItem.author.author,
                     style = MaterialTheme.typography.bodySmall,
@@ -1300,6 +1335,51 @@ private fun DynamicWordContent(word: DynamicItem.DynamicWordModule?) {
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f),
                 maxLines = 4,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun DynamicChargingBlockedContent(
+    blocked: DynamicItem.DynamicBlockedModule?,
+    compact: Boolean = false
+) {
+    val title = blocked?.title
+        ?.takeIf(String::isNotBlank)
+        ?: "充电专属内容"
+    val hint = blocked?.hintMessage
+        ?.takeIf(String::isNotBlank)
+        ?: "点击后使用哔哩哔哩手机客户端扫码充电"
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = if (compact) 112.dp else 132.dp)
+            .background(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                shape = DynamicCardShape
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+    ) {
+        Column(
+            modifier = Modifier.align(Alignment.CenterStart),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DynamicBadge(text = "充电专属")
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
+                maxLines = if (compact) 2 else 3,
                 overflow = TextOverflow.Ellipsis
             )
         }
@@ -1672,6 +1752,65 @@ private fun DynamicStatItem(
         )
     }
 }
+
+@Composable
+private fun DynamicChargingQrDialog(
+    qrContent: String,
+    onDismissRequest: () -> Unit
+) {
+    TvAlertDialog(
+        modifier = Modifier.widthIn(min = 760.dp, max = 860.dp),
+        text = {
+            Row(
+                modifier = Modifier.padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                QrImage(
+                    modifier = Modifier.size(220.dp),
+                    content = qrContent,
+                    borderWidth = 20.dp,
+                    showLoadingWhenContentChanged = false
+                )
+                Column(
+                    modifier = Modifier.widthIn(max = 340.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "手机扫码前往充电页面",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "请使用哔哩哔哩手机客户端扫码",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.7f)
+                    )
+                }
+            }
+        },
+        onDismissRequest = onDismissRequest,
+        confirmButton = {
+            OutlinedButton(onClick = onDismissRequest) {
+                Text(text = "关闭")
+            }
+        },
+        containerColor = Color(0xFF111111).copy(alpha = 0.96f),
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    )
+}
+
+private fun DynamicItem.isChargingBlocked(): Boolean {
+    val blocked = blocked ?: return false
+    return listOf(blocked.title, blocked.hintMessage, blocked.button?.text.orEmpty())
+        .any { it.contains("充电") }
+}
+
+private fun DynamicItem.chargingQrContent(): String =
+    author.mid
+        .takeIf { it > 0L }
+        ?.let { "$DynamicChargingUrlPrefix$it" }
+        .orEmpty()
 
 private fun formatDynamicCount(count: Int): String = when {
     count >= 10000 -> {

@@ -2,6 +2,7 @@ package dev.aaa1115910.biliapi.entity.ugc
 
 import dev.aaa1115910.biliapi.http.entity.home.RcmdIndexData
 import dev.aaa1115910.biliapi.http.entity.home.RcmdTopData
+import dev.aaa1115910.biliapi.http.entity.video.isChargingArcVideo
 import dev.aaa1115910.biliapi.http.entity.video.isInteractiveVideo
 import dev.aaa1115910.biliapi.util.convertStringTimeToSeconds
 import java.text.SimpleDateFormat
@@ -32,11 +33,24 @@ data class UgcItem(
     val feedGoto: String = "",
     val feedParam: String = "",
     val dislikeReasons: List<UgcFeedOption> = emptyList(),
-    val feedbacks: List<UgcFeedOption> = emptyList()
+    val feedbacks: List<UgcFeedOption> = emptyList(),
+    val isChargingArc: Boolean = false,
+    val chargingArcBadge: String = ""
 ) {
     companion object {
-        fun fromRcmdItem(rcmdItem: RcmdIndexData.RcmdItem) =
-            UgcItem(
+        fun fromRcmdItem(rcmdItem: RcmdIndexData.RcmdItem): UgcItem {
+            val chargingArcBadge = listOfNotNull(
+                rcmdItem.badge,
+                rcmdItem.coverBadge,
+                rcmdItem.coverBadge2,
+                rcmdItem.rcmdReasonStyle?.text
+            ).firstOrNull { it.isChargingArcBadgeText() }.orEmpty()
+            val isChargingArc = rcmdItem.isChargingArc ||
+                    rcmdItem.isChargingArchive ||
+                    rcmdItem.chargingPay?.level != null ||
+                    chargingArcBadge.isNotBlank()
+
+            return UgcItem(
                 aid = rcmdItem.args.aid ?: 0,
                 bvid = "",
                 title = rcmdItem.title!!,
@@ -74,8 +88,15 @@ data class UgcItem(
                 feedbacks = rcmdItem.threePoint
                     ?.feedbacks
                     ?.map { UgcFeedOption(it.id, it.name, it.toast) }
-                    ?: emptyList()
+                    ?: emptyList(),
+                isChargingArc = isChargingArc,
+                chargingArcBadge = if (isChargingArc) {
+                    chargingArcBadge.ifBlank { "充电专属" }
+                } else {
+                    ""
+                }
             )
+        }
 
         fun fromRcmdItem(rcmdItem: RcmdTopData.RcmdItem) =
             UgcItem(
@@ -105,11 +126,20 @@ data class UgcItem(
                 play = videoInfo.stat.view,
                 danmaku = videoInfo.stat.danmaku,
                 pubTime = videoInfo.pubdate.smartDate,
-                isInteractive = videoInfo.isInteractiveVideo
+                isInteractive = videoInfo.isInteractiveVideo,
+                isChargingArc = videoInfo.isChargingArcVideo,
+                chargingArcBadge = if (videoInfo.isChargingArcVideo) "充电专属" else ""
             )
 
-        fun fromSmallCoverV5(card: bilibili.app.card.v1.SmallCoverV5) =
-            UgcItem(
+        fun fromSmallCoverV5(card: bilibili.app.card.v1.SmallCoverV5): UgcItem {
+            val chargingArcBadge = listOf(
+                card.leftCornerMarkStyle.text,
+                card.cornerMarkStyle.text,
+                card.rcmdReasonStyle.text
+            ).firstOrNull { it.isChargingArcBadgeText() }.orEmpty()
+            val isChargingArc = chargingArcBadge.isNotBlank()
+
+            return UgcItem(
                 aid = card.base.param.toLong(),
                 title = card.base.title,
                 duration = convertStringTimeToSeconds(card.coverRightText1),
@@ -119,8 +149,11 @@ data class UgcItem(
                 cover = card.base.cover,
                 play = -1,
                 danmaku = -1,
-                idx = card.base.idx.toInt()
+                idx = card.base.idx.toInt(),
+                isChargingArc = isChargingArc,
+                chargingArcBadge = if (isChargingArc) chargingArcBadge else ""
             )
+        }
 
         fun fromRegionDynamicListItem(item: dev.aaa1115910.biliapi.http.entity.region.RegionDynamicList.Item) =
             UgcItem(
@@ -158,6 +191,8 @@ private fun convertStringTimeToSeconds(time: String): Int {
     val seconds = parts[parts.size - 1].toInt()
     return (hours * 3600) + (minutes * 60) + seconds
 }
+
+private fun String.isChargingArcBadgeText() = contains("充电") || contains("限时免费")
 
 /**
  * 智能日期格式化 (兼容低版本 Android)

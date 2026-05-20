@@ -1,6 +1,7 @@
 package dev.aaa1115910.biliapi.http.entity.home
 
 
+import dev.aaa1115910.biliapi.http.entity.video.ChargingPay
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -71,6 +72,13 @@ data class RcmdIndexData(
         val cardGoto: String,
         @SerialName("card_type")
         val cardType: String,
+        val badge: String? = null,
+        @SerialName("cover_badge")
+        val coverBadge: String? = null,
+        @SerialName("cover_badge_2")
+        val coverBadge2: String? = null,
+        @SerialName("charging_pay")
+        val chargingPay: ChargingPay? = null,
         val cover: String? = null,
         @SerialName("cover_left_1_content_description")
         val coverLeft1ContentDescription: String? = null,
@@ -97,6 +105,10 @@ data class RcmdIndexData(
         @SerialName("goto_icon")
         val gotoIcon: GotoIcon? = null,
         val idx: Int,
+        @SerialName("is_charging_arc")
+        val isChargingArc: Boolean = false,
+        @SerialName("is_charging_archive")
+        val isChargingArchive: Boolean = false,
         @SerialName("official_icon")
         val officialIcon: Int? = null,
         @SerialName("param")

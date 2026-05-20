@@ -126,7 +126,7 @@ fun UgcRegionScaffold(
 
             itemsIndexed(ugcViewModel.ugcItems) { index, item ->
                 SmallVideoCard(
-                    data = remember(item.aid) {
+                    data = remember(item.aid, item.isChargingArc, item.chargingArcBadge) {
                         VideoCardData(
                             avid = item.aid,
                             title = item.title,
@@ -136,7 +136,9 @@ fun UgcRegionScaffold(
                             upName = item.author,
                             time = item.duration * 1000L,
                             pubTime = item.pubTime,
-                            isInteractive = item.isInteractive
+                            isInteractive = item.isInteractive,
+                            isChargingArc = item.isChargingArc,
+                            badgeText = item.chargingArcBadge
                         )
                     },
                     onClick = { VideoInfoActivity.actionStart(context, item.aid) },
