@@ -82,6 +82,7 @@ import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
+import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.entity.user.DynamicType
 import dev.aaa1115910.biliapi.entity.user.DynamicVideo
@@ -101,7 +102,9 @@ import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
+import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.bv.util.resizedImageUrl
 import dev.aaa1115910.bv.viewmodel.home.DynamicViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -1303,7 +1306,7 @@ private fun DynamicDrawContent(draw: DynamicItem.DynamicDrawModule?) {
             )
         }
         if (draw.images.isNotEmpty()) {
-            DynamicImageStrip(images = draw.images.map { it.url })
+            DynamicImageStrip(images = draw.images)
         }
         // 文字
         if (draw.text.isNotBlank()) {
@@ -1598,7 +1601,9 @@ private fun AvatarImage(
 @Composable
 private fun DynamicMediaImage(
     url: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    imageSize: ImageSize = ImageSize.DynamicPreview,
+    alignment: Alignment = Alignment.Center
 ) {
     Box(
         modifier = modifier
@@ -1613,10 +1618,12 @@ private fun DynamicMediaImage(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.48f)
             )
         } else {
+            val model = remember(url, imageSize) { url.resizedImageUrl(imageSize) }
             AsyncImage(
-                model = url,
+                model = model,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
+                alignment = alignment,
                 contentScale = ContentScale.Crop
             )
         }
@@ -1624,18 +1631,20 @@ private fun DynamicMediaImage(
 }
 
 @Composable
-private fun DynamicImageStrip(images: List<String>) {
+private fun DynamicImageStrip(images: List<Picture>) {
     val visibleImages = images.take(2)
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        visibleImages.forEach { imageUrl ->
+        visibleImages.forEach { image ->
+            val isLongImage = image.width > 0 && image.height > image.width * 3
             DynamicMediaImage(
-                url = imageUrl,
+                url = image.url,
                 modifier = Modifier
                     .weight(1f)
-                    .height(126.dp)
+                    .height(126.dp),
+                alignment = if (isLongImage) Alignment.TopCenter else Alignment.Center
             )
         }
     }

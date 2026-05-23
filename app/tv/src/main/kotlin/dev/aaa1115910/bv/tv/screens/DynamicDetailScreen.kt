@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -81,7 +82,9 @@ import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.component.ArticleContent
 import dev.aaa1115910.bv.tv.component.CommentImagePreviewDialog
 import dev.aaa1115910.bv.tv.component.CommentPanel
+import dev.aaa1115910.bv.tv.util.tvImageMemoryPolicy
 import dev.aaa1115910.bv.util.fInfo
+import dev.aaa1115910.bv.util.resizedImageUrl
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -756,14 +759,7 @@ private fun DynamicContentSection(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             draw.images.forEach { image ->
-                                AsyncImage(
-                                    model = image.url,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .fillMaxWidth(0.7f)
-                                        .clip(RoundedCornerShape(8.dp)),
-                                    contentScale = ContentScale.FillWidth
-                                )
+                                DynamicDetailDrawImage(image = image)
                             }
                         }
                     }
@@ -899,6 +895,32 @@ private fun DynamicContentSection(
             }
         }
     }
+}
+
+@Composable
+private fun DynamicDetailDrawImage(image: Picture) {
+    val context = LocalContext.current
+    val imageMemoryPolicy = remember(context) { context.tvImageMemoryPolicy() }
+    val isLongImage = image.width > 0 && image.height > image.width * 3
+    val aspectRatio = remember(image.width, image.height) {
+        when {
+            image.width <= 0 || image.height <= 0 -> 16f / 9f
+            else -> (image.width.toFloat() / image.height).coerceIn(0.05f, 4f)
+        }
+    }
+    val imageModifier = Modifier
+        .fillMaxWidth(0.7f)
+        .aspectRatio(aspectRatio)
+        .clip(RoundedCornerShape(8.dp))
+
+    AsyncImage(
+        model = image.url.resizedImageUrl(
+            if (isLongImage) imageMemoryPolicy.detailLongImageSize else imageMemoryPolicy.detailImageSize
+        ),
+        contentDescription = null,
+        modifier = imageModifier,
+        contentScale = ContentScale.FillWidth
+    )
 }
 
 @Composable

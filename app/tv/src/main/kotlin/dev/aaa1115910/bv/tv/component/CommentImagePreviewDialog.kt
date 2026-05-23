@@ -51,6 +51,7 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import coil.size.Precision
 import dev.aaa1115910.biliapi.entity.Picture
+import dev.aaa1115910.bv.tv.util.tvImageMemoryPolicy
 import kotlinx.coroutines.delay
 import kotlin.math.max
 
@@ -77,13 +78,22 @@ fun CommentImagePreviewDialog(
     val requestWidth = previewAreaSize.width.takeIf { it > 0 } ?: 1920
     val requestHeight = previewAreaSize.height.takeIf { it > 0 } ?: 1080
     val imageLoader = context.imageLoader
+    val imageMemoryPolicy = remember(context) { context.tvImageMemoryPolicy() }
 
-    fun buildImageRequest(index: Int) = ImageRequest.Builder(context)
-        .data(pictures[index].url)
-        .size(requestWidth, requestHeight)
-        .precision(Precision.INEXACT)
-        .allowHardware(false)
-        .build()
+    fun buildImageRequest(index: Int): ImageRequest {
+        val picture = pictures[index]
+        val (targetWidth, targetHeight) = imageMemoryPolicy.previewRequestSize(
+            picture = picture,
+            viewportWidth = requestWidth,
+            viewportHeight = requestHeight
+        )
+        return ImageRequest.Builder(context)
+            .data(picture.url)
+            .size(targetWidth, targetHeight)
+            .precision(Precision.INEXACT)
+            .allowHardware(false)
+            .build()
+    }
 
     val previewImageRequest = remember(context, pictures, currentIndex, requestWidth, requestHeight) {
         buildImageRequest(currentIndex)
@@ -118,13 +128,17 @@ fun CommentImagePreviewDialog(
         }
     }
 
-    LaunchedEffect(show, currentIndex, pictures, requestWidth, requestHeight) {
+    LaunchedEffect(show, currentIndex, pictures, requestWidth, requestHeight, imageMemoryPolicy) {
         if (!show || pictures.size <= 1 || previewAreaSize == IntSize.Zero) return@LaunchedEffect
 
-        val preloadIndexes = (1..3)
-            .map { currentIndex + it }
-            .filter { it <= pictures.lastIndex }
-            .filter { it !in prefetchedIndexes }
+        val preloadIndexes = if (imageMemoryPolicy.previewPrefetchCount <= 0) {
+            emptyList()
+        } else {
+            (1..imageMemoryPolicy.previewPrefetchCount)
+                .map { currentIndex + it }
+                .filter { it <= pictures.lastIndex }
+                .filter { it !in prefetchedIndexes }
+        }
 
         preloadIndexes.forEach { index ->
             prefetchedIndexes += index
