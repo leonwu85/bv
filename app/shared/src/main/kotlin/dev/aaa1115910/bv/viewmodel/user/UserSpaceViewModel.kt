@@ -193,6 +193,13 @@ class UserSpaceViewModel(
         }
     }
 
+    fun refreshSelectedTab() {
+        resetSelectedTab(selectedTab)
+        viewModelScope.launch(Dispatchers.IO) {
+            loadMoreForSelectedTabInternal()
+        }
+    }
+
     fun selectTab(tab: UserSpaceTab) {
         selectedTab = tab
         viewModelScope.launch(Dispatchers.Default) {
@@ -584,6 +591,56 @@ class UserSpaceViewModel(
         favoriteGroupEnd.clear()
         favoriteGroupLoading.clear()
         expandedFavoriteGroupIds.clear()
+        followingSeasons.clear()
+        bangumiPage = 1
+        bangumiHasMore = true
+        bangumiLoading = false
+        bangumiError = null
+    }
+
+    private fun resetSelectedTab(tab: UserSpaceTab) {
+        when (tab) {
+            UserSpaceTab.Home -> {
+                resetDynamic()
+                resetVideos()
+            }
+
+            UserSpaceTab.Dynamic -> resetDynamic()
+            UserSpaceTab.Video -> resetVideos()
+            UserSpaceTab.Favorite -> resetFavorites()
+            UserSpaceTab.Bangumi -> resetBangumi()
+        }
+    }
+
+    private fun resetVideos() {
+        tvSpaceVideos.clear()
+        spaceVideos.clear()
+        page = SpaceVideoPage()
+        updatingVideo = false
+        videoLoading = false
+    }
+
+    private fun resetDynamic() {
+        dynamicItems.clear()
+        currentDynamicPage = 0
+        dynamicHistoryOffset = null
+        dynamicUpdateBaseline = null
+        dynamicHasMore = true
+        dynamicLoading = false
+    }
+
+    private fun resetFavorites() {
+        favoriteGroups.clear()
+        favoriteLoading = false
+        favoriteError = null
+        favoriteGroupKinds.clear()
+        favoriteGroupPages.clear()
+        favoriteGroupEnd.clear()
+        favoriteGroupLoading.clear()
+        expandedFavoriteGroupIds.clear()
+    }
+
+    private fun resetBangumi() {
         followingSeasons.clear()
         bangumiPage = 1
         bangumiHasMore = true
