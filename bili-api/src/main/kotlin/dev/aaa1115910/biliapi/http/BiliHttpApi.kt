@@ -277,7 +277,8 @@ object BiliHttpApi {
         type: String = "",
         platform: String = "oc",
         sessData: String? = null,
-        dedeUserID: Long? = null
+        dedeUserID: Long? = null,
+        tryLook: Boolean = false
     ): BiliResponse<PlayUrlData> = client.get("/x/player/playurl") {
         require(av != null || bv != null) { "av and bv cannot be null at the same time" }
         parameter("avid", av)
@@ -291,6 +292,7 @@ object BiliHttpApi {
         parameter("otype", otype)
         parameter("type", type)
         parameter("platform", platform)
+        if (tryLook) parameter("try_look", 1)
         sessData?.let { header("Cookie", "SESSDATA=$sessData;DedeUserID=$dedeUserID") }
     }.body()
 
@@ -379,7 +381,8 @@ object BiliHttpApi {
         drmTechType: Int? = null,
         fromClient: String? = null,
         sessData: String? = null,
-        buvid3: String? = null
+        buvid3: String? = null,
+        tryLook: Boolean = false
     ): BiliResponse<PlayUrlV2Data> = client.get("/pgc/player/web/v2/playurl") {
         av?.let { parameter("avid", it) }
         bv?.let { parameter("bvid", it) }
@@ -393,6 +396,7 @@ object BiliHttpApi {
         supportMultiAudio?.let { parameter("support_multi_audio", it) }
         drmTechType?.let { parameter("drm_tech_type", it) }
         fromClient?.let { parameter("from_client", it) }
+        if (tryLook) parameter("try_look", 1)
         val cookieParts = mutableListOf<String>()
         sessData?.let { cookieParts.add("SESSDATA=$it") }
         buvid3?.let { cookieParts.add("buvid3=$it") }

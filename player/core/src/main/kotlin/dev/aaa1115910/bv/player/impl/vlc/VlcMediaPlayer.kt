@@ -255,7 +255,7 @@ class VlcMediaPlayer(
             config = VLCConfig.Builder()
                 // ========== 网络缓存优化 ==========
                 // 增加网络缓存以减少 seek 和初始加载时的卡顿
-                .setNetworkCaching(6000)  // 6秒网络缓存（B站 DASH 流推荐值）
+                .setNetworkCaching(if (options.expandBuffer) 32000 else 6000)
 
                 // ========== 项目特定自定义选项 ==========
                 // 通过 customOptions 添加官方默认值之外的项目特定配置
@@ -851,7 +851,15 @@ class VlcMediaPlayer(
                 addOption(":video-filter=transform")
                 addOption(":transform-type=${mapDegreesToTransform(currentRotation)}")
             }
-            setHWDecoderEnabled(true, false)
+            VLCOptions.setMediaOptions(
+                media = this,
+                noHardwareAcceleration = !options.enableHardwareDecode,
+                hardwareAcceleration = if (options.enableHardwareDecode) {
+                    VLCOptions.HW_ACCELERATION_AUTOMATIC
+                } else {
+                    VLCOptions.HW_ACCELERATION_DISABLED
+                }
+            )
         }
     }
 

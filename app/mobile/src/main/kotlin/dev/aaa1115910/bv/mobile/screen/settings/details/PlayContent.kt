@@ -11,20 +11,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import dev.aaa1115910.bv.entity.LiveQualityPreference
 import dev.aaa1115910.bv.mobile.component.preferences.items.radioPreference
 import dev.aaa1115910.bv.mobile.component.preferences.items.switchPreference
 import dev.aaa1115910.bv.mobile.component.preferences.preferenceGroups
 import dev.aaa1115910.bv.mobile.settings.MobilePrefKeys
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
-import dev.aaa1115910.bv.player.entity.Audio
-import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.PlayMode
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
-import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
-import dev.aaa1115910.bv.player.entity.VideoCodec
 
 @Composable
 fun PlayContent(
@@ -39,29 +34,9 @@ fun PlayContent(
         preferenceGroups(
             "画面" to {
                 radioPreference(
-                    title = "默认画质",
-                    prefReq = MobilePrefKeys.defaultQualityRequest,
-                    values = Resolution.entries.associate { it.code to it.getDisplayName(context) }
-                        .toSortedMap { a, b -> a.compareTo(b) }
-                )
-                radioPreference(
-                    title = "默认视频编码",
-                    prefReq = MobilePrefKeys.defaultVideoCodecRequest,
-                    values = VideoCodec.entries.associate { it.ordinal to it.getDisplayName(context) }
-                        .toSortedMap { a, b -> a.compareTo(b) }
-                )
-                radioPreference(
                     title = "竖屏视频修复",
                     prefReq = MobilePrefKeys.portraitVideoFixModeRequest,
                     values = PortraitVideoFixMode.entries.associate { it.value to it.displayName(context) }
-                )
-            },
-            "音频" to {
-                radioPreference(
-                    title = "默认音频",
-                    prefReq = MobilePrefKeys.defaultAudioRequest,
-                    values = Audio.entries.associate { it.code to it.getDisplayName(context) }
-                        .toSortedMap { a, b -> a.compareTo(b) }
                 )
             },
             "播放" to {
@@ -130,16 +105,6 @@ fun PlayContent(
                 )
             },
             "直播" to {
-                radioPreference(
-                    title = "默认清晰度",
-                    prefReq = MobilePrefKeys.defaultLiveQnRequest,
-                    values = LiveQualityPreference.entries.associate { it.qn to it.getDisplayName(context) }
-                )
-                radioPreference(
-                    title = "默认直播流",
-                    prefReq = MobilePrefKeys.defaultLiveCodecRequest,
-                    values = LiveCodec.entries.associate { it.ordinal to it.getDisplayName(context) }
-                )
                 switchPreference(
                     title = "直播弹幕表情",
                     prefReq = MobilePrefKeys.showLiveDanmakuEmojiRequest,

@@ -1,5 +1,9 @@
 package dev.aaa1115910.bv.util
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import dev.aaa1115910.bv.BVApp
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -56,5 +60,13 @@ object NetworkUtil {
         }.also {
             deferreds.forEach { it.cancel() }
         }
+    }
+
+    fun isCellularNetwork(context: Context = BVApp.context): Boolean {
+        val connectivityManager = context.getSystemService(ConnectivityManager::class.java)
+            ?: return false
+        val activeNetwork = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return false
+        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
     }
 }

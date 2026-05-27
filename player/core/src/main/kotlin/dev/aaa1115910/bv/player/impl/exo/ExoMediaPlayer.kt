@@ -22,6 +22,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -110,6 +111,9 @@ class ExoMediaPlayer(
             }
             if (options.enableAudioPlaybackParams) {
                 setEnableAudioOutputPlaybackParameters(true)
+            }
+            if (!options.enableHardwareDecode) {
+                setMediaCodecSelector(MediaCodecSelector.PREFER_SOFTWARE)
             }
         }
 
@@ -460,7 +464,7 @@ class ExoMediaPlayer(
      * 直播专用缓冲配置
      */
     private fun calculateLiveBufferConfig(deviceTier: DeviceTier, availableMemory: Long): LiveBufferConfig {
-        return when (deviceTier) {
+        val baseConfig = when (deviceTier) {
             DeviceTier.LOW -> LiveBufferConfig(
                 minBufferMs = 3000,    // 3秒最小缓冲
                 maxBufferMs = 8000,    // 8秒最大缓冲
@@ -489,6 +493,24 @@ class ExoMediaPlayer(
                 prioritizeTime = true
             )
         }
+
+        return if (options.expandBuffer) {
+            baseConfig.copy(
+                minBufferMs = maxOf(baseConfig.minBufferMs * 2, 12000),
+                maxBufferMs = maxOf(baseConfig.maxBufferMs * 3, 45000),
+                bufferForPlaybackMs = maxOf(baseConfig.bufferForPlaybackMs, 2500),
+                bufferForPlaybackAfterRebufferMs = maxOf(
+                    baseConfig.bufferForPlaybackAfterRebufferMs,
+                    5000
+                ),
+                targetBufferBytes = maxOf(
+                    baseConfig.targetBufferBytes,
+                    calculateBufferSize(availableMemory, 0.20, 16, 320)
+                )
+            )
+        } else {
+            baseConfig
+        }
     }
 
     /**
@@ -511,7 +533,7 @@ class ExoMediaPlayer(
             totalMemory < 6L * 1024 * 1024 * 1024 -> DeviceTier.MID // 中端设备：3-6GB RAM
             else -> DeviceTier.HIGH // 高端设备：6GB+ RAM
         }
-        return when (deviceTier) {
+        val baseConfig = when (deviceTier) {
             DeviceTier.LOW -> BufferConfig(
                 minBufferMs = 7000,   // 7秒最小缓冲
                 maxBufferMs = 11000,  // 11秒最大缓冲
@@ -533,6 +555,20 @@ class ExoMediaPlayer(
                 targetBufferBytes = calculateBufferSize(availableMemory, 0.18, 10, 300), // 18%内存，10-300MB
                 prioritizeTime = false
             )
+        }
+
+        return if (options.expandBuffer) {
+            baseConfig.copy(
+                minBufferMs = maxOf(baseConfig.minBufferMs * 2, 30000),
+                maxBufferMs = maxOf(baseConfig.maxBufferMs * 3, 90000),
+                backBufferMs = maxOf(baseConfig.backBufferMs, 15000),
+                targetBufferBytes = maxOf(
+                    baseConfig.targetBufferBytes,
+                    calculateBufferSize(availableMemory, 0.25, 32, 512)
+                )
+            )
+        } else {
+            baseConfig
         }
     }
 

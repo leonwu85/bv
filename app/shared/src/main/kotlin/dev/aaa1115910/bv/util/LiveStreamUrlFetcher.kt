@@ -25,12 +25,14 @@ object LiveStreamUrlFetcher {
      * @param roomId 直播间ID
      * @param qn 画质编号，默认30000（杜比，最高值），服务端会自动降级到实际最高可用画质
      * @param preferredCodec 首选编码格式，默认 HLS 自动选择最佳编码
+     * @param liveCdnHost 自定义直播 CDN host，空值表示使用服务端返回的 host
      * @return 直播播放信息，包含流URL和可用画质列表，如果未开播或获取失败则返回null
      */
     suspend fun fetchLiveStreamUrl(
         roomId: Int,
         qn: Int = 30000,
-        preferredCodec: AppLiveCodec = AppLiveCodec.HLS
+        preferredCodec: AppLiveCodec = AppLiveCodec.HLS,
+        liveCdnHost: String? = null
     ): LivePlayInfo? = withContext(Dispatchers.IO) {
         try {
             val sessData = Prefs.sessData
@@ -78,7 +80,7 @@ object LiveStreamUrlFetcher {
             }
 
             // 解析播放URL和画质信息
-            val result = parsePlayUrl(response, preferredCodec)
+            val result = parsePlayUrl(response, preferredCodec, liveCdnHost)
             if (result == null) {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(
@@ -134,6 +136,20 @@ object LiveStreamUrlFetcher {
         }.getOrElse { 0L }
     }
 
+    internal fun buildLiveUrl(
+        host: String,
+        baseUrl: String,
+        extra: String,
+        liveCdnHost: String?
+    ): String {
+        val customHost = liveCdnHost?.takeIf { it.isNotBlank() }
+        return if (customHost != null) {
+            "${customHost.trimEnd('/')}/${baseUrl.trimStart('/')}$extra"
+        } else {
+            "$host$baseUrl$extra"
+        }
+    }
+
     /**
      * 解析播放URL
      * @param response 直播房间播放信息响应
@@ -141,7 +157,8 @@ object LiveStreamUrlFetcher {
      */
     private fun parsePlayUrl(
         response: LiveRoomPlayInfoResponse,
-        preferredCodec: AppLiveCodec
+        preferredCodec: AppLiveCodec,
+        liveCdnHost: String?
     ): ParseResult? {
         val streams = response.data?.playUrlInfo?.playurl?.stream ?: return null
 
@@ -150,7 +167,7 @@ object LiveStreamUrlFetcher {
                 // HLS 自动选择最佳编码（HEVC > AV1 > AVC）
                 val hlsStream = streams.find { it.protocolName == "http_hls" }
                 if (hlsStream != null) {
-                    val result = buildUrlFromStream(hlsStream, null)
+                    val result = buildUrlFromStream(hlsStream, null, liveCdnHost)
                     if (result != null) {
                         logger.info { "Using HLS stream with auto codec" }
                         return result
@@ -159,7 +176,7 @@ object LiveStreamUrlFetcher {
                 // 回退到 FLV
                 val flvStream = streams.find { it.protocolName == "http_stream" }
                 if (flvStream != null) {
-                    val result = buildUrlFromStream(flvStream, "avc")
+                    val result = buildUrlFromStream(flvStream, "avc", liveCdnHost)
                     if (result != null) {
                         logger.info { "Using FLV stream (fallback)" }
                         return result
@@ -170,7 +187,7 @@ object LiveStreamUrlFetcher {
                 // 强制使用 FLV（仅支持 AVC）
                 val flvStream = streams.find { it.protocolName == "http_stream" }
                 if (flvStream != null) {
-                    val result = buildUrlFromStream(flvStream, "avc")
+                    val result = buildUrlFromStream(flvStream, "avc", liveCdnHost)
                     if (result != null) {
                         logger.info { "Using FLV stream" }
                         return result
@@ -179,7 +196,7 @@ object LiveStreamUrlFetcher {
                 // 回退到 HLS
                 val hlsStream = streams.find { it.protocolName == "http_hls" }
                 if (hlsStream != null) {
-                    val result = buildUrlFromStream(hlsStream, "avc")
+                    val result = buildUrlFromStream(hlsStream, "avc", liveCdnHost)
                     if (result != null) {
                         logger.info { "Using HLS stream with AVC (fallback)" }
                         return result
@@ -190,7 +207,7 @@ object LiveStreamUrlFetcher {
                 // HLS 强制 AVC
                 val hlsStream = streams.find { it.protocolName == "http_hls" }
                 if (hlsStream != null) {
-                    val result = buildUrlFromStream(hlsStream, "avc")
+                    val result = buildUrlFromStream(hlsStream, "avc", liveCdnHost)
                     if (result != null) {
                         logger.info { "Using HLS stream with AVC" }
                         return result
@@ -199,7 +216,7 @@ object LiveStreamUrlFetcher {
                 // 回退到 FLV
                 val flvStream = streams.find { it.protocolName == "http_stream" }
                 if (flvStream != null) {
-                    val result = buildUrlFromStream(flvStream, "avc")
+                    val result = buildUrlFromStream(flvStream, "avc", liveCdnHost)
                     if (result != null) {
                         logger.info { "Using FLV stream (fallback)" }
                         return result
@@ -210,7 +227,7 @@ object LiveStreamUrlFetcher {
 
         // 使用第一个可用的流作为兜底
         for (stream in streams) {
-            val result = buildUrlFromStream(stream, null)
+            val result = buildUrlFromStream(stream, null, liveCdnHost)
             if (result != null) {
                 logger.info { "Using fallback stream: ${stream.protocolName}" }
                 return result
@@ -240,7 +257,11 @@ object LiveStreamUrlFetcher {
      * @param stream 直播流信息
      * @param preferredCodecName 首选编码名称，null 表示按优先级自动选择
      */
-    private fun buildUrlFromStream(stream: LiveStream, preferredCodecName: String?): ParseResult? {
+    private fun buildUrlFromStream(
+        stream: LiveStream,
+        preferredCodecName: String?,
+        liveCdnHost: String?
+    ): ParseResult? {
         // 优先选择 fmp4，其次 ts，最后 flv
         val formatOrder = listOf("fmp4", "ts", "flv")
 
@@ -255,7 +276,7 @@ object LiveStreamUrlFetcher {
                     selectBestCodec(format.codec)
                 } ?: continue
                 val urlInfo = codec.urlInfo.first()
-                val fullUrl = "${urlInfo.host}${codec.baseUrl}${urlInfo.extra}"
+                val fullUrl = buildLiveUrl(urlInfo.host, codec.baseUrl, urlInfo.extra, liveCdnHost)
                 val expiresAt = parseExpiresFromExtra(urlInfo.extra)
                 logger.debug { "Built URL with format $formatName, codec ${codec.codecName}: $fullUrl" }
                 return ParseResult(
@@ -276,7 +297,7 @@ object LiveStreamUrlFetcher {
                     selectBestCodec(format.codec)
                 } ?: continue
                 val urlInfo = codec.urlInfo.first()
-                val fullUrl = "${urlInfo.host}${codec.baseUrl}${urlInfo.extra}"
+                val fullUrl = buildLiveUrl(urlInfo.host, codec.baseUrl, urlInfo.extra, liveCdnHost)
                 val expiresAt = parseExpiresFromExtra(urlInfo.extra)
                 logger.debug { "Built URL with fallback format ${format.formatName}, codec ${codec.codecName}: $fullUrl" }
                 return ParseResult(

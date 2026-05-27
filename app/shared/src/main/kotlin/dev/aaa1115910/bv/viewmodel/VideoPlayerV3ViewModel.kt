@@ -77,6 +77,8 @@ import dev.aaa1115910.bv.settings.PlayerSettingsProvider
 import dev.aaa1115910.bv.util.DanmakuSegmentMergeResult
 import dev.aaa1115910.bv.util.DeviceUtil
 import dev.aaa1115910.bv.util.MergedDanmakuEntry
+import dev.aaa1115910.bv.util.NetworkUtil
+import dev.aaa1115910.bv.util.PlaybackPreferenceSelector
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.VodDanmakuMergeState
 import dev.aaa1115910.bv.util.VodDanmakuMerger
@@ -209,6 +211,30 @@ class VideoPlayerV3ViewModel(
         Secondary("副", "secondary")
     }
 
+    private fun isCellularPlaybackNetwork(): Boolean =
+        runCatching { NetworkUtil.isCellularNetwork() }.getOrDefault(false)
+
+    private fun defaultQualityForCurrentNetwork(): Resolution =
+        PlaybackPreferenceSelector.selectQuality(
+            isCellular = isCellularPlaybackNetwork(),
+            defaultQuality = settings.defaultQuality,
+            cellularQuality = settings.defaultCellularQuality
+        )
+
+    private fun defaultAudioForCurrentNetwork(): Audio =
+        PlaybackPreferenceSelector.selectAudio(
+            isCellular = isCellularPlaybackNetwork(),
+            defaultAudio = settings.defaultAudio,
+            cellularAudio = settings.defaultCellularAudio
+        )
+
+    private fun defaultLiveQnForCurrentNetwork(): Int =
+        PlaybackPreferenceSelector.selectLiveQuality(
+            isCellular = isCellularPlaybackNetwork(),
+            defaultLiveQn = settings.defaultLiveQn,
+            cellularLiveQn = settings.defaultCellularLiveQn
+        )
+
     var videoPlayer: AbstractVideoPlayer? by mutableStateOf(null)
     var danmakuPlayer: DanmakuPlayer? by mutableStateOf(null)
     var liveDanmakuPlayer: LiveDanmakuPlayer? by mutableStateOf(null)
@@ -284,13 +310,13 @@ class VideoPlayerV3ViewModel(
     var currentVideoHeight by mutableIntStateOf(0)
     var currentVideoWidth by mutableIntStateOf(0)
 
-    var currentQuality by mutableStateOf(settings.defaultQuality)
+    var currentQuality by mutableStateOf(defaultQualityForCurrentNetwork())
     var currentVideoCodec by mutableStateOf(settings.defaultVideoCodec)
     var currentPlaySpeed by mutableFloatStateOf(settings.currentPlaySpeed)
     var currentVideoAspectRatio by mutableStateOf(VideoAspectRatio.Default)
     var currentVideoRotation by mutableStateOf(VideoRotation.Original)
     var currentPlaybackMediaMode by mutableStateOf(PlaybackMediaMode.Normal)
-    var currentAudio by mutableStateOf(settings.defaultAudio)
+    var currentAudio by mutableStateOf(defaultAudioForCurrentNetwork())
     var currentDanmakuScale by mutableFloatStateOf(settings.defaultDanmakuScale)
     var currentDanmakuOpacity by mutableFloatStateOf(settings.defaultDanmakuOpacity)
     var currentDanmakuEnabled by mutableStateOf(settings.defaultDanmakuEnabled)
@@ -370,7 +396,7 @@ class VideoPlayerV3ViewModel(
 
     // 直播画质管理
     var availableLiveQualities = mutableStateListOf<Pair<Int, String>>() // qn -> description
-    var currentLiveQn by mutableIntStateOf(settings.defaultLiveQn)
+    var currentLiveQn by mutableIntStateOf(defaultLiveQnForCurrentNetwork())
     var currentLiveQualityDescription by mutableStateOf("")
     private var liveQnDescMap: Map<Int, String> = emptyMap()
 
@@ -629,6 +655,7 @@ class VideoPlayerV3ViewModel(
                     aid = transitionContext.aid,
                     cid = transitionContext.cid,
                     preferApiType = settings.apiType,
+                    tryLook1080P = settings.tryLook1080P,
                 )
 
                 withContext(Dispatchers.Main) {
@@ -788,13 +815,15 @@ class VideoPlayerV3ViewModel(
                         ProxyArea.MainLand -> ""
                         ProxyArea.HongKong -> "hk"
                         ProxyArea.TaiWan -> "tw"
-                    }
+                    },
+                    tryLook1080P = settings.tryLook1080P,
                 )
             } else {
                 videoPlayRepository.getPlayData(
                     aid = avid,
                     cid = cid,
-                    preferApiType = settings.apiType
+                    preferApiType = settings.apiType,
+                    tryLook1080P = settings.tryLook1080P,
                 )
             }
 
@@ -852,17 +881,24 @@ class VideoPlayerV3ViewModel(
 
             ensureVodPlaybackSessionActive(playbackSessionToken)
 
+            val isCellularNetwork = isCellularPlaybackNetwork()
+            val preferredDefaultQuality = PlaybackPreferenceSelector.selectQuality(
+                isCellular = isCellularNetwork,
+                defaultQuality = settings.defaultQuality,
+                cellularQuality = settings.defaultCellularQuality
+            )
+
             // 确定使用哪个默认分辨率
             val defaultQualityToUse = if (
                 isVerticalVideo &&
                 settings.portraitVideoFixMode == PortraitVideoFixMode.LimitResolution1080P &&
-                settings.defaultQuality >= Resolution.R4K
+                preferredDefaultQuality >= Resolution.R4K
             ) {
                 // 如果是竖屏视频且用户设置了竖屏视频限制最高使用1080P
                 Resolution.R1080P60
             } else {
                 // 否则使用普通设置
-                settings.defaultQuality
+                preferredDefaultQuality
             }
 
             val preferredQuality = targetQuality ?: defaultQualityToUse
@@ -876,7 +912,11 @@ class VideoPlayerV3ViewModel(
                 }
             }
 
-            val preferredAudio = targetAudio ?: settings.defaultAudio
+            val preferredAudio = targetAudio ?: PlaybackPreferenceSelector.selectAudio(
+                isCellular = isCellularNetwork,
+                defaultAudio = settings.defaultAudio,
+                cellularAudio = settings.defaultCellularAudio
+            )
             val selectedAudio = when {
                 availableAudio.contains(preferredAudio) -> preferredAudio
                 preferredAudio == Audio.ADolbyAtoms && availableAudio.contains(Audio.AHiRes) -> Audio.AHiRes
@@ -950,14 +990,14 @@ class VideoPlayerV3ViewModel(
         logger.fInfo { "Video available codec: ${availableVideoCodec.toList()}" }
 
         val requestedCodec = preferredCodec ?: currentVideoCodec
-        logger.fInfo { "Default codec: $requestedCodec" }
-        val currentVideoCodec = if (codecList.contains(requestedCodec)) {
-            requestedCodec
-        } else if (codecList.contains(settings.defaultVideoCodec)) {
-            settings.defaultVideoCodec
-        } else {
-            codecList.minByOrNull { it.ordinal }!!
-        }
+        logger.fInfo { "Default codec: $requestedCodec, second codec: ${settings.secondVideoCodec}" }
+        val currentVideoCodec = PlaybackPreferenceSelector.selectVideoCodec(
+            requestedCodec = preferredCodec,
+            currentCodec = currentVideoCodec,
+            defaultCodec = settings.defaultVideoCodec,
+            secondCodec = settings.secondVideoCodec,
+            availableCodecs = codecList
+        )
         withContext(Dispatchers.Main) {
             this@VideoPlayerV3ViewModel.currentVideoCodec = currentVideoCodec
         }
@@ -1053,10 +1093,15 @@ class VideoPlayerV3ViewModel(
         } else {
             // 如果未通过网络代理获得播放地址，才判断是否应该替换为官方 cdn
             if (videoUrls.isNotEmpty()) {
-                videoCdnSelection = VodCdnUrlSelector.select(videoUrls, Prefs.cdnService)
+                videoCdnSelection = VodCdnUrlSelector.select(videoUrls, settings.cdnService)
                 videoUrl = videoCdnSelection.url
             }
-            audioCdnSelection = VodCdnUrlSelector.select(audioUrls, Prefs.cdnService)
+            audioCdnSelection = VodCdnUrlSelector.select(
+                urls = audioUrls,
+                cdnService = settings.cdnService,
+                isAudio = true,
+                disableAudioCdn = settings.disableAudioCdn
+            )
             audioUrl = audioCdnSelection.url
         }
 
@@ -2820,9 +2865,9 @@ class VideoPlayerV3ViewModel(
     /**
      * 加载直播流（带画质信息）
      * @param roomId 直播间ID
-     * @param qn 请求的画质编号，默认使用用户配置的直播清晰度
+     * @param qn 请求的画质编号，默认使用当前网络对应的直播清晰度
      */
-    fun loadLiveStreamWithQuality(roomId: Int, qn: Int = settings.defaultLiveQn) {
+    fun loadLiveStreamWithQuality(roomId: Int, qn: Int = defaultLiveQnForCurrentNetwork()) {
         cancelVodPlayUrlAutoRefresh()
         // 取消之前的重连任务
         liveRetryJob?.cancel()
@@ -3232,7 +3277,13 @@ class VideoPlayerV3ViewModel(
         preferredQn: Int,
         codec: LiveCodec
     ): dev.aaa1115910.bv.util.LivePlayInfo? {
-        val initialPlayInfo = LiveStreamUrlFetcher.fetchLiveStreamUrl(roomId, preferredQn, codec)
+        val liveCdnHost = settings.liveCdnUrl.takeIf { it.isNotBlank() }
+        val initialPlayInfo = LiveStreamUrlFetcher.fetchLiveStreamUrl(
+            roomId = roomId,
+            qn = preferredQn,
+            preferredCodec = codec,
+            liveCdnHost = liveCdnHost
+        )
             ?: return null
         val resolvedQn = LiveQualityPreference.resolveRequestedQn(preferredQn, initialPlayInfo.acceptQn)
 
@@ -3243,7 +3294,12 @@ class VideoPlayerV3ViewModel(
         logger.fInfo {
             "Preferred live quality $preferredQn unavailable or downgraded, retry with resolved qn=$resolvedQn"
         }
-        return LiveStreamUrlFetcher.fetchLiveStreamUrl(roomId, resolvedQn, codec) ?: initialPlayInfo
+        return LiveStreamUrlFetcher.fetchLiveStreamUrl(
+            roomId = roomId,
+            qn = resolvedQn,
+            preferredCodec = codec,
+            liveCdnHost = liveCdnHost
+        ) ?: initialPlayInfo
     }
 
     /**

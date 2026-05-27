@@ -13,6 +13,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import de.schnettler.datastore.manager.PreferenceRequest
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.bv.BVApp
+import dev.aaa1115910.bv.entity.CdnService
 import dev.aaa1115910.bv.entity.LiveQualityPreference
 import dev.aaa1115910.bv.entity.PlayerType
 import dev.aaa1115910.bv.entity.ThemeType
@@ -26,10 +27,11 @@ import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.player.entity.VideoCodec
+import dev.aaa1115910.bv.util.PlaybackPreferenceSelector
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
 
 object MobilePrefs {
@@ -83,9 +85,17 @@ object MobilePrefs {
         get() = Resolution.fromCode(read(MobilePrefKeys.defaultQualityRequest)) ?: Resolution.R1080P
         set(value) = write(MobilePrefKeys.defaultQualityKey, value.code)
 
+    var defaultCellularQuality: Resolution
+        get() = Resolution.fromCode(read(MobilePrefKeys.defaultCellularQualityRequest)) ?: defaultQuality
+        set(value) = write(MobilePrefKeys.defaultCellularQualityKey, value.code)
+
     var defaultVideoCodec: VideoCodec
         get() = VideoCodec.fromCode(read(MobilePrefKeys.defaultVideoCodecRequest))
         set(value) = write(MobilePrefKeys.defaultVideoCodecKey, value.ordinal)
+
+    var secondVideoCodec: VideoCodec
+        get() = VideoCodec.fromCode(read(MobilePrefKeys.secondVideoCodecRequest))
+        set(value) = write(MobilePrefKeys.secondVideoCodecKey, value.ordinal)
 
     var currentPlaySpeed: Float
         get() = read(MobilePrefKeys.currentPlaySpeedRequest)
@@ -111,9 +121,21 @@ object MobilePrefs {
         get() = read(MobilePrefKeys.enableAudioPlaybackParamsRequest)
         set(value) = write(MobilePrefKeys.enableAudioPlaybackParamsKey, value)
 
+    var enableHardwareDecode: Boolean
+        get() = read(MobilePrefKeys.enableHardwareDecodeRequest)
+        set(value) = write(MobilePrefKeys.enableHardwareDecodeKey, value)
+
+    var expandBuffer: Boolean
+        get() = read(MobilePrefKeys.expandBufferRequest)
+        set(value) = write(MobilePrefKeys.expandBufferKey, value)
+
     var defaultAudio: Audio
         get() = Audio.fromCode(read(MobilePrefKeys.defaultAudioRequest)) ?: Audio.A192K
         set(value) = write(MobilePrefKeys.defaultAudioKey, value.code)
+
+    var defaultCellularAudio: Audio
+        get() = Audio.fromCode(read(MobilePrefKeys.defaultCellularAudioRequest)) ?: defaultAudio
+        set(value) = write(MobilePrefKeys.defaultCellularAudioKey, value.code)
 
     var defaultDanmakuScale: Float
         get() = read(MobilePrefKeys.defaultDanmakuScaleRequest)
@@ -196,6 +218,10 @@ object MobilePrefs {
         get() = read(MobilePrefKeys.defaultLiveQnRequest)
         set(value) = write(MobilePrefKeys.defaultLiveQnKey, value)
 
+    var defaultCellularLiveQn: Int
+        get() = read(MobilePrefKeys.defaultCellularLiveQnRequest)
+        set(value) = write(MobilePrefKeys.defaultCellularLiveQnKey, value)
+
     var defaultLiveCodec: LiveCodec
         get() = LiveCodec.fromCode(read(MobilePrefKeys.defaultLiveCodecRequest))
         set(value) = write(MobilePrefKeys.defaultLiveCodecKey, value.ordinal)
@@ -240,6 +266,42 @@ object MobilePrefs {
         get() = read(MobilePrefKeys.preferOfficialCdnRequest)
         set(value) = write(MobilePrefKeys.preferOfficialCdnKey, value)
 
+    var cdnService: CdnService
+        get() = CdnService.fromOrdinal(read(MobilePrefKeys.cdnServiceRequest))
+        set(value) = write(MobilePrefKeys.cdnServiceKey, value.ordinal)
+
+    var liveCdnUrl: String
+        get() = read(MobilePrefKeys.liveCdnUrlRequest)
+        set(value) = write(MobilePrefKeys.liveCdnUrlKey, PlaybackPreferenceSelector.normalizeLiveCdnHost(value))
+
+    var cdnSpeedTest: Boolean
+        get() = read(MobilePrefKeys.cdnSpeedTestRequest)
+        set(value) = write(MobilePrefKeys.cdnSpeedTestKey, value)
+
+    var disableAudioCdn: Boolean
+        get() = read(MobilePrefKeys.disableAudioCdnRequest)
+        set(value) = write(MobilePrefKeys.disableAudioCdnKey, value)
+
+    var tryLook1080P: Boolean
+        get() = read(MobilePrefKeys.tryLook1080PRequest)
+        set(value) = write(MobilePrefKeys.tryLook1080PKey, value)
+
+    var autoSync: String
+        get() = read(MobilePrefKeys.autoSyncRequest)
+        set(value) = write(MobilePrefKeys.autoSyncKey, value.trim())
+
+    var videoSync: String
+        get() = read(MobilePrefKeys.videoSyncRequest)
+        set(value) = write(MobilePrefKeys.videoSyncKey, value)
+
+    var hardwareDecodeMode: String
+        get() = read(MobilePrefKeys.hardwareDecodeModeRequest)
+        set(value) = write(MobilePrefKeys.hardwareDecodeModeKey, value)
+
+    var audioOutputDevices: String
+        get() = read(MobilePrefKeys.audioOutputDevicesRequest)
+        set(value) = write(MobilePrefKeys.audioOutputDevicesKey, value.trim())
+
     var showLiveDanmakuEmoji: Boolean
         get() = read(MobilePrefKeys.showLiveDanmakuEmojiRequest)
         set(value) = write(MobilePrefKeys.showLiveDanmakuEmojiKey, value)
@@ -264,14 +326,19 @@ object MobilePrefKeys {
     val playerTypeKey = intPreferencesKey("mobile_player_type")
     val apiTypeKey = intPreferencesKey("mobile_api_type")
     val defaultQualityKey = intPreferencesKey("mobile_default_quality")
+    val defaultCellularQualityKey = intPreferencesKey("mobile_default_cellular_quality")
     val defaultVideoCodecKey = intPreferencesKey("mobile_default_video_codec")
+    val secondVideoCodecKey = intPreferencesKey("mobile_second_video_codec")
     val currentPlaySpeedKey = floatPreferencesKey("mobile_current_play_speed")
     val enableTunnelingKey = booleanPreferencesKey("mobile_enable_tunneling")
     val enableMobileTunnelingKey = booleanPreferencesKey("mobile_enable_mobile_tunneling")
     val enableFfmpegAudioRendererKey = booleanPreferencesKey("mobile_enable_ffmpeg_audio_renderer")
     val enableAsyncQueueingKey = booleanPreferencesKey("mobile_enable_async_queueing")
     val enableAudioPlaybackParamsKey = booleanPreferencesKey("mobile_enable_audio_playback_params")
+    val enableHardwareDecodeKey = booleanPreferencesKey("mobile_enable_hardware_decode")
+    val expandBufferKey = booleanPreferencesKey("mobile_expand_buffer")
     val defaultAudioKey = intPreferencesKey("mobile_default_audio")
+    val defaultCellularAudioKey = intPreferencesKey("mobile_default_cellular_audio")
     val defaultDanmakuScaleKey = floatPreferencesKey("mobile_default_danmaku_scale")
     val defaultMobileDanmakuScaleKey = floatPreferencesKey("mobile_default_mobile_danmaku_scale")
     val defaultDanmakuOpacityKey = floatPreferencesKey("mobile_default_danmaku_opacity")
@@ -290,6 +357,7 @@ object MobilePrefKeys {
     val defaultSecondarySubtitleBottomPaddingKey = intPreferencesKey("mobile_default_secondary_subtitle_bottom_padding")
     val defaultPlayModeKey = intPreferencesKey("mobile_default_play_mode")
     val defaultLiveQnKey = intPreferencesKey("mobile_default_live_qn")
+    val defaultCellularLiveQnKey = intPreferencesKey("mobile_default_cellular_live_qn")
     val defaultLiveCodecKey = intPreferencesKey("mobile_default_live_codec")
     val isLoopKey = booleanPreferencesKey("mobile_player_is_loop")
     val showDanmakuKey = booleanPreferencesKey("mobile_player_show_danmaku")
@@ -301,6 +369,15 @@ object MobilePrefKeys {
     val playerShowDebugInfoKey = booleanPreferencesKey("mobile_player_show_debug_info")
     val liveIncognitoModeKey = booleanPreferencesKey("mobile_live_incognito_mode")
     val preferOfficialCdnKey = booleanPreferencesKey("mobile_prefer_official_cdn")
+    val cdnServiceKey = intPreferencesKey("mobile_cdn_service")
+    val liveCdnUrlKey = stringPreferencesKey("mobile_live_cdn_url")
+    val cdnSpeedTestKey = booleanPreferencesKey("mobile_cdn_speed_test")
+    val disableAudioCdnKey = booleanPreferencesKey("mobile_disable_audio_cdn")
+    val tryLook1080PKey = booleanPreferencesKey("mobile_try_look_1080p")
+    val autoSyncKey = stringPreferencesKey("mobile_auto_sync")
+    val videoSyncKey = stringPreferencesKey("mobile_video_sync")
+    val hardwareDecodeModeKey = stringPreferencesKey("mobile_hardware_decode_mode")
+    val audioOutputDevicesKey = stringPreferencesKey("mobile_audio_output_devices")
     val showLiveDanmakuEmojiKey = booleanPreferencesKey("mobile_show_live_danmaku_emoji")
     val incognitoModeKey = booleanPreferencesKey("mobile_incognito_mode")
 
@@ -311,14 +388,19 @@ object MobilePrefKeys {
     val playerTypeRequest = PreferenceRequest(playerTypeKey, PlayerType.Media3.ordinal)
     val apiTypeRequest = PreferenceRequest(apiTypeKey, ApiType.App.ordinal)
     val defaultQualityRequest = PreferenceRequest(defaultQualityKey, Resolution.R1080P.code)
+    val defaultCellularQualityRequest = PreferenceRequest(defaultCellularQualityKey, Resolution.R1080P.code)
     val defaultVideoCodecRequest = PreferenceRequest(defaultVideoCodecKey, VideoCodec.HEVC.ordinal)
+    val secondVideoCodecRequest = PreferenceRequest(secondVideoCodecKey, VideoCodec.AVC.ordinal)
     val currentPlaySpeedRequest = PreferenceRequest(currentPlaySpeedKey, 1f)
     val enableTunnelingRequest = PreferenceRequest(enableTunnelingKey, false)
     val enableMobileTunnelingRequest = PreferenceRequest(enableMobileTunnelingKey, false)
     val enableFfmpegAudioRendererRequest = PreferenceRequest(enableFfmpegAudioRendererKey, false)
     val enableAsyncQueueingRequest = PreferenceRequest(enableAsyncQueueingKey, true)
     val enableAudioPlaybackParamsRequest = PreferenceRequest(enableAudioPlaybackParamsKey, true)
+    val enableHardwareDecodeRequest = PreferenceRequest(enableHardwareDecodeKey, true)
+    val expandBufferRequest = PreferenceRequest(expandBufferKey, false)
     val defaultAudioRequest = PreferenceRequest(defaultAudioKey, Audio.A192K.code)
+    val defaultCellularAudioRequest = PreferenceRequest(defaultCellularAudioKey, Audio.A192K.code)
     val defaultDanmakuScaleRequest = PreferenceRequest(defaultDanmakuScaleKey, 1.25f)
     val defaultMobileDanmakuScaleRequest = PreferenceRequest(defaultMobileDanmakuScaleKey, 0.8f)
     val defaultDanmakuOpacityRequest = PreferenceRequest(defaultDanmakuOpacityKey, 0.8f)
@@ -337,6 +419,7 @@ object MobilePrefKeys {
     val defaultSecondarySubtitleBottomPaddingRequest = PreferenceRequest(defaultSecondarySubtitleBottomPaddingKey, 12)
     val defaultPlayModeRequest = PreferenceRequest(defaultPlayModeKey, PlayMode.Sequential.ordinal)
     val defaultLiveQnRequest = PreferenceRequest(defaultLiveQnKey, LiveQualityPreference.Origin.qn)
+    val defaultCellularLiveQnRequest = PreferenceRequest(defaultCellularLiveQnKey, LiveQualityPreference.SuperHD.qn)
     val defaultLiveCodecRequest = PreferenceRequest(defaultLiveCodecKey, LiveCodec.HLS.ordinal)
     val isLoopRequest = PreferenceRequest(isLoopKey, false)
     val showDanmakuRequest = PreferenceRequest(showDanmakuKey, true)
@@ -348,6 +431,15 @@ object MobilePrefKeys {
     val playerShowDebugInfoRequest = PreferenceRequest(playerShowDebugInfoKey, false)
     val liveIncognitoModeRequest = PreferenceRequest(liveIncognitoModeKey, true)
     val preferOfficialCdnRequest = PreferenceRequest(preferOfficialCdnKey, false)
+    val cdnServiceRequest = PreferenceRequest(cdnServiceKey, CdnService.BackupUrl.ordinal)
+    val liveCdnUrlRequest = PreferenceRequest(liveCdnUrlKey, "")
+    val cdnSpeedTestRequest = PreferenceRequest(cdnSpeedTestKey, true)
+    val disableAudioCdnRequest = PreferenceRequest(disableAudioCdnKey, false)
+    val tryLook1080PRequest = PreferenceRequest(tryLook1080PKey, true)
+    val autoSyncRequest = PreferenceRequest(autoSyncKey, "")
+    val videoSyncRequest = PreferenceRequest(videoSyncKey, "audio")
+    val hardwareDecodeModeRequest = PreferenceRequest(hardwareDecodeModeKey, "auto-safe")
+    val audioOutputDevicesRequest = PreferenceRequest(audioOutputDevicesKey, "")
     val showLiveDanmakuEmojiRequest = PreferenceRequest(showLiveDanmakuEmojiKey, false)
     val incognitoModeRequest = PreferenceRequest(incognitoModeKey, false)
 }

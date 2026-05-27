@@ -59,6 +59,7 @@ fun SettingsCategories(
                 null to {
                     listOf(
                         MobileSettings.Appearance,
+                        MobileSettings.AudioVideo,
                         MobileSettings.Play,
                         MobileSettings.Advance,
                         MobileSettings.Debug

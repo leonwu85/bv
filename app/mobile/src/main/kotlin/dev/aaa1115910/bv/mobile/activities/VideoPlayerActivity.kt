@@ -179,6 +179,8 @@ class VideoPlayerActivity : ComponentActivity() {
             enableAsyncQueueing = settings.enableAsyncQueueing,
             enableTunneling = enableTunneling,
             enableAudioPlaybackParams = settings.enableAudioPlaybackParams,
+            enableHardwareDecode = settings.enableHardwareDecode,
+            expandBuffer = settings.expandBuffer,
             isLive = launchArgs.isLive
         )
         val videoPlayer = when (settings.playerType) {
@@ -208,7 +210,7 @@ class VideoPlayerActivity : ComponentActivity() {
                 this.isLive = true
                 this.liveRoomId = launchArgs.liveRoomId
                 this.livePopularityText = if (launchArgs.liveWatchedNum > 0) formatPopularity(launchArgs.liveWatchedNum) else ""
-                loadLiveStreamWithQuality(launchArgs.liveRoomId, settings.defaultLiveQn)
+                loadLiveStreamWithQuality(launchArgs.liveRoomId)
             }
             return
         }
