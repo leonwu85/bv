@@ -69,6 +69,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val CONTROLLER_INTERACTION_COOLDOWN_MS = 450L
+private const val DOUBLE_PRESS_DOWN_INTERVAL_MS = 300L
 
 @Composable
 fun VideoPlayerController(
@@ -471,18 +472,24 @@ fun VideoPlayerController(
 
                         // 检查是否为连按两次（间隔小于300ms且上次按键时间不为0）
                         val currentTime = System.currentTimeMillis()
-                        val isDoublePress = lastPressDown != 0L && currentTime - lastPressDown < 300
+                        val isDoublePress = lastPressDown != 0L &&
+                            currentTime - lastPressDown < DOUBLE_PRESS_DOWN_INTERVAL_MS
                         lastPressDown = currentTime
 
                         doublePressDownJob?.cancel()
-                        doublePressDownJob = scope.launch(Dispatchers.Main) {
-                            delay(300)
+                        if (isDoublePress) {
                             lastPressDown = 0L // 重置时间，避免第三次按下时误判
-                            if ((isDoublePress || showInfo) && !showRelatedVideos) {
+                            if (!showRelatedVideos) {
                                 showInfo = false
                                 onToggleRelatedVideos(true)
-                            } else if(!showInfo && !showRelatedVideos) {
-                                showInfo = true
+                            }
+                        } else {
+                            doublePressDownJob = scope.launch(Dispatchers.Main) {
+                                delay(DOUBLE_PRESS_DOWN_INTERVAL_MS)
+                                lastPressDown = 0L // 重置时间，避免第三次按下时误判
+                                if (!showInfo && !showRelatedVideos) {
+                                    showInfo = true
+                                }
                             }
                         }
                         return@onPreviewKeyEvent true
