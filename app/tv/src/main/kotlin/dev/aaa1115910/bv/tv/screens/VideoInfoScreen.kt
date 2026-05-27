@@ -179,6 +179,7 @@ import kotlin.math.max
 
 private val InteractiveBadgeColor = Color(0xFFFFD54F)
 private val ChargingBadgeColor = Color(0xFF00FFFF)
+private val UgcPartBadgeColor = Color(0xFF8BD8FF)
 private const val ChargingBadgeDefaultText = "充电专属"
 private const val ChargingUrlPrefix = "https://www.bilibili.com/h5/upower/index?mid="
 private const val SupportedClickableTagType = "old_channel"
@@ -2082,15 +2083,26 @@ fun VideoPartRow(
     Column(
         modifier = modifier
             .ifElse(!nested, Modifier.padding(start = 26.dp))
+            .ifElse(
+                nested,
+                Modifier
+                    .padding(horizontal = 48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.White.copy(alpha = 0.06f))
+                    .padding(top = 10.dp, bottom = 8.dp)
+            )
             .onFocusChanged { hasFocus = it.hasFocus },
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
-            modifier = Modifier.padding(start = 10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 10.dp, end = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
+                modifier = Modifier.weight(1f, fill = false),
                 text = (titleText ?: stringResource(R.string.video_info_part_row_title))
                         + (" - $subtitle".takeIf { subtitle.isNotBlank() } ?: ""),
                 fontSize = titleFontSize.sp,
@@ -2098,6 +2110,20 @@ fun VideoPartRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            if (nested && pages.size > 1) {
+                Text(
+                    modifier = Modifier
+                        .background(
+                            color = UgcPartBadgeColor.copy(alpha = if (hasFocus) 0.26f else 0.14f),
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    text = "共${pages.size}P",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (hasFocus) UgcPartBadgeColor else Color.White.copy(alpha = 0.58f),
+                    maxLines = 1
+                )
+            }
             if (enablePartListDialog) {
                 VideoPartRowButton(
                     buttonSize = max(titleFontSize * 1.5f, 21f).dp,
@@ -2176,7 +2202,9 @@ fun VideoUgcSeasonRow(
             durationMillis = 120
         )
     )
-    var focusingEpisode by remember { mutableStateOf<Episode?>(null) }
+    var focusingEpisode by remember(episodes, initialFocusIndex) {
+        mutableStateOf(episodes.getOrNull(initialFocusIndex))
+    }
 
     // 滚动到有历史记录的那一集，如果没有历史记录则滚动到与 intentAid 相同的视频
     LaunchedEffect(lastPlayedCid, intentAid, episodes) {
@@ -2242,6 +2270,7 @@ fun VideoUgcSeasonRow(
                     isInteractive = episode.isInteractive,
                     isChargingArc = episode.isChargingArc,
                     chargingArcBadge = episode.chargingArcBadge,
+                    partCount = episode.pages.size,
                     played = if (episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid }) lastPlayedTime else 0,
                     isLastPlayed = episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid },
                     duration = episode.duration,
@@ -2258,6 +2287,8 @@ fun VideoUgcSeasonRow(
                 lastPlayedTime = lastPlayedTime,
                 enablePartListDialog = (focusingEpisode?.pages?.size ?: 0) > 5,
                 nested = true,
+                titleText = "分 P",
+                dialogTitle = "${focusingEpisode!!.title} - 分 P 列表",
                 onClick = { onClickEpPart(focusingEpisode!!, it) },
                 subtitle = focusingEpisode!!.title
             )
@@ -2298,6 +2329,7 @@ private fun UgcEpisodeButton(
     isInteractive: Boolean = false,
     isChargingArc: Boolean = false,
     chargingArcBadge: String = "",
+    partCount: Int = 1,
     duration: Int,
     played: Int = 0,
     isLastPlayed: Boolean = false,
@@ -2370,6 +2402,28 @@ private fun UgcEpisodeButton(
                     isChargingArc = isChargingArc,
                     chargingArcBadge = chargingArcBadge
                 )
+
+                if (partCount > 1) {
+                    Text(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
+                            .background(
+                                color = Color.Black.copy(alpha = 0.62f),
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = UgcPartBadgeColor.copy(alpha = 0.65f),
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                            .padding(horizontal = 7.dp, vertical = 3.dp),
+                        text = "共${partCount}P",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = UgcPartBadgeColor,
+                        maxLines = 1
+                    )
+                }
 
                 if (playText.isNotEmpty() || danmakuText.isNotEmpty() || durationText.isNotEmpty()) {
                     Box(
@@ -2801,6 +2855,7 @@ private fun VideoUgcListDialog(
                                 isInteractive = episode.isInteractive,
                                 isChargingArc = episode.isChargingArc,
                                 chargingArcBadge = episode.chargingArcBadge,
+                                partCount = episode.pages.size,
                                 played = if (episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid }) lastPlayedTime else 0,
                                 isLastPlayed = episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid },
                                 duration = episode.duration,
@@ -2861,4 +2916,3 @@ fun VideoPartRowPreview() {
         VideoPartRow(pages = pages, onClick = {})
     }
 }
-
