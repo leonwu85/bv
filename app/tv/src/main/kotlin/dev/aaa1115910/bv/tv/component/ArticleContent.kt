@@ -2,14 +2,17 @@ package dev.aaa1115910.bv.tv.component
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.AnnotatedString
@@ -21,7 +24,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import dev.aaa1115910.biliapi.entity.user.ArticlePicture
 import dev.aaa1115910.biliapi.entity.user.ArticleParagraph
 import dev.aaa1115910.biliapi.entity.user.ArticleTextNode
 import dev.aaa1115910.biliapi.entity.user.TextNodeType
@@ -93,14 +96,7 @@ private fun PicturesParagraphContent(
     ) {
         paragraph.pictures.forEach { picture ->
             if (picture.url.isNotBlank()) {
-                AsyncImage(
-                    model = picture.url,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth(0.7f)
-                        .clip(RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.FillWidth
-                )
+                ArticlePictureContent(picture = picture)
             }
         }
     }
@@ -115,16 +111,45 @@ private fun LineParagraphContent(
 ) {
     paragraph.picture?.let { pic ->
         if (pic.url.isNotBlank()) {
-            AsyncImage(
-                model = pic.url,
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxWidth(0.7f)
-                    .padding(vertical = 8.dp),
-                contentScale = ContentScale.FillWidth
+            ArticlePictureContent(
+                picture = pic,
+                modifier = Modifier.padding(vertical = 8.dp)
             )
         }
     }
+}
+
+@Composable
+private fun ArticlePictureContent(
+    picture: ArticlePicture,
+    modifier: Modifier = Modifier
+) {
+    val isLongImage = picture.width > 0 && picture.height > picture.width * 3
+    val aspectRatio = remember(picture.width, picture.height) {
+        when {
+            picture.width <= 0 || picture.height <= 0 -> 16f / 9f
+            else -> (picture.width.toFloat() / picture.height).coerceIn(0.05f, 4f)
+        }
+    }
+
+    TvSafeDynamicImage(
+        url = picture.url,
+        sourceWidth = picture.width,
+        sourceHeight = picture.height,
+        modifier = modifier
+            .fillMaxWidth(0.7f)
+            .then(
+                if (isLongImage) {
+                    Modifier.height(520.dp)
+                } else {
+                    Modifier.aspectRatio(aspectRatio)
+                }
+            ),
+        useCase = TvDynamicImageUseCase.DetailInline,
+        contentScale = if (isLongImage) ContentScale.Crop else ContentScale.FillWidth,
+        alignment = if (isLongImage) Alignment.TopCenter else Alignment.Center,
+        shape = RoundedCornerShape(8.dp)
+    )
 }
 
 /**

@@ -76,4 +76,5 @@ dependencies {
     implementation(libs.markwon.html)
     implementation(libs.markwon.image.coil)
     implementation(libs.vlc.android.all)
+    testImplementation(libs.kotlin.test)
 }

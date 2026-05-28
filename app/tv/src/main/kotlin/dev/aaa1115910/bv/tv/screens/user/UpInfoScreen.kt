@@ -94,6 +94,8 @@ import dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity
 import dev.aaa1115910.bv.tv.component.ContentStatusCard
 import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.tv.R
+import dev.aaa1115910.bv.tv.component.TvDynamicImageUseCase
+import dev.aaa1115910.bv.tv.component.TvSafeDynamicImage
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.tv.manager.FollowStateManager
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
@@ -1144,20 +1146,21 @@ private fun DynamicImageStrip(images: List<Picture>) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         images.take(3).forEach { image ->
-            Box(
+            val isLongImage = image.width > 0 && image.height > image.width * 3
+            TvSafeDynamicImage(
+                url = image.url,
+                sourceWidth = image.width,
+                sourceHeight = image.height,
                 modifier = Modifier
                     .weight(1f)
-                    .height(140.dp)
-                    .clip(UpSpaceCardShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                AsyncImage(
-                    modifier = Modifier.fillMaxSize(),
-                    model = image.url.resizedImageUrl(ImageSize.DynamicPreview),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop
-                )
-            }
+                    .height(140.dp),
+                useCase = TvDynamicImageUseCase.ListPreview,
+                imageSize = ImageSize.DynamicPreview,
+                contentScale = ContentScale.Crop,
+                alignment = if (isLongImage) Alignment.TopCenter else Alignment.Center,
+                shape = UpSpaceCardShape,
+                backgroundColor = MaterialTheme.colorScheme.surfaceVariant
+            )
         }
     }
 }

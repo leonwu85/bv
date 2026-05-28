@@ -82,9 +82,9 @@ import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.component.ArticleContent
 import dev.aaa1115910.bv.tv.component.CommentImagePreviewDialog
 import dev.aaa1115910.bv.tv.component.CommentPanel
-import dev.aaa1115910.bv.tv.util.tvImageMemoryPolicy
+import dev.aaa1115910.bv.tv.component.TvDynamicImageUseCase
+import dev.aaa1115910.bv.tv.component.TvSafeDynamicImage
 import dev.aaa1115910.bv.util.fInfo
-import dev.aaa1115910.bv.util.resizedImageUrl
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -792,13 +792,15 @@ private fun DynamicContentSection(
                     } else {
                         // 回退到摘要显示
                         if (article.covers.isNotEmpty()) {
-                            AsyncImage(
-                                model = article.covers.first(),
-                                contentDescription = null,
+                            val coverPicture = article.coverPictures.firstOrNull()
+                            TvSafeDynamicImage(
+                                url = coverPicture?.url ?: article.covers.first(),
+                                sourceWidth = coverPicture?.width ?: 0,
+                                sourceHeight = coverPicture?.height ?: 0,
                                 modifier = Modifier
                                     .fillMaxWidth(0.6f)
-                                    .height(180.dp)
-                                    .clip(RoundedCornerShape(8.dp)),
+                                    .height(180.dp),
+                                useCase = TvDynamicImageUseCase.DetailInline,
                                 contentScale = ContentScale.Crop
                             )
                         }
@@ -899,8 +901,6 @@ private fun DynamicContentSection(
 
 @Composable
 private fun DynamicDetailDrawImage(image: Picture) {
-    val context = LocalContext.current
-    val imageMemoryPolicy = remember(context) { context.tvImageMemoryPolicy() }
     val isLongImage = image.width > 0 && image.height > image.width * 3
     val aspectRatio = remember(image.width, image.height) {
         when {
@@ -910,16 +910,23 @@ private fun DynamicDetailDrawImage(image: Picture) {
     }
     val imageModifier = Modifier
         .fillMaxWidth(0.7f)
-        .aspectRatio(aspectRatio)
-        .clip(RoundedCornerShape(8.dp))
+        .then(
+            if (isLongImage) {
+                Modifier.height(520.dp)
+            } else {
+                Modifier.aspectRatio(aspectRatio)
+            }
+        )
 
-    AsyncImage(
-        model = image.url.resizedImageUrl(
-            if (isLongImage) imageMemoryPolicy.detailLongImageSize else imageMemoryPolicy.detailImageSize
-        ),
-        contentDescription = null,
+    TvSafeDynamicImage(
+        url = image.url,
+        sourceWidth = image.width,
+        sourceHeight = image.height,
         modifier = imageModifier,
-        contentScale = ContentScale.FillWidth
+        useCase = TvDynamicImageUseCase.DetailInline,
+        contentScale = if (isLongImage) ContentScale.Crop else ContentScale.FillWidth,
+        alignment = if (isLongImage) Alignment.TopCenter else Alignment.Center,
+        shape = RoundedCornerShape(8.dp)
     )
 }
 

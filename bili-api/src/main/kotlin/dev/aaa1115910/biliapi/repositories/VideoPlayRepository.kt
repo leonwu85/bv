@@ -3,6 +3,7 @@ package dev.aaa1115910.biliapi.repositories
 import bilibili.app.playerunite.v1.PlayerGrpcKt
 import bilibili.app.playerunite.v1.playViewUniteReq
 import bilibili.community.service.dm.v1.DMGrpcKt
+import bilibili.community.service.dm.v1.dmSegMobileReq
 import bilibili.community.service.dm.v1.dmViewReq
 import bilibili.pgc.gateway.player.v2.playViewReq
 import bilibili.playershared.videoVod
@@ -18,6 +19,7 @@ import dev.aaa1115910.biliapi.entity.video.VideoShot
 import dev.aaa1115910.biliapi.grpc.utils.handleGrpcException
 import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.http.BiliHttpProxyApi
+import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -50,6 +52,36 @@ class VideoPlayRepository(
         get() = runCatching {
             PgcPlayURLGrpcKt.PlayURLCoroutineStub(channelRepository.proxyChannel!!)
         }.getOrNull()
+
+    suspend fun getAppDanmakuSegment(
+        aid: Long,
+        cid: Long,
+        segmentIndex: Int
+    ): List<DanmakuData> = withContext(Dispatchers.IO) {
+        val reply = runCatching {
+            danmakuStub?.dmSegMobile(dmSegMobileReq {
+                pid = aid
+                oid = cid
+                type = 1
+                this.segmentIndex = segmentIndex.toLong()
+            })
+        }.onFailure { handleGrpcException(it) }.getOrThrow()
+
+        reply?.elemsList.orEmpty().map { elem ->
+            DanmakuData(
+                time = elem.progress / 1000f,
+                type = elem.mode,
+                size = elem.fontsize,
+                color = elem.color,
+                timestamp = (elem.ctime / 1000).toInt(),
+                pool = elem.pool,
+                midHash = elem.midHash,
+                dmid = elem.id,
+                level = elem.weight,
+                text = elem.content
+            )
+        }
+    }
 
 
     suspend fun getPlayData(

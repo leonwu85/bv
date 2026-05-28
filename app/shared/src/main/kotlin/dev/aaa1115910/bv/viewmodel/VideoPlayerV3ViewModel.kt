@@ -33,6 +33,7 @@ import dev.aaa1115910.biliapi.entity.video.SubtitleType
 import dev.aaa1115910.biliapi.entity.video.VideoShot
 import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.http.BiliLiveHttpApi
+import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
 import dev.aaa1115910.biliapi.http.entity.live.DanmakuEvent
 import dev.aaa1115910.biliapi.http.entity.live.LiveEvent
 import dev.aaa1115910.biliapi.http.entity.live.LiveEmotePackage
@@ -445,6 +446,8 @@ class VideoPlayerV3ViewModel(
         private const val DANMAKU_BATCH_SIZE = 600
         private const val DANMAKU_SLICE_SIZE = 2000
         private const val DANMAKU_SLICE_EMIT_DELAY_MS = 12L
+        private const val DANMAKU_WEB_EMPTY_IMMEDIATE_RETRIES = 2
+        private const val DANMAKU_WEB_EMPTY_RETRY_DELAY_MS = 180L
         private const val LIVE_DANMAKU_MESSAGE_LIMIT = 300
         private const val AUTO_PLAY_PREPARE_WAIT_MS = 1_200L
         private const val PREPARED_AUTO_PLAY_PLAY_DATA_TTL_MS = 2 * 60_000L
@@ -518,7 +521,7 @@ class VideoPlayerV3ViewModel(
         val mergeEnabled: Boolean,
         var preloadPolicy: DanmakuPreloadPolicy,
         val loadedDanmakuIds: LinkedHashSet<Long> = LinkedHashSet(),
-        val danmakuSlicesBySegment: LinkedHashMap<Int, List<DanmakuSlice>> = LinkedHashMap(),
+        val danmakuSegmentCacheBySegment: LinkedHashMap<Int, DanmakuSegmentCacheEntry<List<DanmakuSlice>>> = LinkedHashMap(),
         val nextDanmakuSliceIndexBySegment: LinkedHashMap<Int, Int> = LinkedHashMap(),
         val vodDanmakuMergeState: VodDanmakuMergeState = VodDanmakuMergeState()
     )
@@ -529,6 +532,13 @@ class VideoPlayerV3ViewModel(
         val startPositionMs: Long,
         val endPositionMs: Long,
         val items: List<DanmakuItemData>
+    )
+
+    private data class DanmakuSegmentFetchResult(
+        val data: List<DanmakuData>,
+        val source: String,
+        val attempts: Int,
+        val rawCount: Int
     )
 
     private fun hasResolvedCurrentDanmakuMask(): Boolean {
@@ -1276,6 +1286,13 @@ class VideoPlayerV3ViewModel(
         currentInteractiveEdgeId = currentInteractiveOption.edgeId ?: currentInteractiveEdgeId
     }
 
+    private fun DanmakuLoadSession.loadedDanmakuSlices(segmentIndex: Int): List<DanmakuSlice> {
+        return when (val cacheEntry = danmakuSegmentCacheBySegment[segmentIndex]) {
+            is DanmakuSegmentCacheEntry.Loaded -> cacheEntry.value
+            else -> emptyList()
+        }
+    }
+
     suspend fun loadDanmaku(
         cid: Long,
         durationMs: Long = 0,
@@ -1319,14 +1336,15 @@ class VideoPlayerV3ViewModel(
                     cid = cid,
                     segmentIndex = segmentIndex,
                     loadToken = loadToken,
-                    loadSession = loadSession
+                    loadSession = loadSession,
+                    forceRetryTransient = segmentIndex == startSegment
                 )
                 if (slices.isNotEmpty()) {
                     cachedSegments++
                 }
             }
 
-            val startSegmentSlices = loadSession.danmakuSlicesBySegment[startSegment].orEmpty()
+            val startSegmentSlices = loadSession.loadedDanmakuSlices(startSegment)
             if (startSegmentSlices.isNotEmpty()) {
                 val initialSliceIndex = findDanmakuSliceIndexForPosition(
                     slices = startSegmentSlices,
@@ -1348,12 +1366,12 @@ class VideoPlayerV3ViewModel(
             if (initialEmittedDanmaku == 0) {
                 val fallbackSegmentIndex = initialSegments.firstOrNull { segmentIndex ->
                     segmentIndex > startSegment &&
-                    loadSession.danmakuSlicesBySegment[segmentIndex]?.isNotEmpty() == true
+                    loadSession.loadedDanmakuSlices(segmentIndex).isNotEmpty()
                 }
                 if (fallbackSegmentIndex != null) {
                     initialEmittedDanmaku += emitDanmakuSlices(
                         segmentIndex = fallbackSegmentIndex,
-                        slices = loadSession.danmakuSlicesBySegment.getValue(fallbackSegmentIndex),
+                        slices = loadSession.loadedDanmakuSlices(fallbackSegmentIndex),
                         loadSession = loadSession,
                         startSliceIndex = 0,
                         endExclusive = INITIAL_DANMAKU_SLICE_PREFETCH,
@@ -1469,7 +1487,7 @@ class VideoPlayerV3ViewModel(
         if (loadToken != danmakuLoadToken) return
         danmakuLoadToken++
         loadSession?.loadedDanmakuIds?.clear()
-        loadSession?.danmakuSlicesBySegment?.clear()
+        loadSession?.danmakuSegmentCacheBySegment?.clear()
         loadSession?.nextDanmakuSliceIndexBySegment?.clear()
         loadSession?.vodDanmakuMergeState?.clear()
         viewModelScope.launch(Dispatchers.Main) {
@@ -1613,7 +1631,8 @@ class VideoPlayerV3ViewModel(
                         segmentIndex = segmentIndex,
                         positionMs = anchorPosition,
                         loadToken = loadToken,
-                        loadSession = loadSession
+                        loadSession = loadSession,
+                        forceRetryTransient = index == 0
                     )
                     totalEmitted += emittedCount
                     logger.info {
@@ -1687,8 +1706,26 @@ class VideoPlayerV3ViewModel(
         cid: Long,
         segmentIndex: Int,
         loadToken: Long,
-        loadSession: DanmakuLoadSession
+        loadSession: DanmakuLoadSession,
+        forceRetryTransient: Boolean = false
     ): List<DanmakuSlice> {
+        val nowMs = System.currentTimeMillis()
+        val cacheEntry = loadSession.danmakuSegmentCacheBySegment[segmentIndex]
+        val shouldFetchCacheEntry = cacheEntry.shouldFetchDanmakuSegment(nowMs) ||
+            (forceRetryTransient && cacheEntry is DanmakuSegmentCacheEntry.TransientFailed)
+        if (!shouldFetchCacheEntry) {
+            logDanmakuSegmentCache(
+                cid = cid,
+                segmentIndex = segmentIndex,
+                cacheEntry = cacheEntry,
+                attempts = cacheEntry?.cacheAttempts ?: 0
+            )
+            return when (cacheEntry) {
+                is DanmakuSegmentCacheEntry.Loaded -> cacheEntry.value
+                else -> emptyList()
+            }
+        }
+
         return try {
             loadDanmakuSegmentSlicesInternal(
                 cid = cid,
@@ -1702,8 +1739,20 @@ class VideoPlayerV3ViewModel(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            loadSession.danmakuSlicesBySegment[segmentIndex] = emptyList()
-            loadSession.nextDanmakuSliceIndexBySegment[segmentIndex] = 0
+            val failedEntry = nextFailedDanmakuSegmentCacheEntry(
+                previous = cacheEntry,
+                nowMs = System.currentTimeMillis(),
+                source = "web",
+                reason = error.javaClass.simpleName.ifBlank { "Exception" }
+            )
+            loadSession.danmakuSegmentCacheBySegment[segmentIndex] = failedEntry
+            loadSession.nextDanmakuSliceIndexBySegment.remove(segmentIndex)
+            logDanmakuSegmentCache(
+                cid = cid,
+                segmentIndex = segmentIndex,
+                cacheEntry = failedEntry,
+                attempts = failedEntry.cacheAttempts
+            )
             logger.warn { "Load danmaku segment failed segmentIndex=$segmentIndex: ${error.stackTraceToString()}" }
             emptyList()
         }
@@ -1715,25 +1764,37 @@ class VideoPlayerV3ViewModel(
         loadToken: Long,
         loadSession: DanmakuLoadSession
     ): List<DanmakuSlice> {
-        loadSession.danmakuSlicesBySegment[segmentIndex]?.let { return it }
-
         ensureDanmakuLoadActive(loadToken)
-        val segmentData = BiliHttpApi.getDanmakuSeg(
+        val fetchResult = fetchDanmakuSegmentWithRecovery(
             cid = cid,
             avid = currentAid,
             segmentIndex = segmentIndex,
-            sessData = Prefs.sessData
+            loadToken = loadToken
         )
+        val segmentData = fetchResult.data
         ensureDanmakuLoadActive(loadToken)
         if (segmentData.isEmpty()) {
-            loadSession.danmakuSlicesBySegment[segmentIndex] = emptyList()
-            loadSession.nextDanmakuSliceIndexBySegment[segmentIndex] = 0
+            val emptyEntry = nextEmptyDanmakuSegmentCacheEntry(
+                previous = loadSession.danmakuSegmentCacheBySegment[segmentIndex],
+                nowMs = System.currentTimeMillis(),
+                source = fetchResult.source,
+                rawCount = fetchResult.rawCount,
+                reason = "empty_reply"
+            )
+            loadSession.danmakuSegmentCacheBySegment[segmentIndex] = emptyEntry
+            loadSession.nextDanmakuSliceIndexBySegment.remove(segmentIndex)
+            logDanmakuSegmentCache(
+                cid = cid,
+                segmentIndex = segmentIndex,
+                cacheEntry = emptyEntry,
+                attempts = fetchResult.attempts
+            )
             return emptyList()
         }
 
         var deduplicatedCount = 0
         var filteredCount = 0
-        val newDanmaku = ArrayList<dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData>(segmentData.size)
+        val newDanmaku = ArrayList<DanmakuData>(segmentData.size)
         segmentData.forEach { danmaku ->
             if (!loadSession.loadedDanmakuIds.add(danmaku.dmid)) {
                 deduplicatedCount++
@@ -1754,8 +1815,21 @@ class VideoPlayerV3ViewModel(
         }
         trimLoadedDanmakuIds(loadSession)
         if (newDanmaku.isEmpty()) {
-            loadSession.danmakuSlicesBySegment[segmentIndex] = emptyList()
+            val filteredEntry = DanmakuSegmentCacheEntry.Loaded(
+                value = emptyList<DanmakuSlice>(),
+                updatedAtMs = System.currentTimeMillis(),
+                source = fetchResult.source,
+                rawCount = fetchResult.rawCount
+            )
+            loadSession.danmakuSegmentCacheBySegment[segmentIndex] = filteredEntry
             loadSession.nextDanmakuSliceIndexBySegment[segmentIndex] = 0
+            logDanmakuSegmentCache(
+                cid = cid,
+                segmentIndex = segmentIndex,
+                cacheEntry = filteredEntry,
+                attempts = fetchResult.attempts,
+                reason = "filtered_or_deduplicated_empty"
+            )
             return emptyList()
         }
 
@@ -1774,7 +1848,13 @@ class VideoPlayerV3ViewModel(
         }
 
         val slices = buildDanmakuSlices(segmentIndex, convertedItems)
-        loadSession.danmakuSlicesBySegment[segmentIndex] = slices
+        val loadedEntry = DanmakuSegmentCacheEntry.Loaded(
+            value = slices,
+            updatedAtMs = System.currentTimeMillis(),
+            source = fetchResult.source,
+            rawCount = fetchResult.rawCount
+        )
+        loadSession.danmakuSegmentCacheBySegment[segmentIndex] = loadedEntry
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.N_MR1) {
             if (!loadSession.nextDanmakuSliceIndexBySegment.containsKey(segmentIndex)) {
                 loadSession.nextDanmakuSliceIndexBySegment[segmentIndex] = 0
@@ -1782,12 +1862,164 @@ class VideoPlayerV3ViewModel(
         } else {
             loadSession.nextDanmakuSliceIndexBySegment.putIfAbsent(segmentIndex, 0)
         }
+        logDanmakuSegmentCache(
+            cid = cid,
+            segmentIndex = segmentIndex,
+            cacheEntry = loadedEntry,
+            attempts = fetchResult.attempts
+        )
         if (slices.isNotEmpty()) {
             logger.info {
                 "Prepared ${slices.size} danmaku slices for segment $segmentIndex, total=${convertedItems.size}, first=${slices.first().startPositionMs}, last=${slices.last().endPositionMs}"
             }
         }
         return slices
+    }
+
+    private val DanmakuSegmentCacheEntry<*>.cacheAttempts: Int
+        get() = when (this) {
+            is DanmakuSegmentCacheEntry.ConfirmedEmpty -> attempts
+            is DanmakuSegmentCacheEntry.TransientFailed -> attempts
+            is DanmakuSegmentCacheEntry.Loaded -> 0
+        }
+
+    private suspend fun fetchDanmakuSegmentWithRecovery(
+        cid: Long,
+        avid: Long,
+        segmentIndex: Int,
+        loadToken: Long
+    ): DanmakuSegmentFetchResult {
+        var webAttempts = 0
+        repeat(DANMAKU_WEB_EMPTY_IMMEDIATE_RETRIES + 1) { attemptIndex ->
+            val attempt = attemptIndex + 1
+            ensureDanmakuLoadActive(loadToken)
+            webAttempts = attempt
+            val webData = BiliHttpApi.getDanmakuSeg(
+                cid = cid,
+                avid = avid,
+                segmentIndex = segmentIndex,
+                sessData = Prefs.sessData
+            )
+            logDanmakuSegmentFetch(
+                cid = cid,
+                segmentIndex = segmentIndex,
+                source = "web",
+                attempt = attempt,
+                rawCount = webData.size
+            )
+            if (webData.isNotEmpty()) {
+                return DanmakuSegmentFetchResult(
+                    data = webData,
+                    source = "web",
+                    attempts = attempt,
+                    rawCount = webData.size
+                )
+            }
+            if (attempt <= DANMAKU_WEB_EMPTY_IMMEDIATE_RETRIES) {
+                delay(DANMAKU_WEB_EMPTY_RETRY_DELAY_MS)
+            }
+        }
+
+        ensureDanmakuLoadActive(loadToken)
+        val appData = runCatching {
+            videoPlayRepository.getAppDanmakuSegment(
+                aid = avid,
+                cid = cid,
+                segmentIndex = segmentIndex
+            )
+        }.onFailure { error ->
+            if (error is CancellationException) throw error
+            logger.warn {
+                "Danmaku app fallback failed aid=$avid cid=$cid segmentIndex=$segmentIndex: ${error.stackTraceToString()}"
+            }
+        }.getOrDefault(emptyList())
+        logDanmakuSegmentFetch(
+            cid = cid,
+            segmentIndex = segmentIndex,
+            source = "app_grpc_fallback",
+            attempt = webAttempts + 1,
+            rawCount = appData.size
+        )
+        if (appData.isNotEmpty()) {
+            return DanmakuSegmentFetchResult(
+                data = appData,
+                source = "app_grpc_fallback",
+                attempts = webAttempts + 1,
+                rawCount = appData.size
+            )
+        }
+
+        ensureDanmakuLoadActive(loadToken)
+        val xmlData = runCatching {
+            loadXmlDanmakuSegment(
+                cid = cid,
+                segmentIndex = segmentIndex
+            )
+        }.onFailure { error ->
+            if (error is CancellationException) throw error
+            logger.warn {
+                "Danmaku xml fallback failed aid=$avid cid=$cid segmentIndex=$segmentIndex: ${error.stackTraceToString()}"
+            }
+        }.getOrDefault(emptyList())
+        logDanmakuSegmentFetch(
+            cid = cid,
+            segmentIndex = segmentIndex,
+            source = "xml_fallback",
+            attempt = webAttempts + 2,
+            rawCount = xmlData.size
+        )
+        return DanmakuSegmentFetchResult(
+            data = xmlData,
+            source = if (xmlData.isNotEmpty()) "xml_fallback" else "web_app_xml_empty",
+            attempts = webAttempts + 2,
+            rawCount = xmlData.size
+        )
+    }
+
+    @Suppress("DEPRECATION")
+    private suspend fun loadXmlDanmakuSegment(
+        cid: Long,
+        segmentIndex: Int
+    ): List<DanmakuData> {
+        val segmentStartMs = segmentStartPositionMs(segmentIndex)
+        val segmentEndMs = segmentStartMs + DANMAKU_SEGMENT_DURATION_MS
+        return BiliHttpApi.getDanmakuXml(
+            cid = cid,
+            sessData = Prefs.sessData
+        ).data.filter { danmaku ->
+            val positionMs = (danmaku.time * 1000).toLong()
+            positionMs in segmentStartMs until segmentEndMs
+        }
+    }
+
+    private fun logDanmakuSegmentFetch(
+        cid: Long,
+        segmentIndex: Int,
+        source: String,
+        attempt: Int,
+        rawCount: Int
+    ) {
+        logger.info {
+            "Danmaku segment fetch aid=$currentAid cid=$cid segmentIndex=$segmentIndex source=$source attempt=$attempt rawCount=$rawCount cacheState=Fetching positionMs=${segmentStartPositionMs(segmentIndex)}"
+        }
+    }
+
+    private fun logDanmakuSegmentCache(
+        cid: Long,
+        segmentIndex: Int,
+        cacheEntry: DanmakuSegmentCacheEntry<*>?,
+        attempts: Int,
+        reason: String? = null
+    ) {
+        if (cacheEntry == null) return
+        val cacheReason = when (cacheEntry) {
+            is DanmakuSegmentCacheEntry.ConfirmedEmpty -> cacheEntry.reason
+            is DanmakuSegmentCacheEntry.TransientFailed -> cacheEntry.reason
+            is DanmakuSegmentCacheEntry.Loaded -> reason.orEmpty()
+        }.ifBlank { reason.orEmpty() }
+        logger.info {
+            "Danmaku segment cache aid=$currentAid cid=$cid segmentIndex=$segmentIndex source=${cacheEntry.source} attempt=$attempts rawCount=${cacheEntry.rawCount} cacheState=${cacheEntry.cacheState} positionMs=${segmentStartPositionMs(segmentIndex)} reason=$cacheReason"
+        }
     }
 
     fun updateDanmakuMergeEnabled(enabled: Boolean) {
@@ -1870,13 +2102,15 @@ class VideoPlayerV3ViewModel(
         segmentIndex: Int,
         positionMs: Long,
         loadToken: Long,
-        loadSession: DanmakuLoadSession
+        loadSession: DanmakuLoadSession,
+        forceRetryTransient: Boolean = false
     ): Int {
         val slices = loadDanmakuSegmentSlices(
             cid = cid,
             segmentIndex = segmentIndex,
             loadToken = loadToken,
-            loadSession = loadSession
+            loadSession = loadSession,
+            forceRetryTransient = forceRetryTransient
         )
         if (slices.isEmpty()) return 0
 
@@ -1955,7 +2189,7 @@ class VideoPlayerV3ViewModel(
         val policy = loadSession.preloadPolicy
         val firstKeptSegment = anchorSegment - policy.cacheRadius
         val lastKeptSegment = anchorSegment + policy.cacheRadius
-        val iterator = loadSession.danmakuSlicesBySegment.keys.iterator()
+        val iterator = loadSession.danmakuSegmentCacheBySegment.keys.iterator()
         while (iterator.hasNext()) {
             val segmentIndex = iterator.next()
             if (segmentIndex !in firstKeptSegment..lastKeptSegment) {
@@ -1964,11 +2198,11 @@ class VideoPlayerV3ViewModel(
             }
         }
 
-        while (loadSession.danmakuSlicesBySegment.size > policy.maxCachedSegments) {
-            val farthestSegment = loadSession.danmakuSlicesBySegment.keys.maxByOrNull {
+        while (loadSession.danmakuSegmentCacheBySegment.size > policy.maxCachedSegments) {
+            val farthestSegment = loadSession.danmakuSegmentCacheBySegment.keys.maxByOrNull {
                 abs(it - anchorSegment)
             } ?: break
-            loadSession.danmakuSlicesBySegment.remove(farthestSegment)
+            loadSession.danmakuSegmentCacheBySegment.remove(farthestSegment)
             loadSession.nextDanmakuSliceIndexBySegment.remove(farthestSegment)
         }
         trimLoadedDanmakuIds(loadSession)
@@ -2023,7 +2257,7 @@ class VideoPlayerV3ViewModel(
     }
 
     private fun clearDanmakuSliceState() {
-        danmakuLoadSession?.danmakuSlicesBySegment?.clear()
+        danmakuLoadSession?.danmakuSegmentCacheBySegment?.clear()
         danmakuLoadSession?.nextDanmakuSliceIndexBySegment?.clear()
     }
 

@@ -40,12 +40,21 @@ data class TvImageMemoryPolicy(
         return capToMaxPixels(targetWidth, targetHeight)
     }
 
-    private fun capToMaxPixels(width: Int, height: Int): Pair<Int, Int> {
+    fun containerRequestSize(
+        viewportWidth: Int,
+        viewportHeight: Int
+    ): Pair<Int, Int> {
+        val targetWidth = max(1, (max(1, viewportWidth) * previewViewportScale).roundToInt())
+        val targetHeight = max(1, (max(1, viewportHeight) * previewViewportScale).roundToInt())
+        return capToMaxPixels(targetWidth, targetHeight)
+    }
+
+    internal fun capToMaxPixels(width: Int, height: Int): Pair<Int, Int> {
         val pixels = width.toLong() * height.toLong()
         if (pixels <= previewMaxDecodePixels) return width to height
 
         val scale = sqrt(previewMaxDecodePixels.toDouble() / pixels.toDouble())
-        return max(1, (width * scale).roundToInt()) to max(1, (height * scale).roundToInt())
+        return max(1, (width * scale).toInt()) to max(1, (height * scale).toInt())
     }
 }
 

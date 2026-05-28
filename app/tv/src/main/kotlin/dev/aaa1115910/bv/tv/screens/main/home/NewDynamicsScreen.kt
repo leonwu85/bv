@@ -100,11 +100,12 @@ import dev.aaa1115910.bv.tv.activities.dynamic.DynamicDetailActivity
 import dev.aaa1115910.bv.tv.component.ContentStatusCard
 import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
+import dev.aaa1115910.bv.tv.component.TvDynamicImageUseCase
+import dev.aaa1115910.bv.tv.component.TvSafeDynamicImage
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.Prefs
-import dev.aaa1115910.bv.util.resizedImageUrl
 import dev.aaa1115910.bv.viewmodel.home.DynamicViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -1603,31 +1604,22 @@ private fun DynamicMediaImage(
     url: String,
     modifier: Modifier = Modifier,
     imageSize: ImageSize = ImageSize.DynamicPreview,
-    alignment: Alignment = Alignment.Center
+    alignment: Alignment = Alignment.Center,
+    sourceWidth: Int = 0,
+    sourceHeight: Int = 0
 ) {
-    Box(
-        modifier = modifier
-            .clip(DynamicCardShape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-        contentAlignment = Alignment.Center
-    ) {
-        if (url.isBlank()) {
-            Text(
-                text = "暂无封面",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.48f)
-            )
-        } else {
-            val model = remember(url, imageSize) { url.resizedImageUrl(imageSize) }
-            AsyncImage(
-                model = model,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                alignment = alignment,
-                contentScale = ContentScale.Crop
-            )
-        }
-    }
+    TvSafeDynamicImage(
+        url = url,
+        sourceWidth = sourceWidth,
+        sourceHeight = sourceHeight,
+        modifier = modifier,
+        useCase = TvDynamicImageUseCase.ListPreview,
+        imageSize = imageSize,
+        alignment = alignment,
+        contentScale = ContentScale.Crop,
+        shape = DynamicCardShape,
+        emptyText = "暂无封面"
+    )
 }
 
 @Composable
@@ -1641,6 +1633,8 @@ private fun DynamicImageStrip(images: List<Picture>) {
             val isLongImage = image.width > 0 && image.height > image.width * 3
             DynamicMediaImage(
                 url = image.url,
+                sourceWidth = image.width,
+                sourceHeight = image.height,
                 modifier = Modifier
                     .weight(1f)
                     .height(126.dp),
