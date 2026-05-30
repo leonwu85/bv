@@ -76,7 +76,7 @@ fun Context.tvImageMemoryPolicy(): TvImageMemoryPolicy {
             totalMemoryMb in 1..2048 ||
             availableMemoryMb in 1..512 -> TvImageMemoryPolicy(
             detailImageSize = ImageSize.DynamicDetailSmall,
-            detailLongImageSize = ImageSize.DynamicDetailSmall,
+            detailLongImageSize = ImageSize.DynamicLongDetailSmall,
             previewViewportScale = 1.25f,
             previewMaxDecodePixels = 2_000_000,
             previewPrefetchCount = 0
@@ -91,8 +91,8 @@ fun Context.tvImageMemoryPolicy(): TvImageMemoryPolicy {
         )
 
         else -> TvImageMemoryPolicy(
-            detailImageSize = ImageSize.DynamicDetailPreview,
-            detailLongImageSize = ImageSize.DynamicLongDetailPreview,
+            detailImageSize = ImageSize.DynamicDetailMedium,
+            detailLongImageSize = ImageSize.DynamicLongDetailMedium,
             previewViewportScale = 2f,
             previewMaxDecodePixels = 4_000_000,
             previewPrefetchCount = 1

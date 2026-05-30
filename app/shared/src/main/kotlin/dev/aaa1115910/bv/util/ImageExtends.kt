@@ -15,10 +15,11 @@ enum class ImageSize(val sizeString: String) {
     SeasonCoverThumbnail("466h_622w"),
     LargeCover("480h_768w_1c"),
     DynamicPreview("320h_640w_1c"),
-    DynamicDetailSmall("320w"),
-    DynamicDetailPreview("540w"),
-    DynamicDetailLarge("720w"),
-    DynamicLongDetailPreview("480w"),
-    DynamicLongDetailLarge("640w"),
+    DynamicDetailSmall("720w"),
+    DynamicDetailMedium("1080w"),
+    DynamicDetailLarge("1440w"),
+    DynamicLongDetailSmall("480w"),
+    DynamicLongDetailMedium("720w"),
+    DynamicLongDetailLarge("960w"),
     Icon("100h_100w_1c")
 }
