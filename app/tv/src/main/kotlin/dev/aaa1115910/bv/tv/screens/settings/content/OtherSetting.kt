@@ -23,6 +23,7 @@ import androidx.tv.material3.Text
 import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.tv.component.settings.SettingListItem
+import dev.aaa1115910.bv.tv.component.settings.PlayerShortcutKeyBindingsDialog
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
 import dev.aaa1115910.bv.tv.activities.settings.LogsActivity
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
@@ -36,6 +37,8 @@ fun OtherSetting(
     val context = LocalContext.current
 
     var showFps by remember { mutableStateOf(Prefs.showFps) }
+    var showPlayerShortcutDialog by remember { mutableStateOf(false) }
+    var playerShortcutKeyBindings by remember { mutableStateOf(Prefs.playerShortcutKeyBindings) }
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -78,6 +81,15 @@ fun OtherSetting(
             }
             item {
                 SettingListItem(
+                    title = stringResource(R.string.settings_player_shortcut_section_title),
+                    supportText = stringResource(R.string.settings_player_shortcut_entry_text),
+                    onClick = {
+                        showPlayerShortcutDialog = true
+                    }
+                )
+            }
+            item {
+                SettingListItem(
                     title = stringResource(R.string.settings_create_logs_title),
                     supportText = stringResource(R.string.settings_create_logs_text),
                     onClick = {
@@ -98,4 +110,14 @@ fun OtherSetting(
             }
         }
     }
+
+    PlayerShortcutKeyBindingsDialog(
+        show = showPlayerShortcutDialog,
+        keyBindings = playerShortcutKeyBindings,
+        onKeyCodeChange = { action, keyCode ->
+            Prefs.setPlayerShortcutKeyCode(action, keyCode)
+            playerShortcutKeyBindings = Prefs.playerShortcutKeyBindings
+        },
+        onDismissRequest = { showPlayerShortcutDialog = false }
+    )
 }

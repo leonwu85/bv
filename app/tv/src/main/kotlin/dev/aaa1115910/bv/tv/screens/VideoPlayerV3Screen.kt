@@ -882,6 +882,7 @@ fun VideoPlayerV3Screen(
                         showTripleLikeTip = false
                     }
                 },
+                shortcutKeyBindings = Prefs.playerShortcutKeyBindings,
                 useTripleLikeOnLongPress = Prefs.playerLongPressAction == PlayerLongPressAction.TripleLike,
                 onToggleFollow = {
                     val upId = playerViewModel.upId

@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.player.tv.controller
 
+import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
@@ -50,6 +51,7 @@ import dev.aaa1115910.bv.player.entity.LocalVideoPlayerSeekState
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.PlaybackMediaMode
+import dev.aaa1115910.bv.player.entity.PlayerShortcutAction
 import dev.aaa1115910.bv.player.entity.PlayMode
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoAspectRatio
@@ -143,6 +145,7 @@ fun VideoPlayerController(
     onShowComment: () -> Unit = {},
     onShowDescription: () -> Unit = {},
     onTripleLike: () -> Unit = {},
+    shortcutKeyBindings: Map<PlayerShortcutAction, Int> = emptyMap(),
     useTripleLikeOnLongPress: Boolean = false,
     onToggleFollow: () -> Unit = {},
     onReportLiveHistory: () -> Unit = {},
@@ -202,6 +205,47 @@ fun VideoPlayerController(
         val shouldHideController = hideControllerOnCommentPanelOpen && !commentPanelVisible
         onShowComment()
         if (shouldHideController) hideInfoController()
+    }
+
+    val shortcutActionForKeyCode: (Int) -> PlayerShortcutAction? = { keyCode ->
+        if (keyCode == AndroidKeyEvent.KEYCODE_UNKNOWN || keyCode == AndroidKeyEvent.KEYCODE_BACK) {
+            null
+        } else {
+            shortcutKeyBindings.entries
+                .firstOrNull { (_, boundKeyCode) -> boundKeyCode == keyCode }
+                ?.key
+        }
+    }
+
+    fun runShortcutAction(action: PlayerShortcutAction) {
+        when (action) {
+            PlayerShortcutAction.ToggleDanmaku -> {
+                if (videoPlayerConfigData.showDanmaku) {
+                    onHideDanmaku()
+                } else {
+                    onOpenDanmaku()
+                }
+            }
+
+            PlayerShortcutAction.ToggleComment -> handleShowComment()
+
+            PlayerShortcutAction.ToggleSubtitle -> {
+                val subtitle = if (videoPlayerConfigData.currentSubtitleId != -1L) {
+                    videoPlayerConfigData.availableSubtitleTracks.firstOrNull { it.id == -1L }
+                } else {
+                    videoPlayerConfigData.availableSubtitleTracks.firstOrNull { it.id != -1L }
+                }
+                subtitle?.let { onSubtitleChange(it) }
+            }
+
+            PlayerShortcutAction.TripleLike -> onTripleLike()
+
+            PlayerShortcutAction.ToggleRelatedVideos -> {
+                val nextState = !showRelatedVideos
+                if (nextState) showInfo = false
+                onToggleRelatedVideos(nextState)
+            }
+        }
     }
 
     val isSeekToVideoEnd = {
@@ -315,6 +359,20 @@ fun VideoPlayerController(
             .focusable()
             //.ifElse(hasFocus, Modifier.border(2.dp, Color.Yellow))
             .onPreviewKeyEvent {
+                val shortcutAction = shortcutActionForKeyCode(it.nativeKeyEvent.keyCode)
+                if (shortcutAction != null) {
+                    if (showClickableControllers || showSeekController) {
+                        return@onPreviewKeyEvent false
+                    }
+                    if (showRelatedVideos && shortcutAction != PlayerShortcutAction.ToggleRelatedVideos) {
+                        return@onPreviewKeyEvent false
+                    }
+                    if (it.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
+
+                    logger.fInfo { "[${it.key}] shortcut: $shortcutAction" }
+                    runShortcutAction(shortcutAction)
+                    return@onPreviewKeyEvent true
+                }
 
                 if (showClickableControllers || showRelatedVideos) {
                     if (listOf(Key.Back, Key.Menu).contains(it.key)) {

@@ -63,6 +63,7 @@ import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoAspectRatio
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.player.entity.LiveCodec
+import dev.aaa1115910.bv.player.entity.PlayerShortcutAction
 import dev.aaa1115910.bv.player.entity.VideoListItem
 import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.player.entity.VideoPlayerClockState
@@ -202,6 +203,7 @@ fun BvPlayer(
     onShowComment: () -> Unit = {},
     onShowDescription: () -> Unit = {},
     onTripleLike: () -> Unit = {},
+    shortcutKeyBindings: Map<PlayerShortcutAction, Int> = emptyMap(),
     useTripleLikeOnLongPress: Boolean = false,
     onToggleFollow: () -> Unit = {},
     onReportLiveHistory: () -> Unit = {},
@@ -1595,6 +1597,7 @@ fun BvPlayer(
             onShowComment = onShowComment,
             onShowDescription = onShowDescription,
             onTripleLike = onTripleLike,
+            shortcutKeyBindings = shortcutKeyBindings,
             useTripleLikeOnLongPress = useTripleLikeOnLongPress,
             onToggleFollow = onToggleFollow,
             onReportLiveHistory = onReportLiveHistory,

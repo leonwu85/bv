@@ -2,6 +2,7 @@
 
 package dev.aaa1115910.bv.util
 
+import android.view.KeyEvent
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -32,6 +33,7 @@ import dev.aaa1115910.bv.entity.DynamicTabType
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.PlayerBottomProgressBarColor
 import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
+import dev.aaa1115910.bv.player.entity.PlayerShortcutAction
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.Flow
@@ -653,6 +655,41 @@ object Prefs {
         get() = dsm.getPreferenceFlow(PrefKeys.prefPlayerLongPressActionRequest)
             .transform { ordinal -> emit(PlayerLongPressAction.fromValue(ordinal)) }
 
+    private fun playerShortcutKey(action: PlayerShortcutAction) = when (action) {
+        PlayerShortcutAction.ToggleDanmaku -> PrefKeys.prefPlayerShortcutToggleDanmakuKeyCodeKey
+        PlayerShortcutAction.ToggleComment -> PrefKeys.prefPlayerShortcutToggleCommentKeyCodeKey
+        PlayerShortcutAction.ToggleSubtitle -> PrefKeys.prefPlayerShortcutToggleSubtitleKeyCodeKey
+        PlayerShortcutAction.TripleLike -> PrefKeys.prefPlayerShortcutTripleLikeKeyCodeKey
+        PlayerShortcutAction.ToggleRelatedVideos -> PrefKeys.prefPlayerShortcutToggleRelatedVideosKeyCodeKey
+    }
+
+    private fun playerShortcutRequest(action: PlayerShortcutAction) = when (action) {
+        PlayerShortcutAction.ToggleDanmaku -> PrefKeys.prefPlayerShortcutToggleDanmakuKeyCodeRequest
+        PlayerShortcutAction.ToggleComment -> PrefKeys.prefPlayerShortcutToggleCommentKeyCodeRequest
+        PlayerShortcutAction.ToggleSubtitle -> PrefKeys.prefPlayerShortcutToggleSubtitleKeyCodeRequest
+        PlayerShortcutAction.TripleLike -> PrefKeys.prefPlayerShortcutTripleLikeKeyCodeRequest
+        PlayerShortcutAction.ToggleRelatedVideos -> PrefKeys.prefPlayerShortcutToggleRelatedVideosKeyCodeRequest
+    }
+
+    fun getPlayerShortcutKeyCode(action: PlayerShortcutAction): Int =
+        runBlocking { dsm.getPreferenceFlow(playerShortcutRequest(action)).first() }
+
+    fun setPlayerShortcutKeyCode(action: PlayerShortcutAction, keyCode: Int) = runBlocking {
+        if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
+            PlayerShortcutAction.entries
+                .filter { it != action }
+                .forEach { otherAction ->
+                    if (dsm.getPreferenceFlow(playerShortcutRequest(otherAction)).first() == keyCode) {
+                        dsm.editPreference(playerShortcutKey(otherAction), KeyEvent.KEYCODE_UNKNOWN)
+                    }
+                }
+        }
+        dsm.editPreference(playerShortcutKey(action), keyCode)
+    }
+
+    val playerShortcutKeyBindings: Map<PlayerShortcutAction, Int>
+        get() = PlayerShortcutAction.entries.associateWith { getPlayerShortcutKeyCode(it) }
+
     var showOnlineViewerCount: Int
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowOnlineViewerCountRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowOnlineViewerCountKey, value) }
@@ -849,6 +886,11 @@ object PrefKeys {
     val prefDrawerItemsOrderKey = stringPreferencesKey("drawer_items_order")
     val prefSkipPgcIntroOutroKey = booleanPreferencesKey("skip_pgc_intro_outro")
     val prefPlayerLongPressActionKey = intPreferencesKey("player_long_press_action")
+    val prefPlayerShortcutToggleDanmakuKeyCodeKey = intPreferencesKey("player_shortcut_toggle_danmaku_key_code")
+    val prefPlayerShortcutToggleCommentKeyCodeKey = intPreferencesKey("player_shortcut_toggle_comment_key_code")
+    val prefPlayerShortcutToggleSubtitleKeyCodeKey = intPreferencesKey("player_shortcut_toggle_subtitle_key_code")
+    val prefPlayerShortcutTripleLikeKeyCodeKey = intPreferencesKey("player_shortcut_triple_like_key_code")
+    val prefPlayerShortcutToggleRelatedVideosKeyCodeKey = intPreferencesKey("player_shortcut_toggle_related_videos_key_code")
     val prefShowOnlineViewerCountKey = intPreferencesKey("show_online_viewer_count_v2")
     val prefVlcAutoRotate = booleanPreferencesKey("vlc_auto_rotate")
     val prefEnableAsyncQueueing = booleanPreferencesKey("enable_async_queueing")
@@ -968,6 +1010,16 @@ object PrefKeys {
     val prefDrawerItemsOrderRequest = PreferenceRequest(prefDrawerItemsOrderKey, "")
     val prefSkipPgcIntroOutroRequest = PreferenceRequest(prefSkipPgcIntroOutroKey, false)
     val prefPlayerLongPressActionRequest = PreferenceRequest(prefPlayerLongPressActionKey, PlayerLongPressAction.OpenMenu.ordinal)
+    val prefPlayerShortcutToggleDanmakuKeyCodeRequest =
+        PreferenceRequest(prefPlayerShortcutToggleDanmakuKeyCodeKey, KeyEvent.KEYCODE_UNKNOWN)
+    val prefPlayerShortcutToggleCommentKeyCodeRequest =
+        PreferenceRequest(prefPlayerShortcutToggleCommentKeyCodeKey, KeyEvent.KEYCODE_UNKNOWN)
+    val prefPlayerShortcutToggleSubtitleKeyCodeRequest =
+        PreferenceRequest(prefPlayerShortcutToggleSubtitleKeyCodeKey, KeyEvent.KEYCODE_UNKNOWN)
+    val prefPlayerShortcutTripleLikeKeyCodeRequest =
+        PreferenceRequest(prefPlayerShortcutTripleLikeKeyCodeKey, KeyEvent.KEYCODE_UNKNOWN)
+    val prefPlayerShortcutToggleRelatedVideosKeyCodeRequest =
+        PreferenceRequest(prefPlayerShortcutToggleRelatedVideosKeyCodeKey, KeyEvent.KEYCODE_UNKNOWN)
     val prefShowOnlineViewerCountRequest = PreferenceRequest(prefShowOnlineViewerCountKey, 1)  // 0=不显示, 1=30秒后隐藏, 2=始终显示
     val prefVlcAutoRotateRequest = PreferenceRequest(prefVlcAutoRotate, true)
     val prefEnableAsyncQueueingRequest = PreferenceRequest(prefEnableAsyncQueueing, true)
