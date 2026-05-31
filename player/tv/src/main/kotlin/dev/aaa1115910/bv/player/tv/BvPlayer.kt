@@ -159,6 +159,7 @@ fun BvPlayer(
     onSendHeartbeat: suspend (Int) -> Unit,
     onClearBackToHistoryData: () -> Unit,
     onReloadDanmakuAfterSeek: (Long, Boolean) -> Unit = { _, _ -> },
+    onDanmakuPlayerBound: (Long, Boolean) -> Unit = { _, _ -> },
     onEnsureDanmakuCoverage: (Long) -> Unit = {},
     onNearEnd: () -> Unit = {},
     onLoadNextVideo: (Boolean) -> Unit,
@@ -1654,7 +1655,24 @@ fun BvPlayer(
                 modifier = Modifier.align(Alignment.TopCenter),
                 handle = danmakuLayerHandle,
                 onVideoDanmakuSurfaceViewReady = bindDanmakuSurfaceView,
-                onVideoDanmakuSurfaceViewRelease = unbindDanmakuSurfaceView
+                onVideoDanmakuSurfaceViewRelease = unbindDanmakuSurfaceView,
+                onDanmakuPlayerBound = { boundPlayer ->
+                    mDanmakuPlayer = boundPlayer
+                    updateAllDanmakuPlayerConfig(danmakuConfig)
+
+                    val position = runCatching { videoPlayer.currentPosition }
+                        .getOrDefault(0L)
+                        .coerceAtLeast(0L)
+                    val shouldPlay = videoPlayer.isPlaying || isPlaying
+                    boundPlayer.updatePlaySpeed(currentPlaySpeed)
+                    boundPlayer.seekTo(position)
+                    if (shouldPlay) {
+                        boundPlayer.start()
+                    } else {
+                        boundPlayer.pause()
+                    }
+                    onDanmakuPlayerBound(position, shouldPlay)
+                }
             )
 
             // 跳过片头片尾提示

@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
@@ -35,6 +36,7 @@ fun AkDanmakuPlayer(
     videoAspectRatio: Float = 0f,
     onVideoDanmakuSurfaceViewReady: ((VideoDanmakuSurfaceView?) -> Unit)? = null,
     onVideoDanmakuSurfaceViewRelease: ((VideoDanmakuSurfaceView) -> Unit)? = null,
+    onDanmakuPlayerBound: ((DanmakuPlayer) -> Unit)? = null,
 ) {
     AkDanmakuPlayer(
         modifier = modifier,
@@ -44,6 +46,7 @@ fun AkDanmakuPlayer(
         videoAspectRatio = videoAspectRatio,
         onVideoDanmakuSurfaceViewReady = onVideoDanmakuSurfaceViewReady,
         onVideoDanmakuSurfaceViewRelease = onVideoDanmakuSurfaceViewRelease,
+        onDanmakuPlayerBound = onDanmakuPlayerBound,
         useSurfaceViewForNormalMode = false,
         isLiveMode = false,
         onLiveDanmakuPlayerReady = null
@@ -65,12 +68,14 @@ fun AkDanmakuPlayer(
     videoAspectRatio: Float = 0f,
     onVideoDanmakuSurfaceViewReady: ((VideoDanmakuSurfaceView?) -> Unit)? = null,
     onVideoDanmakuSurfaceViewRelease: ((VideoDanmakuSurfaceView) -> Unit)? = null,
+    onDanmakuPlayerBound: ((DanmakuPlayer) -> Unit)? = null,
     useSurfaceViewForNormalMode: Boolean = false,
     isLiveMode: Boolean = false,
     onLiveDanmakuPlayerReady: ((LiveDanmakuPlayer) -> Unit)? = null
 ) {
     var danmakuView: DanmakuView? by remember { mutableStateOf(null) }
     var liveDanmakuPlayer: LiveDanmakuPlayer? by remember { mutableStateOf(null) }
+    val currentOnDanmakuPlayerBound by rememberUpdatedState(onDanmakuPlayerBound)
 
     DisposableEffect(danmakuPlayer, isLiveMode) {
         onDispose {
@@ -85,7 +90,10 @@ fun AkDanmakuPlayer(
     LaunchedEffect(danmakuView, danmakuPlayer) {
         if (!isLiveMode) {
             danmakuView?.let { view ->
-                danmakuPlayer?.bindView(view)
+                danmakuPlayer?.let { player ->
+                    player.bindView(view)
+                    currentOnDanmakuPlayerBound?.invoke(player)
+                }
             }
         }
     }
@@ -140,7 +148,10 @@ fun AkDanmakuPlayer(
 
             LaunchedEffect(danmakuSurfaceView, danmakuPlayer) {
                 danmakuSurfaceView?.let { surfaceView ->
-                    danmakuPlayer?.bindSurfaceView(surfaceView)
+                    danmakuPlayer?.let { player ->
+                        player.bindSurfaceView(surfaceView)
+                        currentOnDanmakuPlayerBound?.invoke(player)
+                    }
                 }
             }
 

@@ -108,8 +108,11 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.yield
 import org.koin.core.annotation.KoinViewModel
 import kotlin.math.abs
 import java.net.URI
@@ -423,6 +426,7 @@ class VideoPlayerV3ViewModel(
     private var vodPlayUrlRefreshJob: Job? = null
     private var vodPlayUrlRefreshToken by mutableLongStateOf(0L)
     private var vodPlaybackSessionToken by mutableLongStateOf(0L)
+    private val danmakuPlayerDataMutex = Mutex()
 
     // 自动连播提前准备
     private var preparedAutoPlayTarget by mutableStateOf<PreparedAutoPlayTarget?>(null)
@@ -1572,6 +1576,35 @@ class VideoPlayerV3ViewModel(
         }
     }
 
+    fun resyncDanmakuAfterPlayerBound(positionMs: Long, shouldPlay: Boolean) {
+        if (isLive) return
+
+        viewModelScope.launch(Dispatchers.Main.immediate) {
+            val player = danmakuPlayer ?: return@launch
+            danmakuPlayerDataMutex.withLock {
+                val retainedItems = danmakuData.toList()
+                if (retainedItems.isNotEmpty()) {
+                    player.clearData()
+                    retainedItems.chunked(DANMAKU_BATCH_SIZE).forEach { chunk ->
+                        player.updateData(chunk)
+                        yield()
+                    }
+                }
+
+                val safePosition = positionMs.coerceAtLeast(0L)
+                player.seekTo(safePosition)
+                if (shouldPlay) {
+                    player.start()
+                } else {
+                    player.pause()
+                }
+                logger.info {
+                    "Resynced danmaku after player bound, retained=${retainedItems.size}, positionMs=$safePosition, shouldPlay=$shouldPlay"
+                }
+            }
+        }
+    }
+
     fun ensureDanmakuCoverage(positionMs: Long) {
         if (isLive || currentCid <= 0L || positionMs < 0L) return
 
@@ -2175,9 +2208,14 @@ class VideoPlayerV3ViewModel(
 
         items.chunked(DANMAKU_BATCH_SIZE).forEach { chunk ->
             loadToken?.let { ensureDanmakuLoadActive(it) }
-            danmakuData.addAll(chunk)
-            danmakuLoadSession?.let { trimRetainedDanmakuData(it.preloadPolicy) }
-            danmakuPlayer?.updateData(chunk)
+            danmakuPlayerDataMutex.withLock {
+                withContext(Dispatchers.Main.immediate) {
+                    loadToken?.let { ensureDanmakuLoadActive(it) }
+                    danmakuData.addAll(chunk)
+                    danmakuLoadSession?.let { trimRetainedDanmakuData(it.preloadPolicy) }
+                    danmakuPlayer?.updateData(chunk)
+                }
+            }
             delay(8)
         }
     }

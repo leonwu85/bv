@@ -519,6 +519,7 @@ fun VideoPlayerV3Screen(
                 onSendHeartbeat = playerViewModel::uploadHistory,
                 onClearBackToHistoryData = { playerViewModel.lastPlayed = 0 },
                 onReloadDanmakuAfterSeek = playerViewModel::reloadDanmakuAfterSeek,
+                onDanmakuPlayerBound = playerViewModel::resyncDanmakuAfterPlayerBound,
                 onEnsureDanmakuCoverage = playerViewModel::ensureDanmakuCoverage,
                 onNearEnd = {
                     if (playerViewModel.showRelatedVideos || playerViewModel.isInteractivePlayback) return@BvPlayer
