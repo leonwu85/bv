@@ -104,7 +104,6 @@ class MpvMediaPlayer(
     }
 
     override fun playUrl(videoUrl: String?, audioUrl: String?) {
-        clearProxyTokens()
         currentVideoUrl = videoUrl
         currentAudioUrl = audioUrl
         loadRequested = false
@@ -432,6 +431,7 @@ class MpvMediaPlayer(
         }
 
         applyNetworkOptions()
+        val previousProxyTokens = proxyTokens.toSet()
         val proxiedUrl = createProxyUrl(url)
         audioTrackAdded = false
         videoCodec = null
@@ -447,6 +447,7 @@ class MpvMediaPlayer(
             setPropertyBoolean("pause", !playWhenReady)
             command(arrayOf("loadfile", proxiedUrl, "replace"))
         }
+        clearProxyTokens(previousProxyTokens)
     }
 
     private fun addAudioTrackIfNeeded() {
@@ -478,9 +479,9 @@ class MpvMediaPlayer(
         }.getOrNull()?.url ?: url
     }
 
-    private fun clearProxyTokens() {
-        proxyTokens.forEach { token -> MpvHttpProxyServer.unregister(token) }
-        proxyTokens.clear()
+    private fun clearProxyTokens(tokens: Set<String> = proxyTokens.toSet()) {
+        tokens.forEach { token -> MpvHttpProxyServer.unregister(token) }
+        proxyTokens.removeAll(tokens)
     }
 
     private fun handleEvent(eventId: Int) {

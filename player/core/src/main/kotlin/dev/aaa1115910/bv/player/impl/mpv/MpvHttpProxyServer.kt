@@ -12,6 +12,7 @@ import java.io.IOException
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.InetAddress
+import java.net.URI
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.UUID
@@ -51,7 +52,7 @@ object MpvHttpProxyServer {
             referer = referer
         )
         return ProxiedUrl(
-            url = "http://127.0.0.1:${socket.localPort}/mpv/$token",
+            url = "http://127.0.0.1:${socket.localPort}/mpv/$token/",
             token = token
         )
     }
@@ -99,15 +100,19 @@ object MpvHttpProxyServer {
                 writeTextResponse(socket, 400, "Bad Request", "Bad Request")
             } else {
                 val method = requestParts[0]
-                val path = requestParts[1]
+                val target = requestParts[1]
+                val path = target.substringBefore("?")
+                val query = target.substringAfter("?", missingDelimiterValue = "")
                 val headers = readRequestHeaders(reader)
-                val token = path.substringAfter("/mpv/", missingDelimiterValue = "")
-                    .substringBefore("?")
+                val proxyPath = path.substringAfter("/mpv/", missingDelimiterValue = "")
+                val token = proxyPath.substringBefore("/")
+                val relativePath = proxyPath.substringAfter("/", missingDelimiterValue = "")
                 val item = proxyItems[token]
                 if (item == null) {
                     writeTextResponse(socket, 404, "Not Found", "MPV proxy item not found")
                 } else {
-                    proxyUpstream(socket, method, headers, item)
+                    val upstreamUrl = item.resolve(relativePath, query)
+                    proxyUpstream(socket, method, headers, item, upstreamUrl)
                 }
             }
         }
@@ -130,7 +135,8 @@ object MpvHttpProxyServer {
         socket: Socket,
         method: String,
         requestHeaders: Map<String, String>,
-        item: ProxyItem
+        item: ProxyItem,
+        upstreamUrl: String
     ) {
         val context = clientContext
         if (context == null) {
@@ -139,7 +145,7 @@ object MpvHttpProxyServer {
         }
 
         val requestBuilder = Request.Builder()
-            .url(item.url)
+            .url(upstreamUrl)
             .header("Accept-Encoding", "identity")
 
         item.headers.forEach { (name, value) ->
@@ -261,7 +267,21 @@ object MpvHttpProxyServer {
         val headers: Map<String, String>,
         val userAgent: String?,
         val referer: String?
-    )
+    ) {
+        fun resolve(relativePath: String, query: String): String {
+            if (relativePath.isBlank()) return url
+
+            val relativeTarget = buildString {
+                append(relativePath)
+                if (query.isNotBlank()) {
+                    append('?')
+                    append(query)
+                }
+            }
+            return runCatching { URI(url).resolve(relativeTarget).toString() }
+                .getOrElse { url }
+        }
+    }
 
     private const val REQUEST_TIMEOUT_MS = 30_000
 }

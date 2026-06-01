@@ -3,6 +3,7 @@ package dev.aaa1115910.bv.util
 import android.widget.Toast
 import dev.aaa1115910.biliapi.entity.live.LiveCodec
 import dev.aaa1115910.biliapi.entity.live.LiveRoomPlayInfoResponse
+import dev.aaa1115910.biliapi.entity.live.LiveUrlInfo
 import dev.aaa1115910.bv.player.entity.LiveCodec as AppLiveCodec
 import dev.aaa1115910.biliapi.entity.live.LiveStream
 import dev.aaa1115910.biliapi.repositories.LiveRepository
@@ -275,7 +276,7 @@ object LiveStreamUrlFetcher {
                     // 自动选择最佳编码
                     selectBestCodec(format.codec)
                 } ?: continue
-                val urlInfo = codec.urlInfo.first()
+                val urlInfo = selectBestUrlInfo(codec.urlInfo) ?: continue
                 val fullUrl = buildLiveUrl(urlInfo.host, codec.baseUrl, urlInfo.extra, liveCdnHost)
                 val expiresAt = parseExpiresFromExtra(urlInfo.extra)
                 logger.debug { "Built URL with format $formatName, codec ${codec.codecName}: $fullUrl" }
@@ -296,7 +297,7 @@ object LiveStreamUrlFetcher {
                 } else {
                     selectBestCodec(format.codec)
                 } ?: continue
-                val urlInfo = codec.urlInfo.first()
+                val urlInfo = selectBestUrlInfo(codec.urlInfo) ?: continue
                 val fullUrl = buildLiveUrl(urlInfo.host, codec.baseUrl, urlInfo.extra, liveCdnHost)
                 val expiresAt = parseExpiresFromExtra(urlInfo.extra)
                 logger.debug { "Built URL with fallback format ${format.formatName}, codec ${codec.codecName}: $fullUrl" }
@@ -310,6 +311,22 @@ object LiveStreamUrlFetcher {
         }
 
         return null
+    }
+
+    private fun selectBestUrlInfo(urlInfos: List<LiveUrlInfo>): LiveUrlInfo? {
+        return urlInfos.maxWithOrNull(
+            compareBy<LiveUrlInfo> { parseExtraLong(it.extra, "score") ?: Long.MIN_VALUE }
+                .thenBy { if (it.extra.contains("sid_l=stream_name_cold")) 0 else 1 }
+        )
+    }
+
+    private fun parseExtraLong(extra: String, name: String): Long? {
+        val escapedName = Regex.escape(name)
+        return Regex("""[?&]$escapedName=([^&]*)""")
+            .find(extra)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toLongOrNull()
     }
 }
 

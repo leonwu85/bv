@@ -90,6 +90,7 @@ object MobilePlayerSettingsSource : PlayerSettingsSource {
 
 object MobileRuntime {
     fun install() {
+        MobilePrefs.sanitizePlayerType()
         PlayerSettingsProvider.current = MobilePlayerSettingsSource
     }
 }

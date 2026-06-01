@@ -74,8 +74,16 @@ object MobilePrefs {
         get() = dsm.getPreferenceFlow(MobilePrefKeys.seedColorRequest)
 
     var playerType: PlayerType
-        get() = PlayerType.entries[read(MobilePrefKeys.playerTypeRequest)]
-        set(value) = write(MobilePrefKeys.playerTypeKey, value.ordinal)
+        get() = resolveMobilePlayerType(read(MobilePrefKeys.playerTypeRequest))
+        set(value) = write(MobilePrefKeys.playerTypeKey, resolveMobilePlayerType(value.ordinal).ordinal)
+
+    fun sanitizePlayerType() {
+        val rawPlayerType = read(MobilePrefKeys.playerTypeRequest)
+        val resolvedPlayerType = resolveMobilePlayerType(rawPlayerType)
+        if (rawPlayerType != resolvedPlayerType.ordinal) {
+            playerType = resolvedPlayerType
+        }
+    }
 
     var apiType: ApiType
         get() = ApiType.entries[read(MobilePrefKeys.apiTypeRequest)]
@@ -309,6 +317,11 @@ object MobilePrefs {
     var incognitoMode: Boolean
         get() = read(MobilePrefKeys.incognitoModeRequest)
         set(value) = write(MobilePrefKeys.incognitoModeKey, value)
+
+    private fun resolveMobilePlayerType(ordinal: Int): PlayerType =
+        PlayerType.entries.getOrElse(ordinal) { PlayerType.Media3 }
+            .takeUnless { it == PlayerType.VLC }
+            ?: PlayerType.Media3
 
     private fun <T> read(request: PreferenceRequest<T>): T =
         runBlocking { dsm.getPreferenceFlow(request).first() }

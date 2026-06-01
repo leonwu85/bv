@@ -167,15 +167,25 @@ class VideoPlayerActivity : ComponentActivity() {
         val settings = PlayerSettingsProvider.current
         val enableTunneling = settings.enableMobileTunneling
         playerViewModel.currentDanmakuScale = settings.defaultMobileDanmakuScale
-        val options = VideoPlayerOptions(
-            userAgent = when (settings.apiType) {
+        val playbackUserAgent = if (launchArgs.isLive) {
+            dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_WEB
+        } else {
+            when (settings.apiType) {
                 ApiType.Web -> dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_WEB
                 ApiType.App -> dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_APP
-            },
-            referer = when (settings.apiType) {
+            }
+        }
+        val playbackReferer = if (launchArgs.isLive) {
+            getString(R.string.video_player_referer)
+        } else {
+            when (settings.apiType) {
                 ApiType.Web -> getString(R.string.video_player_referer)
                 ApiType.App -> null
-            },
+            }
+        }
+        val options = VideoPlayerOptions(
+            userAgent = playbackUserAgent,
+            referer = playbackReferer,
             enableFfmpegAudioRenderer = settings.enableFfmpegAudioRenderer,
             enableAsyncQueueing = settings.enableAsyncQueueing,
             enableTunneling = enableTunneling,
