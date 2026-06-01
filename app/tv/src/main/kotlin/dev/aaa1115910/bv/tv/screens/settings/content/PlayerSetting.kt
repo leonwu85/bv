@@ -32,12 +32,14 @@ import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.tv.component.settings.SettingListItemWithDialog
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
 import dev.aaa1115910.bv.tv.component.settings.SettingNumberListItem
+import dev.aaa1115910.bv.tv.component.LibMPVDownloaderDialog
 import dev.aaa1115910.bv.tv.component.LibVLCDownloaderDialog
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.VlcLibsInstaller
 import dev.aaa1115910.bv.player.BuildConfig
+import dev.aaa1115910.bv.player.impl.mpv.MpvLibsInstaller
 import android.widget.Toast
 import androidx.tv.material3.Button
 
@@ -75,6 +77,8 @@ fun PlayerSetting(
     var enableAudioPlaybackParams by remember { mutableStateOf(Prefs.enableAudioPlaybackParams) }
     var showVlcDownloadConfirmDialog by remember { mutableStateOf(false) }
     var showVlcDownloaderDialog by remember { mutableStateOf(false) }
+    var showMpvDownloadConfirmDialog by remember { mutableStateOf(false) }
+    var showMpvDownloaderDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -140,18 +144,30 @@ fun PlayerSetting(
                     getDisplayName = { item, _ -> item.name },
                     value = selectedPlayerType,
                     onValueChange = { newType ->
-                        if (newType == PlayerType.VLC) {
-                            // 检查 VLC 库是否需要更新（未安装或版本不匹配）
-                            if (VlcLibsInstaller.needsUpdate(context, BuildConfig.libVLCVersion)) {
-                                // 显示下载确认弹窗
-                                showVlcDownloadConfirmDialog = true
-                            } else {
+                        when (newType) {
+                            PlayerType.VLC -> {
+                                // 检查 VLC 库是否需要更新（未安装或版本不匹配）
+                                if (VlcLibsInstaller.needsUpdate(context, BuildConfig.libVLCVersion)) {
+                                    // 显示下载确认弹窗
+                                    showVlcDownloadConfirmDialog = true
+                                } else {
+                                    selectedPlayerType = newType
+                                    Prefs.playerType = newType
+                                }
+                            }
+                            PlayerType.MPV -> {
+                                // 检查 MPV 官方组件是否已安装
+                                if (MpvLibsInstaller.needsInstall(context)) {
+                                    showMpvDownloadConfirmDialog = true
+                                } else {
+                                    selectedPlayerType = newType
+                                    Prefs.playerType = newType
+                                }
+                            }
+                            else -> {
                                 selectedPlayerType = newType
                                 Prefs.playerType = newType
                             }
-                        } else {
-                            selectedPlayerType = newType
-                            Prefs.playerType = newType
                         }
                     }
                 )
@@ -482,6 +498,57 @@ fun PlayerSetting(
             },
             onDownloadFailed = { errorMessage ->
                 showVlcDownloaderDialog = false
+                Toast.makeText(context, "下载失败: $errorMessage", Toast.LENGTH_LONG).show()
+            }
+        )
+    }
+
+    // MPV 下载确认弹窗
+    if (showMpvDownloadConfirmDialog) {
+        TvAlertDialog(
+            onDismissRequest = { showMpvDownloadConfirmDialog = false },
+            title = { Text("需要下载 MPV 组件") },
+            text = {
+                Text(
+                    "MPV 播放器需要下载官方 mpv-android 组件才能使用。\n\n" +
+                            "来源：mpv-android 官方 GitHub Release\n" +
+                            "连接失败时会自动尝试 GitHub 镜像\n" +
+                            "建议在 Wi-Fi 环境下下载"
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showMpvDownloadConfirmDialog = false
+                    showMpvDownloaderDialog = true
+                }) {
+                    Text("下载")
+                }
+            },
+            dismissButton = {
+                Button(onClick = {
+                    showMpvDownloadConfirmDialog = false
+                }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // MPV 库下载弹窗
+    if (showMpvDownloaderDialog) {
+        LibMPVDownloaderDialog(
+            show = true,
+            onDismissRequest = {
+                showMpvDownloaderDialog = false
+            },
+            onDownloadComplete = {
+                showMpvDownloaderDialog = false
+                selectedPlayerType = PlayerType.MPV
+                Prefs.playerType = PlayerType.MPV
+                Toast.makeText(context, "MPV 组件下载完成", Toast.LENGTH_SHORT).show()
+            },
+            onDownloadFailed = { errorMessage ->
+                showMpvDownloaderDialog = false
                 Toast.makeText(context, "下载失败: $errorMessage", Toast.LENGTH_LONG).show()
             }
         )

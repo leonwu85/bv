@@ -2580,7 +2580,11 @@ class VideoPlayerV3ViewModel(
         }.onSuccess {
             logger.info { "Send heartbeat success" }
         }.onFailure {
-            logger.warn { "Send heartbeat failed: ${it.stackTraceToString()}" }
+            if (it is CancellationException) {
+                logger.debug { "Send heartbeat cancelled: ${it.message}" }
+            } else {
+                logger.warn { "Send heartbeat failed: ${it.stackTraceToString()}" }
+            }
         }
     }
 

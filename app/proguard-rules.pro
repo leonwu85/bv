@@ -97,6 +97,9 @@
 # LibVLC
 -keep class org.videolan.libvlc.** { *; }
 
+# mpv-android JNI wrapper
+-keep class is.xyz.mpv.MPVLib { *; }
+
 # gRPC
 -keep class bilibili.rpc.** { *; }
 -keep class com.google.protobuf.** { *; }

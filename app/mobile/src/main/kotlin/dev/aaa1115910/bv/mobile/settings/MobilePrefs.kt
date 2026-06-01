@@ -436,10 +436,10 @@ object MobilePrefKeys {
     val cdnSpeedTestRequest = PreferenceRequest(cdnSpeedTestKey, true)
     val disableAudioCdnRequest = PreferenceRequest(disableAudioCdnKey, false)
     val tryLook1080PRequest = PreferenceRequest(tryLook1080PKey, true)
-    val autoSyncRequest = PreferenceRequest(autoSyncKey, "")
-    val videoSyncRequest = PreferenceRequest(videoSyncKey, "audio")
+    val autoSyncRequest = PreferenceRequest(autoSyncKey, "30")
+    val videoSyncRequest = PreferenceRequest(videoSyncKey, "display-resample")
     val hardwareDecodeModeRequest = PreferenceRequest(hardwareDecodeModeKey, "auto-safe")
-    val audioOutputDevicesRequest = PreferenceRequest(audioOutputDevicesKey, "")
+    val audioOutputDevicesRequest = PreferenceRequest(audioOutputDevicesKey, "opensles,aaudio,audiotrack")
     val showLiveDanmakuEmojiRequest = PreferenceRequest(showLiveDanmakuEmojiKey, false)
     val incognitoModeRequest = PreferenceRequest(incognitoModeKey, false)
 }

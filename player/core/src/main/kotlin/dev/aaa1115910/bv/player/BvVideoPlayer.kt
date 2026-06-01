@@ -1,7 +1,7 @@
 package dev.aaa1115910.bv.player
 
 import android.graphics.Matrix
-import android.widget.FrameLayout
+import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.TextureView
 import androidx.annotation.OptIn
@@ -20,6 +20,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import dev.aaa1115910.bv.player.impl.exo.ExoMediaPlayer
+import dev.aaa1115910.bv.player.impl.mpv.MpvMediaPlayer
 import dev.aaa1115910.bv.player.impl.vlc.VlcMediaPlayer
 import org.videolan.libvlc.util.VLCVideoLayout
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -164,6 +165,53 @@ fun BvVideoPlayer(
                 onDispose {
                     videoPlayer.detachVideoLayout()
                     vlcVideoLayout = null
+                }
+            }
+        }
+        is MpvMediaPlayer -> {
+            var surfaceView: SurfaceView? by remember { mutableStateOf(null) }
+
+            val surfaceCallback = remember(videoPlayer) {
+                object : SurfaceHolder.Callback {
+                    override fun surfaceCreated(holder: SurfaceHolder) {
+                        videoPlayer.attachSurface(
+                            surface = holder.surface,
+                            width = surfaceView?.width ?: 0,
+                            height = surfaceView?.height ?: 0
+                        )
+                    }
+
+                    override fun surfaceChanged(
+                        holder: SurfaceHolder,
+                        format: Int,
+                        width: Int,
+                        height: Int
+                    ) {
+                        videoPlayer.updateSurfaceSize(width, height)
+                    }
+
+                    override fun surfaceDestroyed(holder: SurfaceHolder) {
+                        videoPlayer.detachSurface()
+                    }
+                }
+            }
+
+            AndroidView(
+                modifier = modifier.fillMaxSize(),
+                factory = { ctx ->
+                    SurfaceView(ctx).also { sv ->
+                        surfaceView = sv
+                        sv.holder.addCallback(surfaceCallback)
+                        logger.info { "Current view type is MPV SurfaceView" }
+                    }
+                }
+            )
+
+            DisposableEffect(videoPlayer) {
+                onDispose {
+                    surfaceView?.holder?.removeCallback(surfaceCallback)
+                    videoPlayer.detachSurface()
+                    surfaceView = null
                 }
             }
         }

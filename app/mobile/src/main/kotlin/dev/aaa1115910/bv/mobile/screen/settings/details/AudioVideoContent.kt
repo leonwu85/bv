@@ -120,7 +120,7 @@ fun AudioVideoContent(
             "解码与缓冲" to {
                 switchPreference(
                     title = "开启硬解",
-                    summary = "关闭后 Media3 优先软解，VLC 禁用硬件加速",
+                    summary = "关闭后 Media3 优先软解，VLC 禁用硬件加速，MPV 使用 --hwdec=no",
                     prefReq = MobilePrefKeys.enableHardwareDecodeRequest,
                     onCheckedChange = { true }
                 )
@@ -147,8 +147,14 @@ fun AudioVideoContent(
                     prefReq = MobilePrefKeys.audioOutputDevicesRequest,
                     summary = { value ->
                         value.takeIf { it.isNotBlank() }
-                            ?.let { "$it（当前 Media3/VLC 内核仅保存配置）" }
-                            ?: "当前 Media3/VLC 内核仅保存配置"
+                            ?.let { "$it（MPV --ao）" }
+                            ?: "MPV --ao，逗号分隔"
+                    },
+                    transformValue = { value ->
+                        value.split(",")
+                            .map { it.trim() }
+                            .filter { it.isNotEmpty() }
+                            .joinToString(",")
                     }
                 )
                 editTextPreference(
@@ -156,32 +162,39 @@ fun AudioVideoContent(
                     prefReq = MobilePrefKeys.autoSyncRequest,
                     summary = { value ->
                         value.takeIf { it.isNotBlank() }
-                            ?.let { "$it（当前 Media3/VLC 内核仅保存配置）" }
-                            ?: "当前 Media3/VLC 内核仅保存配置"
-                    }
+                            ?.let { "$it（MPV --autosync）" }
+                            ?: "0 或留空表示使用 MPV 默认"
+                    },
+                    transformValue = { value -> value.trim().filter { it.isDigit() } }
                 )
                 radioPreference(
                     title = "视频同步",
                     prefReq = MobilePrefKeys.videoSyncRequest,
                     values = mapOf(
-                        "audio" to "audio（仅保存）",
-                        "display-resample" to "display-resample（仅保存）",
-                        "display-resample-vdrop" to "display-resample-vdrop（仅保存）",
-                        "display-vdrop" to "display-vdrop（仅保存）",
-                        "display-adrop" to "display-adrop（仅保存）",
-                        "desync" to "desync（仅保存）"
+                        "audio" to "audio",
+                        "display-resample" to "display-resample",
+                        "display-resample-vdrop" to "display-resample-vdrop",
+                        "display-resample-desync" to "display-resample-desync",
+                        "display-tempo" to "display-tempo",
+                        "display-vdrop" to "display-vdrop",
+                        "display-adrop" to "display-adrop",
+                        "display-desync" to "display-desync",
+                        "desync" to "desync"
                     )
                 )
                 radioPreference(
                     title = "硬解模式",
                     prefReq = MobilePrefKeys.hardwareDecodeModeRequest,
                     values = mapOf(
-                        "no" to "no（仅保存）",
-                        "auto" to "auto（仅保存）",
-                        "auto-safe" to "auto-safe（仅保存）",
-                        "auto-copy" to "auto-copy（仅保存）",
-                        "mediacodec" to "mediacodec（仅保存）",
-                        "mediacodec-copy" to "mediacodec-copy（仅保存）"
+                        "no" to "no\n启用软解",
+                        "auto" to "auto\n启用任意可用解码器",
+                        "auto-safe" to "auto-safe\n启用最佳解码器",
+                        "auto-copy" to "auto-copy\n启用带拷贝功能的最佳解码器",
+                        "mediacodec" to "mediacodec\nMediaCodec (Android)",
+                        "mediacodec-copy" to "mediacodec-copy\nMediaCodec (Android) (非直通)",
+                        "rkmpp" to "rkmpp\nRockchip MPP (仅部分 Rockchip 芯片)",
+                        "vulkan" to "vulkan\nVulkan (实验性)",
+                        "vulkan-copy" to "vulkan-copy\nVulkan (实验性) (非直通)"
                     )
                 )
             }

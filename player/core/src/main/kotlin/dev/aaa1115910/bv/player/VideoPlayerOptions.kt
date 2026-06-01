@@ -9,6 +9,10 @@ data class VideoPlayerOptions(
     val enableAudioPlaybackParams: Boolean = true,
     val enableHardwareDecode: Boolean = true,
     val expandBuffer: Boolean = false,
+    val autoSync: String = "",
+    val videoSync: String = "audio",
+    val hardwareDecodeMode: String = "mediacodec,mediacodec-copy",
+    val audioOutputDevices: String = "audiotrack,opensles",
     val enableVideoFrameRateStrategy: Boolean = true,
     val isLive: Boolean = false
 )

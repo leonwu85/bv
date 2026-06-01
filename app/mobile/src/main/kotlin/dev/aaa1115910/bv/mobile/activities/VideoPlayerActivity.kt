@@ -23,6 +23,7 @@ import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.VideoPlayerOptions
 import dev.aaa1115910.bv.player.impl.exo.ExoPlayerFactory
+import dev.aaa1115910.bv.player.impl.mpv.MpvPlayerFactory
 import dev.aaa1115910.bv.player.impl.vlc.VlcPlayerFactory
 import dev.aaa1115910.bv.settings.PlayerSettingsProvider
 import dev.aaa1115910.bv.util.fInfo
@@ -181,11 +182,16 @@ class VideoPlayerActivity : ComponentActivity() {
             enableAudioPlaybackParams = settings.enableAudioPlaybackParams,
             enableHardwareDecode = settings.enableHardwareDecode,
             expandBuffer = settings.expandBuffer,
+            autoSync = settings.autoSync,
+            videoSync = settings.videoSync,
+            hardwareDecodeMode = settings.hardwareDecodeMode,
+            audioOutputDevices = settings.audioOutputDevices,
             isLive = launchArgs.isLive
         )
         val videoPlayer = when (settings.playerType) {
             PlayerType.Media3 -> ExoPlayerFactory().create(this, options)
             PlayerType.VLC -> VlcPlayerFactory().create(this, options)
+            PlayerType.MPV -> MpvPlayerFactory().create(this, options)
         }
         playerViewModel.videoPlayer = videoPlayer
         //TODO 还没处理旋转后的一些判断，就先放这了

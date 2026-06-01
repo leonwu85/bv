@@ -21,6 +21,7 @@ import dev.aaa1115910.bv.player.entity.PlaybackMediaMode
 import dev.aaa1115910.bv.player.entity.RequestState
 import dev.aaa1115910.bv.player.VideoPlayerOptions
 import dev.aaa1115910.bv.player.impl.exo.ExoPlayerFactory
+import dev.aaa1115910.bv.player.impl.mpv.MpvPlayerFactory
 import dev.aaa1115910.bv.player.impl.vlc.VlcPlayerFactory
 import dev.aaa1115910.bv.tv.screens.VideoPlayerV3Screen
 import dev.aaa1115910.bv.tv.manager.VideoUserActionManager
@@ -272,6 +273,7 @@ class VideoPlayerV3Activity : ComponentActivity() {
         val videoPlayer = when (Prefs.playerType) {
             PlayerType.Media3 -> ExoPlayerFactory().create(this, options)
             PlayerType.VLC -> VlcPlayerFactory().create(this, options)
+            PlayerType.MPV -> MpvPlayerFactory().create(this, options)
         }
         playerViewModel.videoPlayer = videoPlayer
     }
