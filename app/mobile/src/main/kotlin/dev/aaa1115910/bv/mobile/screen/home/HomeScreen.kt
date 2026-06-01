@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -31,6 +32,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +54,7 @@ import dev.aaa1115910.bv.viewmodel.home.RecommendViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import kotlin.Int
 
@@ -116,6 +119,30 @@ fun HomeScreenContent(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    LaunchedEffect(selectedTabIndex) {
+        when (MobileHomeTab.entries[selectedTabIndex]) {
+            MobileHomeTab.Recommend -> {
+                if (recommendViewModel.recommendVideoList.isEmpty() && !recommendViewModel.loading) {
+                    withContext(Dispatchers.IO) {
+                        recommendViewModel.loadMore()
+                        recommendViewModel.refreshing = false
+                    }
+                }
+            }
+
+            MobileHomeTab.Popular -> {
+                if (popularViewModel.popularVideoList.isEmpty() && !popularViewModel.loading) {
+                    withContext(Dispatchers.IO) {
+                        popularViewModel.loadMore()
+                        popularViewModel.refreshing = false
+                    }
+                }
+            }
+
+            else -> Unit
+        }
+    }
+
     Column(
         modifier = modifier
             .background(MaterialTheme.colorScheme.surface),
@@ -150,11 +177,15 @@ fun HomeScreenContent(
             ) { page ->
                 when (MobileHomeTab.entries[page]) {
                     MobileHomeTab.Live -> {
-                        ContentCenterScreen(
-                            windowSize = windowSize,
-                            showTopBar = false,
-                            lockedSection = ContentCenterSection.Live
-                        )
+                        if (selectedTabIndex == page) {
+                            ContentCenterScreen(
+                                windowSize = windowSize,
+                                showTopBar = false,
+                                lockedSection = ContentCenterSection.Live
+                            )
+                        } else {
+                            Box(Modifier.fillMaxSize())
+                        }
                     }
 
                     MobileHomeTab.Recommend -> {
@@ -167,6 +198,8 @@ fun HomeScreenContent(
                             },
                             loading = recommendViewModel.loading,
                             refreshing = recommendViewModel.refreshing,
+                            enabled = selectedTabIndex == MobileHomeTab.Recommend.ordinal &&
+                                recommendViewModel.recommendVideoList.isNotEmpty(),
                             onRefresh = {
                                 scope.launch(Dispatchers.IO) {
                                     recommendViewModel.resetPage()
@@ -198,6 +231,8 @@ fun HomeScreenContent(
                             },
                             loading = popularViewModel.loading,
                             refreshing = popularViewModel.refreshing,
+                            enabled = selectedTabIndex == MobileHomeTab.Popular.ordinal &&
+                                popularViewModel.popularVideoList.isNotEmpty(),
                             onRefresh = {
                                 scope.launch(Dispatchers.IO) {
                                     popularViewModel.resetPage()
@@ -220,29 +255,41 @@ fun HomeScreenContent(
                     }
 
                     MobileHomeTab.Zone -> {
-                        ContentCenterScreen(
-                            windowSize = windowSize,
-                            showTopBar = false,
-                            lockedSection = ContentCenterSection.Ugc
-                        )
+                        if (selectedTabIndex == page) {
+                            ContentCenterScreen(
+                                windowSize = windowSize,
+                                showTopBar = false,
+                                lockedSection = ContentCenterSection.Ugc
+                            )
+                        } else {
+                            Box(Modifier.fillMaxSize())
+                        }
                     }
 
                     MobileHomeTab.Bangumi -> {
-                        ContentCenterScreen(
-                            windowSize = windowSize,
-                            showTopBar = false,
-                            lockedSection = ContentCenterSection.Pgc,
-                            initialPgcType = PgcType.Anime
-                        )
+                        if (selectedTabIndex == page) {
+                            ContentCenterScreen(
+                                windowSize = windowSize,
+                                showTopBar = false,
+                                lockedSection = ContentCenterSection.Pgc,
+                                initialPgcType = PgcType.Anime
+                            )
+                        } else {
+                            Box(Modifier.fillMaxSize())
+                        }
                     }
 
                     MobileHomeTab.Cinema -> {
-                        ContentCenterScreen(
-                            windowSize = windowSize,
-                            showTopBar = false,
-                            lockedSection = ContentCenterSection.Pgc,
-                            initialPgcType = PgcType.Movie
-                        )
+                        if (selectedTabIndex == page) {
+                            ContentCenterScreen(
+                                windowSize = windowSize,
+                                showTopBar = false,
+                                lockedSection = ContentCenterSection.Pgc,
+                                initialPgcType = PgcType.Movie
+                            )
+                        } else {
+                            Box(Modifier.fillMaxSize())
+                        }
                     }
                 }
             }

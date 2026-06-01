@@ -19,7 +19,6 @@ import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.player.entity.PlayMode
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
-import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 
 @Composable
 fun PlayContent(
@@ -114,23 +113,6 @@ fun PlayContent(
                     title = "直播隐藏观看记录",
                     prefReq = MobilePrefKeys.liveIncognitoModeRequest,
                     onCheckedChange = { true }
-                )
-            },
-            "SponsorBlock" to {
-                switchPreference(
-                    title = "启用 SponsorBlock",
-                    prefReq = MobilePrefKeys.enableSponsorBlockRequest,
-                    onCheckedChange = { true }
-                )
-                radioPreference(
-                    title = "跳过方式",
-                    prefReq = MobilePrefKeys.sponsorBlockSkipModeRequest,
-                    values = SponsorBlockSkipMode.entries.associate {
-                        it.value to when (it) {
-                            SponsorBlockSkipMode.Manual -> "手动跳过"
-                            SponsorBlockSkipMode.Auto -> "自动跳过"
-                        }
-                    }
                 )
             }
         )

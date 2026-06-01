@@ -118,7 +118,8 @@ enum class MobileSettings(
 ) {
     Appearance(title = "外观设置", summary = "主题模式、动态取色、主色"),
     AudioVideo(title = "音视频设置", summary = "画质音质、CDN、解码"),
-    Play(title = "播放设置", summary = "播放行为、弹幕、SponsorBlock"),
+    Play(title = "播放设置", summary = "播放行为、弹幕、直播"),
+    SponsorBlock(title = "广告助手", summary = "广告片段识别、自动或手动跳过"),
     Advance(title = "更多设置", summary = "接口"),
     Debug(title = "调试", "播放器信息显示"),
     About(title = "关于", summary = "版本和项目说明");

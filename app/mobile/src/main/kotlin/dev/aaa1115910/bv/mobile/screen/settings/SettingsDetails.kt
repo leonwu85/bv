@@ -20,6 +20,7 @@ import dev.aaa1115910.bv.mobile.screen.settings.details.AudioVideoContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.AppearanceContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.DebugContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.PlayContent
+import dev.aaa1115910.bv.mobile.screen.settings.details.SponsorBlockContent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,6 +60,7 @@ fun SettingsDetails(
             null, MobileSettings.Appearance -> AppearanceContent(modifier = contentModifier)
             MobileSettings.AudioVideo -> AudioVideoContent(modifier = contentModifier)
             MobileSettings.Play -> PlayContent(modifier = contentModifier)
+            MobileSettings.SponsorBlock -> SponsorBlockContent(modifier = contentModifier)
             MobileSettings.About -> AboutContent(modifier = contentModifier)
             MobileSettings.Debug -> DebugContent(modifier = contentModifier)
             MobileSettings.Advance -> AdvanceContent(modifier = contentModifier)

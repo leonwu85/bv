@@ -34,6 +34,7 @@ fun RcmdPage(
     onClickVideo: (aid: Long) -> Unit,
     loading: Boolean,
     refreshing: Boolean,
+    enabled: Boolean = true,
     onRefresh: () -> Unit,
     loadMore: () -> Unit
 ) {
@@ -42,7 +43,8 @@ fun RcmdPage(
     val isCompact = windowSize == WindowWidthSizeClass.Compact
 
     state.OnBottomReached(
-        loading = loading
+        loading = loading,
+        enabled = enabled
     ) {
         logger.fInfo { "on reached rcmd page bottom" }
         loadMore()

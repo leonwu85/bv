@@ -66,6 +66,7 @@ import dev.aaa1115910.bv.player.entity.VideoListItem
 import dev.aaa1115910.bv.player.entity.VideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekData
 import dev.aaa1115910.bv.player.entity.VideoPlayerStateData
+import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment
 import dev.aaa1115910.bv.player.mobile.MaterialDarkTheme
 import dev.aaa1115910.bv.player.mobile.controller.menu.DanmakuMenu
 import dev.aaa1115910.bv.player.mobile.controller.menu.DashMenu
@@ -96,6 +97,12 @@ fun BvPlayerController(
     onDanmakuAreaChange: (Float) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit,
     onPlayNewVideo: (VideoListItem) -> Unit,
+    showSponsorBlockTip: Boolean = false,
+    showAutoSkipSponsorTip: Boolean = false,
+    autoSkipSponsorSeconds: Int = 0,
+    currentSponsorSegment: SponsorSegment? = null,
+    onSkipSponsorSegment: () -> Unit = {},
+    onDismissSponsorBlockTip: () -> Unit = {},
     content: @Composable BoxScope.() -> Unit
 ) {
     val context = LocalContext.current
@@ -155,7 +162,13 @@ fun BvPlayerController(
                 onOpenResolutionMenu = { openMenu(MenuType.Resolution) },
                 onOpenDanmakuMenu = { openMenu(MenuType.Danmaku) },
                 onOpenListMenu = { openMenu(MenuType.List) },
-                onCloseMenu = { isMenuOpen = false }
+                onCloseMenu = { isMenuOpen = false },
+                showSponsorBlockTip = showSponsorBlockTip,
+                showAutoSkipSponsorTip = showAutoSkipSponsorTip,
+                autoSkipSponsorSeconds = autoSkipSponsorSeconds,
+                currentSponsorSegment = currentSponsorSegment,
+                onSkipSponsorSegment = onSkipSponsorSegment,
+                onDismissSponsorBlockTip = onDismissSponsorBlockTip
             ) {
                 Box(
                     modifier = Modifier
@@ -295,6 +308,12 @@ fun BvPlayerControllerVideoContent(
     onOpenDanmakuMenu: () -> Unit,
     onOpenListMenu: () -> Unit,
     onCloseMenu: () -> Unit,
+    showSponsorBlockTip: Boolean = false,
+    showAutoSkipSponsorTip: Boolean = false,
+    autoSkipSponsorSeconds: Int = 0,
+    currentSponsorSegment: SponsorSegment? = null,
+    onSkipSponsorSegment: () -> Unit = {},
+    onDismissSponsorBlockTip: () -> Unit = {},
     content: @Composable BoxScope.() -> Unit
 ) {
     val context = LocalContext.current
@@ -478,6 +497,21 @@ fun BvPlayerControllerVideoContent(
                         }
                     )
             ) {}
+        }
+
+        if (!isMenuOpen && !showBaseUi) {
+            SponsorBlockTip(
+                show = showSponsorBlockTip,
+                isFullScreen = isFullScreen,
+                segment = currentSponsorSegment,
+                onSkip = onSkipSponsorSegment,
+                onDismiss = onDismissSponsorBlockTip
+            )
+            AutoSkipSponsorTip(
+                show = showAutoSkipSponsorTip,
+                isFullScreen = isFullScreen,
+                skippedSeconds = autoSkipSponsorSeconds
+            )
         }
 
         if (showBaseUi) {

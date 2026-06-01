@@ -61,6 +61,7 @@ fun SettingsCategories(
                         MobileSettings.Appearance,
                         MobileSettings.AudioVideo,
                         MobileSettings.Play,
+                        MobileSettings.SponsorBlock,
                         MobileSettings.Advance,
                         MobileSettings.Debug
                     ).forEach { item ->

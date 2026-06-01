@@ -57,6 +57,7 @@ fun PopularPage(
     onClickVideo: (aid: Long) -> Unit,
     loading: Boolean,
     refreshing: Boolean,
+    enabled: Boolean = true,
     onRefresh: () -> Unit,
     loadMore: () -> Unit
 ) {
@@ -65,7 +66,8 @@ fun PopularPage(
     val isCompact = windowSize == WindowWidthSizeClass.Compact
 
     state.OnBottomReached(
-        loading = loading
+        loading = loading,
+        enabled = enabled
     ) {
         logger.fInfo { "on reached popular page bottom" }
         loadMore()

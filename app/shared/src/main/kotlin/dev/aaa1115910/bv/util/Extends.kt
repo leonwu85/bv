@@ -182,21 +182,25 @@ fun LazyStaggeredGridState.getLane() =
 @Composable
 fun LazyListState.OnBottomReached(
     loading: Boolean = false,
+    enabled: Boolean = true,
     loadMore: () -> Unit
 ) {
-    val shouldLoadMore = remember {
+    val shouldLoadMore = remember(enabled) {
         derivedStateOf {
-            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
-                ?: return@derivedStateOf true
+            if (!enabled) return@derivedStateOf false
 
-            lastVisibleItem.index >= layoutInfo.totalItemsCount - 5
+            val totalItemsCount = layoutInfo.totalItemsCount
+            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
+                ?: return@derivedStateOf totalItemsCount == 0
+
+            lastVisibleItem.index >= totalItemsCount - 5
         }
     }
 
-    LaunchedEffect(shouldLoadMore, loading) {
+    LaunchedEffect(shouldLoadMore, loading, enabled) {
         snapshotFlow { shouldLoadMore.value }
             .collect {
-                if (it && !loading) loadMore()
+                if (it && enabled && !loading) loadMore()
             }
     }
 }
@@ -204,21 +208,25 @@ fun LazyListState.OnBottomReached(
 @Composable
 fun LazyGridState.OnBottomReached(
     loading: Boolean = false,
+    enabled: Boolean = true,
     loadMore: () -> Unit
 ) {
-    val shouldLoadMore = remember {
+    val shouldLoadMore = remember(enabled) {
         derivedStateOf {
-            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
-                ?: return@derivedStateOf true
+            if (!enabled) return@derivedStateOf false
 
-            lastVisibleItem.index >= layoutInfo.totalItemsCount - 5
+            val totalItemsCount = layoutInfo.totalItemsCount
+            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
+                ?: return@derivedStateOf totalItemsCount == 0
+
+            lastVisibleItem.index >= totalItemsCount - 5
         }
     }
 
-    LaunchedEffect(shouldLoadMore, loading) {
+    LaunchedEffect(shouldLoadMore, loading, enabled) {
         snapshotFlow { shouldLoadMore.value }
             .collect {
-                if (it && !loading) loadMore()
+                if (it && enabled && !loading) loadMore()
             }
     }
 }
@@ -226,21 +234,25 @@ fun LazyGridState.OnBottomReached(
 @Composable
 fun LazyStaggeredGridState.OnBottomReached(
     loading: Boolean = false,
+    enabled: Boolean = true,
     loadMore: () -> Unit
 ) {
-    val shouldLoadMore = remember {
+    val shouldLoadMore = remember(enabled) {
         derivedStateOf {
-            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
-                ?: return@derivedStateOf true
+            if (!enabled) return@derivedStateOf false
 
-            lastVisibleItem.index >= layoutInfo.totalItemsCount - 5
+            val totalItemsCount = layoutInfo.totalItemsCount
+            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
+                ?: return@derivedStateOf totalItemsCount == 0
+
+            lastVisibleItem.index >= totalItemsCount - 5
         }
     }
 
-    LaunchedEffect(shouldLoadMore, loading) {
+    LaunchedEffect(shouldLoadMore, loading, enabled) {
         snapshotFlow { shouldLoadMore.value }
             .collect {
-                if (it && !loading) loadMore()
+                if (it && enabled && !loading) loadMore()
             }
     }
 }

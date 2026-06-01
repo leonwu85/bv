@@ -13,10 +13,12 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -28,6 +30,7 @@ import com.kuaishou.akdanmaku.ext.RETAINER_BILIBILI
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer
 import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskFrame
+import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.AkDanmakuPlayer
 import dev.aaa1115910.bv.player.BvVideoPlayer
@@ -46,6 +49,7 @@ import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.PlayMode
 import dev.aaa1115910.bv.player.entity.Resolution
+import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.player.entity.VideoAspectRatio
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.player.entity.VideoListItem
@@ -64,6 +68,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
+import kotlin.math.roundToInt
 
 private const val FULLSCREEN_DANMAKU_TEXT_SIZE_SCALE = 1f
 private const val EMBEDDED_DANMAKU_TEXT_SIZE_SCALE = 0.8f
@@ -130,6 +135,14 @@ fun BvPlayer(
     danmakuOpacity: Float,
     isLive: Boolean = false,
     onLiveDanmakuPlayerReady: ((com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer) -> Unit)? = null,
+    enableSponsorBlock: Boolean = false,
+    sponsorBlockSkipMode: SponsorBlockSkipMode = SponsorBlockSkipMode.Manual,
+    sponsorSegments: List<SponsorSegment> = emptyList(),
+    showSponsorBlockTip: Boolean = false,
+    currentSponsorSegment: SponsorSegment? = null,
+    onShowSponsorBlockTip: (SponsorSegment) -> Unit = {},
+    onSkipSponsorSegment: (SponsorSegment?) -> Unit = {},
+    onDismissSponsorBlockTip: () -> Unit = {},
 ) {
     val logger = KotlinLogging.logger("BvPlayer")
     val scope = rememberCoroutineScope()
@@ -162,6 +175,10 @@ fun BvPlayer(
     var aspectRatio by remember { mutableFloatStateOf(16f / 9f) }
     var lastPlayed by remember { mutableLongStateOf(0L) }
     var lastHeartbeatPosition by remember { mutableLongStateOf(0L) }
+    var showAutoSkipSponsorTip by remember { mutableStateOf(false) }
+    var autoSkipSponsorSeconds by remember { mutableIntStateOf(0) }
+    var autoSkipSponsorTipToken by remember { mutableLongStateOf(0L) }
+    var processedSponsorSegments by remember { mutableStateOf(setOf<SponsorSegment>()) }
 
     var clock: Triple<Int, Int, Int> by remember { mutableStateOf(Triple(0, 0, 0)) }
 
@@ -226,6 +243,15 @@ fun BvPlayer(
         mDanmakuPlayer?.updateConfig(danmakuConfig)
         mLiveDanmakuPlayer?.updateConfig(danmakuConfig)
     }
+
+    val currentEnableSponsorBlock by rememberUpdatedState(enableSponsorBlock)
+    val currentSponsorBlockSkipMode by rememberUpdatedState(sponsorBlockSkipMode)
+    val currentSponsorSegments by rememberUpdatedState(sponsorSegments)
+    val currentShowSponsorBlockTip by rememberUpdatedState(showSponsorBlockTip)
+    val currentSponsorSegment by rememberUpdatedState(currentSponsorSegment)
+    val currentOnShowSponsorBlockTip by rememberUpdatedState(onShowSponsorBlockTip)
+    val currentOnSkipSponsorSegment by rememberUpdatedState(onSkipSponsorSegment)
+    val currentOnDismissSponsorBlockTip by rememberUpdatedState(onDismissSponsorBlockTip)
 
     val initDanmakuConfig: () -> Unit = {
         updateEnabledDanmakuTypeFilter(videoPlayerConfigData.currentDanmakuEnabledList)
@@ -298,6 +324,20 @@ fun BvPlayer(
                 onClearBackToHistoryData()
             }
         }
+    }
+
+    val syncProcessedSponsorSegmentsForPosition: (Long) -> Unit = { targetPosition ->
+        processedSponsorSegments = currentSponsorSegments
+            .filterTo(mutableSetOf()) { it.endTime <= targetPosition }
+    }
+
+    fun skipSponsorSegment(segment: SponsorSegment?) {
+        if (segment == null) {
+            currentOnSkipSponsorSegment(null)
+            return
+        }
+        syncProcessedSponsorSegmentsForPosition(segment.endTime)
+        currentOnSkipSponsorSegment(segment)
     }
 
     val sendHeartbeat: () -> Unit = sendHeartbeat@{
@@ -398,10 +438,12 @@ fun BvPlayer(
         }
 
         override fun onSeekBack(seekBackIncrementMs: Long) {
+            syncProcessedSponsorSegmentsForPosition(currentPosition)
             onReloadDanmakuAfterSeek(currentPosition, isPlaying)
         }
 
         override fun onSeekForward(seekForwardIncrementMs: Long) {
+            syncProcessedSponsorSegmentsForPosition(currentPosition)
             onReloadDanmakuAfterSeek(currentPosition, isPlaying)
         }
 
@@ -416,6 +458,17 @@ fun BvPlayer(
 
     LaunchedEffect(videoPlayerConfigData.currentVideoCid) {
         lastHeartbeatPosition = 0L
+    }
+
+    LaunchedEffect(sponsorSegments) {
+        processedSponsorSegments = emptySet()
+    }
+
+    LaunchedEffect(autoSkipSponsorTipToken) {
+        if (autoSkipSponsorTipToken == 0L) return@LaunchedEffect
+        showAutoSkipSponsorTip = true
+        delay(3_000)
+        showAutoSkipSponsorTip = false
     }
 
     // 同步 videoPlayerHistoryData.lastPlayed 到本地变量
@@ -450,6 +503,31 @@ fun BvPlayer(
     }
 
     LaunchedEffect(currentPosition, isPlaying, isLive, videoPlayerConfigData.incognitoMode) {
+        if (
+            !isLive &&
+            currentEnableSponsorBlock &&
+            currentSponsorSegments.isNotEmpty() &&
+            isPlaying &&
+            !currentShowSponsorBlockTip
+        ) {
+            val segment = currentSponsorSegments.firstOrNull {
+                currentPosition >= it.startTime && currentPosition < it.endTime
+            }
+            if (segment != null && segment !in processedSponsorSegments) {
+                processedSponsorSegments = processedSponsorSegments + segment
+                logger.info {
+                    "SponsorBlock segment matched at ${currentPosition}ms, range=${segment.startTime}-${segment.endTime}, mode=$currentSponsorBlockSkipMode"
+                }
+                if (currentSponsorBlockSkipMode == SponsorBlockSkipMode.Auto) {
+                    autoSkipSponsorSeconds = (segment.duration / 1000.0).roundToInt().coerceAtLeast(1)
+                    autoSkipSponsorTipToken++
+                    skipSponsorSegment(segment)
+                } else {
+                    currentOnShowSponsorBlockTip(segment)
+                }
+            }
+        }
+
         if (!isLive && !videoPlayerConfigData.incognitoMode && isPlaying) {
             if (currentPosition - lastHeartbeatPosition >= 15_000) {
                 lastHeartbeatPosition = currentPosition
@@ -518,6 +596,7 @@ fun BvPlayer(
                 }
             },
             onSeekToPosition = { position ->
+                syncProcessedSponsorSegmentsForPosition(position)
                 onReloadDanmakuAfterSeek(position, isPlaying)
                 videoPlayer.seekTo(position)
             },
@@ -575,7 +654,16 @@ fun BvPlayer(
             onPlayNewVideo = {
                 sendHeartbeat()
                 onLoadNewVideo(it)
-            }
+            },
+            showSponsorBlockTip = showSponsorBlockTip,
+            showAutoSkipSponsorTip = showAutoSkipSponsorTip,
+            autoSkipSponsorSeconds = autoSkipSponsorSeconds,
+            currentSponsorSegment = currentSponsorSegment,
+            onSkipSponsorSegment = {
+                logger.info { "Skip sponsor segment" }
+                skipSponsorSegment(currentSponsorSegment)
+            },
+            onDismissSponsorBlockTip = currentOnDismissSponsorBlockTip
         ) {
             BvVideoPlayer(
                 modifier = Modifier

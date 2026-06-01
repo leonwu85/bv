@@ -77,7 +77,11 @@ fun HistoryScreen(
     ) { innerPadding ->
         LazyVerticalGrid(
             modifier = Modifier.padding(top = innerPadding.calculateTopPadding()),
-            columns = GridCells.Adaptive(if (windowSize.widthSizeClass == WindowWidthSizeClass.Compact) 180.dp else 220.dp),
+            columns = if (windowSize.widthSizeClass == WindowWidthSizeClass.Compact) {
+                GridCells.Fixed(2)
+            } else {
+                GridCells.Adaptive(220.dp)
+            },
             state = listState,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),

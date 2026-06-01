@@ -1,5 +1,10 @@
 package dev.aaa1115910.bv.player.mobile.controller
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,7 +12,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BrightnessHigh
 import androidx.compose.material.icons.rounded.BrightnessLow
@@ -20,6 +27,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,8 +39,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment
+import dev.aaa1115910.bv.player.shared.R
 import dev.aaa1115910.bv.util.formatHourMinSec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -271,6 +285,164 @@ private fun VolumeTipPreview() {
     MaterialTheme {
         Surface {
             VolumeTip(show = true, progress = 0.3f)
+        }
+    }
+}
+
+@Composable
+fun SponsorBlockTip(
+    modifier: Modifier = Modifier,
+    show: Boolean,
+    isFullScreen: Boolean,
+    segment: SponsorSegment?,
+    onSkip: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var remainingTime by remember { mutableStateOf(10) }
+    val density = LocalDensity.current
+
+    LaunchedEffect(show, segment?.UUID) {
+        if (!show) return@LaunchedEffect
+        remainingTime = 10
+        repeat(10) {
+            delay(1000)
+            remainingTime--
+        }
+        onDismiss()
+    }
+
+    val tipContent: @Composable () -> Unit = {
+        AnimatedVisibility(
+            visible = show,
+            enter = fadeIn() + slideInVertically { if (isFullScreen) it / 2 else -it / 2 },
+            exit = fadeOut() + slideOutVertically { if (isFullScreen) it / 2 else -it / 2 }
+        ) {
+            val containerColor = if (isFullScreen) {
+                Color.Black.copy(alpha = 0.62f)
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHighest
+            }
+            val contentColor = if (isFullScreen) Color.White else MaterialTheme.colorScheme.onSurface
+            val tipShape = if (isFullScreen) {
+                MaterialTheme.shapes.medium
+            } else {
+                RoundedCornerShape(
+                    topStart = 0.dp,
+                    topEnd = 0.dp,
+                    bottomStart = 12.dp,
+                    bottomEnd = 12.dp
+                )
+            }
+            Surface(
+                modifier = Modifier.widthIn(max = 420.dp),
+                color = containerColor,
+                shape = tipShape,
+                shadowElevation = if (isFullScreen) 0.dp else 6.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        modifier = Modifier.weight(1f),
+                        text = "${segment?.categoryEnum?.displayName ?: "广告片段"}来袭 (${remainingTime}s)",
+                        color = contentColor,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    TextButton(onClick = onSkip) {
+                        Text(
+                            text = "跳过",
+                            color = if (isFullScreen) Color.White else MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (isFullScreen) {
+        Box(
+            modifier = modifier.fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 48.dp)
+            ) { tipContent() }
+        }
+    } else {
+        Popup(
+            alignment = Alignment.BottomCenter,
+            offset = IntOffset(0, with(density) { 60.dp.roundToPx() })
+        ) {
+            tipContent()
+        }
+    }
+}
+
+@Composable
+fun AutoSkipSponsorTip(
+    modifier: Modifier = Modifier,
+    show: Boolean,
+    isFullScreen: Boolean,
+    skippedSeconds: Int
+) {
+    val density = LocalDensity.current
+    val tipContent: @Composable () -> Unit = {
+        AnimatedVisibility(
+            visible = show && skippedSeconds > 0,
+            enter = fadeIn() + slideInVertically { if (isFullScreen) it / 2 else -it / 2 },
+            exit = fadeOut() + slideOutVertically { if (isFullScreen) it / 2 else -it / 2 }
+        ) {
+            val containerColor = if (isFullScreen) {
+                Color.Black.copy(alpha = 0.62f)
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHighest
+            }
+            val contentColor = if (isFullScreen) Color.White else MaterialTheme.colorScheme.onSurface
+            val tipShape = if (isFullScreen) {
+                MaterialTheme.shapes.medium
+            } else {
+                RoundedCornerShape(
+                    topStart = 0.dp,
+                    topEnd = 0.dp,
+                    bottomStart = 12.dp,
+                    bottomEnd = 12.dp
+                )
+            }
+            Surface(
+                modifier = Modifier.widthIn(max = 420.dp),
+                color = containerColor,
+                shape = tipShape,
+                shadowElevation = if (isFullScreen) 0.dp else 6.dp
+            ) {
+                Text(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    text = stringResource(R.string.video_player_auto_skip_sponsor_tip, skippedSeconds),
+                    color = contentColor,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+    }
+
+    if (isFullScreen) {
+        Box(
+            modifier = modifier.fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 48.dp)
+            ) { tipContent() }
+        }
+    } else {
+        Popup(
+            alignment = Alignment.BottomCenter,
+            offset = IntOffset(0, with(density) { 60.dp.roundToPx() })
+        ) {
+            tipContent()
         }
     }
 }

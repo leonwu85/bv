@@ -56,7 +56,9 @@ fun AdvanceContent(
                 radioPreference(
                     title = "播放器内核",
                     prefReq = MobilePrefKeys.playerTypeRequest,
-                    values = PlayerType.entries.associate { it.ordinal to it.name },
+                    values = PlayerType.entries
+                        .filter { it != PlayerType.VLC }
+                        .associate { it.ordinal to it.name },
                     onValueChange = { ordinal ->
                         val newType = PlayerType.entries[ordinal]
                         if (newType == PlayerType.MPV && MpvLibsInstaller.needsInstall(context)) {

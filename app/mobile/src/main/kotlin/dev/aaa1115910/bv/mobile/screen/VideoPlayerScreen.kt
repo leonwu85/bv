@@ -720,6 +720,21 @@ fun VideoPlayerScreen(
                             isLive = playerViewModel.isLive,
                             onLiveDanmakuPlayerReady = { player ->
                                 playerViewModel.setLivePlayer(player)
+                            },
+                            enableSponsorBlock = playerViewModel.enableSponsorBlock,
+                            sponsorBlockSkipMode = playerViewModel.sponsorBlockSkipMode,
+                            sponsorSegments = playerViewModel.sponsorSegments,
+                            showSponsorBlockTip = playerViewModel.showSponsorBlockTip,
+                            currentSponsorSegment = playerViewModel.currentSponsorSegment,
+                            onShowSponsorBlockTip = { segment ->
+                                playerViewModel.currentSponsorSegment = segment
+                                playerViewModel.showSponsorBlockTip = true
+                            },
+                            onSkipSponsorSegment = { segment ->
+                                playerViewModel.skipSponsorSegment(segment)
+                            },
+                            onDismissSponsorBlockTip = {
+                                playerViewModel.dismissSponsorBlockTip()
                             }
                         )
                     }
