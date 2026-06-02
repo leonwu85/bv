@@ -911,6 +911,7 @@ fun BvPlayer(
         override fun onPlay() {
             logger.info { "onPlay" }
             scope.launch(Dispatchers.Main) {
+                val hasPlayedBefore = hasStartedPlaybackOnce
                 hasStartedPlaybackOnce = true
                 val wasPlaying = isPlaying
                 isPlaying = true
@@ -943,19 +944,21 @@ fun BvPlayer(
                     lastHeartbeatPosition = pos
                     updateBackToHistory()
                 } else if (!wasPlaying) {
-                    val timeSinceLastSeek = currentTime - lastDanmakuSeekTime
-                    if (timeSinceLastSeek < 3000) {
-                        logger.info { "onPlay: skip seek (timeSinceLastSeek=${timeSinceLastSeek}ms)" }
-                        mDanmakuPlayer?.start()
-                    } else {
+                    if (!hasPlayedBefore) {
                         val danmakuPosition = if (lastPlayed > 0) lastPlayed else videoPlayer.currentPosition
-                        logger.info { "onPlay: danmakuPosition=${danmakuPosition.formatHourMinSec()}, currentPosition=${videoPlayer.currentPosition.formatHourMinSec()}" }
+                        logger.info {
+                            "onPlay: initial danmaku sync to ${danmakuPosition.formatHourMinSec()}, currentPosition=${videoPlayer.currentPosition.formatHourMinSec()}"
+                        }
                         mDanmakuPlayer?.seekTo(danmakuPosition)
-                        mDanmakuPlayer?.start()
                         lastDanmakuSeekTime = currentTime
                         lastHeartbeatPosition = danmakuPosition
-                        updateBackToHistory()
+                    } else {
+                        logger.info {
+                            "onPlay: resume danmaku without seek, currentPosition=${videoPlayer.currentPosition.formatHourMinSec()}"
+                        }
                     }
+                    mDanmakuPlayer?.start()
+                    updateBackToHistory()
                 }
             }
         }

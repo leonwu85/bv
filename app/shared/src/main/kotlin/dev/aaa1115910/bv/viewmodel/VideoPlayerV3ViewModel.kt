@@ -1561,7 +1561,7 @@ class VideoPlayerV3ViewModel(
                 )
                 withContext(Dispatchers.Main) {
                     danmakuPlayer?.seekTo(positionMs)
-                    if (shouldPlay) {
+                    if (shouldPlay || videoPlayer?.isPlaying == true) {
                         danmakuPlayer?.start()
                     } else {
                         danmakuPlayer?.pause()
