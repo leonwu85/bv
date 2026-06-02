@@ -459,7 +459,7 @@ class MpvMediaPlayer(
         audioTrackAdded = true
         val proxiedAudioUrl = createProxyUrl(normalizedAudioUrl)
         runMpv("add audio") {
-            command(arrayOf("audio-add", proxiedAudioUrl, "auto"))
+            command(arrayOf("audio-add", proxiedAudioUrl, "select"))
         }
     }
 
