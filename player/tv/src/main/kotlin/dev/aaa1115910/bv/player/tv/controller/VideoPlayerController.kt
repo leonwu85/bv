@@ -233,7 +233,7 @@ fun VideoPlayerController(
                 val subtitle = if (videoPlayerConfigData.currentSubtitleId != -1L) {
                     videoPlayerConfigData.availableSubtitleTracks.firstOrNull { it.id == -1L }
                 } else {
-                    videoPlayerConfigData.availableSubtitleTracks.firstOrNull { it.id != -1L }
+                    videoPlayerConfigData.availableSubtitleTracks.preferredSubtitleForQuickToggle()
                 }
                 subtitle?.let { onSubtitleChange(it) }
             }

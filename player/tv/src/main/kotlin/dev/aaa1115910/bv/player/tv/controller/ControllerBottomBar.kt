@@ -235,7 +235,6 @@ fun ControllerBottomBar(
     val autoHideState = remember { ControllerBottomBarAutoHideState() }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showRotationDialog by remember { mutableStateOf(false) }
-    var showSubtitleDialog by remember { mutableStateOf(false) }
     var speed by remember { mutableFloatStateOf(playSpeed) }
     val danmakuIconId =
         if (showDanmaku) R.drawable.ic_danmaku_on else R.drawable.ic_danmaku_hide
@@ -251,6 +250,7 @@ fun ControllerBottomBar(
         fromSeason, showDanmaku, isPlaying, isLoop,
         showPrevVideoBtn, showNextVideoBtn, isLive,
         speed, isAudioOnly, rotation, hasSubtitles, currentSubtitleId,
+        availableSubtitleTracks,
         commentPanelVisible, videoPlayerConfigData.supportManualVideoRotation
     ) {
         listOf(
@@ -288,7 +288,14 @@ fun ControllerBottomBar(
             ControlButton(
                 id = "subtitle",
                 painterId = subtitleIconId,
-                onClick = { showSubtitleDialog = true },
+                onClick = {
+                    val targetSubtitle = if (currentSubtitleId != -1L) {
+                        availableSubtitleTracks.firstOrNull { it.id == -1L }
+                    } else {
+                        availableSubtitleTracks.preferredSubtitleForQuickToggle()
+                    }
+                    targetSubtitle?.let { onSubtitleChange(it.id) }
+                },
                 visible = hasSubtitles,
                 selected = currentSubtitleId > 0
             ),
@@ -425,7 +432,6 @@ fun ControllerBottomBar(
             show &&
             !showSpeedDialog &&
             !showRotationDialog &&
-            !showSubtitleDialog &&
             !autoHideState.pauseAutoHide
         ) {
             autoHideState.hideVideoInfoJob = scope.launch {
@@ -435,7 +441,7 @@ fun ControllerBottomBar(
         }
     }
 
-    LaunchedEffect(show, showSpeedDialog, showRotationDialog, showSubtitleDialog) {
+    LaunchedEffect(show, showSpeedDialog, showRotationDialog) {
         scheduleHideJob()
     }
     DisposableEffect(Unit) {
@@ -1114,16 +1120,4 @@ fun ControllerBottomBar(
         )
     }
 
-    if (showSubtitleDialog) {
-        val currentSubtitle =
-            availableSubtitleTracks.firstOrNull { it.id == currentSubtitleId }
-        if (currentSubtitle != null) {
-            SubtitleDialog(
-                onHideDialog = { showSubtitleDialog = false },
-                subtitle = currentSubtitle,
-                availableSubtitleTracks = availableSubtitleTracks,
-                onSubtitleChange = { subtitle -> onSubtitleChange(subtitle.id) }
-            )
-        }
-    }
 }
