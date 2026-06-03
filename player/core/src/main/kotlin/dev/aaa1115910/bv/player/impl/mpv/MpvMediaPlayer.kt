@@ -35,6 +35,7 @@ class MpvMediaPlayer(
     private var surfaceAttached = false
     private var released = false
     private var suppressNextEndEvent = false
+    private var endDispatchedForCurrentMedia = false
     private var pendingSeekCallbackPosition: Long? = null
 
     private var _isPlaying = false
@@ -104,12 +105,16 @@ class MpvMediaPlayer(
     }
 
     override fun playUrl(videoUrl: String?, audioUrl: String?) {
+        val hasMediaToReplace = mediaLoaded
         currentVideoUrl = videoUrl
         currentAudioUrl = audioUrl
         loadRequested = false
         mediaLoaded = false
         audioTrackAdded = false
+        if (hasMediaToReplace) suppressNextEndEvent = true
         pendingSeekCallbackPosition = null
+        stopProgressUpdates()
+        _isPlaying = false
         _currentPosition = 0L
         _duration = 0L
         _bufferedPercentage = 0
@@ -345,7 +350,7 @@ class MpvMediaPlayer(
     private fun configureAfterInit() {
         MPVLib.setOptionString("save-position-on-quit", "no")
         MPVLib.setOptionString("force-window", "no")
-        MPVLib.setOptionString("idle", "once")
+        MPVLib.setOptionString("idle", "yes")
         MPVLib.setPropertyBoolean("pause", true)
     }
 
@@ -437,7 +442,6 @@ class MpvMediaPlayer(
         videoCodec = null
         audioCodec = null
         hwdec = null
-        suppressNextEndEvent = mediaLoaded
         mediaLoaded = true
         _bufferedPercentage = 0
         _currentPosition = 0L
@@ -494,6 +498,8 @@ class MpvMediaPlayer(
     }
 
     private fun handleFileLoaded() {
+        suppressNextEndEvent = false
+        endDispatchedForCurrentMedia = false
         addAudioTrackIfNeeded()
         refreshVideoInfo()
 
@@ -524,6 +530,9 @@ class MpvMediaPlayer(
             suppressNextEndEvent = false
             return
         }
+        if (endDispatchedForCurrentMedia) return
+
+        endDispatchedForCurrentMedia = true
         stopProgressUpdates()
         updatePlayingState(false)
         onMain {
