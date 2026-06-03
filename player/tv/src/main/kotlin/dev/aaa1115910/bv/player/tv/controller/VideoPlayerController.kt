@@ -83,6 +83,7 @@ fun VideoPlayerController(
     bottomProgressBarColor: Color = Color(0xFFBD26B8).copy(alpha = 0.5f),
 
     showRelatedVideos: Boolean = false,
+    showRelatedButton: Boolean = true,
     onToggleRelatedVideos: (Boolean) -> Unit,
     registerShowInfoProvider: ((() -> Boolean) -> Unit) = {},
     registerControllerInteractionProvider: ((() -> Boolean) -> Unit) = {},
@@ -727,6 +728,7 @@ fun VideoPlayerController(
                 showInfo = false
                 showListController = true
             },
+            showRelatedButton = showRelatedButton,
             onOpenRelatedVideo = {
                 onToggleRelatedVideos(true)
 

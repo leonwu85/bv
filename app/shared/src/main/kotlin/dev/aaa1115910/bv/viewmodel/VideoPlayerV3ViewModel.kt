@@ -49,6 +49,7 @@ import dev.aaa1115910.biliapi.websocket.LiveDataWebSocket
 import dev.aaa1115910.bilisubtitle.SubtitleParser
 import dev.aaa1115910.bilisubtitle.entity.SubtitleItem
 import dev.aaa1115910.bv.BVApp
+import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.entity.LiveQualityPreference
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.player.autoplay.AutoPlayCandidate
@@ -313,6 +314,12 @@ class VideoPlayerV3ViewModel(
 
     var currentVideoHeight by mutableIntStateOf(0)
     var currentVideoWidth by mutableIntStateOf(0)
+
+    fun replaceRelatedVideos(videos: List<VideoCardData>) {
+        videoInfoRepository.relatedVideos.clear()
+        videoInfoRepository.relatedVideos.addAll(videos)
+        if (videos.isEmpty()) showRelatedVideos = false
+    }
 
     var currentQuality by mutableStateOf(defaultQualityForCurrentNetwork())
     var currentVideoCodec by mutableStateOf(settings.defaultVideoCodec)

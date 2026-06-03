@@ -377,6 +377,9 @@ class VideoPlayerV3Activity : ComponentActivity() {
                 }
                 val detail = videoDetailViewModel.videoDetail
                     ?: error("视频详情为空")
+                playerViewModel.replaceRelatedVideos(
+                    videoDetailViewModel.relatedVideos.take(16)
+                )
 
                 VideoUserActionManager.updateFromLoadedData(
                     aid = detail.aid,

@@ -199,6 +199,7 @@ fun ControllerBottomBar(
     onLoopPlayModeChange: (Boolean) -> Unit,
     onRotationChange: (VideoRotation) -> Unit,
     fromSeason: Boolean = false,
+    showRelatedButton: Boolean = !fromSeason,
     isFollowingUp: Boolean = false,
     userActionContent: @Composable (
         modifier: Modifier,
@@ -912,7 +913,7 @@ fun ControllerBottomBar(
                     Text("列表", style = MaterialTheme.typography.bodySmall)
                 }
 
-                if (!fromSeason) {
+                if (showRelatedButton) {
                     val relatedFocus = userActionFocusRequesters.value["related"]
                     Button(
                         modifier = Modifier
