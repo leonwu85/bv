@@ -13,6 +13,7 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
@@ -96,6 +97,7 @@ data class DynamicItem(
             val face: String = "",
             @SerialName("face_nft")
             val faceNft: Boolean = false,
+            @Serializable(with = FlexibleBooleanSerializer::class)
             val following: Boolean = false,
             @SerialName("icon_badge")
             val iconBadge: IconBadge? = null,
@@ -670,6 +672,27 @@ object FlexibleIntSerializer : KSerializer<Int> {
 
     override fun serialize(encoder: Encoder, value: Int) {
         encoder.encodeInt(value)
+    }
+}
+
+object FlexibleBooleanSerializer : KSerializer<Boolean> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleBoolean", PrimitiveKind.BOOLEAN)
+
+    override fun deserialize(decoder: Decoder): Boolean {
+        val jsonDecoder = decoder as? JsonDecoder ?: return decoder.decodeBoolean()
+        val element = jsonDecoder.decodeJsonElement()
+        val primitive = element as? JsonPrimitive ?: return false
+        primitive.booleanOrNull?.let { return it }
+        primitive.intOrNull?.let { return it != 0 }
+        return when (primitive.contentOrNull?.lowercase()) {
+            "true", "1" -> true
+            else -> false
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: Boolean) {
+        encoder.encodeBoolean(value)
     }
 }
 
