@@ -75,10 +75,17 @@ fun PlayerSetting(
     var enableAsyncQueueing by remember { mutableStateOf(Prefs.enableAsyncQueueing) }
     var enableTunneling by remember { mutableStateOf(Prefs.enableTvTunneling) }
     var enableAudioPlaybackParams by remember { mutableStateOf(Prefs.enableAudioPlaybackParams) }
+    var tvMpvVideoOutput by remember { mutableStateOf(Prefs.tvMpvVideoOutput) }
     var showVlcDownloadConfirmDialog by remember { mutableStateOf(false) }
     var showVlcDownloaderDialog by remember { mutableStateOf(false) }
     var showMpvDownloadConfirmDialog by remember { mutableStateOf(false) }
     var showMpvDownloaderDialog by remember { mutableStateOf(false) }
+    val mpvVideoOutputs = listOf("mediacodec_embed", "gpu", "gpu-next")
+    val mpvVideoOutputDisplayNames = mapOf(
+        "mediacodec_embed" to "普通",
+        "gpu" to "gpu",
+        "gpu-next" to "gpu-next"
+    )
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -413,6 +420,22 @@ fun PlayerSetting(
                         onCheckedChange = {
                             vlcAutoRotate = it
                             Prefs.vlcAutoRotate = it
+                        }
+                    )
+                }
+            }
+            // MPV 播放器专用设置
+            if (selectedPlayerType == PlayerType.MPV) {
+                item {
+                    SettingListItemWithDialog(
+                        title = "MPV 视频输出",
+                        supportText = "用于测试 MPV --vo，重进播放器后生效",
+                        options = mpvVideoOutputs,
+                        getDisplayName = { item, _ -> mpvVideoOutputDisplayNames[item] ?: item },
+                        value = tvMpvVideoOutput,
+                        onValueChange = {
+                            tvMpvVideoOutput = it
+                            Prefs.tvMpvVideoOutput = it
                         }
                     )
                 }

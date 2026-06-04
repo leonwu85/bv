@@ -1,7 +1,6 @@
 package dev.aaa1115910.bv.player.impl.mpv
 
 import android.content.Context
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Surface
@@ -12,6 +11,7 @@ import `is`.xyz.mpv.MPVLib
 import `is`.xyz.mpv.MPVLib.MpvEvent
 import `is`.xyz.mpv.MPVLib.MpvFormat
 import io.github.oshai.kotlinlogging.KotlinLogging
+import java.net.URI
 import kotlin.math.abs
 
 class MpvMediaPlayer(
@@ -26,7 +26,6 @@ class MpvMediaPlayer(
     private var currentVideoUrl: String? = null
     private var currentAudioUrl: String? = null
     private var headers: Map<String, String> = emptyMap()
-    private val proxyTokens = mutableSetOf<String>()
 
     private var loadRequested = false
     private var mediaLoading = false
@@ -50,6 +49,7 @@ class MpvMediaPlayer(
     private var videoCodec: String? = null
     private var audioCodec: String? = null
     private var hwdec: String? = null
+    private val videoOutput = resolveVideoOutputMode()
 
     private val progressUpdateRunnable = object : Runnable {
         override fun run() {
@@ -171,7 +171,6 @@ class MpvMediaPlayer(
 
     override fun reset() {
         stop()
-        clearProxyTokens()
         currentVideoUrl = null
         currentAudioUrl = null
         loadRequested = false
@@ -224,7 +223,6 @@ class MpvMediaPlayer(
         } catch (error: Throwable) {
             logger.error(error) { "Error releasing MPV player" }
         } finally {
-            clearProxyTokens()
             mpvInitialized = false
             mPlayerEventListener = null
         }
@@ -275,6 +273,7 @@ class MpvMediaPlayer(
                 video codec: ${videoCodec ?: "unknown"}
                 audio codec: ${audioCodec ?: "unknown"}
                 hwdec: ${hwdec ?: "unknown"}
+                vo: $videoOutput
                 speed: $speed
             """.trimIndent()
         }
@@ -291,7 +290,7 @@ class MpvMediaPlayer(
             attachSurface(surface)
             surfaceAttached = true
             setOptionString("force-window", "yes")
-            setPropertyString("vo", MPV_VIDEO_OUTPUT)
+            setPropertyString("vo", videoOutput)
             updateSurfaceSize(width, height)
         }
 
@@ -328,7 +327,7 @@ class MpvMediaPlayer(
         MPVLib.setOptionString("profile", "fast")
         MPVLib.setOptionString("gpu-context", "android")
         MPVLib.setOptionString("opengl-es", "yes")
-        MPVLib.setOptionString("vo", MPV_VIDEO_OUTPUT)
+        MPVLib.setOptionString("vo", videoOutput)
         MPVLib.setOptionString("ao", options.audioOutputDevices.ifBlank { DEFAULT_AUDIO_OUTPUT_DEVICES })
         MPVLib.setOptionString("ytdl", "no")
         MPVLib.setOptionString("audio-set-media-role", "yes")
@@ -360,7 +359,7 @@ class MpvMediaPlayer(
     }
 
     private fun shouldUseHardwareDecode(): Boolean {
-        return options.enableHardwareDecode && !isAndroidEmulator()
+        return options.enableHardwareDecode
     }
 
     private fun resolveHardwareDecodeMode(): String {
@@ -371,20 +370,13 @@ class MpvMediaPlayer(
         }
     }
 
-    private fun isAndroidEmulator(): Boolean {
-        return Build.FINGERPRINT.startsWith("generic") ||
-                Build.FINGERPRINT.startsWith("unknown") ||
-                Build.MODEL.contains("google_sdk", ignoreCase = true) ||
-                Build.MODEL.contains("Emulator", ignoreCase = true) ||
-                Build.MODEL.contains("Android SDK built for", ignoreCase = true) ||
-                Build.MANUFACTURER.contains("Genymotion", ignoreCase = true) ||
-                Build.HARDWARE.contains("goldfish", ignoreCase = true) ||
-                Build.HARDWARE.contains("ranchu", ignoreCase = true) ||
-                Build.PRODUCT.contains("sdk", ignoreCase = true) ||
-                Build.DEVICE.contains("emulator", ignoreCase = true) ||
-                Build.DEVICE.contains("emu", ignoreCase = true) ||
-                (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")) ||
-                Build.PRODUCT == "google_sdk"
+    private fun resolveVideoOutputMode(): String {
+        val mode = options.mpvVideoOutput.trim()
+        return if (mode in SUPPORTED_VIDEO_OUTPUTS) {
+            mode
+        } else {
+            DEFAULT_VIDEO_OUTPUT
+        }
     }
 
     private fun applyNetworkOptions() {
@@ -441,10 +433,9 @@ class MpvMediaPlayer(
         }
 
         applyNetworkOptions()
-        val previousProxyTokens = proxyTokens.toSet()
-        val proxiedUrl = createProxyUrl(url)
-        val proxiedAudioUrl = externalAudioUrl()?.let { createProxyUrl(it) }
-        audioTrackAdded = proxiedAudioUrl != null
+        val videoUrl = url.toMpvMediaUrl()
+        val audioUrl = externalAudioUrl()?.toMpvMediaUrl()
+        audioTrackAdded = audioUrl != null
         videoCodec = null
         audioCodec = null
         hwdec = null
@@ -456,9 +447,8 @@ class MpvMediaPlayer(
 
         runMpv("load media") {
             setPropertyBoolean("pause", true)
-            command(buildLoadFileCommand(proxiedUrl, proxiedAudioUrl))
+            command(buildLoadFileCommand(videoUrl, audioUrl))
         }
-        clearProxyTokens(previousProxyTokens)
     }
 
     private fun addAudioTrackIfNeeded() {
@@ -467,31 +457,49 @@ class MpvMediaPlayer(
             ?: return
 
         audioTrackAdded = true
-        val proxiedAudioUrl = createProxyUrl(normalizedAudioUrl)
+        val audioUrl = normalizedAudioUrl.toMpvMediaUrl()
         runMpv("add audio") {
-            command(arrayOf("audio-add", proxiedAudioUrl, "select"))
+            command(arrayOf("audio-add", audioUrl, "select"))
         }
-    }
-
-    private fun createProxyUrl(url: String): String {
-        return runCatching {
-            MpvHttpProxyServer.register(
-                context = context.applicationContext,
-                url = url,
-                headers = headers,
-                userAgent = options.userAgent,
-                referer = options.referer
-            )
-        }.onSuccess { proxiedUrl ->
-            proxiedUrl.token?.let { proxyTokens += it }
-        }.onFailure {
-            logger.warn(it) { "Failed to create MPV local proxy URL, falling back to original URL" }
-        }.getOrNull()?.url ?: url
     }
 
     private fun externalAudioUrl(): String? {
         val videoUrl = currentVideoUrl?.takeIf { it.isNotBlank() } ?: return null
         return currentAudioUrl?.takeIf { it.isNotBlank() && it != videoUrl }
+    }
+
+    private fun String.toMpvMediaUrl(): String {
+        val uri = runCatching { URI(this) }.getOrNull() ?: return this
+        val scheme = uri.scheme ?: return this
+        val host = uri.host ?: return this
+        if (!scheme.equals("https", ignoreCase = true) || !host.isBiliMediaHost()) {
+            return this
+        }
+
+        val rewrittenUrl = buildString {
+            append("http://")
+            append(uri.rawAuthority ?: host)
+            uri.rawPath?.let { append(it) }
+            uri.rawQuery?.let {
+                append('?')
+                append(it)
+            }
+            uri.rawFragment?.let {
+                append('#')
+                append(it)
+            }
+        }
+        logger.info { "Rewrite MPV media URL to HTTP for CDN host: $host" }
+        return rewrittenUrl
+    }
+
+    private fun String.isBiliMediaHost(): Boolean {
+        val host = lowercase()
+        return host == "bilivideo.com" ||
+                host.endsWith(".bilivideo.com") ||
+                host == "bilivideo.cn" ||
+                host.endsWith(".bilivideo.cn") ||
+                host.endsWith(".akamaized.net")
     }
 
     private fun buildLoadFileCommand(videoUrl: String, audioUrl: String?): Array<String> {
@@ -519,11 +527,6 @@ class MpvMediaPlayer(
                 MPVLib.getPropertyString("track-list/$index/type") == "audio"
             }
         }.getOrDefault(false)
-    }
-
-    private fun clearProxyTokens(tokens: Set<String> = proxyTokens.toSet()) {
-        tokens.forEach { token -> MpvHttpProxyServer.unregister(token) }
-        proxyTokens.removeAll(tokens)
     }
 
     private fun handleEvent(eventId: Int) {
@@ -790,7 +793,7 @@ class MpvMediaPlayer(
     )
 
     companion object {
-        private const val MPV_VIDEO_OUTPUT = "gpu"
+        private const val DEFAULT_VIDEO_OUTPUT = "gpu"
         private const val DEFAULT_AUDIO_OUTPUT_DEVICES = "audiotrack,opensles"
         private const val DEFAULT_VIDEO_SYNC = "audio"
         private const val DEFAULT_HARDWARE_DECODE_MODE = "mediacodec,mediacodec-copy"
@@ -799,5 +802,6 @@ class MpvMediaPlayer(
         private const val EXPANDED_DEMUXER_CACHE_BYTES = 256L * 1024L * 1024L
         private const val PROGRESS_UPDATE_INTERVAL_MS = 500L
         private const val FRAME_RATE_EPSILON = 0.001f
+        private val SUPPORTED_VIDEO_OUTPUTS = setOf("mediacodec_embed", "gpu", "gpu-next")
     }
 }

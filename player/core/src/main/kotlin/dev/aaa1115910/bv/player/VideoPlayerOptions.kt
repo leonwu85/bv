@@ -12,6 +12,7 @@ data class VideoPlayerOptions(
     val autoSync: String = "",
     val videoSync: String = "audio",
     val hardwareDecodeMode: String = "mediacodec,mediacodec-copy",
+    val mpvVideoOutput: String = "gpu",
     val audioOutputDevices: String = "audiotrack,opensles",
     val enableVideoFrameRateStrategy: Boolean = true,
     val isLive: Boolean = false

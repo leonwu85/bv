@@ -270,6 +270,7 @@ class VideoPlayerV3Activity : ComponentActivity() {
                 ApiType.App -> null
             }
         }
+        val mpvVideoOutput = Prefs.tvMpvVideoOutput
         val options = VideoPlayerOptions(
             userAgent = playbackUserAgent,
             referer = playbackReferer,
@@ -277,6 +278,8 @@ class VideoPlayerV3Activity : ComponentActivity() {
             enableAsyncQueueing = Prefs.enableAsyncQueueing,
             enableTunneling = enableTunneling,
             enableAudioPlaybackParams = Prefs.enableAudioPlaybackParams,
+            hardwareDecodeMode = resolveTvMpvHardwareDecodeMode(mpvVideoOutput),
+            mpvVideoOutput = mpvVideoOutput,
             enableVideoFrameRateStrategy = false,
             isLive = isLive
         )
@@ -286,6 +289,14 @@ class VideoPlayerV3Activity : ComponentActivity() {
             PlayerType.MPV -> MpvPlayerFactory().create(this, options)
         }
         playerViewModel.videoPlayer = videoPlayer
+    }
+
+    private fun resolveTvMpvHardwareDecodeMode(mpvVideoOutput: String): String {
+        return when (mpvVideoOutput) {
+            "mediacodec_embed" -> "mediacodec"
+            "gpu", "gpu-next" -> "mediacodec-copy"
+            else -> "mediacodec-copy"
+        }
     }
 
     private fun startVodPlayback(

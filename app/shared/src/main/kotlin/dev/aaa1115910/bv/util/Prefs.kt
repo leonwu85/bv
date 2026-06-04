@@ -743,6 +743,10 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableAudioPlaybackParamsRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableAudioPlaybackParams, value) }
 
+    var tvMpvVideoOutput: String
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefTvMpvVideoOutputRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefTvMpvVideoOutputKey, value) }
+
     var vlcLibsVersion: String
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefVlcLibsVersionRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefVlcLibsVersionKey, value) }
@@ -899,6 +903,7 @@ object PrefKeys {
     val prefEnableTvTunneling = booleanPreferencesKey("enable_tv_tunneling")
     val prefTvTunnelingDefaultMigrationDone = booleanPreferencesKey("tv_tunneling_default_migration_done")
     val prefEnableAudioPlaybackParams = booleanPreferencesKey("enable_audio_playback_params")
+    val prefTvMpvVideoOutputKey = stringPreferencesKey("tv_mpv_video_output")
     val prefVlcLibsVersionKey = stringPreferencesKey("vlc_libs_version")
     val prefDefaultDanmakuFilterLevelKey = intPreferencesKey("default_danmaku_filter_level")
     val prefDefaultDanmakuMergeEnabledKey = booleanPreferencesKey("default_danmaku_merge_enabled")
@@ -1028,6 +1033,7 @@ object PrefKeys {
     val prefEnableTvTunnelingRequest = PreferenceRequest(prefEnableTvTunneling, false)
     val prefTvTunnelingDefaultMigrationDoneRequest = PreferenceRequest(prefTvTunnelingDefaultMigrationDone, false)
     val prefEnableAudioPlaybackParamsRequest = PreferenceRequest(prefEnableAudioPlaybackParams, true)
+    val prefTvMpvVideoOutputRequest = PreferenceRequest(prefTvMpvVideoOutputKey, "gpu")
     val prefVlcLibsVersionRequest = PreferenceRequest(prefVlcLibsVersionKey, "")
     val prefDefaultDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultDanmakuFilterLevelKey, 1)
     val prefDefaultDanmakuMergeEnabledRequest = PreferenceRequest(prefDefaultDanmakuMergeEnabledKey, false)
