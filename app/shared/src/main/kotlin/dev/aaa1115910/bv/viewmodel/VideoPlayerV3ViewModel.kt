@@ -72,6 +72,7 @@ import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.VideoListInteractiveNode
 import dev.aaa1115910.bv.player.entity.VideoListItemData
+import dev.aaa1115910.bv.player.entity.VideoPlayerViewPoint
 import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.repository.VideoInfoRepository
@@ -312,6 +313,7 @@ class VideoPlayerV3ViewModel(
     val danmakuMasks = mutableStateListOf<DanmakuMaskSegment>()
     var videoShot: VideoShot? by mutableStateOf(null)
     var clipInfoList: List<ClipInfo> by mutableStateOf(emptyList())
+    var viewPoints: List<VideoPlayerViewPoint> by mutableStateOf(emptyList())
 
     var availableQuality = mutableStateListOf<Resolution>()
     var availableVideoCodec = mutableStateListOf<VideoCodec>()
@@ -758,6 +760,7 @@ class VideoPlayerV3ViewModel(
         if (videoChanged) {
             invalidatePreparedAutoPlayTarget()
             resetResolvedDanmakuMask(clearMasks = true)
+            viewPoints = emptyList()
         }
         currentAid = avid
         currentCid = cid
@@ -789,7 +792,7 @@ class VideoPlayerV3ViewModel(
             enableSmartSubtitleIfAvailable(
                 fallbackToFirstSubtitle = continuePlayNext && lastPlayEnabledSubtitle && upId <= 0L
             )
-            loadPlayUrl(
+            val playUrlLoaded = loadPlayUrl(
                 avid,
                 cid,
                 epid ?: 0,
@@ -799,6 +802,17 @@ class VideoPlayerV3ViewModel(
                 playbackSessionToken = playbackSessionToken,
                 preparedPlayData = preparedPlayData,
             )
+            if (playUrlLoaded) {
+                launch {
+                    updateViewPoints(
+                        aid = avid,
+                        cid = cid,
+                        epid = epid,
+                        seasonId = seasonId,
+                        playbackSessionToken = playbackSessionToken
+                    )
+                }
+            }
             if (isInteractivePlayback && (!interactiveOptionsFromQuestions || interactiveOptions.isEmpty())) {
                 refreshInteractiveBranches(currentInteractiveEdgeId.takeIf { it > 0L })
             }
@@ -810,6 +824,49 @@ class VideoPlayerV3ViewModel(
             loadSponsorSegments(AvBvConverter.av2bv(avid), cid)
 
             updateVideoShot()
+        }
+    }
+
+    private suspend fun updateViewPoints(
+        aid: Long,
+        cid: Long,
+        epid: Int?,
+        seasonId: Int?,
+        playbackSessionToken: Long,
+    ) {
+        val points = runCatching {
+            val playerInfo = videoPlayRepository.getVideoPlayerWbiInfo(
+                aid = aid,
+                cid = cid,
+                epid = epid,
+                seasonId = seasonId
+            )
+            if (playerInfo.viewPoints.firstOrNull()?.type != 2) {
+                emptyList()
+            } else {
+                playerInfo.viewPoints
+                    .filter { point -> point.to > point.from && point.content.isNotBlank() }
+                    .map { point ->
+                        VideoPlayerViewPoint(
+                            from = point.from,
+                            to = point.to,
+                            content = point.content,
+                            imageUrl = point.imgUrl
+                        )
+                    }
+            }
+        }.onFailure {
+            logger.fWarn { "Load video view points failed: ${it.message}" }
+        }.getOrDefault(emptyList())
+
+        withContext(Dispatchers.Main) {
+            if (
+                isVodPlaybackSessionActive(playbackSessionToken) &&
+                currentAid == aid &&
+                currentCid == cid
+            ) {
+                viewPoints = points
+            }
         }
     }
 
@@ -3201,6 +3258,7 @@ class VideoPlayerV3ViewModel(
      */
     fun loadLiveStreamWithQuality(roomId: Int, qn: Int = defaultLiveQnForCurrentNetwork()) {
         cancelVodPlayUrlAutoRefresh()
+        viewPoints = emptyList()
         // 取消之前的重连任务
         liveRetryJob?.cancel()
         liveRetryJob = null
@@ -3639,6 +3697,7 @@ class VideoPlayerV3ViewModel(
      */
     fun loadLiveStream(streamUrl: String) {
         cancelVodPlayUrlAutoRefresh()
+        viewPoints = emptyList()
         viewModelScope.launch(Dispatchers.IO) {
             logger.fInfo { "Load live stream: $streamUrl" }
             withContext(Dispatchers.Main) { loadState = RequestState.Doing }

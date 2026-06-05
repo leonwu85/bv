@@ -10,10 +10,21 @@ data class VideoPlayerInfo(
     val lastPlayTime: Int = 0,
     @SerialName("last_play_cid")
     val lastPlayCid: Long = 0L,
+    @SerialName("view_points")
+    val viewPoints: List<ViewPoint> = emptyList(),
 ) {
     @Serializable
     data class Interaction(
         @SerialName("graph_version")
         val graphVersion: Int? = null,
+    )
+
+    @Serializable
+    data class ViewPoint(
+        val type: Int = 0,
+        val from: Long = 0L,
+        val to: Long = 0L,
+        val content: String = "",
+        val imgUrl: String = "",
     )
 }

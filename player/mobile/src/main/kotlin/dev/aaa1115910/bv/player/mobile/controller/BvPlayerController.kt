@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -497,6 +498,24 @@ fun BvPlayerControllerVideoContent(
                         }
                     )
             ) {}
+        }
+
+        if (!videoPlayerConfigData.isLive && videoPlayerConfigData.viewPoints.isNotEmpty()) {
+            val viewPointBottomPadding = when {
+                showBaseUi && isFullScreen -> 104.dp
+                showBaseUi -> 48.dp
+                else -> 0.dp
+            }
+            ViewPointSegmentBar(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(bottom = viewPointBottomPadding),
+                viewPoints = videoPlayerConfigData.viewPoints,
+                durationMs = videoPlayerSeekData.duration,
+                currentPositionMs = videoPlayerSeekData.position,
+                onSeekToPosition = onSeekToPosition
+            )
         }
 
         if (!isMenuOpen && !showBaseUi) {

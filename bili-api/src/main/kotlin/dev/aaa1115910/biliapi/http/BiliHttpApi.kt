@@ -308,6 +308,31 @@ object BiliHttpApi {
         sessData?.let { header("Cookie", "SESSDATA=$sessData;") }
     }.body()
 
+    suspend fun getVideoPlayerWbiInfo(
+        av: Long? = null,
+        bv: String? = null,
+        cid: Long,
+        seasonId: Int? = null,
+        epid: Int? = null,
+        sessData: String? = null,
+    ): BiliResponse<VideoPlayerInfo> {
+        require(av != null || bv != null) { "av and bv cannot be null at the same time" }
+        val signedParams = Parameters.build {
+            av?.let { append("aid", it.toString()) }
+            bv?.let { append("bvid", it) }
+            append("cid", cid.toString())
+            seasonId?.takeIf { it > 0 }?.let { append("season_id", it.toString()) }
+            epid?.takeIf { it > 0 }?.let { append("ep_id", it.toString()) }
+        }.signWbi()
+
+        return client.get("/x/player/wbi/v2") {
+            signedParams.entries().forEach { (key, values) ->
+                values.forEach { value -> parameter(key, value) }
+            }
+            sessData?.let { header("Cookie", "SESSDATA=$sessData;") }
+        }.body()
+    }
+
     suspend fun getInteractiveEdgeInfo(
         bvid: String,
         graphVersion: Int,

@@ -83,6 +83,16 @@ data class VideoPlayerHistoryData(
     val showBackToHistory: Boolean = false,
 )
 
+data class VideoPlayerViewPoint(
+    val from: Long = 0L,
+    val to: Long = 0L,
+    val content: String = "",
+    val imageUrl: String = "",
+) {
+    val startMs: Long get() = from.coerceAtLeast(0L) * 1000L
+    val endMs: Long get() = to.coerceAtLeast(from).coerceAtLeast(0L) * 1000L
+}
+
 data class VideoPlayerPaymentData(
     val needPay: Boolean = false,
     val epid: Int = 0,
@@ -147,6 +157,7 @@ data class VideoPlayerConfigData(
     val enableStartPositionSwitch: Boolean = false,
     val debugDanmakuMaskDownsample180p: Boolean = false,
     val clipInfoList: List<ClipInfo> = emptyList(),
+    val viewPoints: List<VideoPlayerViewPoint> = emptyList(),
     val skipPgcIntroOutro: Boolean = false,
     val isLive: Boolean = false,
     val availableLiveQualities: List<Pair<Int, String>> = emptyList(),

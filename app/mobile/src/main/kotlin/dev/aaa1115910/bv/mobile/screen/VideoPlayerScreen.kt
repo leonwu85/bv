@@ -595,6 +595,7 @@ fun VideoPlayerScreen(
                             currentPlayMode = playerViewModel.currentPlayMode,
                             incognitoMode = playerSettings.incognitoMode,
                             defaultStartPosition = playerSettings.playerDefaultStartPosition.toPlayerType(),
+                            viewPoints = playerViewModel.viewPoints,
                             isLive = playerViewModel.isLive,
                             availableLiveQualities = playerViewModel.availableLiveQualities,
                             currentLiveQn = playerViewModel.currentLiveQn,

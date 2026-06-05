@@ -20,6 +20,7 @@ import dev.aaa1115910.biliapi.grpc.utils.handleGrpcException
 import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.http.BiliHttpProxyApi
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
+import dev.aaa1115910.biliapi.http.entity.video.VideoPlayerInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -244,6 +245,19 @@ class VideoPlayRepository(
             }
         }
     }
+
+    suspend fun getVideoPlayerWbiInfo(
+        aid: Long,
+        cid: Long,
+        epid: Int? = null,
+        seasonId: Int? = null,
+    ): VideoPlayerInfo = BiliHttpApi.getVideoPlayerWbiInfo(
+        av = aid,
+        cid = cid,
+        epid = epid,
+        seasonId = seasonId,
+        sessData = authRepository.sessionData
+    ).getResponseData()
 
     suspend fun getSubtitle(
         aid: Long,
