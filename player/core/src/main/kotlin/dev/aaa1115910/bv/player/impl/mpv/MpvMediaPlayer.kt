@@ -284,6 +284,9 @@ class MpvMediaPlayer(
     override val videoHeight: Int
         get() = _videoHeight
 
+    val usesEmbeddedVideoOutput: Boolean
+        get() = videoOutput == MEDIACODEC_EMBED_VIDEO_OUTPUT
+
     fun attachSurface(surface: Surface, width: Int, height: Int) {
         if (released) return
         runMpv("attach surface") {
@@ -794,6 +797,7 @@ class MpvMediaPlayer(
 
     companion object {
         private const val DEFAULT_VIDEO_OUTPUT = "gpu"
+        private const val MEDIACODEC_EMBED_VIDEO_OUTPUT = "mediacodec_embed"
         private const val DEFAULT_AUDIO_OUTPUT_DEVICES = "audiotrack,opensles"
         private const val DEFAULT_VIDEO_SYNC = "audio"
         private const val DEFAULT_HARDWARE_DECODE_MODE = "mediacodec,mediacodec-copy"
@@ -802,6 +806,6 @@ class MpvMediaPlayer(
         private const val EXPANDED_DEMUXER_CACHE_BYTES = 256L * 1024L * 1024L
         private const val PROGRESS_UPDATE_INTERVAL_MS = 500L
         private const val FRAME_RATE_EPSILON = 0.001f
-        private val SUPPORTED_VIDEO_OUTPUTS = setOf("mediacodec_embed", "gpu", "gpu-next")
+        private val SUPPORTED_VIDEO_OUTPUTS = setOf(MEDIACODEC_EMBED_VIDEO_OUTPUT, "gpu", "gpu-next")
     }
 }

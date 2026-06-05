@@ -294,8 +294,8 @@ class VideoPlayerV3Activity : ComponentActivity() {
     private fun resolveTvMpvHardwareDecodeMode(mpvVideoOutput: String): String {
         return when (mpvVideoOutput) {
             "mediacodec_embed" -> "mediacodec"
-            "gpu", "gpu-next" -> "mediacodec-copy"
-            else -> "mediacodec-copy"
+            "gpu", "gpu-next" -> "mediacodec"
+            else -> "mediacodec"
         }
     }
 

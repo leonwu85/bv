@@ -43,6 +43,7 @@ import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.BvVideoPlayer
 import dev.aaa1115910.bv.player.impl.exo.ExoMediaPlayer
+import dev.aaa1115910.bv.player.impl.mpv.MpvMediaPlayer
 import dev.aaa1115910.bv.player.VideoPlayerListener
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.DanmakuType
@@ -1642,7 +1643,9 @@ fun BvPlayer(
             BvVideoPlayer(
                 modifier = Modifier
                     .then(
-                        if (videoPlayer is ExoMediaPlayer) {
+                        if (videoPlayer is ExoMediaPlayer ||
+                            (videoPlayer is MpvMediaPlayer && videoPlayer.usesEmbeddedVideoOutput)
+                        ) {
                             Modifier.aspectRatio(aspectRatioValue)
                         } else {
                             Modifier
