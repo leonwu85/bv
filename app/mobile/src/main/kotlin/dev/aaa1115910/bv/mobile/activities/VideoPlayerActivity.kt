@@ -195,9 +195,16 @@ class VideoPlayerActivity : ComponentActivity() {
             autoSync = settings.autoSync,
             videoSync = settings.videoSync,
             hardwareDecodeMode = settings.hardwareDecodeMode,
+            superResolutionType = settings.superResolutionType,
             audioOutputDevices = settings.audioOutputDevices,
             isLive = launchArgs.isLive
         )
+        logger.fInfo {
+            "Mobile video player options: player=${settings.playerType}, " +
+                    "superResolution=${options.superResolutionType}, " +
+                    "enableHardwareDecode=${options.enableHardwareDecode}, " +
+                    "hardwareDecodeMode=${options.hardwareDecodeMode}, mpvVideoOutput=${options.mpvVideoOutput}"
+        }
         val videoPlayer = when (settings.playerType) {
             PlayerType.Media3 -> ExoPlayerFactory().create(this, options)
             PlayerType.VLC -> VlcPlayerFactory().create(this, options)

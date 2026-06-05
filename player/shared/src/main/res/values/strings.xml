@@ -50,6 +50,12 @@
     <string name="live_codec_flv">FLV</string>
     <string name="live_codec_avc">HLS（AVC）</string>
 
+    <string name="super_resolution_disable">禁用</string>
+    <string name="super_resolution_efficiency_anime">效率 A</string>
+    <string name="super_resolution_efficiency_fsrcnnx">效率 F</string>
+    <string name="super_resolution_quality_anime">质量 A</string>
+    <string name="super_resolution_quality_fsrcnnx">质量 F</string>
+
     <string name="video_player_menu_danmaku_area">显示区域</string>
     <string name="video_player_menu_danmaku_mask">防遮挡</string>
     <string name="video_player_menu_danmaku_merge">智能过滤</string>

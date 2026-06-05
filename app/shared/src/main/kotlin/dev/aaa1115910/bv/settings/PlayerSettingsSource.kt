@@ -13,6 +13,7 @@ import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
+import dev.aaa1115910.bv.player.entity.SuperResolutionType
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.util.Prefs
 
@@ -77,6 +78,7 @@ interface PlayerSettingsSource {
     val autoSync: String
     val videoSync: String
     val hardwareDecodeMode: String
+    val superResolutionType: SuperResolutionType
     val audioOutputDevices: String
     val showLiveDanmakuEmoji: Boolean
     val incognitoMode: Boolean
@@ -163,6 +165,7 @@ object DefaultPlayerSettingsSource : PlayerSettingsSource {
     override val autoSync get() = ""
     override val videoSync get() = "audio"
     override val hardwareDecodeMode get() = "auto-safe"
+    override val superResolutionType get() = Prefs.superResolutionType
     override val audioOutputDevices get() = ""
     override val showLiveDanmakuEmoji get() = Prefs.showLiveDanmakuEmoji
     override val incognitoMode get() = Prefs.incognitoMode

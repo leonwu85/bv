@@ -35,6 +35,7 @@ import dev.aaa1115910.bv.player.entity.PlayerBottomProgressBarColor
 import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
 import dev.aaa1115910.bv.player.entity.PlayerShortcutAction
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
+import dev.aaa1115910.bv.player.entity.SuperResolutionType
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -816,6 +817,12 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefTvMpvVideoOutputRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefTvMpvVideoOutputKey, value) }
 
+    var superResolutionType: SuperResolutionType
+        get() = runBlocking {
+            SuperResolutionType.fromValue(dsm.getPreferenceFlow(PrefKeys.prefSuperResolutionTypeRequest).first())
+        }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefSuperResolutionTypeKey, value.value) }
+
     var vlcLibsVersion: String
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefVlcLibsVersionRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefVlcLibsVersionKey, value) }
@@ -975,6 +982,7 @@ object PrefKeys {
     val prefTvTunnelingDefaultMigrationDone = booleanPreferencesKey("tv_tunneling_default_migration_done")
     val prefEnableAudioPlaybackParams = booleanPreferencesKey("enable_audio_playback_params")
     val prefTvMpvVideoOutputKey = stringPreferencesKey("tv_mpv_video_output")
+    val prefSuperResolutionTypeKey = intPreferencesKey("super_resolution_type")
     val prefVlcLibsVersionKey = stringPreferencesKey("vlc_libs_version")
     val prefDefaultDanmakuFilterLevelKey = intPreferencesKey("default_danmaku_filter_level")
     val prefDefaultDanmakuMergeEnabledKey = booleanPreferencesKey("default_danmaku_merge_enabled")
@@ -1107,6 +1115,8 @@ object PrefKeys {
     val prefTvTunnelingDefaultMigrationDoneRequest = PreferenceRequest(prefTvTunnelingDefaultMigrationDone, false)
     val prefEnableAudioPlaybackParamsRequest = PreferenceRequest(prefEnableAudioPlaybackParams, true)
     val prefTvMpvVideoOutputRequest = PreferenceRequest(prefTvMpvVideoOutputKey, "gpu")
+    val prefSuperResolutionTypeRequest =
+        PreferenceRequest(prefSuperResolutionTypeKey, SuperResolutionType.Disable.value)
     val prefVlcLibsVersionRequest = PreferenceRequest(prefVlcLibsVersionKey, "")
     val prefDefaultDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultDanmakuFilterLevelKey, 1)
     val prefDefaultDanmakuMergeEnabledRequest = PreferenceRequest(prefDefaultDanmakuMergeEnabledKey, false)

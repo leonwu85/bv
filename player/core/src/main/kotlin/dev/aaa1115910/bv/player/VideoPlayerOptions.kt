@@ -1,5 +1,7 @@
 package dev.aaa1115910.bv.player
 
+import dev.aaa1115910.bv.player.entity.SuperResolutionType
+
 data class VideoPlayerOptions(
     val userAgent: String? = null,
     val referer: String? = null,
@@ -13,6 +15,7 @@ data class VideoPlayerOptions(
     val videoSync: String = "audio",
     val hardwareDecodeMode: String = "mediacodec,mediacodec-copy",
     val mpvVideoOutput: String = "gpu",
+    val superResolutionType: SuperResolutionType = SuperResolutionType.Disable,
     val audioOutputDevices: String = "audiotrack,opensles",
     val enableVideoFrameRateStrategy: Boolean = true,
     val isLive: Boolean = false

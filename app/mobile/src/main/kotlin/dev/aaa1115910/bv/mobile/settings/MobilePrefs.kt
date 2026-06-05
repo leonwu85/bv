@@ -26,6 +26,7 @@ import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
+import dev.aaa1115910.bv.player.entity.SuperResolutionType
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.util.PlaybackPreferenceSelector
 import kotlinx.coroutines.flow.Flow
@@ -306,6 +307,10 @@ object MobilePrefs {
         get() = read(MobilePrefKeys.hardwareDecodeModeRequest)
         set(value) = write(MobilePrefKeys.hardwareDecodeModeKey, value)
 
+    var superResolutionType: SuperResolutionType
+        get() = SuperResolutionType.fromValue(read(MobilePrefKeys.superResolutionTypeRequest))
+        set(value) = write(MobilePrefKeys.superResolutionTypeKey, value.value)
+
     var audioOutputDevices: String
         get() = read(MobilePrefKeys.audioOutputDevicesRequest)
         set(value) = write(MobilePrefKeys.audioOutputDevicesKey, value.trim())
@@ -390,6 +395,7 @@ object MobilePrefKeys {
     val autoSyncKey = stringPreferencesKey("mobile_auto_sync")
     val videoSyncKey = stringPreferencesKey("mobile_video_sync")
     val hardwareDecodeModeKey = stringPreferencesKey("mobile_hardware_decode_mode")
+    val superResolutionTypeKey = intPreferencesKey("mobile_super_resolution_type")
     val audioOutputDevicesKey = stringPreferencesKey("mobile_audio_output_devices")
     val showLiveDanmakuEmojiKey = booleanPreferencesKey("mobile_show_live_danmaku_emoji")
     val incognitoModeKey = booleanPreferencesKey("mobile_incognito_mode")
@@ -452,6 +458,7 @@ object MobilePrefKeys {
     val autoSyncRequest = PreferenceRequest(autoSyncKey, "30")
     val videoSyncRequest = PreferenceRequest(videoSyncKey, "display-resample")
     val hardwareDecodeModeRequest = PreferenceRequest(hardwareDecodeModeKey, "auto-safe")
+    val superResolutionTypeRequest = PreferenceRequest(superResolutionTypeKey, SuperResolutionType.Disable.value)
     val audioOutputDevicesRequest = PreferenceRequest(audioOutputDevicesKey, "opensles,aaudio,audiotrack")
     val showLiveDanmakuEmojiRequest = PreferenceRequest(showLiveDanmakuEmojiKey, false)
     val incognitoModeRequest = PreferenceRequest(incognitoModeKey, false)

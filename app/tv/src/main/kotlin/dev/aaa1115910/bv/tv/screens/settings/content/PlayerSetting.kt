@@ -28,6 +28,7 @@ import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
 import dev.aaa1115910.bv.player.entity.PlayerLoadNextAction
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.Resolution
+import dev.aaa1115910.bv.player.entity.SuperResolutionType
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.tv.component.settings.SettingListItemWithDialog
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
@@ -77,6 +78,7 @@ fun PlayerSetting(
     var enableTunneling by remember { mutableStateOf(Prefs.enableTvTunneling) }
     var enableAudioPlaybackParams by remember { mutableStateOf(Prefs.enableAudioPlaybackParams) }
     var tvMpvVideoOutput by remember { mutableStateOf(Prefs.tvMpvVideoOutput) }
+    var superResolutionType by remember { mutableStateOf(Prefs.superResolutionType) }
     var showVlcDownloadConfirmDialog by remember { mutableStateOf(false) }
     var showVlcDownloaderDialog by remember { mutableStateOf(false) }
     var showMpvDownloadConfirmDialog by remember { mutableStateOf(false) }
@@ -438,6 +440,19 @@ fun PlayerSetting(
             }
             // MPV 播放器专用设置
             if (selectedPlayerType == PlayerType.MPV) {
+                item {
+                    SettingListItemWithDialog(
+                        title = "超分辨率",
+                        supportText = "仅 MPV 内核生效，重进播放器后生效",
+                        options = SuperResolutionType.entries,
+                        getDisplayName = { item, ctx -> item.displayName(ctx) },
+                        value = superResolutionType,
+                        onValueChange = {
+                            superResolutionType = it
+                            Prefs.superResolutionType = it
+                        }
+                    )
+                }
                 item {
                     SettingListItemWithDialog(
                         title = "MPV 视频输出",

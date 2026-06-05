@@ -6,12 +6,15 @@ import android.os.Looper
 import android.view.Surface
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.VideoPlayerOptions
+import dev.aaa1115910.bv.player.entity.SuperResolutionType
 import dev.aaa1115910.bv.util.formatHourMinSec
 import `is`.xyz.mpv.MPVLib
 import `is`.xyz.mpv.MPVLib.MpvEvent
 import `is`.xyz.mpv.MPVLib.MpvFormat
 import io.github.oshai.kotlinlogging.KotlinLogging
+import java.io.File
 import java.net.URI
+import java.util.Locale
 import kotlin.math.abs
 
 class MpvMediaPlayer(
@@ -50,6 +53,10 @@ class MpvMediaPlayer(
     private var audioCodec: String? = null
     private var hwdec: String? = null
     private val videoOutput = resolveVideoOutputMode()
+    private var surfaceWidth = 0
+    private var surfaceHeight = 0
+    private var superResolutionShaderPaths = ""
+    private var lastSuperResolutionStateLogKey: String? = null
 
     private val progressUpdateRunnable = object : Runnable {
         override fun run() {
@@ -274,6 +281,7 @@ class MpvMediaPlayer(
                 audio codec: ${audioCodec ?: "unknown"}
                 hwdec: ${hwdec ?: "unknown"}
                 vo: $videoOutput
+                super resolution: ${options.superResolutionType}
                 speed: $speed
             """.trimIndent()
         }
@@ -304,9 +312,12 @@ class MpvMediaPlayer(
 
     fun updateSurfaceSize(width: Int, height: Int) {
         if (width <= 0 || height <= 0) return
+        surfaceWidth = width
+        surfaceHeight = height
         runMpv("update surface size") {
             setPropertyString("android-surface-size", "${width}x$height")
         }
+        logSuperResolutionState("surface-size")
     }
 
     fun detachSurface() {
@@ -317,6 +328,8 @@ class MpvMediaPlayer(
             detachSurface()
         }
         surfaceAttached = false
+        surfaceWidth = 0
+        surfaceHeight = 0
     }
 
     private fun configureBeforeInit() {
@@ -340,6 +353,7 @@ class MpvMediaPlayer(
         }
         MPVLib.setOptionString("hwdec", resolveHardwareDecodeMode())
         MPVLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
+        configureSuperResolutionShaders()
 
         val cacheBytes = if (options.expandBuffer) {
             EXPANDED_DEMUXER_CACHE_BYTES
@@ -359,6 +373,7 @@ class MpvMediaPlayer(
         MPVLib.setOptionString("force-window", "no")
         MPVLib.setOptionString("idle", "yes")
         MPVLib.setPropertyBoolean("pause", true)
+        logSuperResolutionMpvOption()
     }
 
     private fun shouldUseHardwareDecode(): Boolean {
@@ -397,6 +412,91 @@ class MpvMediaPlayer(
             }
         }.onFailure {
             logger.warn(it) { "Failed to apply MPV network options" }
+        }
+    }
+
+    private fun configureSuperResolutionShaders() {
+        val shaderNames = options.superResolutionType.shaderNames()
+        if (shaderNames.isEmpty()) {
+            superResolutionShaderPaths = ""
+            logger.info { "MPV super resolution disabled: type=${options.superResolutionType}" }
+            return
+        }
+
+        val shaderDir = copyShaderAssets(shaderNames) ?: run {
+            superResolutionShaderPaths = ""
+            logger.warn { "MPV super resolution inactive: failed to prepare shaders for ${options.superResolutionType}" }
+            return
+        }
+        val shaderPaths = shaderNames.joinToString(SHADER_LIST_DELIMITER) { shaderName ->
+            File(shaderDir, shaderName).absolutePath
+        }
+        superResolutionShaderPaths = shaderPaths
+        MPVLib.setOptionString("glsl-shaders", shaderPaths)
+        logger.info {
+            "MPV super resolution configured: type=${options.superResolutionType}, " +
+                    "shaderCount=${shaderNames.size}, shaders=${shaderNames.joinToString()}, paths=$shaderPaths"
+        }
+    }
+
+    private fun copyShaderAssets(shaderNames: List<String>): File? {
+        val shaderDir = context.getDir("mpv_shaders", Context.MODE_PRIVATE).also { it.mkdirs() }
+        shaderNames.forEach { shaderName ->
+            val target = File(shaderDir, shaderName)
+            runCatching {
+                context.assets.open("$SHADER_ASSET_DIR/$shaderName").use { input ->
+                    target.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }.onFailure { error ->
+                logger.warn(error) { "Failed to copy MPV shader asset: $shaderName" }
+                return null
+            }
+        }
+        return shaderDir
+    }
+
+    private fun logSuperResolutionMpvOption() {
+        val property = runCatching {
+            MPVLib.getPropertyString("glsl-shaders")
+        }.getOrNull()
+        logger.info {
+            "MPV super resolution option: type=${options.superResolutionType}, " +
+                    "configuredPaths=${superResolutionShaderPaths.ifBlank { "<empty>" }}, " +
+                    "mpvProperty=${property?.ifBlank { "<empty>" } ?: "<unavailable>"}"
+        }
+    }
+
+    private fun logSuperResolutionState(reason: String) {
+        val videoWidth = _videoWidth
+        val videoHeight = _videoHeight
+        val outputWidth = surfaceWidth
+        val outputHeight = surfaceHeight
+        if (videoWidth <= 0 || videoHeight <= 0 || outputWidth <= 0 || outputHeight <= 0) return
+
+        val requested = options.superResolutionType != SuperResolutionType.Disable
+        val shaderConfigured = superResolutionShaderPaths.isNotBlank()
+        val scaleX = outputWidth.toDouble() / videoWidth.toDouble()
+        val scaleY = outputHeight.toDouble() / videoHeight.toDouble()
+        val upscalingLikely = scaleX > SUPER_RESOLUTION_UPSCALE_THRESHOLD &&
+                scaleY > SUPER_RESOLUTION_UPSCALE_THRESHOLD
+        val state = when {
+            !requested -> "disabled"
+            !shaderConfigured -> "requested_but_shader_not_configured"
+            upscalingLikely -> "likely_active"
+            else -> "configured_not_upscaling"
+        }
+        val key = "$state|${options.superResolutionType}|${videoWidth}x$videoHeight|${outputWidth}x$outputHeight"
+        if (lastSuperResolutionStateLogKey == key) return
+        lastSuperResolutionStateLogKey = key
+
+        logger.info {
+            "MPV super resolution state: reason=$reason, state=$state, " +
+                    "type=${options.superResolutionType}, shaderConfigured=$shaderConfigured, " +
+                    "source=${videoWidth}x$videoHeight, surface=${outputWidth}x$outputHeight, " +
+                    "scale=${scaleX.formatScale()}x${scaleY.formatScale()}, " +
+                    "threshold=$SUPER_RESOLUTION_UPSCALE_THRESHOLD"
         }
     }
 
@@ -680,6 +780,7 @@ class MpvMediaPlayer(
             onMain {
                 mPlayerEventListener?.onVideoSizeChanged(_videoWidth, _videoHeight)
             }
+            logSuperResolutionState("video-size")
         }
     }
 
@@ -790,6 +891,17 @@ class MpvMediaPlayer(
         }
     }
 
+    private fun SuperResolutionType.shaderNames(): List<String> =
+        when (this) {
+            SuperResolutionType.Disable -> emptyList()
+            SuperResolutionType.EfficiencyAnime -> ANIME4K_MODE_A_FAST_SHADERS
+            SuperResolutionType.EfficiencyFsrcnnx -> FSRCNNX_FAST_SHADERS
+            SuperResolutionType.QualityAnime -> ANIME4K_MODE_A_HQ_SHADERS
+            SuperResolutionType.QualityFsrcnnx -> FSRCNNX_QUALITY_SHADERS
+        }
+
+    private fun Double.formatScale(): String = String.format(Locale.US, "%.3f", this)
+
     private data class ObservedProperty(
         val name: String,
         val format: Int
@@ -806,6 +918,37 @@ class MpvMediaPlayer(
         private const val EXPANDED_DEMUXER_CACHE_BYTES = 256L * 1024L * 1024L
         private const val PROGRESS_UPDATE_INTERVAL_MS = 500L
         private const val FRAME_RATE_EPSILON = 0.001f
+        private const val SUPER_RESOLUTION_UPSCALE_THRESHOLD = 1.2
+        private const val SHADER_ASSET_DIR = "shaders"
+        private const val SHADER_LIST_DELIMITER = ":"
+        private const val ANIME4K_CLAMP_HIGHLIGHTS = "Anime4K_Clamp_Highlights.glsl"
+        private const val ANIME4K_RESTORE_CNN_M = "Anime4K_Restore_CNN_M.glsl"
+        private const val ANIME4K_RESTORE_CNN_VL = "Anime4K_Restore_CNN_VL.glsl"
+        private const val ANIME4K_UPSCALE_CNN_X2_S = "Anime4K_Upscale_CNN_x2_S.glsl"
+        private const val ANIME4K_UPSCALE_CNN_X2_M = "Anime4K_Upscale_CNN_x2_M.glsl"
+        private const val ANIME4K_UPSCALE_CNN_X2_VL = "Anime4K_Upscale_CNN_x2_VL.glsl"
+        private const val ANIME4K_AUTO_DOWNSCALE_PRE_X2 = "Anime4K_AutoDownscalePre_x2.glsl"
+        private const val ANIME4K_AUTO_DOWNSCALE_PRE_X4 = "Anime4K_AutoDownscalePre_x4.glsl"
+        private const val FSRCNNX_FAST = "FSRCNNX_x2_8-0-4-1.glsl"
+        private const val FSRCNNX_QUALITY = "FSRCNNX_x2_16-0-4-1.glsl"
         private val SUPPORTED_VIDEO_OUTPUTS = setOf(MEDIACODEC_EMBED_VIDEO_OUTPUT, "gpu", "gpu-next")
+        private val ANIME4K_MODE_A_FAST_SHADERS = listOf(
+            ANIME4K_CLAMP_HIGHLIGHTS,
+            ANIME4K_RESTORE_CNN_M,
+            ANIME4K_UPSCALE_CNN_X2_M,
+            ANIME4K_AUTO_DOWNSCALE_PRE_X2,
+            ANIME4K_AUTO_DOWNSCALE_PRE_X4,
+            ANIME4K_UPSCALE_CNN_X2_S
+        )
+        private val ANIME4K_MODE_A_HQ_SHADERS = listOf(
+            ANIME4K_CLAMP_HIGHLIGHTS,
+            ANIME4K_RESTORE_CNN_VL,
+            ANIME4K_UPSCALE_CNN_X2_VL,
+            ANIME4K_AUTO_DOWNSCALE_PRE_X2,
+            ANIME4K_AUTO_DOWNSCALE_PRE_X4,
+            ANIME4K_UPSCALE_CNN_X2_M
+        )
+        private val FSRCNNX_FAST_SHADERS = listOf(FSRCNNX_FAST)
+        private val FSRCNNX_QUALITY_SHADERS = listOf(FSRCNNX_QUALITY)
     }
 }

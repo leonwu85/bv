@@ -84,6 +84,7 @@ object MobilePlayerSettingsSource : PlayerSettingsSource {
     override val autoSync get() = MobilePrefs.autoSync
     override val videoSync get() = MobilePrefs.videoSync
     override val hardwareDecodeMode get() = MobilePrefs.hardwareDecodeMode
+    override val superResolutionType get() = MobilePrefs.superResolutionType
     override val audioOutputDevices get() = MobilePrefs.audioOutputDevices
     override val showLiveDanmakuEmoji get() = MobilePrefs.showLiveDanmakuEmoji
     override val incognitoMode get() = MobilePrefs.incognitoMode

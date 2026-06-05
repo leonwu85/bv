@@ -281,9 +281,16 @@ class VideoPlayerV3Activity : ComponentActivity() {
             enableAudioPlaybackParams = Prefs.enableAudioPlaybackParams,
             hardwareDecodeMode = resolveTvMpvHardwareDecodeMode(mpvVideoOutput),
             mpvVideoOutput = mpvVideoOutput,
+            superResolutionType = Prefs.superResolutionType,
             enableVideoFrameRateStrategy = false,
             isLive = isLive
         )
+        logger.fInfo {
+            "TV video player options: player=${Prefs.playerType}, " +
+                    "superResolution=${options.superResolutionType}, " +
+                    "enableHardwareDecode=${options.enableHardwareDecode}, " +
+                    "hardwareDecodeMode=${options.hardwareDecodeMode}, mpvVideoOutput=${options.mpvVideoOutput}"
+        }
         val videoPlayer = when (Prefs.playerType) {
             PlayerType.Media3 -> ExoPlayerFactory().create(this, options)
             PlayerType.VLC -> VlcPlayerFactory().create(this, options)

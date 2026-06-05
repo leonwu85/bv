@@ -34,6 +34,7 @@ import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.Resolution
+import dev.aaa1115910.bv.player.entity.SuperResolutionType
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.player.impl.mpv.MpvLibsInstaller
 import dev.aaa1115910.bv.util.PlaybackPreferenceSelector
@@ -43,6 +44,7 @@ fun AudioVideoContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var selectedPlayerType by remember { mutableStateOf(MobilePrefs.playerType) }
     var showMpvDownloadConfirmDialog by remember { mutableStateOf(false) }
     var showMpvDownloaderDialog by remember { mutableStateOf(false) }
 
@@ -64,10 +66,18 @@ fun AudioVideoContent(
                             showMpvDownloadConfirmDialog = true
                             false
                         } else {
+                            selectedPlayerType = newType
                             true
                         }
                     }
                 )
+                if (selectedPlayerType == PlayerType.MPV) {
+                    radioPreference(
+                        title = "超分辨率",
+                        prefReq = MobilePrefKeys.superResolutionTypeRequest,
+                        values = SuperResolutionType.entries.associate { it.value to it.displayName(context) }
+                    )
+                }
             },
             "CDN" to {
                 switchPreference(
@@ -271,6 +281,7 @@ fun AudioVideoContent(
             onDownloadComplete = {
                 showMpvDownloaderDialog = false
                 MobilePrefs.playerType = PlayerType.MPV
+                selectedPlayerType = PlayerType.MPV
                 Toast.makeText(context, "MPV 组件下载完成", Toast.LENGTH_SHORT).show()
             },
             onDownloadFailed = { errorMessage ->
