@@ -60,6 +60,7 @@ fun PlayerSetting(
     var playerBottomProgressBarColor by remember { mutableStateOf(Prefs.playerBottomProgressBarColor) }
     var playerShowDebugInfo by remember { mutableStateOf(Prefs.playerShowDebugInfo) }
     var debugDanmakuMaskDownsample180p by remember { mutableStateOf(Prefs.debugDanmakuMaskDownsample180p) }
+    var subtitleSmartDisplay by remember { mutableStateOf(Prefs.subtitleSmartDisplay) }
     var playerExitWhenAllIsPlayed by remember { mutableStateOf(Prefs.playerExitWhenAllIsPlayed) }
     var playerLoadNextAction by remember { mutableStateOf(Prefs.playerLoadNextAction) }
     var playerDefaultStartPosition by remember { mutableStateOf(Prefs.playerDefaultStartPosition) }
@@ -248,6 +249,17 @@ fun PlayerSetting(
                         }
                     )
                 }
+            }
+            item {
+                SettingSwitchListItem(
+                    title = stringResource(R.string.settings_player_subtitle_smart_display_title),
+                    supportText = stringResource(R.string.settings_player_subtitle_smart_display_text),
+                    checked = subtitleSmartDisplay,
+                    onCheckedChange = {
+                        subtitleSmartDisplay = it
+                        Prefs.subtitleSmartDisplay = it
+                    }
+                )
             }
             item {
                 SettingSwitchListItem(

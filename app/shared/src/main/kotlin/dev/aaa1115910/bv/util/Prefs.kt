@@ -36,6 +36,10 @@ import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
 import dev.aaa1115910.bv.player.entity.PlayerShortcutAction
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -44,6 +48,18 @@ import kotlinx.coroutines.runBlocking
 import java.util.Date
 import java.util.UUID
 import kotlin.math.roundToInt
+
+data class SubtitleLanguagePreference(
+    val lang: String,
+    val langDoc: String
+)
+
+@Serializable
+private data class StoredSubtitleLanguagePreference(
+    val upId: Long,
+    val lang: String,
+    val langDoc: String
+)
 
 object Prefs {
     private val dsm = BVApp.dataStoreManager
@@ -54,6 +70,8 @@ object Prefs {
     private const val DRAWER_ITEM_UGC_ORDINAL = 3
     private const val DRAWER_ITEM_PGC_ORDINAL = 4
     private const val DRAWER_ITEM_LIVE_ORDINAL = 5
+    private const val SUBTITLE_LANGUAGE_PREFERENCE_LIMIT = 200
+    private val subtitleLanguagePreferenceJson = Json { ignoreUnknownKeys = true }
 
     private fun buildDefaultDrawerItemsOrder(showLiveInSidebar: Boolean): String {
         return listOf(
@@ -305,6 +323,57 @@ object Prefs {
                 PrefKeys.prefDefaultSecondarySubtitleBottomPaddingKey, value.value.roundToInt()
             )
         }
+
+    var subtitleSmartDisplay: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefSubtitleSmartDisplayRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefSubtitleSmartDisplayKey, value) }
+
+    private var subtitleLanguagePreferences: String
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefSubtitleLanguagePreferencesRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefSubtitleLanguagePreferencesKey, value) }
+
+    private fun readSubtitleLanguagePreferences(): List<StoredSubtitleLanguagePreference> {
+        val rawPreferences = subtitleLanguagePreferences
+        if (rawPreferences.isBlank()) return emptyList()
+        return runCatching {
+            subtitleLanguagePreferenceJson.decodeFromString<List<StoredSubtitleLanguagePreference>>(rawPreferences)
+        }.getOrElse {
+            logger.warn { "Decode subtitle language preferences failed: ${it.message}" }
+            emptyList()
+        }
+    }
+
+    private fun writeSubtitleLanguagePreferences(preferences: List<StoredSubtitleLanguagePreference>) {
+        subtitleLanguagePreferences = subtitleLanguagePreferenceJson.encodeToString(preferences)
+    }
+
+    fun getSubtitleLanguagePreference(upId: Long): SubtitleLanguagePreference? {
+        if (upId <= 0L) return null
+        return readSubtitleLanguagePreferences()
+            .firstOrNull { it.upId == upId }
+            ?.let { SubtitleLanguagePreference(lang = it.lang, langDoc = it.langDoc) }
+    }
+
+    fun setSubtitleLanguagePreference(upId: Long, lang: String, langDoc: String) {
+        if (upId <= 0L || (lang.isBlank() && langDoc.isBlank())) return
+
+        val updatedPreferences = readSubtitleLanguagePreferences()
+            .filterNot { it.upId == upId }
+            .toMutableList()
+            .apply {
+                add(
+                    0,
+                    StoredSubtitleLanguagePreference(
+                        upId = upId,
+                        lang = lang,
+                        langDoc = langDoc
+                    )
+                )
+            }
+            .take(SUBTITLE_LANGUAGE_PREFERENCE_LIMIT)
+
+        writeSubtitleLanguagePreferences(updatedPreferences)
+    }
 
     var showFps: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowFpsRequest).first() }
@@ -837,6 +906,8 @@ object PrefKeys {
     val prefDefaultSecondarySubtitleFontSizeKey = intPreferencesKey("dssfs")
     val prefDefaultSecondarySubtitleBackgroundOpacityKey = floatPreferencesKey("dssbo")
     val prefDefaultSecondarySubtitleBottomPaddingKey = intPreferencesKey("dssbp")
+    val prefSubtitleSmartDisplayKey = booleanPreferencesKey("subtitle_smart_display")
+    val prefSubtitleLanguagePreferencesKey = stringPreferencesKey("subtitle_language_preferences")
     val prefShowFpsKey = booleanPreferencesKey("sf")
     val prefBuvidKey = stringPreferencesKey("random_buvid")
     val prefBuvid3Key = stringPreferencesKey("random_buvid3")
@@ -953,6 +1024,8 @@ object PrefKeys {
         PreferenceRequest(prefDefaultSecondarySubtitleBackgroundOpacityKey, 0.4f)
     val prefDefaultSecondarySubtitleBottomPaddingRequest =
         PreferenceRequest(prefDefaultSecondarySubtitleBottomPaddingKey, 12)
+    val prefSubtitleSmartDisplayRequest = PreferenceRequest(prefSubtitleSmartDisplayKey, true)
+    val prefSubtitleLanguagePreferencesRequest = PreferenceRequest(prefSubtitleLanguagePreferencesKey, "")
     val prefShowFpsRequest = PreferenceRequest(prefShowFpsKey, false)
     val prefBuvidRequest = PreferenceRequest(prefBuvidKey, "")
     val prefBuvid3Request = PreferenceRequest(prefBuvid3Key, "")

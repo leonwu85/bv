@@ -224,6 +224,7 @@ class VideoPlayerV3Activity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        playerViewModel.saveSubtitleSmartDisplayPreferenceIfNeeded()
         super.onDestroy()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 

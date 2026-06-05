@@ -82,6 +82,7 @@ import dev.aaa1115910.bv.util.MergedDanmakuEntry
 import dev.aaa1115910.bv.util.NetworkUtil
 import dev.aaa1115910.bv.util.PlaybackPreferenceSelector
 import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.bv.util.SubtitleLanguagePreference
 import dev.aaa1115910.bv.util.VodDanmakuMergeState
 import dev.aaa1115910.bv.util.VodDanmakuMerger
 import dev.aaa1115910.bv.util.VodCdnSelection
@@ -201,6 +202,18 @@ internal fun resolveDanmakuPreloadPolicy(
     }
 }
 
+private fun String.normalizedSubtitleLanguageKey(): String {
+    return trim().lowercase().replace('_', '-')
+}
+
+private fun Subtitle.matchesLanguagePreference(preference: SubtitleLanguagePreference): Boolean {
+    val preferredLang = preference.lang.normalizedSubtitleLanguageKey()
+    val preferredLangDoc = preference.langDoc.trim()
+
+    return (preferredLang.isNotBlank() && lang.normalizedSubtitleLanguageKey() == preferredLang) ||
+        (preferredLangDoc.isNotBlank() && langDoc.trim() == preferredLangDoc)
+}
+
 @KoinViewModel
 class VideoPlayerV3ViewModel(
     private val videoInfoRepository: VideoInfoRepository,
@@ -249,6 +262,7 @@ class VideoPlayerV3ViewModel(
         super.onCleared()
         logger.fInfo { "VideoPlayerV3ViewModel onCleared" }
 
+        saveSubtitleSmartDisplayPreferenceIfNeeded()
         invalidatePreparedAutoPlayTarget()
         cancelVodPlayUrlAutoRefresh()
 
@@ -767,11 +781,14 @@ class VideoPlayerV3ViewModel(
             }
 
             val lastPlayEnabledSubtitle = currentSubtitleId != -1L
-            if (lastPlayEnabledSubtitle) {
+            if (lastPlayEnabledSubtitle && settings.subtitleSmartDisplay) {
                 logger.info { "Subtitle is enabled, next video will enable subtitle automatic" }
             }
 
             updateSubtitle()
+            enableSmartSubtitleIfAvailable(
+                fallbackToFirstSubtitle = continuePlayNext && lastPlayEnabledSubtitle && upId <= 0L
+            )
             loadPlayUrl(
                 avid,
                 cid,
@@ -793,11 +810,6 @@ class VideoPlayerV3ViewModel(
             loadSponsorSegments(AvBvConverter.av2bv(avid), cid)
 
             updateVideoShot()
-
-            //如果是继续播放下一集，且之前开启了字幕，就会自动加载第一条字幕，主要用于观看番剧时自动加载字幕
-            if (continuePlayNext) {
-                if (lastPlayEnabledSubtitle) enableFirstSubtitle()
-            }
         }
     }
 
@@ -2527,6 +2539,43 @@ class VideoPlayerV3ViewModel(
             )
         }.onFailure {
             logger.error { "Load first subtitle failed: ${it.stackTraceToString()}" }
+        }
+    }
+
+    fun saveSubtitleSmartDisplayPreferenceIfNeeded() {
+        if (!settings.subtitleSmartDisplay || isLive || upId <= 0L || currentSubtitleId == -1L) {
+            return
+        }
+
+        val subtitle = availableSubtitle.firstOrNull {
+            it.id == currentSubtitleId && it.id != -1L
+        } ?: return
+
+        Prefs.setSubtitleLanguagePreference(
+            upId = upId,
+            lang = subtitle.lang,
+            langDoc = subtitle.langDoc
+        )
+        logger.info { "Save subtitle language preference: upId=$upId, lang=${subtitle.lang}, langDoc=${subtitle.langDoc}" }
+    }
+
+    private fun enableSmartSubtitleIfAvailable(fallbackToFirstSubtitle: Boolean) {
+        if (!settings.subtitleSmartDisplay || isLive) return
+
+        val preferredSubtitle = Prefs.getSubtitleLanguagePreference(upId)
+            ?.let { preference ->
+                availableSubtitle
+                    .filter { it.id != -1L }
+                    .firstOrNull { it.matchesLanguagePreference(preference) }
+            }
+
+        if (preferredSubtitle != null) {
+            logger.info {
+                "Load smart subtitle: upId=$upId, lang=${preferredSubtitle.lang}, langDoc=${preferredSubtitle.langDoc}"
+            }
+            loadSubtitle(preferredSubtitle.id)
+        } else if (fallbackToFirstSubtitle) {
+            enableFirstSubtitle()
         }
     }
 

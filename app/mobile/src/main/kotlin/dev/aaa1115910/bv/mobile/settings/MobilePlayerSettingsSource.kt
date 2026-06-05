@@ -56,6 +56,7 @@ object MobilePlayerSettingsSource : PlayerSettingsSource {
     override val defaultSecondarySubtitleFontSize get() = MobilePrefs.defaultSecondarySubtitleFontSize
     override val defaultSecondarySubtitleBackgroundOpacity get() = MobilePrefs.defaultSecondarySubtitleBackgroundOpacity
     override val defaultSecondarySubtitleBottomPadding get() = MobilePrefs.defaultSecondarySubtitleBottomPadding
+    override val subtitleSmartDisplay get() = false
     override val defaultPlayMode get() = MobilePrefs.defaultPlayMode
     override var defaultPlayModeMutable
         get() = MobilePrefs.defaultPlayMode

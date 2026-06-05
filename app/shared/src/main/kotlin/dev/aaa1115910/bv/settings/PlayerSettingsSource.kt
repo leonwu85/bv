@@ -53,6 +53,7 @@ interface PlayerSettingsSource {
     val defaultSecondarySubtitleFontSize: TextUnit
     val defaultSecondarySubtitleBackgroundOpacity: Float
     val defaultSecondarySubtitleBottomPadding: Dp
+    val subtitleSmartDisplay: Boolean
     val defaultPlayMode: PlayMode
     var defaultPlayModeMutable: PlayMode
     val defaultLiveQn: Int
@@ -134,6 +135,7 @@ object DefaultPlayerSettingsSource : PlayerSettingsSource {
     override val defaultSecondarySubtitleFontSize get() = Prefs.defaultSecondarySubtitleFontSize
     override val defaultSecondarySubtitleBackgroundOpacity get() = Prefs.defaultSecondarySubtitleBackgroundOpacity
     override val defaultSecondarySubtitleBottomPadding get() = Prefs.defaultSecondarySubtitleBottomPadding
+    override val subtitleSmartDisplay get() = Prefs.subtitleSmartDisplay
     override val defaultPlayMode get() = Prefs.defaultPlayMode
     override var defaultPlayModeMutable: PlayMode
         get() = Prefs.defaultPlayMode

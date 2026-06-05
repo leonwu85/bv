@@ -254,6 +254,7 @@ fun VideoPlayerV3Screen(
     }
 
     val exitPlayer = {
+        playerViewModel.saveSubtitleSmartDisplayPreferenceIfNeeded()
         playerViewModel.dismissInteractiveOptionDialog()
         Prefs.currentPlaySpeed = Prefs.defaultPlaySpeed
         PlayedAidsCache.clear()
@@ -544,6 +545,7 @@ fun VideoPlayerV3Screen(
                         } else null
 
                     if (prevEp != null) {
+                        playerViewModel.saveSubtitleSmartDisplayPreferenceIfNeeded()
                         playerViewModel.title = prevEp.title
                         playerViewModel.partTitle = prevEp.partTitle
                         if (prevEp.seasonId == null && playerViewModel.currentAid != prevEp.aid) {
@@ -576,6 +578,7 @@ fun VideoPlayerV3Screen(
                         return@BvPlayer
                     }
 
+                    playerViewModel.saveSubtitleSmartDisplayPreferenceIfNeeded()
                     // 标记当前稿件已播放
                     PlayedAidsCache.markPlayed(playerViewModel.currentAid)
                     val nextVideo = resolveNextAutoPlayVideo(immediate)
@@ -658,6 +661,7 @@ fun VideoPlayerV3Screen(
                                 if (autoActionCountdownJob != null) {
                                     autoActionCountdownJob = null
                                     Prefs.currentPlaySpeed = Prefs.defaultPlaySpeed
+                                    playerViewModel.saveSubtitleSmartDisplayPreferenceIfNeeded()
                                     // 自动退出时也清空缓存
                                     PlayedAidsCache.clear()
                                     (context as Activity).finish()
@@ -671,6 +675,7 @@ fun VideoPlayerV3Screen(
                     // 什么都不做
                 },
                 onExit = {
+                    playerViewModel.saveSubtitleSmartDisplayPreferenceIfNeeded()
                     Prefs.currentPlaySpeed = Prefs.defaultPlaySpeed
                     // 退出时清空播放缓存
                     PlayedAidsCache.clear()
@@ -679,6 +684,7 @@ fun VideoPlayerV3Screen(
                 onLoadNewVideo = { videoListItem ->
                     when (videoListItem) {
                         is VideoListItemData -> {
+                            playerViewModel.saveSubtitleSmartDisplayPreferenceIfNeeded()
                             // 手动选择新视频时也标记播放
                             PlayedAidsCache.markPlayed(videoListItem.aid)
                             if (videoListItem is VideoListInteractiveNode) {
@@ -1136,6 +1142,7 @@ fun VideoPlayerV3Screen(
                 show = playerViewModel.showInteractiveOptionDialog,
                 options = playerViewModel.interactiveOptions,
                 onSelectOption = { option ->
+                    playerViewModel.saveSubtitleSmartDisplayPreferenceIfNeeded()
                     PlayedAidsCache.markPlayed(option.aid)
                     playerViewModel.playInteractiveOption(option)
                 },
@@ -1158,6 +1165,7 @@ fun VideoPlayerV3Screen(
                     showMore = {},
                     focusRequester = relatedVideosFocusRequester,
                     onOpenSeasonInfo = { videoData ->
+                        playerViewModel.saveSubtitleSmartDisplayPreferenceIfNeeded()
                         SeasonInfoActivity.actionStart(
                             context = context,
                             epId = videoData.epId!!,
@@ -1165,6 +1173,7 @@ fun VideoPlayerV3Screen(
                         )
                     },
                     onOpenVideoInfo = { videoData ->
+                        playerViewModel.saveSubtitleSmartDisplayPreferenceIfNeeded()
                         VideoInfoActivity.actionStart(
                             context = context,
                             aid = videoData.avid,
