@@ -483,6 +483,9 @@ class VideoPlayerV3ViewModel(
         private const val INITIAL_DANMAKU_SEGMENT_PREFETCH = 2
         private const val INITIAL_DANMAKU_SLICE_PREFETCH = 3
         private const val CATCH_UP_DANMAKU_SLICE_PREFETCH = 2
+        private const val MAX_DANMAKU_SLICE_PREFETCH = 8
+        private const val DANMAKU_COVERAGE_LOOKAHEAD_MS = 20_000L
+        private const val DANMAKU_COVERAGE_RECHECK_INTERVAL_MS = 3_000L
         private const val DANMAKU_BATCH_SIZE = 600
         private const val DANMAKU_SLICE_SIZE = 2000
         private const val DANMAKU_SLICE_EMIT_DELAY_MS = 12L
@@ -1503,13 +1506,18 @@ class VideoPlayerV3ViewModel(
                     positionMs = initialPositionMs
                 )
                 if (initialSliceIndex < startSegmentSlices.size) {
+                    val initialEndExclusive = findDanmakuSliceEndExclusiveForCoverage(
+                        slices = startSegmentSlices,
+                        startSliceIndex = initialSliceIndex,
+                        positionMs = initialPositionMs,
+                        minSliceCount = INITIAL_DANMAKU_SLICE_PREFETCH
+                    )
                     initialEmittedDanmaku += emitDanmakuSlices(
                         segmentIndex = startSegment,
                         slices = startSegmentSlices,
                         loadSession = loadSession,
                         startSliceIndex = initialSliceIndex,
-                        endExclusive = (initialSliceIndex + INITIAL_DANMAKU_SLICE_PREFETCH)
-                            .coerceAtMost(startSegmentSlices.size),
+                        endExclusive = initialEndExclusive,
                         loadToken = loadToken
                     )
                 }
@@ -1760,14 +1768,11 @@ class VideoPlayerV3ViewModel(
         val currentSegment = calculateInitialDanmakuSegment(normalizedPosition)
         val shouldSkip = currentSegment == lastDanmakuCatchUpSegment &&
             lastDanmakuCatchUpPositionMs >= 0L &&
-            normalizedPosition - lastDanmakuCatchUpPositionMs < 15_000L
+            normalizedPosition - lastDanmakuCatchUpPositionMs < DANMAKU_COVERAGE_RECHECK_INTERVAL_MS
         if (shouldSkip) return
 
         val previousCatchUpPositionMs = lastDanmakuCatchUpPositionMs
         val catchUpJobActive = danmakuCatchUpJob?.isActive == true
-
-        lastDanmakuCatchUpPositionMs = normalizedPosition
-        lastDanmakuCatchUpSegment = currentSegment
 
         if (catchUpJobActive) {
             logger.info {
@@ -1775,6 +1780,9 @@ class VideoPlayerV3ViewModel(
             }
             return
         }
+
+        lastDanmakuCatchUpPositionMs = normalizedPosition
+        lastDanmakuCatchUpSegment = currentSegment
 
         val loadToken = danmakuLoadToken
         val durationMs = playData?.timeLength
@@ -2278,6 +2286,34 @@ class VideoPlayerV3ViewModel(
         return if (firstAvailableSlice >= 0) firstAvailableSlice else slices.size
     }
 
+    private fun findDanmakuSliceEndExclusiveForCoverage(
+        slices: List<DanmakuSlice>,
+        startSliceIndex: Int,
+        positionMs: Long,
+        minSliceCount: Int
+    ): Int {
+        if (slices.isEmpty()) return 0
+
+        val normalizedStart = startSliceIndex.coerceIn(0, slices.size)
+        if (normalizedStart >= slices.size) return slices.size
+
+        val minEndExclusive = (normalizedStart + minSliceCount)
+            .coerceAtMost(slices.size)
+        val maxEndExclusive = (normalizedStart + MAX_DANMAKU_SLICE_PREFETCH)
+            .coerceAtMost(slices.size)
+        val targetEndPositionMs = positionMs + DANMAKU_COVERAGE_LOOKAHEAD_MS
+
+        var endExclusive = minEndExclusive
+        while (
+            endExclusive < maxEndExclusive &&
+            slices[endExclusive - 1].endPositionMs < targetEndPositionMs
+        ) {
+            endExclusive++
+        }
+
+        return endExclusive
+    }
+
     private suspend fun emitDanmakuSlicesAroundPosition(
         cid: Long,
         segmentIndex: Int,
@@ -2300,7 +2336,12 @@ class VideoPlayerV3ViewModel(
 
         val nextSliceIndex = loadSession.nextDanmakuSliceIndexBySegment[segmentIndex] ?: 0
         val startSliceIndex = maxOf(nextSliceIndex, targetSliceIndex)
-        val endExclusive = (targetSliceIndex + CATCH_UP_DANMAKU_SLICE_PREFETCH).coerceAtMost(slices.size)
+        val endExclusive = findDanmakuSliceEndExclusiveForCoverage(
+            slices = slices,
+            startSliceIndex = targetSliceIndex,
+            positionMs = positionMs,
+            minSliceCount = CATCH_UP_DANMAKU_SLICE_PREFETCH
+        )
         if (startSliceIndex >= endExclusive) return 0
 
         return emitDanmakuSlices(
