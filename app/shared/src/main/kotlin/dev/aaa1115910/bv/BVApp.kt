@@ -13,6 +13,7 @@ import coil.Coil
 import de.schnettler.datastore.manager.DataStoreManager
 import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.http.BiliHttpProxyApi
+import dev.aaa1115910.biliapi.http.entity.BiliAuthFailureHandler
 import dev.aaa1115910.biliapi.http.util.BiliAppConf
 import dev.aaa1115910.biliapi.http.util.BiliWebConf
 import dev.aaa1115910.biliapi.repositories.AuthRepository
@@ -22,6 +23,7 @@ import dev.aaa1115910.bv.dao.AppDatabase
 import dev.aaa1115910.bv.entity.AuthData
 import dev.aaa1115910.bv.entity.db.UserDB
 import dev.aaa1115910.bv.network.HttpServer
+import dev.aaa1115910.bv.repository.UserRepository
 import dev.aaa1115910.bv.util.BlacklistUtil
 import dev.aaa1115910.bv.util.CoilConfig
 import dev.aaa1115910.bv.util.FirebaseUtil
@@ -30,6 +32,7 @@ import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.toast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.koin.android.ext.koin.androidContext
@@ -44,6 +47,8 @@ import org.koin.plugin.module.dsl.startKoin
 import org.slf4j.impl.HandroidLoggerAdapter
 
 class BVApp : Application() {
+    private val authFailureScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     companion object {
         @SuppressLint("StaticFieldLeak")
         lateinit var context: Context
@@ -98,6 +103,14 @@ class BVApp : Application() {
         // 设置 sessData 提供者，用于更新 WBI keys 时携带登录凭证
         BiliHttpApi.sessDataProvider = { Prefs.sessData }
         BiliHttpApi.buvid3Provider = { Prefs.buvid3 }
+        BiliAuthFailureHandler.onAuthFailure = { message ->
+            if (Prefs.isLogin) {
+                authFailureScope.launch {
+                    val userRepository by koinApplication.koin.inject<UserRepository>()
+                    userRepository.logoutOnAuthFailure(message)
+                }
+            }
+        }
         BiliWebConf.webViewVersion = runCatching {
             WebViewCompat.getCurrentLoadedWebViewPackage()!!.versionName!!
                 .substringBefore(".").toInt()

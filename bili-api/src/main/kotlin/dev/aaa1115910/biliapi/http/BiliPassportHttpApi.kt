@@ -3,6 +3,7 @@ package dev.aaa1115910.biliapi.http
 import dev.aaa1115910.biliapi.BiliApiConstants
 import dev.aaa1115910.biliapi.http.entity.BiliResponse
 import dev.aaa1115910.biliapi.http.entity.login.CaptchaData
+import dev.aaa1115910.biliapi.http.entity.login.LoginWebKeyData
 import dev.aaa1115910.biliapi.http.entity.login.qr.AppQRDataRequest
 import dev.aaa1115910.biliapi.http.entity.login.qr.AppQRLoginData
 import dev.aaa1115910.biliapi.http.entity.login.qr.RequestWebQRData
@@ -10,6 +11,7 @@ import dev.aaa1115910.biliapi.http.entity.login.qr.WebQRLoginData
 import dev.aaa1115910.biliapi.http.entity.login.sms.SendSmsResponse
 import dev.aaa1115910.biliapi.http.entity.login.sms.SmsLoginResponse
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
+import dev.aaa1115910.biliapi.http.util.BiliLoginConf
 import dev.aaa1115910.biliapi.http.util.encApiSign
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -20,6 +22,7 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.forms.FormDataContent
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -45,7 +48,16 @@ object BiliPassportHttpApi {
 
     private fun createClient() {
         client = HttpClient(OkHttp) {
-            BiliUserAgent()
+            install(BiliUserAgent) {
+                version = BiliLoginConf.APP_VERSION_NAME
+                buildCode = BiliLoginConf.APP_BUILD_CODE
+                channel = BiliLoginConf.CHANNEL
+                platform = BiliLoginConf.PLATFORM
+                mobiApp = BiliLoginConf.MOBI_APP
+                model = BiliLoginConf.MODEL
+                osVersion = BiliLoginConf.OS_VERSION
+                network = BiliLoginConf.NETWORK
+            }
             install(ContentNegotiation) {
                 json(Json {
                     coerceInputValues = true
@@ -62,6 +74,12 @@ object BiliPassportHttpApi {
                     host = "passport.bilibili.com"
                     protocol = URLProtocol.HTTPS
                 }
+                header("env", "prod")
+                header("app-key", BiliLoginConf.MOBI_APP)
+                header("x-bili-trace-id", BiliLoginConf.TRACE_ID)
+                header("x-bili-aurora-eid", "")
+                header("x-bili-aurora-zone", "")
+                header("bili-http-engine", "cronet")
             }
         }.apply {
             encApiSign()
@@ -89,14 +107,16 @@ object BiliPassportHttpApi {
      */
     suspend fun getAppQRUrl(
         localId: String? = null,
-        ts: Int,
-        mobiApp: String? = null
+        ts: Int? = null,
+        mobiApp: String? = null,
+        platform: String? = null
     ): BiliResponse<AppQRDataRequest> =
         client.post("/x/passport-tv-login/qrcode/auth_code") {
             setBody(FormDataContent(
                 Parameters.build {
                     localId?.let { append("local_id", it) }
-                    append("ts", "$ts")
+                    ts?.let { append("ts", "$it") }
+                    platform?.let { append("platform", it) }
                     mobiApp?.let { append("mobi_app", it) }
                 }
             ))
@@ -109,14 +129,14 @@ object BiliPassportHttpApi {
     suspend fun loginWithAppQR(
         authCode: String,
         localId: String? = null,
-        ts: Int
+        ts: Int? = null
     ): BiliResponse<AppQRLoginData> =
         client.post("/x/passport-tv-login/qrcode/poll") {
             setBody(FormDataContent(
                 Parameters.build {
                     append("auth_code", authCode)
                     localId?.let { append("local_id", it) }
-                    append("ts", "$ts")
+                    ts?.let { append("ts", "$it") }
                 }
             ))
         }.body()
@@ -134,14 +154,20 @@ object BiliPassportHttpApi {
         }.body()
 
     /**
+     * 获取登录用 RSA 公钥
+     */
+    suspend fun getWebKey(): BiliResponse<LoginWebKeyData> =
+        client.get("/x/passport-login/web/key").body()
+
+    /**
      * 发送短信验证码
      *
      * @param cid 国际冠字码
      * @param tel 手机号码
-     * @param loginSessionId 登录标识 uuid去掉'-'后得到
-     * @param channel 一般固定值为"bili"
-     * @param buvid
-     * @param statistics 一般固定为{"appId":1,"platform":3,"version":"7.27.0","abtest":""}
+     * @param loginSessionId 使用 md5(buvid + 当前毫秒时间戳) 生成
+     * @param channel 固定值为 "master"
+     * @param buvid 登录设备标识
+     * @param statistics HD 端 statistics
      */
     suspend fun sendSms(
         cid: Long,
@@ -154,19 +180,34 @@ object BiliPassportHttpApi {
         channel: String,
         buvid: String,
         statistics: String,
+        build: Int? = null,
+        cLocale: String? = null,
+        disableRcmd: String? = null,
+        localId: String? = null,
+        mobiApp: String? = null,
+        platform: String? = null,
+        sLocale: String? = null,
         ts: Long
     ): BiliResponse<SendSmsResponse> = client.post("/x/passport-login/sms/send") {
+        header("buvid", buvid)
         setBody(FormDataContent(
             Parameters.build {
+                build?.let { append("build", "$it") }
+                append("buvid", buvid)
+                cLocale?.let { append("c_locale", it) }
+                append("channel", channel)
                 append("cid", "$cid")
+                disableRcmd?.let { append("disable_rcmd", it) }
+                geeChallenge?.let { append("gee_challenge", it) }
+                geeSeccode?.let { append("gee_seccode", it) }
+                geeValidate?.let { append("gee_validate", it) }
+                localId?.let { append("local_id", it) }
                 append("tel", "$tel")
                 append("login_session_id", loginSessionId)
                 recaptchaToken?.let { append("recaptcha_token", it) }
-                geeChallenge?.let { append("gee_challenge", it) }
-                geeValidate?.let { append("gee_validate", it) }
-                geeSeccode?.let { append("gee_seccode", it) }
-                append("channel", channel)
-                append("buvid", buvid)
+                mobiApp?.let { append("mobi_app", it) }
+                platform?.let { append("platform", it) }
+                sLocale?.let { append("s_locale", it) }
                 append("statistics", statistics)
                 append("ts", "$ts")
             }
@@ -176,18 +217,56 @@ object BiliPassportHttpApi {
     suspend fun loginWithSms(
         cid: Long,
         tel: Long,
-        loginSessionId: String,
+        loginSessionId: String? = null,
         code: Int,
-        captchaKey: String
+        captchaKey: String,
+        build: Int? = null,
+        buvid: String? = null,
+        biliLocalId: String? = null,
+        cLocale: String? = null,
+        channel: String? = null,
+        device: String? = null,
+        deviceId: String? = null,
+        deviceName: String? = null,
+        devicePlatform: String? = null,
+        disableRcmd: String? = null,
+        dt: String? = null,
+        fromPv: String? = null,
+        fromUrl: String? = null,
+        localId: String? = null,
+        mobiApp: String? = null,
+        platform: String? = null,
+        sLocale: String? = null,
+        statistics: String? = null,
+        ts: Long? = null
     ): BiliResponse<SmsLoginResponse> = client.post("/x/passport-login/login/sms") {
+        buvid?.let { header("buvid", it) }
         setBody(FormDataContent(
             Parameters.build {
+                biliLocalId?.let { append("bili_local_id", it) }
+                build?.let { append("build", "$it") }
+                buvid?.let { append("buvid", it) }
+                cLocale?.let { append("c_locale", it) }
                 append("cid", "$cid")
-                append("tel", "$tel")
-                append("login_session_id", loginSessionId)
-                append("code", "$code")
                 append("captcha_key", captchaKey)
-                append("ts", "0")
+                channel?.let { append("channel", it) }
+                append("code", "$code")
+                device?.let { append("device", it) }
+                deviceId?.let { append("device_id", it) }
+                deviceName?.let { append("device_name", it) }
+                devicePlatform?.let { append("device_platform", it) }
+                disableRcmd?.let { append("disable_rcmd", it) }
+                dt?.let { append("dt", it) }
+                fromPv?.let { append("from_pv", it) }
+                fromUrl?.let { append("from_url", it) }
+                localId?.let { append("local_id", it) }
+                loginSessionId?.let { append("login_session_id", it) }
+                mobiApp?.let { append("mobi_app", it) }
+                platform?.let { append("platform", it) }
+                sLocale?.let { append("s_locale", it) }
+                statistics?.let { append("statistics", it) }
+                append("tel", "$tel")
+                ts?.let { append("ts", "$it") }
             }
         ))
     }.body()

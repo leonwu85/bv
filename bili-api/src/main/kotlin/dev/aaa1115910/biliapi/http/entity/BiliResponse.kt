@@ -21,7 +21,10 @@ data class BiliResponse<T>(
     init {
         when (code) {
             0 -> {}
-            -101 -> logger.error { "请求失败，账号未登录: $message (code: $code)" }
+            -101 -> {
+                logger.error { "请求失败，账号未登录: $message (code: $code)" }
+                BiliAuthFailureHandler.notify(message)
+            }
             -352 -> logger.error { "请求失败，风控异常: $message (code: $code)" }
             else -> logger.error { "请求失败: $message (code: $code)" }
         }
@@ -55,9 +58,37 @@ data class BiliResponseWithoutData(
     init {
         when (code) {
             0 -> {}
-            -101 -> logger.error { "请求失败，账号未登录: $message (code: $code)" }
+            -101 -> {
+                logger.error { "请求失败，账号未登录: $message (code: $code)" }
+                BiliAuthFailureHandler.notify(message)
+            }
             -352 -> logger.error { "请求失败，风控异常: $message (code: $code)" }
             else -> logger.error { "请求失败: $message (code: $code)" }
+        }
+    }
+
+    @Throws()
+    fun requireSuccess() {
+        when (code) {
+            0 -> {}
+            -101 -> throw AuthFailureException(message)
+            -352 -> throw RiskControlException(message)
+            else -> throw IllegalStateException(message)
+        }
+    }
+}
+
+object BiliAuthFailureHandler {
+    private val logger = KotlinLogging.logger {}
+
+    @Volatile
+    var onAuthFailure: ((String) -> Unit)? = null
+
+    internal fun notify(message: String) {
+        runCatching {
+            onAuthFailure?.invoke(message)
+        }.onFailure {
+            logger.warn(it) { "Handle auth failure failed" }
         }
     }
 }

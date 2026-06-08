@@ -1,5 +1,7 @@
 package dev.aaa1115910.biliapi.http
 
+import dev.aaa1115910.biliapi.http.util.BiliLoginConf
+import dev.aaa1115910.biliapi.http.util.generateLoginSessionId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
@@ -55,9 +57,10 @@ class BiliPassportHttpApiTest {
     fun `get app qr login url`() {
         val response = runBlocking {
             BiliPassportHttpApi.getAppQRUrl(
-                localId = "1",
+                localId = BiliLoginConf.LOCAL_ID,
                 ts = (System.currentTimeMillis() / 1000).toInt(),
-                mobiApp = "android_hd"
+                platform = BiliLoginConf.PLATFORM,
+                mobiApp = BiliLoginConf.MOBI_APP
             )
         }
         println(response)
@@ -70,9 +73,10 @@ class BiliPassportHttpApiTest {
     fun `request app qr login result`() {
         val qrUrlResponse = runBlocking {
             BiliPassportHttpApi.getAppQRUrl(
-                localId = "1",
+                localId = BiliLoginConf.LOCAL_ID,
                 ts = (System.currentTimeMillis() / 1000).toInt(),
-                mobiApp = "android_hd"
+                platform = BiliLoginConf.PLATFORM,
+                mobiApp = BiliLoginConf.MOBI_APP
             )
         }
         val url = qrUrlResponse.data?.url
@@ -84,7 +88,7 @@ class BiliPassportHttpApiTest {
             val loginResponse = runBlocking {
                 BiliPassportHttpApi.loginWithAppQR(
                     authCode = key!!,
-                    localId = "1",
+                    localId = BiliLoginConf.LOCAL_ID,
                     ts = (System.currentTimeMillis() / 1000).toInt()
                 )
             }
@@ -131,15 +135,22 @@ class BiliPassportHttpApiTest {
     @Test
     fun `send sms`() = runBlocking {
         println(
-            BiliPassportHttpApi.sendSms(
-                cid = 86,
-                tel = tel,
-                loginSessionId = loginSessionId,
-                channel = "bili",
-                buvid = buvid,
-                statistics = """{"appId":1,"platform":3,"version":"7.27.0","abtest":""}""",
-                ts = System.currentTimeMillis() / 1000
-            )
+                BiliPassportHttpApi.sendSms(
+                    cid = 86,
+                    tel = tel,
+                    loginSessionId = generateLoginSessionId(buvid, System.currentTimeMillis()),
+                    channel = BiliLoginConf.CHANNEL,
+                    buvid = buvid,
+                    statistics = BiliLoginConf.STATISTICS,
+                    build = BiliLoginConf.APP_BUILD_CODE,
+                    cLocale = BiliLoginConf.C_LOCALE,
+                    disableRcmd = BiliLoginConf.DISABLE_RCMD,
+                    localId = buvid,
+                    mobiApp = BiliLoginConf.MOBI_APP,
+                    platform = BiliLoginConf.PLATFORM,
+                    sLocale = BiliLoginConf.S_LOCALE,
+                    ts = System.currentTimeMillis() / 1000
+                )
         )
     }
 
@@ -150,15 +161,22 @@ class BiliPassportHttpApiTest {
                 cid = 86,
                 tel = tel,
                 loginSessionId = loginSessionId,
-                recaptchaToken = recaptchaToken,
-                geeChallenge = geeChallenge,
-                geeValidate = geeValidate,
-                geeSeccode = "$geeValidate|jordan",
-                channel = "bili",
-                buvid = buvid,
-                statistics = """{"appId":1,"platform":3,"version":"7.27.0","abtest":""}""",
-                ts = System.currentTimeMillis() / 1000
-            )
+                    recaptchaToken = recaptchaToken,
+                    geeChallenge = geeChallenge,
+                    geeValidate = geeValidate,
+                    geeSeccode = "$geeValidate|jordan",
+                    channel = BiliLoginConf.CHANNEL,
+                    buvid = buvid,
+                    statistics = BiliLoginConf.STATISTICS,
+                    build = BiliLoginConf.APP_BUILD_CODE,
+                    cLocale = BiliLoginConf.C_LOCALE,
+                    disableRcmd = BiliLoginConf.DISABLE_RCMD,
+                    localId = buvid,
+                    mobiApp = BiliLoginConf.MOBI_APP,
+                    platform = BiliLoginConf.PLATFORM,
+                    sLocale = BiliLoginConf.S_LOCALE,
+                    ts = System.currentTimeMillis() / 1000
+                )
         )
     }
 
@@ -168,9 +186,16 @@ class BiliPassportHttpApiTest {
             BiliPassportHttpApi.loginWithSms(
                 cid = 86,
                 tel = tel,
-                loginSessionId = loginSessionId,
                 code = 23,
-                captchaKey = ""
+                captchaKey = "",
+                build = BiliLoginConf.APP_BUILD_CODE,
+                buvid = buvid,
+                channel = BiliLoginConf.CHANNEL,
+                localId = buvid,
+                mobiApp = BiliLoginConf.MOBI_APP,
+                platform = BiliLoginConf.PLATFORM,
+                statistics = BiliLoginConf.STATISTICS,
+                ts = System.currentTimeMillis() / 1000
             )
         )
     }

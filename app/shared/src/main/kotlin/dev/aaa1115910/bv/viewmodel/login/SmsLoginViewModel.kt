@@ -31,7 +31,6 @@ class SmsLoginViewModel(
     var sendSmsState by mutableStateOf(SendSmsState.Ready)
 
     private var phone: Long = 0
-    private val loginSessionId = loginRepository.generateLoginSessionId()
     private var recaptchaToken: String? = null
     var geetestChallenge: String? = null
     var geetestValidate: String? = null
@@ -47,7 +46,11 @@ class SmsLoginViewModel(
         logger.info { "Send sms to $phone" }
         runCatching {
             val sendSmsResult = loginRepository.requestSms(
-                phone, loginSessionId, buvid, recaptchaToken, geetestChallenge, geetestValidate
+                phone = phone,
+                buvid = buvid,
+                recaptchaToken = recaptchaToken,
+                geetestChallenge = geetestChallenge,
+                geetestValidate = geetestValidate
             )
             when (sendSmsResult.state) {
                 SendSmsState.Ready -> {
@@ -107,7 +110,7 @@ class SmsLoginViewModel(
         runCatching {
             val loginResult = loginRepository.loginWithSms(
                 phone = phone,
-                loginSessionId = loginSessionId,
+                buvid = buvid,
                 code = code,
                 captchaKey = captchaKey!!
             )

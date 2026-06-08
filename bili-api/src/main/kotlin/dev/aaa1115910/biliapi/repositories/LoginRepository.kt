@@ -7,13 +7,19 @@ import dev.aaa1115910.biliapi.entity.login.QrLoginState
 import dev.aaa1115910.biliapi.entity.login.SmsLoginResult
 import dev.aaa1115910.biliapi.entity.login.WebCookies
 import dev.aaa1115910.biliapi.http.BiliPassportHttpApi
+import dev.aaa1115910.biliapi.http.util.BiliLoginConf
+import dev.aaa1115910.biliapi.http.util.encodeLoginComponent
+import dev.aaa1115910.biliapi.http.util.encryptLoginDt
+import dev.aaa1115910.biliapi.http.util.generateLoginDeviceId
+import dev.aaa1115910.biliapi.http.util.generateLoginSessionId
 import io.ktor.util.date.toJvmDate
 import org.koin.core.annotation.Single
 import java.util.Date
-import java.util.UUID
 
 @Single
 class LoginRepository {
+    private val loginDeviceId = generateLoginDeviceId()
+
     /**
      * 请求扫码登录的二维码，仅支持 Http 接口使用
      */
@@ -71,9 +77,10 @@ class LoginRepository {
      */
     suspend fun requestAppQrLogin(): QrLoginData {
         val response = BiliPassportHttpApi.getAppQRUrl(
-            localId = "0",
+            localId = BiliLoginConf.LOCAL_ID,
             ts = (System.currentTimeMillis() / 1000).toInt(),
-            mobiApp = "android_hd"
+            platform = BiliLoginConf.PLATFORM,
+            mobiApp = BiliLoginConf.MOBI_APP
         ).getResponseData()
         return QrLoginData(
             url = response.url,
@@ -89,7 +96,7 @@ class LoginRepository {
     suspend fun checkAppQrLoginState(authCode: String): QrLoginResult {
         val response = BiliPassportHttpApi.loginWithAppQR(
             authCode = authCode,
-            localId = "0",
+            localId = BiliLoginConf.LOCAL_ID,
             ts = (System.currentTimeMillis() / 1000).toInt(),
         )
         println(response)
@@ -138,31 +145,36 @@ class LoginRepository {
         )
     }
 
-    fun generateLoginSessionId() = UUID.randomUUID().toString().replace("-", "")
-
     /**
      * 请求验证码
      */
     suspend fun requestSms(
         phone: Long,
-        loginSessionId: String,
         buvid: String,
         recaptchaToken: String? = null,
         geetestChallenge: String? = null,
         geetestValidate: String? = null
     ): SendSmsResult {
+        val timestampMillis = System.currentTimeMillis()
         val response = BiliPassportHttpApi.sendSms(
             cid = 86,
             tel = phone,
-            loginSessionId = loginSessionId,
+            loginSessionId = generateLoginSessionId(buvid, timestampMillis),
             recaptchaToken = recaptchaToken,
             geeChallenge = geetestChallenge,
             geeValidate = geetestValidate,
-            geeSeccode = "$geetestValidate|jordan",
-            channel = "bili",
+            geeSeccode = geetestValidate?.let { "$it|jordan" },
+            channel = BiliLoginConf.CHANNEL,
             buvid = buvid,
-            statistics = """{"appId":1,"platform":3,"version":"7.27.0","abtest":""}""",
-            ts = System.currentTimeMillis() / 1000
+            statistics = BiliLoginConf.STATISTICS,
+            build = BiliLoginConf.APP_BUILD_CODE,
+            cLocale = BiliLoginConf.C_LOCALE,
+            disableRcmd = BiliLoginConf.DISABLE_RCMD,
+            localId = buvid,
+            mobiApp = BiliLoginConf.MOBI_APP,
+            platform = BiliLoginConf.PLATFORM,
+            sLocale = BiliLoginConf.S_LOCALE,
+            ts = timestampMillis / 1000
         )
         return if (response.code == 0 && response.data != null) {
             if (response.data.captchaKey != "") {
@@ -189,16 +201,35 @@ class LoginRepository {
      */
     suspend fun loginWithSms(
         phone: Long,
-        loginSessionId: String,
+        buvid: String,
         code: Int,
         captchaKey: String
     ): SmsLoginResult {
+        val webKey = BiliPassportHttpApi.getWebKey().getResponseData().key
         val response = BiliPassportHttpApi.loginWithSms(
             cid = 86,
             tel = phone,
-            loginSessionId = loginSessionId,
             code = code,
-            captchaKey = captchaKey
+            captchaKey = captchaKey,
+            build = BiliLoginConf.APP_BUILD_CODE,
+            buvid = buvid,
+            biliLocalId = loginDeviceId,
+            cLocale = BiliLoginConf.C_LOCALE,
+            channel = BiliLoginConf.CHANNEL,
+            device = BiliLoginConf.DEVICE,
+            deviceId = loginDeviceId,
+            deviceName = BiliLoginConf.DEVICE_NAME,
+            devicePlatform = BiliLoginConf.DEVICE_PLATFORM,
+            disableRcmd = BiliLoginConf.DISABLE_RCMD,
+            dt = encryptLoginDt(webKey),
+            fromPv = BiliLoginConf.FROM_PV,
+            fromUrl = encodeLoginComponent(BiliLoginConf.FROM_URL),
+            localId = buvid,
+            mobiApp = BiliLoginConf.MOBI_APP,
+            platform = BiliLoginConf.PLATFORM,
+            sLocale = BiliLoginConf.S_LOCALE,
+            statistics = BiliLoginConf.STATISTICS,
+            ts = System.currentTimeMillis() / 1000
         ).getResponseData()
         return SmsLoginResult.fromSmsLoginResponse(response)
     }

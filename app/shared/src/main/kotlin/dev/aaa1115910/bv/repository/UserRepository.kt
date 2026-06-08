@@ -13,6 +13,8 @@ import dev.aaa1115910.bv.entity.db.UserDB
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.koin.core.annotation.Single
 import java.util.Date
 
@@ -38,6 +40,8 @@ class UserRepository(
 
     var username by mutableStateOf("")
     var avatar by mutableStateOf("")
+
+    private val authFailureLogoutMutex = Mutex()
 
     private fun reloadFromPrefs() {
         logger.info { "Reload auth data from prefs" }
@@ -94,6 +98,14 @@ class UserRepository(
             logger.info { "Not found user $uid in user db" }
         }
         clearAuth()
+    }
+
+    suspend fun logoutOnAuthFailure(reason: String) {
+        authFailureLogoutMutex.withLock {
+            if (!isLogin && !Prefs.isLogin) return
+            logger.info { "Auth failure detected, auto logout: $reason" }
+            logout()
+        }
     }
 
     private fun clearAuth() {

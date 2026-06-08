@@ -8,6 +8,7 @@ import dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_APP
 import dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_WEB
 import dev.aaa1115910.biliapi.http.entity.BiliResponse
 import dev.aaa1115910.biliapi.http.entity.BiliResponseWithoutData
+import dev.aaa1115910.biliapi.http.entity.BiliAuthFailureHandler
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuPostData
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuResponse
@@ -2429,14 +2430,19 @@ object BiliHttpApi {
     suspend fun getWebInterfaceNav(
         buvid3: String? = null,
         sessData: String = ""
-    ): BiliResponse<NavResponseData> =
-        client.get("/x/web-interface/nav") {
+    ): BiliResponse<NavResponseData> {
+        val response = client.get("/x/web-interface/nav") {
             if (buvid3 != null && sessData.isNotEmpty()) {
                 header("Cookie", "buvid3=$buvid3; SESSDATA=$sessData;")
             } else if (sessData.isNotEmpty()) {
                 header("Cookie", "SESSDATA=$sessData;")
             }
-        }.body()
+        }.body<BiliResponse<NavResponseData>>()
+        if (sessData.isNotEmpty() && response.code == 0 && response.data?.isLogin == false) {
+            BiliAuthFailureHandler.notify("账号未登录")
+        }
+        return response
+    }
 
     /**
      * 更新 wbi keys

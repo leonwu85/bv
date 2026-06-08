@@ -1,6 +1,5 @@
 package dev.aaa1115910.biliapi
 
-import dev.aaa1115910.biliapi.http.BiliPassportHttpApi
 import dev.aaa1115910.biliapi.http.util.generateBuvid
 import dev.aaa1115910.biliapi.repositories.LoginRepository
 import dev.aaa1115910.biliapi.repositories.SendSmsResult
@@ -12,7 +11,6 @@ class BvLoginRepositoryTest {
     private val loginRepository = LoginRepository()
     private val phone = 16215705468L
     private val buvid = generateBuvid()
-    private val loginSessionId = loginRepository.generateLoginSessionId()
     var captchaKey: String? = null
 
     fun `send sms`() = runBlocking {
@@ -20,7 +18,6 @@ class BvLoginRepositoryTest {
         println(
             """
             buvid: $buvid
-            loginSessionId: $loginSessionId
             phoneNumber: $phone
         """.trimIndent()
         )
@@ -34,7 +31,6 @@ class BvLoginRepositoryTest {
         runCatching {
             sendSmsResult = loginRepository.requestSms(
                 phone = phone,
-                loginSessionId = loginSessionId,
                 buvid = buvid
             )
             println("Request send sms result: $sendSmsResult")
@@ -84,7 +80,6 @@ class BvLoginRepositoryTest {
                 runCatching {
                     sendSmsResult = loginRepository.requestSms(
                         phone = phone,
-                        loginSessionId = loginSessionId,
                         buvid = buvid,
                         recaptchaToken = recaptchaToken,
                         geetestChallenge = "$geetestChallenge",
@@ -117,14 +112,13 @@ class BvLoginRepositoryTest {
         println("====login with sms==== ")
         print("please input the sms code: ")
         val code = readln().toInt()
-        val response = BiliPassportHttpApi.loginWithSms(
-            cid = 86,
-            tel = phone,
-            loginSessionId = loginSessionId,
+        val response = loginRepository.loginWithSms(
+            phone = phone,
+            buvid = buvid,
             code = code,
             captchaKey = captchaKey!!
         )
-        println(response.getResponseData())
+        println(response)
     }
 }
 
