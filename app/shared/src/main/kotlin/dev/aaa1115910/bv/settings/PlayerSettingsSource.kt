@@ -25,6 +25,7 @@ interface PlayerSettingsSource {
     val defaultVideoCodec: VideoCodec
     val secondVideoCodec: VideoCodec
     val currentPlaySpeed: Float
+    val autoPlay: Boolean
     val enableTunneling: Boolean
     val enableMobileTunneling: Boolean
     val enableFfmpegAudioRenderer: Boolean
@@ -92,6 +93,7 @@ object DefaultPlayerSettingsSource : PlayerSettingsSource {
     override val defaultVideoCodec get() = Prefs.defaultVideoCodec
     override val secondVideoCodec get() = VideoCodec.AVC
     override val currentPlaySpeed get() = Prefs.currentPlaySpeed
+    override val autoPlay get() = true
     override val enableTunneling get() = Prefs.enableTunneling
     override val enableMobileTunneling get() = Prefs.enableMobileTunneling
     override val enableFfmpegAudioRenderer get() = Prefs.enableFfmpegAudioRenderer

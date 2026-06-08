@@ -11,6 +11,7 @@ object MobilePlayerSettingsSource : PlayerSettingsSource {
     override val defaultVideoCodec get() = MobilePrefs.defaultVideoCodec
     override val secondVideoCodec get() = MobilePrefs.secondVideoCodec
     override val currentPlaySpeed get() = MobilePrefs.currentPlaySpeed
+    override val autoPlay get() = MobilePrefs.autoPlay
     override val enableTunneling get() = MobilePrefs.enableTunneling
     override val enableMobileTunneling get() = MobilePrefs.enableMobileTunneling
     override val enableFfmpegAudioRenderer get() = MobilePrefs.enableFfmpegAudioRenderer

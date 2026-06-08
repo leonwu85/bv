@@ -117,6 +117,7 @@ fun BvPlayer(
     onBack: () -> Unit,
     onClearBackToHistoryData: () -> Unit,
     onReloadDanmakuAfterSeek: (Long, Boolean) -> Unit = { _, _ -> },
+    onRequestManualPlayback: () -> Boolean = { false },
     onChangeResolution: (Resolution, afterChange: suspend () -> Unit) -> Unit,
     onChangeVideoCodec: (VideoCodec, afterChange: suspend () -> Unit) -> Unit,
     onChangeAudio: (Audio, afterChange: suspend () -> Unit) -> Unit,
@@ -373,13 +374,16 @@ fun BvPlayer(
         override fun onReady() {
             logger.info { "onReady" }
             isError = false
+            isBuffering = false
             exception = null
             initDanmakuConfig()
 
             updateVideoAspectRatio()
 
 
-            videoPlayer.start()
+            if (videoPlayerConfigData.autoPlay || isLive || hasStartedPlaybackOnce) {
+                videoPlayer.start()
+            }
 
             //reset default play speed
             logger.info { "Reset default play speed: ${videoPlayerConfigData.currentVideoSpeed}" }
@@ -591,7 +595,8 @@ fun BvPlayer(
             isBuffering = isBuffering,
             isError = isError,
             exception = exception,
-            showBackToHistory = showBackToHistory
+            showBackToHistory = showBackToHistory,
+            hasStartedPlaybackOnce = hasStartedPlaybackOnce
         ),
         LocalVideoPlayerDebugInfoData provides VideoPlayerDebugInfoData(
             debugInfo = videoPlayer.debugInfo
@@ -603,7 +608,23 @@ fun BvPlayer(
             onEnterFullScreen = onEnterFullScreen,
             onExitFullScreen = onExitFullScreen,
             onBack = onBack,
-            onPlay = { videoPlayer.start() },
+            onPlay = onPlay@{
+                val shouldRequestManualPlayback =
+                    !videoPlayerConfigData.autoPlay && !isLive && !hasStartedPlaybackOnce
+                if (!hasStartedPlaybackOnce) {
+                    pendingDanmakuPlaySyncPosition = if (lastPlayed > 0) {
+                        lastPlayed
+                    } else {
+                        videoPlayer.currentPosition
+                    }
+                    hasStartedPlaybackOnce = true
+                }
+                if (shouldRequestManualPlayback && onRequestManualPlayback()) {
+                    isBuffering = true
+                    return@onPlay
+                }
+                videoPlayer.start()
+            },
             onPause = {
                 if (isLive) {
                     videoPlayer.start()
@@ -623,8 +644,10 @@ fun BvPlayer(
                 pendingDanmakuPlaySyncPosition = currentTime
                 onChangeResolution(it) {
                     withContext(Dispatchers.Main) {
-                        videoPlayer.seekTo(currentTime)
-                        videoPlayer.start()
+                        if (videoPlayerConfigData.autoPlay || isLive || hasStartedPlaybackOnce) {
+                            videoPlayer.seekTo(currentTime)
+                            videoPlayer.start()
+                        }
                     }
                 }
             },
@@ -633,8 +656,10 @@ fun BvPlayer(
                 pendingDanmakuPlaySyncPosition = currentTime
                 onChangeVideoCodec(it) {
                     withContext(Dispatchers.Main) {
-                        videoPlayer.seekTo(currentTime)
-                        videoPlayer.start()
+                        if (videoPlayerConfigData.autoPlay || isLive || hasStartedPlaybackOnce) {
+                            videoPlayer.seekTo(currentTime)
+                            videoPlayer.start()
+                        }
                     }
                 }
             },
@@ -643,8 +668,10 @@ fun BvPlayer(
                 pendingDanmakuPlaySyncPosition = currentTime
                 onChangeAudio(it) {
                     withContext(Dispatchers.Main) {
-                        videoPlayer.seekTo(currentTime)
-                        videoPlayer.start()
+                        if (videoPlayerConfigData.autoPlay || isLive || hasStartedPlaybackOnce) {
+                            videoPlayer.seekTo(currentTime)
+                            videoPlayer.start()
+                        }
                     }
                 }
             },

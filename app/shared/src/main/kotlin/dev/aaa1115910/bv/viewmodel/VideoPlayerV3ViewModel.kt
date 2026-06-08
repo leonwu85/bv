@@ -230,6 +230,14 @@ class VideoPlayerV3ViewModel(
         Secondary("副", "secondary")
     }
 
+    private data class PendingVodPlaybackSource(
+        val videoUrl: String?,
+        val audioUrl: String?,
+        val initialSeekPositionMs: Long?,
+        val historySeekPositionMs: Long?,
+        val playbackSessionToken: Long,
+    )
+
     private fun isCellularPlaybackNetwork(): Boolean =
         runCatching { NetworkUtil.isCellularNetwork() }.getOrDefault(false)
 
@@ -392,6 +400,7 @@ class VideoPlayerV3ViewModel(
 
     var title by mutableStateOf("")
     var partTitle by mutableStateOf("")
+    var cover by mutableStateOf("")
     var lastPlayed by mutableIntStateOf(0)
     var fromSeason by mutableStateOf(false)
     var subType by mutableIntStateOf(0)
@@ -449,6 +458,8 @@ class VideoPlayerV3ViewModel(
     private var vodPlayUrlRefreshJob: Job? = null
     private var vodPlayUrlRefreshToken by mutableLongStateOf(0L)
     private var vodPlaybackSessionToken by mutableLongStateOf(0L)
+    private var pendingVodPlaybackSource: PendingVodPlaybackSource? = null
+    private var manualVodPlaybackRequested = false
     private val danmakuPlayerDataMutex = Mutex()
 
     // 自动连播提前准备
@@ -753,6 +764,16 @@ class VideoPlayerV3ViewModel(
     ) {
         val playbackSessionToken = beginVodPlaybackSession()
         val videoChanged = currentAid != avid || currentCid != cid
+        pendingVodPlaybackSource = null
+        manualVodPlaybackRequested = settings.autoPlay
+        if (!settings.autoPlay) {
+            runCatching {
+                videoPlayer?.stop()
+            }.onFailure {
+                logger.fWarn { "Stop current vod playback before deferred manual play failed: ${it.message}" }
+            }
+            showBuffering = false
+        }
         showInteractiveOptionDialog = false
         if (continuePlayNext) {
             lastPlayed = 0
@@ -765,6 +786,12 @@ class VideoPlayerV3ViewModel(
         currentAid = avid
         currentCid = cid
         currentEpid = epid ?: 0
+        availableVideoList
+            .filterIsInstance<VideoListItemData>()
+            .firstOrNull { it.cid == cid }
+            ?.cover
+            ?.takeIf { it.isNotBlank() }
+            ?.let { cover = it }
         clearVodDanmakuMergeState()
         syncCurrentInteractivePointersFromList()
         if (!isInteractivePlayback && videoInfoRepository.videoList.none { it is VideoListInteractiveNode }) {
@@ -825,6 +852,41 @@ class VideoPlayerV3ViewModel(
 
             updateVideoShot()
         }
+    }
+
+    fun requestManualVodPlayback(): Boolean {
+        if (isLive || settings.autoPlay) return false
+
+        manualVodPlaybackRequested = true
+        val playbackSource = pendingVodPlaybackSource ?: return true
+        pendingVodPlaybackSource = null
+        applyVodPlaybackSource(playbackSource, startWhenReady = true)
+        return true
+    }
+
+    private fun applyVodPlaybackSource(
+        playbackSource: PendingVodPlaybackSource,
+        startWhenReady: Boolean = false,
+    ) {
+        if (!isVodPlaybackSessionActive(playbackSource.playbackSessionToken)) return
+
+        val player = videoPlayer ?: return
+        logger.info { "Video url: ${playbackSource.videoUrl}" }
+        logger.info { "Audio url: ${playbackSource.audioUrl}" }
+        player.playUrl(playbackSource.videoUrl, playbackSource.audioUrl)
+
+        val seekPositionMs = playbackSource.initialSeekPositionMs?.takeIf { it > 0L }
+            ?: playbackSource.historySeekPositionMs?.takeIf { it > 0L }
+        if (seekPositionMs != null) {
+            logger.info { "Set initial seek position to ${seekPositionMs}ms" }
+            player.setInitialSeekPosition(seekPositionMs)
+        }
+
+        player.prepare()
+        if (startWhenReady) {
+            player.start()
+        }
+        showBuffering = true
     }
 
     private suspend fun updateViewPoints(
@@ -1158,7 +1220,7 @@ class VideoPlayerV3ViewModel(
         var audioUrl = audioItem?.baseUrl ?: playData!!.dashAudios.firstOrNull()?.baseUrl
         if (audioUrl == null) {
             logger.fError { "Failed to get audio URL" }
-            errorMessage = "获取音频地址失败" 
+            errorMessage = "获取音频地址失败"
             loadState = RequestState.Failed
             return
         }
@@ -1217,19 +1279,27 @@ class VideoPlayerV3ViewModel(
             if (!isVodPlaybackSessionActive(playbackSessionToken)) return@withContext
             currentVideoHeight = videoItem?.height ?: 0
             currentVideoWidth = videoItem?.width ?: 0
-            logger.info { "Video url: $videoUrl" }
-            logger.info { "Audio url: $audioUrl" }
-            videoPlayer!!.playUrl(videoUrl, audioUrl)
-            // 根据 DefaultStartPosition 设置初始跳转位置，避免在 onReady 中 seekTo 导致的状态抖动
-            if (initialSeekPositionMs != null && initialSeekPositionMs > 0L) {
-                logger.info { "Set initial seek position to current: ${initialSeekPositionMs}ms" }
-                videoPlayer!!.setInitialSeekPosition(initialSeekPositionMs)
-            } else if (lastPlayed > 0 && settings.playerDefaultStartPosition == PlayerDefaultStartPosition.History) {
-                logger.info { "Set initial seek position to history: ${lastPlayed}ms" }
-                videoPlayer!!.setInitialSeekPosition(lastPlayed.toLong())
+            val playbackSource = PendingVodPlaybackSource(
+                videoUrl = videoUrl,
+                audioUrl = audioUrl,
+                initialSeekPositionMs = initialSeekPositionMs,
+                historySeekPositionMs = lastPlayed
+                    .takeIf { it > 0 && settings.playerDefaultStartPosition == PlayerDefaultStartPosition.History }
+                    ?.toLong(),
+                playbackSessionToken = playbackSessionToken,
+            )
+            if (!settings.autoPlay && !manualVodPlaybackRequested) {
+                logger.info { "Defer vod playback prepare until manual play" }
+                pendingVodPlaybackSource = playbackSource
+                showBuffering = false
+                return@withContext
             }
-            videoPlayer!!.prepare()
-            showBuffering = true
+
+            pendingVodPlaybackSource = null
+            applyVodPlaybackSource(
+                playbackSource = playbackSource,
+                startWhenReady = !settings.autoPlay && manualVodPlaybackRequested,
+            )
         }
 
         if (playUrlExpiresAt > 0L) {
@@ -2829,6 +2899,7 @@ class VideoPlayerV3ViewModel(
         )
         title = transitionContext.title
         partTitle = transitionContext.partTitle
+        cover = transitionContext.cover
         fromSeason = false
         subType = 0
         epid = transitionContext.epid ?: 0

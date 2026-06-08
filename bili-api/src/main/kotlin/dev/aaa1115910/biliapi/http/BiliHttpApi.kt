@@ -2921,6 +2921,90 @@ object BiliHttpApi {
         return Pair(response.code == 0, response.message)
     }
 
+    suspend fun likeReply(
+        oid: Long,
+        type: Long,
+        rpid: Long,
+        action: Int,
+        csrf: String? = null,
+        sessData: String? = null
+    ): BiliResponseWithoutData {
+        checkToken(null, sessData)
+        return client.post("/x/v2/reply/action") {
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        append("oid", "$oid")
+                        append("type", "$type")
+                        append("rpid", "$rpid")
+                        append("action", "$action")
+                        csrf?.let { append("csrf", it) }
+                    }
+                )
+            )
+            sessData?.let { header("Cookie", "SESSDATA=$it;") }
+        }.body()
+    }
+
+    suspend fun hateReply(
+        oid: Long,
+        type: Long,
+        rpid: Long,
+        action: Int,
+        csrf: String? = null,
+        sessData: String? = null
+    ): BiliResponseWithoutData {
+        checkToken(null, sessData)
+        return client.post("/x/v2/reply/hate") {
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        append("oid", "$oid")
+                        append("type", "$type")
+                        append("rpid", "$rpid")
+                        append("action", "$action")
+                        csrf?.let { append("csrf", it) }
+                    }
+                )
+            )
+            sessData?.let { header("Cookie", "SESSDATA=$it;") }
+        }.body()
+    }
+
+    suspend fun reportReply(
+        oid: Long,
+        type: Long,
+        rpid: Long,
+        reasonType: Int,
+        reasonDesc: String? = null,
+        addBlacklist: Boolean = false,
+        csrf: String? = null,
+        sessData: String? = null
+    ): BiliResponseWithoutData {
+        checkToken(null, sessData)
+        return client.post("/x/v2/reply/report") {
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        append("oid", "$oid")
+                        append("type", "$type")
+                        append("rpid", "$rpid")
+                        append("reason", "$reasonType")
+                        append("add_blacklist", "$addBlacklist")
+                        append("gaia_source", "main_h5")
+                        append("platform", "android")
+                        append("scene", "main")
+                        if (reasonType == 0) {
+                            reasonDesc?.let { append("content", it) }
+                        }
+                        csrf?.let { append("csrf", it) }
+                    }
+                )
+            )
+            sessData?.let { header("Cookie", "SESSDATA=$it;") }
+        }.body()
+    }
+
     suspend fun getSeasonIdByAvid(
         avid: Long
     ): Int? {

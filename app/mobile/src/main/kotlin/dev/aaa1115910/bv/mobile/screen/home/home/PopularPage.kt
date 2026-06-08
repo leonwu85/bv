@@ -54,7 +54,7 @@ fun PopularPage(
     state: LazyGridState,
     windowSize: WindowWidthSizeClass,
     videos: List<UgcItem>,
-    onClickVideo: (aid: Long) -> Unit,
+    onClickVideo: (video: UgcItem) -> Unit,
     loading: Boolean,
     refreshing: Boolean,
     enabled: Boolean = true,
@@ -92,7 +92,7 @@ fun PopularPage(
                 PopularVideoListCard(
                     data = video.toPopularVideoCardData(),
                     compact = isCompact,
-                    onClick = { onClickVideo(video.aid) }
+                    onClick = { onClickVideo(video) }
                 )
             }
         }

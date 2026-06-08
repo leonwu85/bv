@@ -46,6 +46,7 @@ data class Comment(
     val pictures: List<Picture>,
     val replies: List<Comment>,
     val repliesCount: Int,
+    val action: Int = 0,
     val like: Long = 0,
     val translatedContent: List<String> = emptyList(),
     val translatedEmotes: List<Emote> = emptyList(),
@@ -63,6 +64,12 @@ data class Comment(
 
     val canTranslate: Boolean
         get() = translationSwitch == TranslationSwitch.TRANSLATION_SWITCH_SHOW_TRANSLATION
+
+    val isLiked: Boolean
+        get() = action == 1
+
+    val isDisliked: Boolean
+        get() = action == 2
 
     companion object {
         fun fromReply(reply: dev.aaa1115910.biliapi.http.entity.reply.CommentData.Reply): Comment {
@@ -83,6 +90,7 @@ data class Comment(
                 pictures = reply.content.pictures.map { Picture.fromPicture(it) },
                 replies = reply.replies.map { fromReply(it) },
                 repliesCount = reply.count,
+                action = reply.action,
                 like = reply.like.toLong(),
                 translationSwitch = TranslationSwitch.TRANSLATION_SWITCH_UNSUPPORTED
             )
@@ -108,6 +116,7 @@ data class Comment(
                 pictures = reply.content.picturesList.map { Picture.fromPicture(it) },
                 replies = reply.repliesList.map { fromReplyInfo(it) },
                 repliesCount = reply.count.toInt(),
+                action = reply.replyControl.action.toInt(),
                 like = reply.like,
                 translatedContent = translatedContent?.content.orEmpty(),
                 translatedEmotes = translatedContent?.emotes.orEmpty(),

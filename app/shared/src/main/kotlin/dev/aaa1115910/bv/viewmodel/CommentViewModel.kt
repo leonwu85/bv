@@ -221,6 +221,94 @@ class CommentViewModel(
         }
     }
 
+    private fun updateCommentInList(list: MutableList<Comment>, updatedComment: Comment) {
+        list.indices.forEach { index ->
+            val comment = list[index]
+            when {
+                comment.rpid == updatedComment.rpid -> {
+                    list[index] = updatedComment
+                }
+
+                comment.replies.any { it.rpid == updatedComment.rpid } -> {
+                    list[index] = comment.copy(
+                        replies = comment.replies.map { reply ->
+                            if (reply.rpid == updatedComment.rpid) updatedComment else reply
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun updateCommentState(updatedComment: Comment) {
+        withContext(Dispatchers.Main) {
+            updateCommentInList(comments, updatedComment)
+            updateCommentInList(replies, updatedComment)
+            if (replyRootComment?.rpid == updatedComment.rpid) {
+                replyRootComment = updatedComment
+            }
+        }
+    }
+
+    suspend fun toggleCommentLike(comment: Comment): Result<Comment> {
+        if (!Prefs.isLogin) {
+            return Result.failure(IllegalStateException("账号未登录"))
+        }
+        return runCatching {
+            commentRepository.likeComment(comment)
+        }.onSuccess { updatedComment ->
+            updateCommentState(updatedComment)
+        }.onFailure {
+            logger.fException(it) { "Toggle comment like failed" }
+        }
+    }
+
+    suspend fun toggleCommentDislike(comment: Comment): Result<Comment> {
+        if (!Prefs.isLogin) {
+            return Result.failure(IllegalStateException("账号未登录"))
+        }
+        return runCatching {
+            commentRepository.hateComment(comment)
+        }.onSuccess { updatedComment ->
+            updateCommentState(updatedComment)
+        }.onFailure {
+            logger.fException(it) { "Toggle comment dislike failed" }
+        }
+    }
+
+    suspend fun reportComment(
+        comment: Comment,
+        reasonType: Int,
+        reasonDesc: String? = null,
+        addBlacklist: Boolean = false
+    ): Result<Unit> {
+        if (!Prefs.isLogin) {
+            return Result.failure(IllegalStateException("账号未登录"))
+        }
+        return runCatching {
+            commentRepository.reportComment(
+                comment = comment,
+                reasonType = reasonType,
+                reasonDesc = reasonDesc,
+                addBlacklist = addBlacklist
+            )
+        }.onFailure {
+            logger.fException(it) { "Report comment failed" }
+        }
+    }
+
+    suspend fun blacklistCommentUser(comment: Comment): Result<Unit> {
+        if (!Prefs.isLogin) {
+            return Result.failure(IllegalStateException("账号未登录"))
+        }
+        return runCatching {
+            val success = userRepository.blacklistUser(comment.member.mid)
+            if (!success) error("加入黑名单失败")
+        }.onFailure {
+            logger.fException(it) { "Blacklist comment user failed" }
+        }
+    }
+
     suspend fun loadEmotePackages() {
         if (loadingEmotes || emotePackages.isNotEmpty()) return
         runCatching {

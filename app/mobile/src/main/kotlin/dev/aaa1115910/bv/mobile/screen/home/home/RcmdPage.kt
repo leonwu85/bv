@@ -31,7 +31,7 @@ fun RcmdPage(
     state: LazyGridState,
     windowSize: WindowWidthSizeClass,
     videos: List<UgcItem>,
-    onClickVideo: (aid: Long) -> Unit,
+    onClickVideo: (video: UgcItem) -> Unit,
     loading: Boolean,
     refreshing: Boolean,
     enabled: Boolean = true,
@@ -84,7 +84,7 @@ fun RcmdPage(
                         dislikeReasons = video.dislikeReasons.map { VideoCardFeedOption(it.id, it.name, it.toast) },
                         feedbacks = video.feedbacks.map { VideoCardFeedOption(it.id, it.name, it.toast) }
                     ),
-                    onClick = { onClickVideo(video.aid) }
+                    onClick = { onClickVideo(video) }
                 )
             }
         }

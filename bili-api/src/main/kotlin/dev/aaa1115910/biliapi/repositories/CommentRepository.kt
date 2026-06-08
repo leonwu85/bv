@@ -144,6 +144,74 @@ class CommentRepository(
         }
     }
 
+    suspend fun likeComment(comment: Comment): Comment {
+        val action = if (comment.isLiked) 0 else 1
+        val response = BiliHttpApi.likeReply(
+            oid = comment.oid,
+            type = comment.type,
+            rpid = comment.rpid,
+            action = action,
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        )
+        if (response.code != 0) {
+            throw Exception(response.message)
+        }
+        val nextLike = if (action == 1) {
+            comment.like + 1
+        } else {
+            (comment.like - 1).coerceAtLeast(0)
+        }
+        return comment.copy(
+            action = if (action == 1) 1 else 0,
+            like = nextLike
+        )
+    }
+
+    suspend fun hateComment(comment: Comment): Comment {
+        val action = if (comment.isDisliked) 0 else 1
+        val response = BiliHttpApi.hateReply(
+            oid = comment.oid,
+            type = comment.type,
+            rpid = comment.rpid,
+            action = action,
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        )
+        if (response.code != 0) {
+            throw Exception(response.message)
+        }
+        return comment.copy(
+            action = if (action == 1) 2 else 0,
+            like = if (action == 1 && comment.isLiked) {
+                (comment.like - 1).coerceAtLeast(0)
+            } else {
+                comment.like
+            }
+        )
+    }
+
+    suspend fun reportComment(
+        comment: Comment,
+        reasonType: Int,
+        reasonDesc: String? = null,
+        addBlacklist: Boolean = false
+    ) {
+        val response = BiliHttpApi.reportReply(
+            oid = comment.oid,
+            type = comment.type,
+            rpid = comment.rpid,
+            reasonType = reasonType,
+            reasonDesc = reasonDesc,
+            addBlacklist = addBlacklist,
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        )
+        if (response.code != 0) {
+            throw Exception(response.message)
+        }
+    }
+
     suspend fun translateReply(comment: Comment): Comment? {
         if (!comment.canTranslate) return null
         return runCatching {

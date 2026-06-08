@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
@@ -97,7 +98,10 @@ fun VideoPlayerPages(
     pgcSections: List<Section>,
     onClickInteractiveNode: (InteractiveNode) -> Unit,
     onClickPage: (VideoPage) -> Unit,
-    onClickEpisode: (sectionIndex: Int, episode: Episode) -> Unit
+    onClickEpisode: (sectionIndex: Int, episode: Episode) -> Unit,
+    onClickEpisodePage: (sectionIndex: Int, episode: Episode, page: VideoPage) -> Unit = { _, _, page ->
+        onClickPage(page)
+    }
 ) {
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(
@@ -151,9 +155,10 @@ fun VideoPlayerPages(
                     episodes = currentSection!!.episodes,
                     onClickMore = { openBottomSheet = !openBottomSheet },
                     onClickEpisode = { episode ->
-                        onClickEpisode(
-                            ugcSeason.sections.indexOf(currentSection), episode
-                        )
+                        onClickEpisode(ugcSeason.sections.indexOf(currentSection), episode)
+                    },
+                    onClickPage = { episode, page ->
+                        onClickEpisodePage(ugcSeason.sections.indexOf(currentSection), episode, page)
                     },
                     currentCid = currentCid
                 )
@@ -185,9 +190,10 @@ fun VideoPlayerPages(
                 onClickInteractiveNode = onClickInteractiveNode,
                 onClickPage = onClickPage,
                 onClickEpisode = { episode ->
-                    onClickEpisode(
-                        ugcSeason!!.sections.indexOf(currentSection), episode
-                    )
+                    onClickEpisode(ugcSeason!!.sections.indexOf(currentSection), episode)
+                },
+                onClickEpisodePage = { episode, page ->
+                    onClickEpisodePage(ugcSeason!!.sections.indexOf(currentSection), episode, page)
                 }
             )
         }
@@ -202,6 +208,17 @@ fun VideoPlayerInteractiveNodesRow(
     onClickMore: () -> Unit = {},
     onClickNode: (InteractiveNode) -> Unit = {}
 ) {
+    val currentIndex = remember(nodes, currentCid) {
+        nodes.indexOfFirst { it.cid == currentCid }
+    }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(currentIndex) {
+        if (currentIndex >= 0) {
+            listState.scrollToItem((currentIndex - 1).coerceAtLeast(0))
+        }
+    }
+
     Column(
         modifier = modifier.background(MaterialTheme.colorScheme.surface)
     ) {
@@ -209,6 +226,7 @@ fun VideoPlayerInteractiveNodesRow(
             modifier = Modifier.fillMaxWidth()
         ) {
             LazyRow(
+                state = listState,
                 contentPadding = PaddingValues(
                     start = 8.dp,
                     end = 68.dp,
@@ -287,8 +305,31 @@ fun VideoPlayerEpisodesRow(
     episodes: List<Episode>,
     currentCid: Long,
     onClickMore: () -> Unit = {},
-    onClickEpisode: (Episode) -> Unit = {}
+    onClickEpisode: (Episode) -> Unit = {},
+    onClickPage: (episode: Episode, page: VideoPage) -> Unit = { _, _ -> }
 ) {
+    val currentEpisodeIndex = remember(episodes, currentCid) {
+        episodes.indexOfFirst { it.matchesCurrentCid(currentCid) }
+    }
+    val currentEpisode = episodes.getOrNull(currentEpisodeIndex)
+    val currentEpisodePageIndex = remember(currentEpisode, currentCid) {
+        currentEpisode?.pages?.indexOfFirst { it.cid == currentCid } ?: -1
+    }
+    val episodeListState = rememberLazyListState()
+    val pageListState = rememberLazyListState()
+
+    LaunchedEffect(currentEpisodeIndex) {
+        if (currentEpisodeIndex >= 0) {
+            episodeListState.scrollToItem((currentEpisodeIndex - 1).coerceAtLeast(0))
+        }
+    }
+
+    LaunchedEffect(currentEpisode, currentEpisodePageIndex) {
+        if (currentEpisodePageIndex >= 0) {
+            pageListState.scrollToItem((currentEpisodePageIndex - 1).coerceAtLeast(0))
+        }
+    }
+
     Column(
         modifier = modifier
             .background(MaterialTheme.colorScheme.surface)
@@ -303,6 +344,7 @@ fun VideoPlayerEpisodesRow(
         Box {
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
+                state = episodeListState,
                 contentPadding = PaddingValues(
                     start = 8.dp,
                     end = 68.dp,
@@ -315,8 +357,15 @@ fun VideoPlayerEpisodesRow(
                     VideoPlayerPageItem(
                         modifier = modifier,
                         text = "EP${index + 1} ${episode.title}",
-                        onClick = { onClickEpisode(episode) },
-                        isPlaying = episode.cid == currentCid
+                        onClick = {
+                            val firstPage = episode.pages.firstOrNull()
+                            if (episode.pages.size > 1 && firstPage != null) {
+                                onClickPage(episode, firstPage)
+                            } else {
+                                onClickEpisode(episode)
+                            }
+                        },
+                        isPlaying = episode.matchesCurrentCid(currentCid)
                     )
                 }
             }
@@ -325,6 +374,28 @@ fun VideoPlayerEpisodesRow(
                     .align(Alignment.CenterEnd),
                 onClick = onClickMore
             )
+        }
+        if (currentEpisode != null && currentEpisode.pages.size > 1) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                state = pageListState,
+                contentPadding = PaddingValues(
+                    start = 8.dp,
+                    end = 8.dp,
+                    top = 0.dp,
+                    bottom = 8.dp
+                ),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(currentEpisode.pages) { index, page ->
+                    VideoPlayerPageItem(
+                        modifier = modifier,
+                        text = "P${index + 1} ${page.title}",
+                        onClick = { onClickPage(currentEpisode, page) },
+                        isPlaying = page.cid == currentCid
+                    )
+                }
+            }
         }
     }
 }
@@ -338,6 +409,17 @@ fun VideoPlayerPagesRow(
     onClickMore: () -> Unit = {},
     onClickPage: (VideoPage) -> Unit = {}
 ) {
+    val currentIndex = remember(pages, currentCid) {
+        pages.indexOfFirst { it.cid == currentCid }
+    }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(currentIndex) {
+        if (currentIndex >= 0) {
+            listState.scrollToItem((currentIndex - 1).coerceAtLeast(0))
+        }
+    }
+
     Column(
         modifier = modifier
             .background(MaterialTheme.colorScheme.surface)
@@ -353,6 +435,7 @@ fun VideoPlayerPagesRow(
             modifier = Modifier.fillMaxWidth()
         ) {
             LazyRow(
+                state = listState,
                 contentPadding = PaddingValues(
                     start = 8.dp,
                     end = 68.dp,
@@ -462,9 +545,22 @@ private fun VideoPlayerPartSheetContent(
     pgcSections: List<Section>,
     onClickInteractiveNode: (InteractiveNode) -> Unit,
     onClickPage: (VideoPage) -> Unit,
-    onClickEpisode: (Episode) -> Unit
+    onClickEpisode: (Episode) -> Unit,
+    onClickEpisodePage: (episode: Episode, page: VideoPage) -> Unit = { _, _ -> }
 ) {
     var currentSection by remember { mutableStateOf(ugcSeason?.sections?.first()) }
+    val interactiveListState = rememberLazyListState()
+    val ugcEpisodeListState = rememberLazyListState()
+    val pageListState = rememberLazyListState()
+    val currentInteractiveIndex = remember(interactiveNodes, currentCid) {
+        interactiveNodes.indexOfFirst { it.cid == currentCid }
+    }
+    val currentEpisodeIndex = remember(currentSection, currentCid) {
+        currentSection?.episodes?.indexOfFirst { it.matchesCurrentCid(currentCid) } ?: -1
+    }
+    val currentPageIndex = remember(pages, currentCid) {
+        pages.indexOfFirst { it.cid == currentCid }
+    }
 
     val onClickSectionTab: (Section) -> Unit = { section ->
         currentSection = section
@@ -480,6 +576,24 @@ private fun VideoPlayerPartSheetContent(
                     episode.cid == currentCid || episode.pages.any { page -> page.cid == currentCid }
                 }
             }
+        }
+    }
+
+    LaunchedEffect(currentInteractiveIndex) {
+        if (currentInteractiveIndex >= 0) {
+            interactiveListState.scrollToItem((currentInteractiveIndex - 1).coerceAtLeast(0))
+        }
+    }
+
+    LaunchedEffect(currentSection, currentEpisodeIndex) {
+        if (currentEpisodeIndex >= 0) {
+            ugcEpisodeListState.scrollToItem((currentEpisodeIndex - 1).coerceAtLeast(0))
+        }
+    }
+
+    LaunchedEffect(currentPageIndex) {
+        if (currentPageIndex >= 0) {
+            pageListState.scrollToItem((currentPageIndex - 1).coerceAtLeast(0))
         }
     }
 
@@ -515,7 +629,9 @@ private fun VideoPlayerPartSheetContent(
             Text("pgc")
         } else if (interactiveNodes.isNotEmpty()) {
             HorizontalDivider()
-            LazyColumn {
+            LazyColumn(
+                state = interactiveListState
+            ) {
                 itemsIndexed(interactiveNodes, key = { _, node -> node.cid }) { index, node ->
                     PageListItem(
                         modifier = modifier,
@@ -561,6 +677,7 @@ private fun VideoPlayerPartSheetContent(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.surface),
+                    state = ugcEpisodeListState,
                     contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
                     itemsIndexed(currentSection!!.episodes) { epIndex, episode ->
@@ -569,7 +686,7 @@ private fun VideoPlayerPartSheetContent(
                                 modifier = modifier,
                                 text = "EP${epIndex + 1} ${episode.title}",
                                 duration = episode.duration,
-                                isPlaying = episode.cid == currentCid,
+                                isPlaying = episode.matchesCurrentCid(currentCid),
                                 onClick = { onClickEpisode(episode) }
                             )
                         } else {
@@ -580,7 +697,7 @@ private fun VideoPlayerPartSheetContent(
                                     modifier = modifier,
                                     text = "EP${epIndex + 1} ${episode.title}",
                                     duration = null,
-                                    isPlaying = episode.pages.any { it.cid == currentCid },
+                                    isPlaying = episode.matchesCurrentCid(currentCid),
                                     onClick = { expand = !expand }
                                 )
                                 AnimatedVisibility(
@@ -596,7 +713,7 @@ private fun VideoPlayerPartSheetContent(
                                                 text = "P${pageIndex + 1} ${page.title}",
                                                 duration = page.duration,
                                                 isPlaying = page.cid == currentCid,
-                                                onClick = { onClickPage(page) }
+                                                onClick = { onClickEpisodePage(episode, page) }
                                             )
                                         }
                                     }
@@ -609,7 +726,9 @@ private fun VideoPlayerPartSheetContent(
             }
         } else if (pages.size > 1) {
             HorizontalDivider()
-            LazyColumn {
+            LazyColumn(
+                state = pageListState
+            ) {
                 itemsIndexed(pages) { index, page ->
                     PageListItem(
                         modifier = modifier,
@@ -676,6 +795,10 @@ private fun PageListItem(
             containerColor = Color.Transparent
         ),
     )
+}
+
+private fun Episode.matchesCurrentCid(currentCid: Long): Boolean {
+    return cid == currentCid || pages.any { it.cid == currentCid }
 }
 
 @Composable

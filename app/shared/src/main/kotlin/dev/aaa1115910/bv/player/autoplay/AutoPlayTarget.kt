@@ -31,6 +31,7 @@ internal data class PreparedAutoPlayTransitionContext(
     val seasonId: Int? = null,
     val title: String,
     val partTitle: String,
+    val cover: String,
     val isVerticalVideo: Boolean,
     val playerIconIdle: String = "",
     val playerIconMoving: String = "",

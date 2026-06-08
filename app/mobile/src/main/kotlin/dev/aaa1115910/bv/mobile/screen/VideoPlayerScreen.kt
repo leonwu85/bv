@@ -21,6 +21,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -104,6 +105,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -149,6 +151,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -540,6 +543,7 @@ fun VideoPlayerScreen(
                             width = playerViewModel.currentVideoWidth,
                             height = playerViewModel.currentVideoHeight,
                             codec = playerViewModel.currentVideoCodec.name,
+                            cover = playerViewModel.cover,
                             title = playerViewModel.title,
                             partTitle = playerViewModel.partTitle,
                         ),
@@ -580,6 +584,7 @@ fun VideoPlayerScreen(
                             currentVideoCodec = playerViewModel.currentVideoCodec,
                             currentVideoAspectRatio = playerViewModel.currentVideoAspectRatio,
                             currentVideoSpeed = playerViewModel.currentPlaySpeed,
+                            autoPlay = playerSettings.autoPlay,
                             currentAudio = playerViewModel.currentAudio,
                             currentDanmakuEnabled = playerViewModel.currentDanmakuEnabled,
                             currentDanmakuEnabledList = playerViewModel.currentDanmakuTypes,
@@ -627,6 +632,7 @@ fun VideoPlayerScreen(
                             danmakuPlayer = playerViewModel.danmakuPlayer,
                             onClearBackToHistoryData = { playerViewModel.lastPlayed = 0 },
                             onReloadDanmakuAfterSeek = playerViewModel::reloadDanmakuAfterSeek,
+                            onRequestManualPlayback = playerViewModel::requestManualVodPlayback,
                             onEnterFullScreen = {
                                 isVideoFullscreen = true
                             },
@@ -963,7 +969,18 @@ fun VideoPlayerScreen(
                                                         )
                                                         playerViewModel.loadPlayUrl(
                                                             avid = episode.aid,
-                                                            cid = episode.cid,
+                                                            cid = episode.pages.firstOrNull()?.cid ?: episode.cid,
+                                                            epid = episode.epid,
+                                                            continuePlayNext = true
+                                                        )
+                                                    },
+                                                    onClickEpisodePage = { sectionIndex, episode, page ->
+                                                        videoDetailViewModel.updateUgcSeasonSectionVideoList(
+                                                            sectionIndex
+                                                        )
+                                                        playerViewModel.loadPlayUrl(
+                                                            avid = episode.aid,
+                                                            cid = page.cid,
                                                             epid = episode.epid,
                                                             continuePlayNext = true
                                                         )
@@ -979,8 +996,7 @@ fun VideoPlayerScreen(
                                                     onClick = {
                                                         VideoPlayerActivity.actionStart(
                                                             context = context,
-                                                            aid = relatedVideo.aid,
-                                                            fromSeason = relatedVideo.jumpToSeason
+                                                            relatedVideo = relatedVideo
                                                         )
                                                     }
                                                 )
@@ -1124,7 +1140,18 @@ fun VideoPlayerScreen(
                                     )
                                     playerViewModel.loadPlayUrl(
                                         avid = episode.aid,
-                                        cid = episode.cid,
+                                        cid = episode.pages.firstOrNull()?.cid ?: episode.cid,
+                                        epid = episode.epid,
+                                        continuePlayNext = true
+                                    )
+                                },
+                                onClickEpisodePage = { sectionIndex, episode, page ->
+                                    videoDetailViewModel.updateUgcSeasonSectionVideoList(
+                                        sectionIndex
+                                    )
+                                    playerViewModel.loadPlayUrl(
+                                        avid = episode.aid,
+                                        cid = page.cid,
                                         epid = episode.epid,
                                         continuePlayNext = true
                                     )
@@ -1162,8 +1189,7 @@ fun VideoPlayerScreen(
                                 onClick = {
                                     VideoPlayerActivity.actionStart(
                                         context = context,
-                                        aid = relatedVideo.aid,
-                                        fromSeason = relatedVideo.jumpToSeason
+                                        relatedVideo = relatedVideo
                                     )
                                 }
                             )
@@ -1556,8 +1582,9 @@ fun VideoPlayerInfo(
                 Text(text = "关注")
             }
         }
-        Text(
+        LongPressCopyText(
             text = title,
+            label = "标题",
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.titleMedium
@@ -1577,7 +1604,7 @@ fun VideoPlayerInfo(
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
-                    Text(text = "$playCount")
+                    Text(text = formatStatCount(playCount))
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -1589,7 +1616,7 @@ fun VideoPlayerInfo(
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
-                    Text(text = "$danmakuCount")
+                    Text(text = formatStatCount(danmakuCount))
                 }
                 Text(text = date)
                 Text(text = "av$avid")
@@ -1618,9 +1645,68 @@ fun VideoPlayerInfo(
                 onShare = onShare,
                 onSaveCover = onSaveCover
             )
-            Text(text = description)
+            LongPressCopyText(
+                text = description,
+                label = "简介"
+            )
         }
     }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun LongPressCopyText(
+    text: String,
+    label: String,
+    modifier: Modifier = Modifier,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip,
+    style: TextStyle? = null
+) {
+    val context = LocalContext.current
+    val textStyle = style ?: LocalTextStyle.current
+    val interactionSource = remember { MutableInteractionSource() }
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        Text(
+            modifier = Modifier.combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = {},
+                onLongClick = {
+                    if (text.isNotBlank()) expanded = true
+                }
+            ),
+            text = text,
+            maxLines = maxLines,
+            overflow = overflow,
+            style = textStyle
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text(text = "复制") },
+                leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    copyText(context, label, text)
+                    "已复制$label".toast(context)
+                }
+            )
+        }
+    }
+}
+
+private fun copyText(
+    context: Context,
+    label: String,
+    text: String
+) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -3105,6 +3191,15 @@ private fun formatStatCount(value: Int): String {
         value >= 100_000_000 -> "${value / 100_000_000}亿"
         value >= 10_000 -> String.format("%.1f万", value / 10_000.0)
         value > 0 -> value.toString()
+        else -> "-"
+    }
+}
+
+private fun formatStatCount(value: Long): String {
+    return when {
+        value >= 100_000_000L -> "${value / 100_000_000L}亿"
+        value >= 10_000L -> String.format("%.1f万", value / 10_000.0)
+        value > 0L -> value.toString()
         else -> "-"
     }
 }

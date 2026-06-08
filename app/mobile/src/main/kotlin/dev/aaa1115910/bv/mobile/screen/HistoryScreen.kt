@@ -93,7 +93,7 @@ fun HistoryScreen(
                     onClick = {
                         VideoPlayerActivity.actionStart(
                             context = context,
-                            aid = history.avid
+                            video = history
                         )
                     }
                 )

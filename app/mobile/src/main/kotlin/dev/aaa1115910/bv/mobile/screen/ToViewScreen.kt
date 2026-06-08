@@ -121,7 +121,7 @@ fun ToViewScreen(
                         onClick = {
                             VideoPlayerActivity.actionStart(
                                 context = context,
-                                aid = video.avid,
+                                video = video,
                                 fromToView = true
                             )
                         }

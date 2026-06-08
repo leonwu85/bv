@@ -11,12 +11,18 @@ import androidx.lifecycle.lifecycleScope
 import com.kuaishou.akdanmaku.render.SimpleRenderer
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import dev.aaa1115910.biliapi.entity.ApiType
+import dev.aaa1115910.biliapi.entity.ugc.UgcItem
+import dev.aaa1115910.biliapi.entity.user.DynamicItem as BiliDynamicItem
+import dev.aaa1115910.biliapi.entity.user.DynamicVideo
+import dev.aaa1115910.biliapi.entity.user.SpaceVideo
+import dev.aaa1115910.biliapi.entity.video.RelatedVideo
 import dev.aaa1115910.biliapi.entity.video.VideoDetail
 import dev.aaa1115910.biliapi.entity.video.season.Episode
 import dev.aaa1115910.biliapi.entity.video.season.SeasonDetail
 import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.PlayerType
+import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.mobile.screen.VideoPlayerScreen
 import dev.aaa1115910.bv.mobile.settings.MobileRuntime
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
@@ -28,6 +34,7 @@ import dev.aaa1115910.bv.player.impl.vlc.VlcPlayerFactory
 import dev.aaa1115910.bv.settings.PlayerSettingsProvider
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.formatPubTimeString
+import dev.aaa1115910.bv.util.removeHtmlTags
 import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.viewmodel.CommentViewModel
 import dev.aaa1115910.bv.viewmodel.SeasonViewModel
@@ -45,6 +52,8 @@ data class VideoLaunchArgs(
     val cid: Long,
     val fromSeason: Boolean,
     val fromToView: Boolean,
+    val cover: String,
+    val partTitle: String,
     val epid: Int?,
     val seasonId: Int?,
     val liveRoomId: Int,
@@ -52,6 +61,9 @@ data class VideoLaunchArgs(
     val upName: String,
     val upFace: String,
     val upMid: Long,
+    val play: Long,
+    val danmaku: Int,
+    val pubTime: String,
     val liveWatchedNum: Int,
 ) {
     companion object {
@@ -62,13 +74,18 @@ data class VideoLaunchArgs(
                 cid = intent.getLongExtra("cid", 0),
                 fromSeason = intent.getBooleanExtra("fromSeason", false),
                 fromToView = intent.getBooleanExtra("fromToView", false),
+                cover = intent.getStringExtra("cover") ?: "",
+                partTitle = intent.getStringExtra("partTitle") ?: "",
                 epid = intent.getIntExtra("epid", 0).takeIf { it != 0 },
                 seasonId = intent.getIntExtra("seasonId", 0).takeIf { it != 0 },
                 liveRoomId = intent.getIntExtra("liveRoomId", 0),
-                title = intent.getStringExtra("title") ?: "Unknown Title",
+                title = intent.getStringExtra("title") ?: "",
                 upName = intent.getStringExtra("upName") ?: "",
                 upFace = intent.getStringExtra("upFace") ?: "",
                 upMid = intent.getLongExtra("upMid", 0L),
+                play = intent.getLongExtra("play", 0L),
+                danmaku = intent.getIntExtra("danmaku", 0),
+                pubTime = intent.getStringExtra("pubTime") ?: "",
                 liveWatchedNum = intent.getIntExtra("liveWatchedNum", 0)
             )
         }
@@ -85,12 +102,34 @@ class VideoPlayerActivity : ComponentActivity() {
             }
         }
 
+        private fun parseDynamicStatText(text: String): Long {
+            val normalized = text.trim().replace(",", "")
+            if (normalized.isBlank()) return 0L
+
+            val multiplier = when {
+                "亿" in normalized -> 100_000_000.0
+                "万" in normalized -> 10_000.0
+                else -> 1.0
+            }
+            val value = Regex("""\d+(?:\.\d+)?""").find(normalized)?.value?.toDoubleOrNull() ?: 0.0
+            return (value * multiplier).toLong()
+        }
+
         fun actionStart(
             context: Context,
             aid: Long,
             //cid: Long,
             fromSeason: Boolean = false,
             fromToView: Boolean = false,
+            cover: String = "",
+            title: String = "",
+            partTitle: String = "",
+            upName: String = "",
+            upFace: String = "",
+            upMid: Long = 0L,
+            play: Long = 0L,
+            danmaku: Int = 0,
+            pubTime: String = "",
             epid: Int? = null,
             seasonId: Int? = null,
         ) {
@@ -100,9 +139,155 @@ class VideoPlayerActivity : ComponentActivity() {
                     //putExtra("cid", cid)
                     putExtra("fromSeason", fromSeason)
                     putExtra("fromToView", fromToView)
+                    putExtra("cover", cover)
+                    putExtra("title", title)
+                    putExtra("partTitle", partTitle)
+                    putExtra("upName", upName)
+                    putExtra("upFace", upFace)
+                    putExtra("upMid", upMid)
+                    putExtra("play", play)
+                    putExtra("danmaku", danmaku)
+                    putExtra("pubTime", pubTime)
                     epid?.let { putExtra("epid", it) }
                     seasonId?.let { putExtra("seasonId", it) }
                 }
+            )
+        }
+
+        fun actionStart(
+            context: Context,
+            video: VideoCardData,
+            fromToView: Boolean = false
+        ) {
+            actionStart(
+                context = context,
+                aid = video.avid,
+                fromSeason = video.jumpToSeason,
+                fromToView = fromToView,
+                cover = video.cover,
+                title = video.title,
+                upName = video.upName,
+                upFace = video.upFace,
+                upMid = video.upId,
+                play = video.play ?: 0L,
+                danmaku = video.danmaku ?: 0,
+                pubTime = video.pubTime.orEmpty(),
+                epid = video.epId,
+                seasonId = video.seasonId
+            )
+        }
+
+        fun actionStart(
+            context: Context,
+            video: UgcItem
+        ) {
+            actionStart(
+                context = context,
+                aid = video.aid,
+                cover = video.cover,
+                title = video.title.removeHtmlTags(),
+                upName = video.author,
+                upFace = video.authorFace,
+                upMid = video.authorId,
+                play = video.play.coerceAtLeast(0L),
+                danmaku = video.danmaku.coerceAtLeast(0),
+                pubTime = video.pubTime.orEmpty()
+            )
+        }
+
+        fun actionStart(
+            context: Context,
+            video: DynamicVideo
+        ) {
+            actionStart(
+                context = context,
+                aid = video.aid,
+                fromSeason = video.seasonId != null && video.seasonId != 0,
+                cover = video.cover,
+                title = video.title,
+                upName = video.author,
+                upFace = video.authorFace.ifBlank { video.avatar },
+                upMid = video.authorId,
+                play = video.play.coerceAtLeast(0L),
+                danmaku = video.danmaku.coerceAtLeast(0),
+                pubTime = video.pubTime.orEmpty(),
+                epid = video.epid,
+                seasonId = video.seasonId
+            )
+        }
+
+        fun actionStart(
+            context: Context,
+            dynamicItem: BiliDynamicItem
+        ) {
+            dynamicItem.video?.let { video ->
+                actionStart(
+                    context = context,
+                    aid = video.aid,
+                    fromSeason = video.seasonId != null && video.seasonId != 0,
+                    cover = video.cover,
+                    title = video.title,
+                    upName = dynamicItem.author.author,
+                    upFace = dynamicItem.author.avatar,
+                    upMid = dynamicItem.author.mid,
+                    play = parseDynamicStatText(video.play),
+                    danmaku = parseDynamicStatText(video.danmaku)
+                        .coerceAtMost(Int.MAX_VALUE.toLong())
+                        .toInt(),
+                    pubTime = dynamicItem.author.pubTime,
+                    epid = video.epid,
+                    seasonId = video.seasonId
+                )
+                return
+            }
+
+            dynamicItem.pgc?.let { pgc ->
+                actionStart(
+                    context = context,
+                    aid = pgc.aid,
+                    fromSeason = true,
+                    cover = pgc.cover,
+                    title = pgc.title,
+                    epid = pgc.epid,
+                    seasonId = pgc.seasonId
+                )
+            }
+        }
+
+        fun actionStart(
+            context: Context,
+            video: SpaceVideo
+        ) {
+            actionStart(
+                context = context,
+                aid = video.aid,
+                cover = video.cover,
+                title = video.title,
+                upName = video.author,
+                upMid = video.authorId,
+                play = video.play.coerceAtLeast(0L),
+                danmaku = video.danmaku.coerceAtLeast(0),
+                pubTime = video.publishDate.formatPubTimeString(context)
+            )
+        }
+
+        fun actionStart(
+            context: Context,
+            relatedVideo: RelatedVideo
+        ) {
+            actionStart(
+                context = context,
+                aid = relatedVideo.aid,
+                fromSeason = relatedVideo.jumpToSeason,
+                cover = relatedVideo.cover,
+                title = relatedVideo.title,
+                upName = relatedVideo.author?.name.orEmpty(),
+                upFace = relatedVideo.author?.face.orEmpty(),
+                upMid = relatedVideo.author?.mid ?: 0L,
+                play = relatedVideo.view.coerceAtLeast(0L),
+                danmaku = relatedVideo.danmaku.coerceAtLeast(0),
+                pubTime = relatedVideo.pubTime.orEmpty(),
+                epid = relatedVideo.epid
             )
         }
 
@@ -237,6 +422,16 @@ class VideoPlayerActivity : ComponentActivity() {
             }
             return
         }
+
+        playerViewModel.cover = launchArgs.cover
+        playerViewModel.title = launchArgs.title
+        playerViewModel.partTitle = launchArgs.partTitle
+        playerViewModel.upName = launchArgs.upName
+        playerViewModel.upFace = launchArgs.upFace
+        playerViewModel.upId = launchArgs.upMid
+        playerViewModel.play = launchArgs.play
+        playerViewModel.danmaku = launchArgs.danmaku
+        playerViewModel.pubTime = launchArgs.pubTime
 
         var aid = launchArgs.aid
         var cid = launchArgs.cid
@@ -402,6 +597,7 @@ class VideoPlayerActivity : ComponentActivity() {
         playerViewModel.apply {
             title = detail.title
             partTitle = page?.title ?: ""
+            cover = detail.cover
             playerIconIdle = detail.playerIcon?.idle ?: ""
             playerIconMoving = detail.playerIcon?.moving ?: ""
             play = detail.stat.view
@@ -421,6 +617,7 @@ class VideoPlayerActivity : ComponentActivity() {
         playerViewModel.apply {
             title = season.title
             partTitle = episode.longTitle.ifBlank { episode.title }
+            cover = episode.cover.ifBlank { season.cover }
             playerIconIdle = season.playerIcon?.idle ?: ""
             playerIconMoving = season.playerIcon?.moving ?: ""
             play = episode.viewCount

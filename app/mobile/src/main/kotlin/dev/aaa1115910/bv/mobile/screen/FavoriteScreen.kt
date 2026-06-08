@@ -95,7 +95,7 @@ fun FavoriteScreen(
         onClickVideo = { videoCardData ->
             VideoPlayerActivity.actionStart(
                 context = context,
-                aid = videoCardData.avid,
+                video = videoCardData,
             )
         },
         onBack = { (context as Activity).finish() }

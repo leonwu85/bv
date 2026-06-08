@@ -1231,30 +1231,18 @@ private fun UserSpaceMoreMenu(
 private fun openSpaceVideo(context: Context, video: SpaceVideo) {
     VideoPlayerActivity.actionStart(
         context = context,
-        aid = video.aid
+        video = video
     )
 }
 
 private fun openDynamicItem(context: Context, dynamicItem: DynamicItem) {
     when (dynamicItem.type) {
         DynamicType.Av -> {
-            VideoPlayerActivity.actionStart(
-                context = context,
-                aid = dynamicItem.video?.aid ?: return,
-                fromSeason = dynamicItem.video?.seasonId != null && dynamicItem.video?.seasonId != 0,
-                epid = dynamicItem.video?.epid,
-                seasonId = dynamicItem.video?.seasonId
-            )
+            VideoPlayerActivity.actionStart(context = context, dynamicItem = dynamicItem)
         }
 
         DynamicType.Pgc -> {
-            VideoPlayerActivity.actionStart(
-                context = context,
-                aid = 0,
-                fromSeason = true,
-                epid = dynamicItem.pgc?.epid ?: return,
-                seasonId = dynamicItem.pgc?.seasonId
-            )
+            VideoPlayerActivity.actionStart(context = context, dynamicItem = dynamicItem)
         }
 
         else -> {

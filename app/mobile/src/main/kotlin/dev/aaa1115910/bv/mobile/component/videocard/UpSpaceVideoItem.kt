@@ -110,7 +110,7 @@ fun UpSpaceVideoItem(
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                         )
                         Text(
-                            text = "${spaceVideo.play}",
+                            text = formatCount(spaceVideo.play),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                         )
@@ -125,7 +125,7 @@ fun UpSpaceVideoItem(
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                         )
                         Text(
-                            text = "${spaceVideo.danmaku}",
+                            text = formatCount(spaceVideo.danmaku.toLong()),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                         )
@@ -136,6 +136,15 @@ fun UpSpaceVideoItem(
         }
     }
 
+}
+
+private fun formatCount(count: Long): String {
+    return when {
+        count >= 100_000_000L -> String.format("%.1f亿", count / 100_000_000.0)
+        count >= 10_000L -> String.format("%.1f万", count / 10_000.0)
+        count >= 0L -> count.toString()
+        else -> ""
+    }
 }
 
 @Preview

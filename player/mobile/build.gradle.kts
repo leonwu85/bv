@@ -68,6 +68,7 @@ dependencies {
     implementation(androidx.compose.ui.tooling.preview)
     implementation(androidx.compose.ui.util)
     implementation(androidx.core.ktx)
+    implementation(libs.coil.compose)
     implementation(androidx.media3.common)
     implementation(androidx.media3.decoder)
     implementation(androidx.media3.exoplayer)

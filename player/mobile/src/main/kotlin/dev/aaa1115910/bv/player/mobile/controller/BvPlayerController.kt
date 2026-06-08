@@ -10,6 +10,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -23,7 +24,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -47,6 +53,7 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -55,11 +62,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
+import coil.compose.AsyncImage
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.DanmakuType
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerSeekData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
+import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.PlayMode
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoCodec
@@ -322,8 +331,20 @@ fun BvPlayerControllerVideoContent(
     val videoPlayerSeekData = LocalVideoPlayerSeekData.current
     val videoPlayerStateData = LocalVideoPlayerStateData.current
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
+    val videoPlayerVideoInfoData = LocalVideoPlayerVideoInfoData.current
     var showBaseUi by remember { mutableStateOf(false) }
     val isMenuOpen by rememberUpdatedState(isMenuOpen)
+    var hasRequestedManualPlay by remember(
+        videoPlayerConfigData.currentVideoCid,
+        videoPlayerConfigData.autoPlay
+    ) {
+        mutableStateOf(false)
+    }
+    val showManualStartOverlay = !videoPlayerConfigData.autoPlay &&
+            !videoPlayerConfigData.isLive &&
+            !videoPlayerStateData.hasStartedPlaybackOnce &&
+            !hasRequestedManualPlay &&
+            !videoPlayerStateData.isError
 
     //在手势触发的事件中，直接读取 isPlaying currentTime 参数都只会读取到错误的值，原因未知
     var isPlaying by remember { mutableStateOf(videoPlayerStateData.isPlaying) }
@@ -443,7 +464,7 @@ fun BvPlayerControllerVideoContent(
     ) {
         content()
 
-        if (videoPlayerStateData.isBuffering && !videoPlayerStateData.isError) {
+        if (videoPlayerStateData.isBuffering && !videoPlayerStateData.isError && !showManualStartOverlay) {
             BufferingTip(modifier = Modifier.align(Alignment.Center))
         }
 
@@ -500,7 +521,18 @@ fun BvPlayerControllerVideoContent(
             ) {}
         }
 
-        if (!videoPlayerConfigData.isLive && videoPlayerConfigData.viewPoints.isNotEmpty()) {
+        if (showManualStartOverlay) {
+            ManualStartOverlay(
+                modifier = Modifier.fillMaxSize(),
+                cover = videoPlayerVideoInfoData.cover,
+                onPlay = {
+                    hasRequestedManualPlay = true
+                    onPlay()
+                }
+            )
+        }
+
+        if (!showManualStartOverlay && !videoPlayerConfigData.isLive && videoPlayerConfigData.viewPoints.isNotEmpty()) {
             val viewPointBottomPadding = when {
                 showBaseUi && isFullScreen -> 104.dp
                 showBaseUi -> 48.dp
@@ -518,7 +550,7 @@ fun BvPlayerControllerVideoContent(
             )
         }
 
-        if (!isMenuOpen && !showBaseUi) {
+        if (!showManualStartOverlay && !isMenuOpen && !showBaseUi) {
             SponsorBlockTip(
                 show = showSponsorBlockTip,
                 isFullScreen = isFullScreen,
@@ -716,7 +748,52 @@ fun Modifier.detectPlayerGestures(
                     }
                 }
             }
+    }
+}
+
+@Composable
+private fun ManualStartOverlay(
+    modifier: Modifier = Modifier,
+    cover: String,
+    onPlay: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .background(Color.Black)
+            .clickable(onClick = onPlay)
+    ) {
+        if (cover.isNotBlank()) {
+            AsyncImage(
+                modifier = Modifier.fillMaxSize(),
+                model = cover,
+                contentDescription = null,
+                contentScale = ContentScale.Crop
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.28f))
+            )
         }
+
+        IconButton(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(76.dp),
+            onClick = onPlay,
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = Color.White.copy(alpha = 0.92f),
+                contentColor = Color.Black
+            )
+        ) {
+            Icon(
+                modifier = Modifier.size(48.dp),
+                imageVector = Icons.Rounded.PlayArrow,
+                contentDescription = null
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

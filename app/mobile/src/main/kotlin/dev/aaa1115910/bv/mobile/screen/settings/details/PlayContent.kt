@@ -56,6 +56,11 @@ fun PlayContent(
                     values = PlayerDefaultStartPosition.entries.associate { it.value to it.displayName(context) }
                 )
                 switchPreference(
+                    title = "自动播放",
+                    prefReq = MobilePrefKeys.autoPlayRequest,
+                    onCheckedChange = { true }
+                )
+                switchPreference(
                     title = "循环播放",
                     prefReq = MobilePrefKeys.isLoopRequest,
                     onCheckedChange = { true }

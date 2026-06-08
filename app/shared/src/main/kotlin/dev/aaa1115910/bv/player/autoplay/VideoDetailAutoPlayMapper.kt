@@ -93,6 +93,7 @@ internal fun VideoDetail.toPreparedAutoPlayTransitionContext(
         seasonId = null,
         title = title,
         partTitle = preferredPartTitle ?: targetPage.title,
+        cover = cover,
         isVerticalVideo = targetPage.dimension.isVertical,
         playerIconIdle = playerIcon?.idle ?: "",
         playerIconMoving = playerIcon?.moving ?: "",

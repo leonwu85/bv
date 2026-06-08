@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,6 +22,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -56,9 +58,21 @@ fun VideoListMenu(
             list.findCurrentVideoListItem(videoPlayerConfigData.currentVideoCid)
         }
     }
+    val selectedIndex by remember(selectedVideoListItem, list) {
+        derivedStateOf {
+            selectedVideoListItem?.let { list.indexOf(it) } ?: -1
+        }
+    }
     val isUgcSeason by remember {
         derivedStateOf {
             videoPlayerConfigData.availableVideoList.any { it is VideoListUgcEpisode }
+        }
+    }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(selectedIndex) {
+        if (selectedIndex >= 0) {
+            listState.scrollToItem((selectedIndex - 2).coerceAtLeast(0))
         }
     }
 
@@ -83,6 +97,7 @@ fun VideoListMenu(
             modifier = Modifier
                 .padding(top = innerPadding.calculateTopPadding())
                 .fillMaxSize(),
+            state = listState,
             contentPadding = PaddingValues(vertical = 12.dp, horizontal = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -118,9 +133,10 @@ private fun VideoListItem(
     ) {
         when (item) {
             is VideoListPart -> {
+                val title = item.partTitle.ifBlank { item.title }
                 Text(
                     text = (" - ".takeIf { inUgcEpisode }
-                        ?: "") + "P${item.index + 1} ${item.title}",
+                        ?: "") + "P${item.index + 1} $title",
                     modifier = modifier
                         .padding(textPadding),
                     maxLines = 2,

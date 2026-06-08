@@ -885,7 +885,7 @@ private fun UgcChannelPage(
                 onClick = { item ->
                     VideoPlayerActivity.actionStart(
                         context = context,
-                        aid = item.aid
+                        video = item
                     )
                 }
             )

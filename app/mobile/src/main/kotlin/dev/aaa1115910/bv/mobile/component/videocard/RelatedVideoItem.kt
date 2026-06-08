@@ -127,7 +127,7 @@ fun RelatedVideoItem(
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                         )
                         Text(
-                            text = "${relatedVideo.view}",
+                            text = videoCardData.playString,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                         )
@@ -142,7 +142,7 @@ fun RelatedVideoItem(
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                         )
                         Text(
-                            text = "${relatedVideo.danmaku}",
+                            text = videoCardData.danmakuString,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                         )

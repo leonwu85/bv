@@ -121,6 +121,11 @@ fun SeasonInfoScreen(
                         context = context,
                         aid = episode.aid,
                         fromSeason = true,
+                        cover = episode.cover.ifBlank { seasonData.cover },
+                        title = seasonData.title,
+                        partTitle = episode.longTitle.ifBlank { episode.title },
+                        play = episode.viewCount,
+                        danmaku = episode.danmakuCount,
                         epid = episode.epid,
                         seasonId = seasonData.seasonId
                     )

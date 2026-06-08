@@ -42,6 +42,7 @@ data class VideoPlayerVideoInfoData(
     val width: Int = 0,
     val height: Int = 0,
     val codec: String = "",
+    val cover: String = "",
     val title: String = "Title",
     val partTitle: String = "PartTitle",
     val play: Long = 0,
@@ -109,6 +110,7 @@ data class VideoPlayerStateData(
     val isError: Boolean = false,
     val exception: Exception? = null,
     val showBackToHistory: Boolean = false,
+    val hasStartedPlaybackOnce: Boolean = false,
 )
 
 data class VideoPlayerConfigData(
@@ -124,6 +126,7 @@ data class VideoPlayerConfigData(
     val currentVideoRotation: VideoRotation = VideoRotation.Original,
     val supportManualVideoRotation: Boolean = false,
     val currentVideoSpeed: Float = 1f,
+    val autoPlay: Boolean = true,
     val currentPlaybackMediaMode: PlaybackMediaMode = PlaybackMediaMode.Normal,
     val currentAudio: Audio = Audio.A192K,
     val currentDanmakuEnabled: Boolean = true,
