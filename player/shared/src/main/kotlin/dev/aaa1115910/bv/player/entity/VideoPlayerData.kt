@@ -170,6 +170,7 @@ data class VideoPlayerConfigData(
     val currentLiveQualityDescription: String = "",
     val availableLiveCodecs: List<LiveCodec> = LiveCodec.entries,
     val currentLiveCodec: LiveCodec = LiveCodec.HLS,
+    val bottomControlPanelConfig: PlayerBottomControlPanelConfig = PlayerBottomControlPanelConfig.Default,
 )
 
 data class VideoPlayerDanmakuMasksData(

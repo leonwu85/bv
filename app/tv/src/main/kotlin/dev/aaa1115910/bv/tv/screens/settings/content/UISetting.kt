@@ -55,6 +55,7 @@ import dev.aaa1115910.bv.entity.DynamicPageStyle
 import dev.aaa1115910.bv.entity.DynamicTabType
 import dev.aaa1115910.bv.entity.ThemeType
 import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
+import dev.aaa1115910.bv.tv.activities.settings.PlayerBottomControlPanelCustomizeActivity
 import dev.aaa1115910.bv.tv.component.UgcTopNavItem
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.screens.main.DrawerItem
@@ -196,6 +197,13 @@ fun UISetting(
                         supportText = stringResource(R.string.settings_ui_long_press_text),
                         valueText = currentLongPressAction.getDisplayName(LocalContext.current),
                         onClick = { showLongPressActionDialog = true }
+                    )
+                }
+                item {
+                    SettingListItem(
+                        title = stringResource(R.string.settings_ui_bottom_control_panel_title),
+                        supportText = stringResource(R.string.settings_ui_bottom_control_panel_text),
+                        onClick = { PlayerBottomControlPanelCustomizeActivity.actionStart(context) }
                     )
                 }
                 item {

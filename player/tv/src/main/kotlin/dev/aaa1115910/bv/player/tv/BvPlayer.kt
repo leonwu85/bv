@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.os.CountDownTimer
 import android.util.LruCache
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -65,6 +66,7 @@ import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoAspectRatio
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.player.entity.LiveCodec
+import dev.aaa1115910.bv.player.entity.PlayerBottomControlPanelConfig
 import dev.aaa1115910.bv.player.entity.PlayerShortcutAction
 import dev.aaa1115910.bv.player.entity.VideoListItem
 import dev.aaa1115910.bv.player.entity.VideoRotation
@@ -158,6 +160,7 @@ fun BvPlayer(
     playerSeekBackwardStep: Int = 5,
     showBottomProgressBar: Boolean = false,
     bottomProgressBarColor: Color = Color(0xFFBD26B8).copy(alpha = 0.5f),
+    bottomControlPanelConfig: PlayerBottomControlPanelConfig = PlayerBottomControlPanelConfig.Default,
     useTextureViewFixPortraitVideo: Boolean = false,
     onSendHeartbeat: suspend (Int) -> Unit,
     onClearBackToHistoryData: () -> Unit,
@@ -232,6 +235,13 @@ fun BvPlayer(
         modifier: Modifier,
         focusMap: Map<String, FocusRequester>,
         onFocus: (String) -> Unit,
+        onPauseAutoHide: (Boolean) -> Unit
+    ) -> Unit = { _, _, _, _ -> },
+    userActionButtonIds: Set<String> = emptySet(),
+    userActionButtonContent: @Composable (
+        buttonId: String,
+        modifier: Modifier,
+        contentPadding: PaddingValues,
         onPauseAutoHide: (Boolean) -> Unit
     ) -> Unit = { _, _, _, _ -> }
 ) {
@@ -1405,6 +1415,7 @@ fun BvPlayer(
             playerSeekBackwardStep = playerSeekBackwardStep,
             showBottomProgressBar = showBottomProgressBar,
             bottomProgressBarColor = bottomProgressBarColor,
+            bottomControlPanelConfig = bottomControlPanelConfig,
             showRelatedVideos = videoPlayerConfigData.showRelatedVideos,
             showRelatedButton = showRelatedButton,
             onToggleRelatedVideos = onToggleRelatedVideos,
@@ -1669,6 +1680,8 @@ fun BvPlayer(
                 onLoopPlayModeChange(it)
             },
             userActionContent = userActionContent,
+            userActionButtonIds = userActionButtonIds,
+            userActionButtonContent = userActionButtonContent,
             onLoadPrevVideo = onLoadPrevVideo,
             onLoadNextVideo = onLoadNextVideo,
             openPlayListRequestToken = openPlayListRequestToken,

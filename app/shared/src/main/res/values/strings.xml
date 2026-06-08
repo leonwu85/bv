@@ -297,6 +297,8 @@
     <string name="settings_ui_home_nav_hidden">隐藏</string>
     <string name="settings_ui_long_press_title">播放时长按确定键</string>
     <string name="settings_ui_long_press_text">设置播放器界面长按确定键时的行为</string>
+    <string name="settings_ui_bottom_control_panel_title">自定义播放底部控制面板</string>
+    <string name="settings_ui_bottom_control_panel_text">调整播放页底部控制面板组件大小和按钮顺序</string>
     <string name="player_long_press_action_open_menu">打开菜单</string>
     <string name="player_long_press_action_triple_like">一键三连</string>
     <string name="settings_live_enable">显示直播</string>

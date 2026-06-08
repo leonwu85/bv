@@ -3,6 +3,7 @@
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.runtime.Composable
@@ -34,6 +35,7 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerClockState
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekThumbData
 import dev.aaa1115910.bv.player.entity.VideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.VideoRotation
+import dev.aaa1115910.bv.player.entity.PlayerBottomControlPanelConfig
 import dev.aaa1115910.bv.player.tv.component.PlayerAnimations
 import dev.aaa1115910.bv.player.tv.theme.PlayerColors
 
@@ -43,6 +45,7 @@ fun ControllerVideoInfo(
     show: Boolean,
     playSpeed: Float = 1f,
     bottomProgressBarColor: Color = PlayerColors.bottomProgressBar,
+    bottomControlPanelConfig: PlayerBottomControlPanelConfig = PlayerBottomControlPanelConfig.Default,
     onInteraction: () -> Unit = {},
     onHideInfo: () -> Unit,
     onPlay: () -> Unit,
@@ -64,6 +67,13 @@ fun ControllerVideoInfo(
         modifier: Modifier,
         focusMap: Map<String, FocusRequester>,
         onFocus: (String) -> Unit,
+        onPauseAutoHide: (Boolean) -> Unit
+    ) -> Unit = { _, _, _, _ -> },
+    userActionButtonIds: Set<String> = emptySet(),
+    userActionButtonContent: @Composable (
+        buttonId: String,
+        modifier: Modifier,
+        contentPadding: PaddingValues,
         onPauseAutoHide: (Boolean) -> Unit
     ) -> Unit = { _, _, _, _ -> },
     onSeekBack: () -> Unit,
@@ -139,6 +149,7 @@ fun ControllerVideoInfo(
                 showTitle = !useCompactTitle,
                 playSpeed = playSpeed,
                 bottomProgressBarColor = bottomProgressBarColor,
+                bottomControlPanelConfig = bottomControlPanelConfig,
                 rotation = videoPlayerConfigData.currentVideoRotation,
                 idleIcon = videoPlayerSeekThumbData.idleIcon,
                 movingIcon = videoPlayerSeekThumbData.movingIcon,
@@ -170,6 +181,8 @@ fun ControllerVideoInfo(
                 onRotationChange = onRotationChange,
                 fromSeason = videoPlayerVideoInfoData.fromSeason,
                 userActionContent = userActionContent,
+                userActionButtonIds = userActionButtonIds,
+                userActionButtonContent = userActionButtonContent,
                 onSeekBack = onSeekBack,
                 onSeekForward = onSeekForward,
                 availableSubtitleTracks = videoPlayerConfigData.availableSubtitleTracks,

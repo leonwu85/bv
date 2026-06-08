@@ -54,6 +54,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -78,6 +79,8 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.aaa1115910.biliapi.entity.video.Subtitle
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
+import dev.aaa1115910.bv.player.entity.PlayerBottomControlPanelButtonIds
+import dev.aaa1115910.bv.player.entity.PlayerBottomControlPanelConfig
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekState
 import dev.aaa1115910.bv.player.entity.VideoPlayerStateData
 import dev.aaa1115910.bv.player.entity.VideoRotation
@@ -159,12 +162,56 @@ internal fun formatControllerTitle(title: String, partTitle: String): String =
     "${if (title.contains(partTitle)) "" else "$partTitle ｜ "}$title"
 
 @Composable
+private fun ControllerActionTextButton(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    text: String,
+    onClick: () -> Unit,
+    iconScale: Float = 0.9f,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+) {
+    Button(
+        modifier = modifier,
+        onClick = onClick,
+        contentPadding = contentPadding,
+        colors = ButtonDefaults.colors(
+            containerColor = Color.Transparent,
+            focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+            focusedContentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        border = ButtonDefaults.border(
+            border = Border(
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = Color.Transparent
+                )
+            ),
+            focusedBorder = Border(
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.45f)
+                )
+            )
+        )
+    ) {
+        Icon(
+            modifier = Modifier.scale(iconScale),
+            imageVector = icon,
+            contentDescription = text
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(text, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
 fun ControllerBottomBar(
     show: Boolean,
     onHideInfo: () -> Unit,
     modifier: Modifier = Modifier,
     playSpeed: Float = 1f,
     bottomProgressBarColor: Color = PlayerColors.bottomProgressBar,
+    bottomControlPanelConfig: PlayerBottomControlPanelConfig = PlayerBottomControlPanelConfig.Default,
     rotation: VideoRotation,
     title: String,
     partTitle: String,
@@ -206,6 +253,13 @@ fun ControllerBottomBar(
         focusMap: Map<String, FocusRequester>,
         onFocus: (String) -> Unit,
         onPauseAutoHide: (Boolean) -> Unit,
+    ) -> Unit = { _, _, _, _ -> },
+    userActionButtonIds: Set<String> = emptySet(),
+    userActionButtonContent: @Composable (
+        buttonId: String,
+        modifier: Modifier,
+        contentPadding: PaddingValues,
+        onPauseAutoHide: (Boolean) -> Unit
     ) -> Unit = { _, _, _, _ -> },
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
@@ -452,6 +506,32 @@ fun ControllerBottomBar(
     val currentDensity = LocalDensity.current
     val controllerPanelScale =
         (currentDensity.density / ControllerPanelBaseDensity).coerceAtLeast(0.01f)
+    val panelConfig = bottomControlPanelConfig.normalized()
+    val effectiveTitleScale = if (isLive) 1f else panelConfig.titleScale
+    val effectiveInfoScale = if (isLive) 1f else panelConfig.infoScale
+    val actionButtonIds = remember(
+        panelConfig.actionButtonOrder,
+        userActionButtonIds,
+        showRelatedButton
+    ) {
+        panelConfig.orderedActionButtons(
+            buildSet {
+                addAll(userActionButtonIds)
+                add(PlayerBottomControlPanelButtonIds.TripleLike)
+                add(PlayerBottomControlPanelButtonIds.Description)
+                add(PlayerBottomControlPanelButtonIds.Playlist)
+                if (showRelatedButton) add(PlayerBottomControlPanelButtonIds.Related)
+            }
+        )
+    }
+    val orderedButtons = remember(buttons, panelConfig.functionButtonOrder) {
+        val buttonsById = buttons.associateBy { it.id }
+        panelConfig
+            .orderedFunctionButtons(buttonsById.keys)
+            .mapNotNull { buttonsById[it] }
+    }
+    val firstActionFocusRequester =
+        actionButtonIds.firstNotNullOfOrNull { userActionFocusRequesters.value[it] } ?: FocusRequester()
 
     CompositionLocalProvider(
         LocalDensity provides Density(
@@ -483,8 +563,8 @@ fun ControllerBottomBar(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.headlineSmall.copy(
-                    fontSize = ControllerTitleFontSize.scaledBy(controllerPanelScale),
-                    lineHeight = ControllerTitleLineHeight.scaledBy(controllerPanelScale)
+                    fontSize = ControllerTitleFontSize.scaledBy(controllerPanelScale * effectiveTitleScale),
+                    lineHeight = ControllerTitleLineHeight.scaledBy(controllerPanelScale * effectiveTitleScale)
                 ),
             )
         }
@@ -510,7 +590,7 @@ fun ControllerBottomBar(
                         modifier = Modifier
                             .height(
                                 ControllerInfoButtonHeight.scaledByAtLeast(
-                                    controllerPanelScale,
+                                    controllerPanelScale * effectiveInfoScale,
                                     ControllerMinInfoButtonHeight
                                 )
                             )
@@ -556,7 +636,7 @@ fun ControllerBottomBar(
                         modifier = Modifier
                             .height(
                                 ControllerInfoButtonHeight.scaledByAtLeast(
-                                    controllerPanelScale,
+                                    controllerPanelScale * effectiveInfoScale,
                                     ControllerMinInfoButtonHeight
                                 )
                             )
@@ -700,7 +780,7 @@ fun ControllerBottomBar(
                     modifier = Modifier
                         .height(
                             ControllerInfoButtonHeight.scaledByAtLeast(
-                                controllerPanelScale,
+                                controllerPanelScale * effectiveInfoScale,
                                 ControllerMinInfoButtonHeight
                             )
                         )
@@ -726,7 +806,7 @@ fun ControllerBottomBar(
                     if (upAvatar.isNotEmpty()) {
                         AsyncImage(
                             modifier = Modifier
-                                .size(ControllerUpAvatarSize.scaledBy(controllerPanelScale))
+                                .size(ControllerUpAvatarSize.scaledBy(controllerPanelScale * effectiveInfoScale))
                                 .clip(CircleShape),
                             model = upAvatar,
                             contentDescription = upName,
@@ -739,8 +819,8 @@ fun ControllerBottomBar(
                         color = PlayerColors.textPrimary,
                         maxLines = 1,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = ControllerInfoFontSize.scaledBy(controllerPanelScale),
-                            lineHeight = ControllerInfoLineHeight.scaledBy(controllerPanelScale)
+                            fontSize = ControllerInfoFontSize.scaledBy(controllerPanelScale * effectiveInfoScale),
+                            lineHeight = ControllerInfoLineHeight.scaledBy(controllerPanelScale * effectiveInfoScale)
                         )
                     )
                 }
@@ -753,8 +833,8 @@ fun ControllerBottomBar(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = ControllerInfoFontSize.scaledBy(controllerPanelScale),
-                        lineHeight = ControllerInfoLineHeight.scaledBy(controllerPanelScale)
+                        fontSize = ControllerInfoFontSize.scaledBy(controllerPanelScale * effectiveInfoScale),
+                        lineHeight = ControllerInfoLineHeight.scaledBy(controllerPanelScale * effectiveInfoScale)
                     )
                 )
             }
@@ -772,188 +852,93 @@ fun ControllerBottomBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 原有用户操作内容（点赞/收藏/投币）
-            userActionContent(
-                Modifier,
-                userActionFocusRequesters.value,
-                { scheduleHideJob() },
-                { pause ->
-                    autoHideState.pauseAutoHide = pause
-                    if (pause) cancelHideJob() else scheduleHideJob()
-                }
+            val actionScale = controllerPanelScale * panelConfig.actionRowScale
+            val actionHeight = ControllerActionButtonHeight.scaledByAtLeast(
+                actionScale,
+                ControllerMinActionButtonHeight
             )
-
-            // 三连按钮
-            val tripleLikeFocus = userActionFocusRequesters.value["tripleLike"]
-            Button(
-                modifier = Modifier
-                    .height(
-                        ControllerActionButtonHeight.scaledByAtLeast(
-                            controllerPanelScale,
-                            ControllerMinActionButtonHeight
-                        )
-                    )
+            val actionContentPadding = PaddingValues(
+                horizontal = 8.dp.scaledBy(panelConfig.actionRowScale),
+                vertical = 0.dp
+            )
+            val pauseAutoHide: (Boolean) -> Unit = { pause ->
+                autoHideState.pauseAutoHide = pause
+                if (pause) cancelHideJob() else scheduleHideJob()
+            }
+            fun actionModifier(id: String): Modifier {
+                return Modifier
+                    .height(actionHeight)
                     .onFocusChanged { if (it.isFocused) scheduleHideJob() }
-                    .then(tripleLikeFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
-                onClick = onTripleLike,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                colors = ButtonDefaults.colors(
-                    containerColor = Color.Transparent,
-                    focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                    focusedContentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                border = ButtonDefaults.border(
-                    border = Border(
-                        border = BorderStroke(
-                            width = 1.dp,
-                            color = Color.Transparent
-                        )
-                    ),
-                    focusedBorder = Border(
-                        border = BorderStroke(
-                            width = 1.dp,
-                            color = Color.White.copy(alpha = 0.45f)
-                        )
+                    .then(
+                        userActionFocusRequesters.value[id]?.let { Modifier.focusRequester(it) }
+                            ?: Modifier
                     )
-                )
-            ) {
-                Icon(
-                    modifier = Modifier.scale(0.8f),
-                    imageVector = Icons.Outlined.Star,
-                    contentDescription = "三连"
-                )
-                Spacer(Modifier.width(4.dp))
-                Text("三连", style = MaterialTheme.typography.bodySmall)
             }
 
-            // 简介按钮
-            val descFocus = userActionFocusRequesters.value["description"]
-            Button(
-                modifier = Modifier
-                    .height(
-                        ControllerActionButtonHeight.scaledByAtLeast(
-                            controllerPanelScale,
-                            ControllerMinActionButtonHeight
-                        )
-                    )
-                    .onFocusChanged { if (it.isFocused) scheduleHideJob() }
-                    .then(descFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
-                onClick = onShowDescription,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                colors = ButtonDefaults.colors(
-                    containerColor = Color.Transparent,
-                    focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                    focusedContentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                border = ButtonDefaults.border(
-                    border = Border(
-                        border = BorderStroke(
-                            width = 1.dp,
-                            color = Color.Transparent
-                        )
-                    ),
-                    focusedBorder = Border(
-                        border = BorderStroke(
-                            width = 1.dp,
-                            color = Color.White.copy(alpha = 0.45f)
-                        )
-                    )
+            if (userActionButtonIds.isEmpty()) {
+                userActionContent(
+                    Modifier,
+                    userActionFocusRequesters.value,
+                    { scheduleHideJob() },
+                    pauseAutoHide
                 )
-            ) {
-                Icon(
-                    modifier = Modifier.scale(0.8f),
-                    imageVector = Icons.Outlined.Info,
-                    contentDescription = "简介"
-                )
-                Spacer(Modifier.width(4.dp))
-                Text("简介", style = MaterialTheme.typography.bodySmall)
             }
 
-            // 列表按钮
-            if (!isLive) {
-                val playlistFocus = userActionFocusRequesters.value["playlist"]
-                Button(
-                    modifier = Modifier
-                        .height(
-                            ControllerActionButtonHeight.scaledByAtLeast(
-                                controllerPanelScale,
-                                ControllerMinActionButtonHeight
-                            )
+            actionButtonIds.forEach { buttonId ->
+                when (buttonId) {
+                    PlayerBottomControlPanelButtonIds.Like,
+                    PlayerBottomControlPanelButtonIds.Favorite,
+                    PlayerBottomControlPanelButtonIds.Coin -> {
+                        userActionButtonContent(
+                            buttonId,
+                            actionModifier(buttonId),
+                            actionContentPadding,
+                            pauseAutoHide
                         )
-                        .onFocusChanged { if (it.isFocused) scheduleHideJob() }
-                        .then(playlistFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
-                    onClick = onOpenPlayList,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                    colors = ButtonDefaults.colors(
-                        containerColor = Color.Transparent,
-                        focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                        focusedContentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    border = ButtonDefaults.border(
-                        border = Border(
-                            border = BorderStroke(
-                                width = 1.dp,
-                                color = Color.Transparent
-                            )
-                        ),
-                        focusedBorder = Border(
-                            border = BorderStroke(
-                                width = 1.dp,
-                                color = Color.White.copy(alpha = 0.45f)
-                            )
-                        )
-                    )
-                ) {
-                    Icon(
-                        modifier = Modifier.scale(0.9f),
-                        imageVector = Icons.AutoMirrored.Rounded.PlaylistPlay,
-                        contentDescription = "列表"
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text("列表", style = MaterialTheme.typography.bodySmall)
-                }
+                    }
 
-                if (showRelatedButton) {
-                    val relatedFocus = userActionFocusRequesters.value["related"]
-                    Button(
-                        modifier = Modifier
-                            .height(
-                                ControllerActionButtonHeight.scaledByAtLeast(
-                                    controllerPanelScale,
-                                    ControllerMinActionButtonHeight
-                                )
-                            )
-                            .onFocusChanged { if (it.isFocused) scheduleHideJob() }
-                            .then(relatedFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
-                        onClick = onOpenRelatedVideo,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        colors = ButtonDefaults.colors(
-                            containerColor = Color.Transparent,
-                            focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                            focusedContentColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        border = ButtonDefaults.border(
-                            border = Border(
-                                border = BorderStroke(
-                                    width = 1.dp,
-                                    color = Color.Transparent
-                                )
-                            ),
-                            focusedBorder = Border(
-                                border = BorderStroke(
-                                    width = 1.dp,
-                                    color = Color.White.copy(alpha = 0.45f)
-                                )
-                            )
+                    PlayerBottomControlPanelButtonIds.TripleLike -> {
+                        ControllerActionTextButton(
+                            modifier = actionModifier(buttonId),
+                            icon = Icons.Outlined.Star,
+                            text = "三连",
+                            onClick = onTripleLike,
+                            iconScale = 0.8f,
+                            contentPadding = actionContentPadding
                         )
-                    ) {
-                        Icon(
-                            modifier = Modifier.scale(0.9f),
-                            imageVector = Icons.Rounded.KeyboardDoubleArrowDown,
-                            contentDescription = "推荐"
+                    }
+
+                    PlayerBottomControlPanelButtonIds.Description -> {
+                        ControllerActionTextButton(
+                            modifier = actionModifier(buttonId),
+                            icon = Icons.Outlined.Info,
+                            text = "简介",
+                            onClick = onShowDescription,
+                            iconScale = 0.8f,
+                            contentPadding = actionContentPadding
                         )
-                        Spacer(Modifier.width(4.dp))
-                        Text("推荐", style = MaterialTheme.typography.bodySmall)
+                    }
+
+                    PlayerBottomControlPanelButtonIds.Playlist -> {
+                        ControllerActionTextButton(
+                            modifier = actionModifier(buttonId),
+                            icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+                            text = "列表",
+                            onClick = onOpenPlayList,
+                            iconScale = 0.9f,
+                            contentPadding = actionContentPadding
+                        )
+                    }
+
+                    PlayerBottomControlPanelButtonIds.Related -> {
+                        ControllerActionTextButton(
+                            modifier = actionModifier(buttonId),
+                            icon = Icons.Rounded.KeyboardDoubleArrowDown,
+                            text = "推荐",
+                            onClick = onOpenRelatedVideo,
+                            iconScale = 0.9f,
+                            contentPadding = actionContentPadding
+                        )
                     }
                 }
             }
@@ -966,8 +951,8 @@ fun ControllerBottomBar(
                 .padding(
                     start = 30.dp,
                     end = 30.dp,
-                    top = ControllerSeekBarTopPadding.scaledBy(controllerPanelScale),
-                    bottom = ControllerSeekBarBottomPadding.scaledBy(controllerPanelScale)
+                    top = ControllerSeekBarTopPadding.scaledBy(controllerPanelScale * panelConfig.seekBarScale),
+                    bottom = ControllerSeekBarBottomPadding.scaledBy(controllerPanelScale * panelConfig.seekBarScale)
                 )
                 .focusRequester(seekbarFocusRequester)
                 .onFocusChanged {
@@ -975,8 +960,8 @@ fun ControllerBottomBar(
                     seekbarHasFocus = it.isFocused
                 }
                 .focusProperties {
-                    up = userActionFocusRequesters.value["like"] ?: FocusRequester()
-                    down = focusRequesters[buttons.firstOrNull()?.id ?: "settings"]
+                    up = firstActionFocusRequester
+                    down = focusRequesters[orderedButtons.firstOrNull()?.id ?: "settings"]
                         ?: FocusRequester()
                 }
                 .focusable()
@@ -1000,7 +985,8 @@ fun ControllerBottomBar(
             isFocused = seekbarHasFocus,
             playedTrackBrush = seekBarPlayedTrackBrush,
             showThumb = false,
-            trackBottomMargin = ControllerSeekBarTrackBottomMargin.scaledBy(controllerPanelScale)
+            trackBottomMargin = ControllerSeekBarTrackBottomMargin.scaledBy(controllerPanelScale * panelConfig.seekBarScale),
+            trackHeightScale = panelConfig.seekBarScale
         )
 
         // ── Row 2: 功能按钮 ──
@@ -1016,14 +1002,14 @@ fun ControllerBottomBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            buttons.forEach { button ->
+            orderedButtons.forEach { button ->
                 Button(
                     modifier = Modifier
-                        .height(ControllerFunctionButtonSize.scaledBy(controllerPanelScale))
+                        .height(ControllerFunctionButtonSize.scaledBy(controllerPanelScale * panelConfig.functionRowScale))
                         .width(
                             (button.width ?: ControllerFunctionButtonSize.value.toInt())
                                 .dp
-                                .scaledBy(controllerPanelScale)
+                                .scaledBy(controllerPanelScale * panelConfig.functionRowScale)
                         )
                         .focusRequester(focusRequesters[button.id] ?: FocusRequester()),
                     onClick = button.onClick,

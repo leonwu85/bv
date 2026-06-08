@@ -6,6 +6,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -58,6 +59,7 @@ import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoAspectRatio
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.player.entity.LiveCodec
+import dev.aaa1115910.bv.player.entity.PlayerBottomControlPanelConfig
 import dev.aaa1115910.bv.player.entity.VideoListItem
 import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.player.seekbar.SeekMoveState
@@ -82,6 +84,7 @@ fun VideoPlayerController(
     playerSeekBackwardStep: Int = 5,
     showBottomProgressBar: Boolean = false,
     bottomProgressBarColor: Color = Color(0xFFBD26B8).copy(alpha = 0.5f),
+    bottomControlPanelConfig: PlayerBottomControlPanelConfig = PlayerBottomControlPanelConfig.Default,
 
     showRelatedVideos: Boolean = false,
     showRelatedButton: Boolean = true,
@@ -112,6 +115,13 @@ fun VideoPlayerController(
         onFocus: (String) -> Unit,
         onPauseAutoHide: (Boolean) -> Unit
     ) -> Unit,
+    userActionButtonIds: Set<String> = emptySet(),
+    userActionButtonContent: @Composable (
+        buttonId: String,
+        modifier: Modifier,
+        contentPadding: PaddingValues,
+        onPauseAutoHide: (Boolean) -> Unit
+    ) -> Unit = { _, _, _, _ -> },
 
     //menu events
     onResolutionChange: (Resolution) -> Unit,
@@ -695,6 +705,7 @@ fun VideoPlayerController(
             show = showInfo,
             playSpeed = videoPlayer.speed,
             bottomProgressBarColor = bottomProgressBarColor,
+            bottomControlPanelConfig = bottomControlPanelConfig,
             onInteraction = { markControllerInteraction(CONTROLLER_INTERACTION_COOLDOWN_MS) },
             onHideInfo = { hideInfoController() },
             onPlay = {
@@ -747,6 +758,8 @@ fun VideoPlayerController(
             onLoopPlayModeChange = onLoopPlayModeChange,
             onRotationChange = onRotationChange,
             userActionContent = userActionContent,
+            userActionButtonIds = userActionButtonIds,
+            userActionButtonContent = userActionButtonContent,
             onSeekBack = {
                 scope.launch(Dispatchers.Main) {
                     delay(100)

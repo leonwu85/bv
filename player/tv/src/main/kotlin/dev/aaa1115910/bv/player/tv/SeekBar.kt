@@ -50,6 +50,7 @@ fun VideoSeekBar(
     showThumb: Boolean = true,
     thumbSize: Dp = 48.dp,
     trackBottomMargin: Dp = 8.dp,
+    trackHeightScale: Float = 1f,
 ) {
     VideoSeekBar(
         modifier = modifier,
@@ -74,7 +75,8 @@ fun VideoSeekBar(
         },
         isFocused = isFocused,
         thumbSize = thumbSize,
-        trackBottomMargin = trackBottomMargin
+        trackBottomMargin = trackBottomMargin,
+        trackHeightScale = trackHeightScale
     )
 }
 
@@ -92,9 +94,11 @@ private fun VideoSeekBar(
     isFocused: Boolean = false,
     thumbSize: Dp = 48.dp,
     trackBottomMargin: Dp = 8.dp,
+    trackHeightScale: Float = 1f,
 ) {
+    val targetBarHeight = if (isFocused) 12.dp else 6.dp
     val barHeight by animateDpAsState(
-        targetValue = if (isFocused) 12.dp else 6.dp,
+        targetValue = (targetBarHeight.value * trackHeightScale.coerceAtLeast(0.1f)).dp,
         animationSpec = tween(200),
         label = "seekbar height"
     )

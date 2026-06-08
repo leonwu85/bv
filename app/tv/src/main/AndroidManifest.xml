@@ -30,6 +30,12 @@
             android:label="@string/title_activity_remote_controller_panel_demo"
             android:theme="@style/Theme.BV.TV" />
         <activity
+            android:name=".activities.settings.PlayerBottomControlPanelCustomizeActivity"
+            android:enableOnBackInvokedCallback="false"
+            android:exported="false"
+            android:label="@string/title_activity_player_bottom_control_panel_customize"
+            android:theme="@style/Theme.BV.TV" />
+        <activity
             android:name=".activities.settings.LogsActivity"
             android:enableOnBackInvokedCallback="false"
             android:exported="false"

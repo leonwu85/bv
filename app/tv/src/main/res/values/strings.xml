@@ -11,6 +11,7 @@
     <string name="title_activity_media_codec">解码器信息</string>
     <string name="title_activity_pgc_index">PGC 索引</string>
     <string name="title_activity_remote_controller_panel_demo">遥控板按键演示</string>
+    <string name="title_activity_player_bottom_control_panel_customize">自定义播放底部控制面板</string>
     <string name="title_activity_search_input">搜索输入</string>
     <string name="title_activity_search_result">搜索结果</string>
     <string name="title_activity_season_info">剧集信息</string>

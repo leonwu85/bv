@@ -33,6 +33,7 @@ import dev.aaa1115910.bv.entity.DynamicPageStyle
 import dev.aaa1115910.bv.entity.DynamicTabType
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.PlayerBottomProgressBarColor
+import dev.aaa1115910.bv.player.entity.PlayerBottomControlPanelConfig
 import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
 import dev.aaa1115910.bv.player.entity.PlayerShortcutAction
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
@@ -64,6 +65,44 @@ private data class StoredSubtitleLanguagePreference(
     val langDoc: String
 )
 
+@Serializable
+private data class StoredPlayerBottomControlPanelConfig(
+    val titleScale: Float = PlayerBottomControlPanelConfig.DefaultScale,
+    val infoScale: Float = PlayerBottomControlPanelConfig.DefaultScale,
+    val actionRowScale: Float = PlayerBottomControlPanelConfig.DefaultScale,
+    val seekBarScale: Float = PlayerBottomControlPanelConfig.DefaultScale,
+    val functionRowScale: Float = PlayerBottomControlPanelConfig.DefaultScale,
+    val actionButtonOrder: List<String> = PlayerBottomControlPanelConfig.DefaultActionButtonOrder,
+    val functionButtonOrder: List<String> = PlayerBottomControlPanelConfig.DefaultFunctionButtonOrder
+) {
+    fun toConfig(): PlayerBottomControlPanelConfig {
+        return PlayerBottomControlPanelConfig(
+            titleScale = titleScale,
+            infoScale = infoScale,
+            actionRowScale = actionRowScale,
+            seekBarScale = seekBarScale,
+            functionRowScale = functionRowScale,
+            actionButtonOrder = actionButtonOrder,
+            functionButtonOrder = functionButtonOrder
+        ).normalized()
+    }
+
+    companion object {
+        fun fromConfig(config: PlayerBottomControlPanelConfig): StoredPlayerBottomControlPanelConfig {
+            val normalized = config.normalized()
+            return StoredPlayerBottomControlPanelConfig(
+                titleScale = normalized.titleScale,
+                infoScale = normalized.infoScale,
+                actionRowScale = normalized.actionRowScale,
+                seekBarScale = normalized.seekBarScale,
+                functionRowScale = normalized.functionRowScale,
+                actionButtonOrder = normalized.actionButtonOrder,
+                functionButtonOrder = normalized.functionButtonOrder
+            )
+        }
+    }
+}
+
 object Prefs {
     private val dsm = BVApp.dataStoreManager
     val logger = KotlinLogging.logger { }
@@ -75,6 +114,10 @@ object Prefs {
     private const val DRAWER_ITEM_LIVE_ORDINAL = 5
     private const val SUBTITLE_LANGUAGE_PREFERENCE_LIMIT = 200
     private val subtitleLanguagePreferenceJson = Json { ignoreUnknownKeys = true }
+    private val playerBottomControlPanelConfigJson = Json {
+        encodeDefaults = true
+        ignoreUnknownKeys = true
+    }
 
     private fun buildDefaultDrawerItemsOrder(showLiveInSidebar: Boolean): String {
         return listOf(
@@ -122,6 +165,27 @@ object Prefs {
         return parsedItems.joinToString(",") { (itemOrdinal, hidden) ->
             if (hidden) "-$itemOrdinal" else "$itemOrdinal"
         }
+    }
+
+    internal fun parsePlayerBottomControlPanelConfig(rawConfig: String): PlayerBottomControlPanelConfig {
+        if (rawConfig.isBlank()) return PlayerBottomControlPanelConfig.Default
+
+        return runCatching {
+            playerBottomControlPanelConfigJson
+                .decodeFromString<StoredPlayerBottomControlPanelConfig>(rawConfig)
+                .toConfig()
+        }.getOrElse {
+            logger.warn { "Decode player bottom control panel config failed: ${it.message}" }
+            PlayerBottomControlPanelConfig.Default
+        }
+    }
+
+    internal fun encodePlayerBottomControlPanelConfig(
+        config: PlayerBottomControlPanelConfig
+    ): String {
+        return playerBottomControlPanelConfigJson.encodeToString(
+            StoredPlayerBottomControlPanelConfig.fromConfig(config)
+        )
     }
 
     var isLogin: Boolean
@@ -665,6 +729,19 @@ object Prefs {
             dsm.editPreference(PrefKeys.prefPlayerBottomProgressBarColorKey, value.value)
         }
 
+    val playerBottomControlPanelConfigFlow: Flow<PlayerBottomControlPanelConfig>
+        get() = dsm.getPreferenceFlow(PrefKeys.prefPlayerBottomControlPanelConfigRequest)
+            .transform { rawConfig -> emit(parsePlayerBottomControlPanelConfig(rawConfig)) }
+
+    var playerBottomControlPanelConfig: PlayerBottomControlPanelConfig
+        get() = runBlocking { playerBottomControlPanelConfigFlow.first() }
+        set(value) = runBlocking {
+            dsm.editPreference(
+                PrefKeys.prefPlayerBottomControlPanelConfigKey,
+                encodePlayerBottomControlPanelConfig(value)
+            )
+        }
+
     var showUGCVideoInfo: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefShowUGCVideoInfoRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefShowUGCVideoInfoKey, value) }
@@ -978,6 +1055,7 @@ object PrefKeys {
     val prefSupportManualVideoRotationKey = booleanPreferencesKey("support_manual_video_rotation")
     val prefPlayerCommentSplitScreenKey = booleanPreferencesKey("player_comment_split_screen")
     val prefPlayerBottomProgressBarColorKey = intPreferencesKey("player_bottom_progress_bar_color")
+    val prefPlayerBottomControlPanelConfigKey = stringPreferencesKey("player_bottom_control_panel_config")
     val prefShowUGCVideoInfoKey = booleanPreferencesKey("pref_show_ugc_video_info")
     val prefIsLoopKey = booleanPreferencesKey("player_is_loop")
     val prefShowDanmakuKey = booleanPreferencesKey("player_show_danmaku")
@@ -1109,6 +1187,7 @@ object PrefKeys {
     val prefSupportManualVideoRotationRequest = PreferenceRequest(prefSupportManualVideoRotationKey, false)
     val prefPlayerCommentSplitScreenRequest = PreferenceRequest(prefPlayerCommentSplitScreenKey, false)
     val prefPlayerBottomProgressBarColorRequest = PreferenceRequest(prefPlayerBottomProgressBarColorKey, PlayerBottomProgressBarColor.Purple.value)
+    val prefPlayerBottomControlPanelConfigRequest = PreferenceRequest(prefPlayerBottomControlPanelConfigKey, "")
     val prefShowUGCVideoInfoRequest = PreferenceRequest(prefShowUGCVideoInfoKey, true)
     val prefIsLoopRequest = PreferenceRequest(prefIsLoopKey, false)
     val prefShowDanmakuRequest = PreferenceRequest(prefShowDanmakuKey, true)
