@@ -592,6 +592,8 @@ fun VideoPlayerScreen(
                             currentDanmakuOpacity = playerViewModel.currentDanmakuOpacity,
                             currentDanmakuArea = playerViewModel.currentDanmakuArea,
                             currentDanmakuMask = playerViewModel.currentDanmakuMask,
+                            currentDanmakuSpeedMode = playerViewModel.currentDanmakuSpeedMode,
+                            currentDanmakuPresentationSpeed = playerViewModel.currentDanmakuPresentationSpeed,
                             currentSubtitleId = playerViewModel.currentSubtitleId,
                             currentSubtitleData = playerViewModel.currentSubtitleData,
                             currentSubtitleFontSize = playerViewModel.currentSubtitleFontSize,
@@ -687,6 +689,14 @@ fun VideoPlayerScreen(
                             onDanmakuAreaChange = { area ->
                                 playerViewModel.currentDanmakuArea = area
                                 playerSettings.defaultDanmakuAreaMutable = area
+                            },
+                            onDanmakuSpeedModeChange = { mode ->
+                                playerViewModel.currentDanmakuSpeedMode = mode
+                                playerSettings.defaultDanmakuSpeedModeMutable = mode
+                            },
+                            onDanmakuPresentationSpeedChange = { speed ->
+                                playerViewModel.currentDanmakuPresentationSpeed = speed
+                                playerSettings.defaultDanmakuPresentationSpeedMutable = speed
                             },
                             onPlayModeChange = { playMode ->
                                 playerViewModel.currentPlayMode = playMode

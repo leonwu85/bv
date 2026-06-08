@@ -359,6 +359,8 @@ class VideoPlayerV3ViewModel(
         addAll(settings.defaultDanmakuTypes)
     }
     var currentDanmakuArea by mutableFloatStateOf(settings.defaultDanmakuArea)
+    var currentDanmakuSpeedMode by mutableStateOf(settings.defaultDanmakuSpeedMode)
+    var currentDanmakuPresentationSpeed by mutableFloatStateOf(settings.defaultDanmakuPresentationSpeed)
     private var currentDanmakuMaskState by mutableStateOf(settings.defaultDanmakuMask)
     var currentDanmakuMask: Boolean
         get() = currentDanmakuMaskState

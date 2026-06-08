@@ -23,6 +23,7 @@ import dev.aaa1115910.bv.entity.PlayerType
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.player.entity.Audio
+import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.PlayerBottomProgressBarColor
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
 import dev.aaa1115910.bv.player.entity.PlayerLoadNextAction
@@ -71,6 +72,10 @@ fun PlayerSetting(
     var playerSeekBackwardStep by remember { mutableDoubleStateOf(Prefs.playerSeekBackwardStep.toDouble()) }
     var portraitVideoFixMode by remember { mutableStateOf(Prefs.portraitVideoFixMode) }
     var defaultDanmakuArea by remember { mutableDoubleStateOf(Prefs.defaultDanmakuArea.toDouble()) }
+    var defaultDanmakuSpeedMode by remember { mutableStateOf(Prefs.defaultDanmakuSpeedMode) }
+    var defaultDanmakuPresentationSpeed by remember {
+        mutableDoubleStateOf(Prefs.defaultDanmakuPresentationSpeed.toDouble())
+    }
     var skipPgcIntroOutro by remember { mutableStateOf(Prefs.skipPgcIntroOutro) }
     var vlcAutoRotate by remember { mutableStateOf(Prefs.vlcAutoRotate) }
     var selectedPlayerType by remember { mutableStateOf(Prefs.playerType) }
@@ -410,6 +415,35 @@ fun PlayerSetting(
                     onValueChange = {
                         defaultDanmakuArea = it / 100
                         Prefs.defaultDanmakuArea = (it / 100).toFloat()
+                    }
+                )
+            }
+            item {
+                SettingListItemWithDialog(
+                    title = "默认弹幕速度模式",
+                    supportText = "点播弹幕展示速度策略",
+                    options = DanmakuSpeedMode.entries,
+                    getDisplayName = { item, ctx -> item.getDisplayName(ctx) },
+                    value = defaultDanmakuSpeedMode,
+                    onValueChange = {
+                        defaultDanmakuSpeedMode = it
+                        Prefs.defaultDanmakuSpeedMode = it
+                    }
+                )
+            }
+            item {
+                SettingNumberListItem(
+                    title = "默认自定义弹幕速度",
+                    supportText = "仅在弹幕速度模式为自定义时生效",
+                    value = defaultDanmakuPresentationSpeed,
+                    minValue = 0.5,
+                    maxValue = 2.0,
+                    isInteger = false,
+                    step = 0.05,
+                    valueFormat = "%.2fx",
+                    onValueChange = {
+                        defaultDanmakuPresentationSpeed = it
+                        Prefs.defaultDanmakuPresentationSpeed = it.toFloat()
                     }
                 )
             }

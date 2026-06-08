@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import coil.compose.AsyncImage
 import dev.aaa1115910.bv.player.entity.Audio
+import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.DanmakuType
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerSeekData
@@ -105,6 +106,8 @@ fun BvPlayerController(
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuScaleChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
+    onDanmakuSpeedModeChange: (DanmakuSpeedMode) -> Unit,
+    onDanmakuPresentationSpeedChange: (Float) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit,
     onPlayNewVideo: (VideoListItem) -> Unit,
     showSponsorBlockTip: Boolean = false,
@@ -215,6 +218,8 @@ fun BvPlayerController(
                 onDanmakuOpacityChange = onDanmakuOpacityChange,
                 onDanmakuScaleChange = onDanmakuScaleChange,
                 onDanmakuAreaChange = onDanmakuAreaChange,
+                onDanmakuSpeedModeChange = onDanmakuSpeedModeChange,
+                onDanmakuPresentationSpeedChange = onDanmakuPresentationSpeedChange,
                 onPlayModeChange = onPlayModeChange,
                 onPlayNewVideo = onPlayNewVideo
             )
@@ -239,6 +244,8 @@ private fun BvPlayerControllerSettings(
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuScaleChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
+    onDanmakuSpeedModeChange: (DanmakuSpeedMode) -> Unit,
+    onDanmakuPresentationSpeedChange: (Float) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit,
     onPlayNewVideo: (VideoListItem) -> Unit
 ) {
@@ -273,6 +280,8 @@ private fun BvPlayerControllerSettings(
                         onDanmakuScaleChange = onDanmakuScaleChange,
                         onDanmakuOpacityChange = onDanmakuOpacityChange,
                         onDanmakuAreaChange = onDanmakuAreaChange,
+                        onDanmakuSpeedModeChange = onDanmakuSpeedModeChange,
+                        onDanmakuPresentationSpeedChange = onDanmakuPresentationSpeedChange,
                         onClose = onCloseMenu
                     )
                 }
@@ -843,6 +852,8 @@ private fun BvPlayerControllerPreview() {
                 onDanmakuOpacityChange = {},
                 onDanmakuAreaChange = {},
                 onDanmakuScaleChange = {},
+                onDanmakuSpeedModeChange = {},
+                onDanmakuPresentationSpeedChange = {},
                 onPlayModeChange = {},
                 onPlayNewVideo = {}
             ) {

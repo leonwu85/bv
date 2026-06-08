@@ -6,6 +6,7 @@ import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.bv.entity.CdnService
 import dev.aaa1115910.bv.entity.PlayerType
 import dev.aaa1115910.bv.player.entity.Audio
+import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.DanmakuType
 import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.PlayMode
@@ -45,6 +46,10 @@ interface PlayerSettingsSource {
     val defaultDanmakuTypes: List<DanmakuType>
     val defaultDanmakuArea: Float
     var defaultDanmakuAreaMutable: Float
+    val defaultDanmakuSpeedMode: DanmakuSpeedMode
+    var defaultDanmakuSpeedModeMutable: DanmakuSpeedMode
+    val defaultDanmakuPresentationSpeed: Float
+    var defaultDanmakuPresentationSpeedMutable: Float
     val defaultDanmakuMask: Boolean
     val defaultDanmakuFilterLevel: Int
     val defaultDanmakuMergeEnabled: Boolean
@@ -128,6 +133,18 @@ object DefaultPlayerSettingsSource : PlayerSettingsSource {
         get() = Prefs.defaultDanmakuArea
         set(value) {
             Prefs.defaultDanmakuArea = value
+        }
+    override val defaultDanmakuSpeedMode get() = Prefs.defaultDanmakuSpeedMode
+    override var defaultDanmakuSpeedModeMutable: DanmakuSpeedMode
+        get() = Prefs.defaultDanmakuSpeedMode
+        set(value) {
+            Prefs.defaultDanmakuSpeedMode = value
+        }
+    override val defaultDanmakuPresentationSpeed get() = Prefs.defaultDanmakuPresentationSpeed
+    override var defaultDanmakuPresentationSpeedMutable: Float
+        get() = Prefs.defaultDanmakuPresentationSpeed
+        set(value) {
+            Prefs.defaultDanmakuPresentationSpeed = value
         }
     override val defaultDanmakuMask get() = Prefs.defaultDanmakuMask
     override val defaultDanmakuFilterLevel get() = Prefs.defaultDanmakuFilterLevel

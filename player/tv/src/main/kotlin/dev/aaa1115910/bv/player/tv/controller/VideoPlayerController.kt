@@ -44,6 +44,7 @@ import androidx.tv.material3.Text
 import dev.aaa1115910.biliapi.entity.video.Subtitle
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.entity.Audio
+import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.DanmakuType
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerDebugInfoData
@@ -126,6 +127,8 @@ fun VideoPlayerController(
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
+    onDanmakuSpeedModeChange: (DanmakuSpeedMode) -> Unit,
+    onDanmakuPresentationSpeedChange: (Float) -> Unit,
     onDanmakuMaskChange: (Boolean) -> Unit,
     onDanmakuMergeChange: (Boolean) -> Unit = {},
     onDanmakuFilterLevelChange: (Int) -> Unit = {},
@@ -794,6 +797,8 @@ fun VideoPlayerController(
             onDanmakuSizeChange = onDanmakuSizeChange,
             onDanmakuOpacityChange = onDanmakuOpacityChange,
             onDanmakuAreaChange = onDanmakuAreaChange,
+            onDanmakuSpeedModeChange = onDanmakuSpeedModeChange,
+            onDanmakuPresentationSpeedChange = onDanmakuPresentationSpeedChange,
             onDanmakuMaskChange = onDanmakuMaskChange,
             onDanmakuMergeChange = onDanmakuMergeChange,
             onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,

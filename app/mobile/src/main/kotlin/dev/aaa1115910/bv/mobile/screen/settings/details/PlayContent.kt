@@ -16,6 +16,7 @@ import dev.aaa1115910.bv.mobile.component.preferences.items.switchPreference
 import dev.aaa1115910.bv.mobile.component.preferences.preferenceGroups
 import dev.aaa1115910.bv.mobile.settings.MobilePrefKeys
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
+import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.PlayMode
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
@@ -106,6 +107,17 @@ fun PlayContent(
                         0.75f to "3/4 屏",
                         1f to "全屏"
                     )
+                )
+                radioPreference(
+                    title = "默认弹幕速度模式",
+                    prefReq = MobilePrefKeys.defaultDanmakuSpeedModeRequest,
+                    values = DanmakuSpeedMode.entries.associate { it.ordinal to it.getDisplayName(context) }
+                )
+                radioPreference(
+                    title = "默认自定义弹幕速度",
+                    prefReq = MobilePrefKeys.defaultDanmakuPresentationSpeedRequest,
+                    values = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+                        .associateWith { "${it}x" }
                 )
             },
             "直播" to {

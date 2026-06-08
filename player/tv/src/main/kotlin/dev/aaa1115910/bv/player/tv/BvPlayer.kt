@@ -46,6 +46,7 @@ import dev.aaa1115910.bv.player.impl.exo.ExoMediaPlayer
 import dev.aaa1115910.bv.player.impl.mpv.MpvMediaPlayer
 import dev.aaa1115910.bv.player.VideoPlayerListener
 import dev.aaa1115910.bv.player.entity.Audio
+import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.DanmakuType
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerClockState
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
@@ -78,6 +79,7 @@ import dev.aaa1115910.bv.player.tv.controller.SkipOpTip
 import dev.aaa1115910.bv.player.tv.controller.VideoPlayerController
 import dev.aaa1115910.bv.util.countDownTimer
 import dev.aaa1115910.bv.player.util.DanmakuMaskFinder
+import dev.aaa1115910.bv.player.util.DanmakuSpeedPolicy
 import dev.aaa1115910.bv.player.util.renderMaskFrameToBitmap
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.formatHourMinSec
@@ -180,6 +182,8 @@ fun BvPlayer(
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
+    onDanmakuSpeedModeChange: (DanmakuSpeedMode) -> Unit,
+    onDanmakuPresentationSpeedChange: (Float) -> Unit,
     onDanmakuMaskChange: (Boolean) -> Unit,
     onDanmakuMergeChange: (Boolean) -> Unit = {},
     onDanmakuFilterLevelChange: (Int) -> Unit = {},
@@ -256,12 +260,6 @@ fun BvPlayer(
     // 直播弹幕播放器引用，用于同步配置更新
     var mLiveDanmakuPlayer: com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer? by remember { mutableStateOf(null) }
 
-    // 统一更新所有弹幕播放器配置的辅助函数
-    val updateAllDanmakuPlayerConfig: (DanmakuConfig) -> Unit = { config ->
-        mDanmakuPlayer?.updateConfig(config)
-        mLiveDanmakuPlayer?.updateConfig(config)
-    }
-
     var showLogs by remember { mutableStateOf(false) }
     var showBackToHistory by remember { mutableStateOf(false) }
     var isPlaying by rememberSaveable { mutableStateOf(false) }
@@ -272,12 +270,62 @@ fun BvPlayer(
 
     val typeFilter by remember { mutableStateOf(TypeFilter()) }
     var danmakuConfig by remember { mutableStateOf(DanmakuConfig()) }
+    var baseDanmakuDurationMs by remember { mutableLongStateOf(danmakuConfig.durationMs) }
+    var baseRollingDanmakuDurationMs by remember { mutableLongStateOf(danmakuConfig.rollingDurationMs) }
+    var appliedDanmakuDurationScale by remember { mutableFloatStateOf(1f) }
 
     val seekState = remember { VideoPlayerSeekState() }
     var currentVideoAspectRatio by remember { mutableStateOf(videoPlayerConfigData.currentVideoAspectRatio) }
     var currentVideoRotation by remember { mutableStateOf(videoPlayerConfigData.currentVideoRotation) }
     var currentPlaySpeed by remember { mutableFloatStateOf(videoPlayerConfigData.currentVideoSpeed) }
     var aspectRatioValue by remember { mutableFloatStateOf(16f / 9f) }
+
+    fun refreshDanmakuDurationBaseline(config: DanmakuConfig) {
+        val expectedDuration = DanmakuSpeedPolicy.scaleDuration(
+            baseDanmakuDurationMs,
+            appliedDanmakuDurationScale
+        )
+        val expectedRollingDuration = DanmakuSpeedPolicy.scaleDuration(
+            baseRollingDanmakuDurationMs,
+            appliedDanmakuDurationScale
+        )
+        if (config.durationMs != expectedDuration) {
+            baseDanmakuDurationMs = config.durationMs
+        }
+        if (config.rollingDurationMs != expectedRollingDuration) {
+            baseRollingDanmakuDurationMs = config.rollingDurationMs
+        }
+    }
+
+    fun applyDanmakuSpeedPolicy() {
+        if (videoPlayerConfigData.isLive) return
+        val player = mDanmakuPlayer ?: return
+        refreshDanmakuDurationBaseline(danmakuConfig)
+        val timing = DanmakuSpeedPolicy.resolve(
+            playbackSpeed = currentPlaySpeed,
+            mode = videoPlayerConfigData.currentDanmakuSpeedMode,
+            customPresentationSpeed = videoPlayerConfigData.currentDanmakuPresentationSpeed
+        )
+        val compensatedConfig = DanmakuSpeedPolicy.applyDurationScale(
+            config = danmakuConfig,
+            timing = timing,
+            baseDurationMs = baseDanmakuDurationMs,
+            baseRollingDurationMs = baseRollingDanmakuDurationMs
+        )
+        danmakuConfig = compensatedConfig
+        appliedDanmakuDurationScale = timing.durationScale
+        player.updateConfig(compensatedConfig)
+        player.updatePlaySpeed(timing.timerSpeed)
+    }
+
+    val updateAllDanmakuPlayerConfig: (DanmakuConfig) -> Unit = { config ->
+        if (videoPlayerConfigData.isLive) {
+            mDanmakuPlayer?.updateConfig(config)
+        } else {
+            applyDanmakuSpeedPolicy()
+        }
+        mLiveDanmakuPlayer?.updateConfig(config)
+    }
     var lastPlayed by remember { mutableLongStateOf(0L) }
     var openPlayListRequestToken by remember { mutableLongStateOf(0L) }
     
@@ -896,11 +944,11 @@ fun BvPlayer(
                     videoPlayer.speed = 1f
                 } else {
                     // Apply the current session playback speed to a newly prepared player.
-                    onPlaySpeedChange(currentPlaySpeed)
-                    logger.info { "Reset default play speed: $currentPlaySpeed" }
-                    videoPlayer.speed = currentPlaySpeed
-                    mDanmakuPlayer?.updatePlaySpeed(currentPlaySpeed)
-                }
+	                    onPlaySpeedChange(currentPlaySpeed)
+	                    logger.info { "Reset default play speed: $currentPlaySpeed" }
+	                    videoPlayer.speed = currentPlaySpeed
+	                    applyDanmakuSpeedPolicy()
+	                }
 
                 // 如果视频正在播放，同步恢复弹幕
                 if (videoPlayer.isPlaying) {
@@ -1201,6 +1249,18 @@ fun BvPlayer(
         videoPlayer.setPlayerEventListener(videoPlayerListener)
     }
 
+    LaunchedEffect(videoPlayerConfigData.currentVideoSpeed) {
+        currentPlaySpeed = videoPlayerConfigData.currentVideoSpeed
+        applyDanmakuSpeedPolicy()
+    }
+
+    LaunchedEffect(
+        videoPlayerConfigData.currentDanmakuSpeedMode,
+        videoPlayerConfigData.currentDanmakuPresentationSpeed
+    ) {
+        applyDanmakuSpeedPolicy()
+    }
+
     LaunchedEffect(danmakuPlayer) {
         mDanmakuPlayer = danmakuPlayer
         danmakuLayerHandle.updateDanmakuPlayer(danmakuPlayer)
@@ -1467,12 +1527,12 @@ fun BvPlayer(
                     logger.info { "Ignore playback speed change in live mode: $speed" }
                     return@VideoPlayerController
                 }
-                logger.info { "Set default play speed: $speed" }
-                currentPlaySpeed = speed
-                onPlaySpeedChange(speed)
-                videoPlayer.speed = speed
-                mDanmakuPlayer?.updatePlaySpeed(speed)
-            },
+	                logger.info { "Set default play speed: $speed" }
+	                currentPlaySpeed = speed
+	                onPlaySpeedChange(speed)
+	                videoPlayer.speed = speed
+	                applyDanmakuSpeedPolicy()
+	            },
             onAudioChange = { audio ->
                 videoPlayer.pause()
                 val current = videoPlayer.currentPosition
@@ -1523,6 +1583,17 @@ fun BvPlayer(
             onDanmakuAreaChange = { area ->
                 logger.info { "On danmaku area change: $area" }
                 onDanmakuAreaChange(area)
+            },
+            onDanmakuSpeedModeChange = { mode ->
+                logger.info { "On danmaku speed mode change: $mode" }
+                onDanmakuSpeedModeChange(mode)
+                applyDanmakuSpeedPolicy()
+            },
+            onDanmakuPresentationSpeedChange = { speed ->
+                val sanitizedSpeed = DanmakuSpeedPolicy.sanitizePresentationSpeed(speed)
+                logger.info { "On danmaku presentation speed change: $sanitizedSpeed" }
+                onDanmakuPresentationSpeedChange(sanitizedSpeed)
+                applyDanmakuSpeedPolicy()
             },
             onDanmakuMaskChange = { mask ->
                 logger.info { "On danmaku mask change: $mask" }
@@ -1671,9 +1742,8 @@ fun BvPlayer(
                     val position = runCatching { videoPlayer.currentPosition }
                         .getOrDefault(0L)
                         .coerceAtLeast(0L)
-                    val shouldPlay = videoPlayer.isPlaying || isPlaying
-                    boundPlayer.updatePlaySpeed(currentPlaySpeed)
-                    boundPlayer.seekTo(position)
+	                    val shouldPlay = videoPlayer.isPlaying || isPlaying
+	                    boundPlayer.seekTo(position)
                     if (shouldPlay) {
                         boundPlayer.start()
                     } else {

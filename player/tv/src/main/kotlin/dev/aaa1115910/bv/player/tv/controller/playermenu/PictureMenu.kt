@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,6 +29,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.aaa1115910.bv.player.entity.Audio
+import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoAspectRatio
@@ -41,7 +43,9 @@ import dev.aaa1115910.bv.player.tv.controller.playermenu.component.MenuListItem
 import dev.aaa1115910.bv.player.tv.controller.playermenu.component.RadioMenuList
 import dev.aaa1115910.bv.player.tv.controller.playermenu.component.StepLessMenuItem
 import dev.aaa1115910.bv.player.tv.theme.PlayerColors
+import dev.aaa1115910.bv.player.util.DanmakuSpeedPolicy
 import dev.aaa1115910.bv.util.ifElse
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
@@ -52,6 +56,8 @@ fun PictureMenuList(
     onAspectRatioChange: (VideoAspectRatio) -> Unit,
     onRotationChange: (VideoRotation) -> Unit,
     onPlaySpeedChange: (Float) -> Unit,
+    onDanmakuSpeedModeChange: (DanmakuSpeedMode) -> Unit,
+    onDanmakuPresentationSpeedChange: (Float) -> Unit,
     onAudioChange: (Audio) -> Unit,
     onLiveQualityChange: (Int) -> Unit = {},
     onLiveCodecChange: (LiveCodec) -> Unit = {},
@@ -64,11 +70,18 @@ fun PictureMenuList(
     val parentMenuPositionFocusRequester = remember { FocusRequester() }
     val pictureMenuItems = remember(
         videoPlayerConfigData.isLive,
-        videoPlayerConfigData.supportManualVideoRotation
+        videoPlayerConfigData.supportManualVideoRotation,
+        videoPlayerConfigData.currentDanmakuSpeedMode
     ) {
         VideoPlayerPictureMenuItem.entries.filterNot {
             (videoPlayerConfigData.isLive && it == VideoPlayerPictureMenuItem.PlaySpeed) ||
-                (!videoPlayerConfigData.supportManualVideoRotation && it == VideoPlayerPictureMenuItem.Rotation)
+                (videoPlayerConfigData.isLive && it == VideoPlayerPictureMenuItem.DanmakuSpeedMode) ||
+                (videoPlayerConfigData.isLive && it == VideoPlayerPictureMenuItem.DanmakuPresentationSpeed) ||
+                (!videoPlayerConfigData.supportManualVideoRotation && it == VideoPlayerPictureMenuItem.Rotation) ||
+                (
+                    it == VideoPlayerPictureMenuItem.DanmakuPresentationSpeed &&
+                        videoPlayerConfigData.currentDanmakuSpeedMode != DanmakuSpeedMode.Custom
+                    )
         }
     }
     var selectedPictureMenuItem by remember(pictureMenuItems) {
@@ -79,6 +92,13 @@ fun PictureMenuList(
     }
     val audioList = remember(videoPlayerConfigData.availableAudio) {
         videoPlayerConfigData.availableAudio.sortedBy { it.ordinal }
+    }
+
+    LaunchedEffect(pictureMenuItems) {
+        if (selectedPictureMenuItem !in pictureMenuItems) {
+            selectedPictureMenuItem = pictureMenuItems.firstOrNull()
+                ?: VideoPlayerPictureMenuItem.Resolution
+        }
     }
 
     Row(
@@ -183,6 +203,38 @@ fun PictureMenuList(
                     onValueChange = onPlaySpeedChange,
                     onFocusBackToParent = { onFocusStateChange(MenuFocusState.Menu) }
                 )
+
+                VideoPlayerPictureMenuItem.DanmakuSpeedMode -> RadioMenuList(
+                    modifier = menuItemsModifier,
+                    items = DanmakuSpeedMode.entries.map { it.getDisplayName(context) },
+                    selected = videoPlayerConfigData.currentDanmakuSpeedMode.ordinal,
+                    onSelectedChanged = { index ->
+                        onDanmakuSpeedModeChange(DanmakuSpeedMode.fromOrdinal(index))
+                    },
+                    onFocusBackToParent = {
+                        onFocusStateChange(MenuFocusState.Menu)
+                        parentMenuFocusRequester.requestFocus()
+                    }
+                )
+
+                VideoPlayerPictureMenuItem.DanmakuPresentationSpeed -> {
+                    val presentationSpeed = DanmakuSpeedPolicy.sanitizePresentationSpeed(
+                        videoPlayerConfigData.currentDanmakuPresentationSpeed
+                    )
+                    StepLessMenuItem(
+                        modifier = menuItemsModifier,
+                        value = presentationSpeed,
+                        step = 0.05f,
+                        range = DanmakuSpeedPolicy.MIN_PRESENTATION_SPEED..DanmakuSpeedPolicy.MAX_PRESENTATION_SPEED,
+                        text = String.format(Locale.US, "%.2fx", presentationSpeed),
+                        onValueChange = {
+                            onDanmakuPresentationSpeedChange(
+                                DanmakuSpeedPolicy.sanitizePresentationSpeed(it)
+                            )
+                        },
+                        onFocusBackToParent = { onFocusStateChange(MenuFocusState.Menu) }
+                    )
+                }
 
                 VideoPlayerPictureMenuItem.Audio -> RadioMenuList(
                     modifier = menuItemsModifier,

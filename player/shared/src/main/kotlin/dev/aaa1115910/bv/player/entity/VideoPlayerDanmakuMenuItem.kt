@@ -10,7 +10,9 @@ enum class VideoPlayerDanmakuMenuItem(private val strRes: Int) {
     Area(R.string.video_player_menu_danmaku_area),
     Mask(R.string.video_player_menu_danmaku_mask),
     Merge(R.string.video_player_menu_danmaku_merge),
-    FilterLevel(R.string.video_player_menu_danmaku_filter_level);
+    FilterLevel(R.string.video_player_menu_danmaku_filter_level),
+    SpeedMode(R.string.video_player_menu_danmaku_speed_mode),
+    PresentationSpeed(R.string.video_player_menu_danmaku_presentation_speed);
 
     fun getDisplayName(context: Context) = context.getString(strRes)
 }

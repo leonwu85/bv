@@ -50,6 +50,7 @@ import dev.aaa1115910.biliapi.entity.video.SubtitleAiStatus
 import dev.aaa1115910.biliapi.entity.video.SubtitleAiType
 import dev.aaa1115910.biliapi.entity.video.SubtitleType
 import dev.aaa1115910.bv.player.entity.Audio
+import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.DanmakuType
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.PlayMode
@@ -85,6 +86,8 @@ fun MenuController(
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
+    onDanmakuSpeedModeChange: (DanmakuSpeedMode) -> Unit,
+    onDanmakuPresentationSpeedChange: (Float) -> Unit,
     onDanmakuMaskChange: (Boolean) -> Unit = {},
     onDanmakuMergeChange: (Boolean) -> Unit = {},
     onDanmakuFilterLevelChange: (Int) -> Unit = {},
@@ -136,6 +139,8 @@ fun MenuController(
                 onDanmakuSizeChange = onDanmakuSizeChange,
                 onDanmakuOpacityChange = onDanmakuOpacityChange,
                 onDanmakuAreaChange = onDanmakuAreaChange,
+                onDanmakuSpeedModeChange = onDanmakuSpeedModeChange,
+                onDanmakuPresentationSpeedChange = onDanmakuPresentationSpeedChange,
                 onDanmakuMaskChange = onDanmakuMaskChange,
                 onDanmakuMergeChange = onDanmakuMergeChange,
                 onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
@@ -170,6 +175,8 @@ fun MenuController(
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
+    onDanmakuSpeedModeChange: (DanmakuSpeedMode) -> Unit,
+    onDanmakuPresentationSpeedChange: (Float) -> Unit,
     onDanmakuMaskChange: (Boolean) -> Unit = {},
     onDanmakuMergeChange: (Boolean) -> Unit = {},
     onDanmakuFilterLevelChange: (Int) -> Unit = {},
@@ -249,6 +256,8 @@ fun MenuController(
                     onDanmakuSizeChange = onDanmakuSizeChange,
                     onDanmakuOpacityChange = onDanmakuOpacityChange,
                     onDanmakuAreaChange = onDanmakuAreaChange,
+                    onDanmakuSpeedModeChange = onDanmakuSpeedModeChange,
+                    onDanmakuPresentationSpeedChange = onDanmakuPresentationSpeedChange,
                     onDanmakuMaskChange = onDanmakuMaskChange,
                     onDanmakuMergeChange = onDanmakuMergeChange,
                     onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
@@ -317,6 +326,8 @@ private fun MenuList(
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
+    onDanmakuSpeedModeChange: (DanmakuSpeedMode) -> Unit,
+    onDanmakuPresentationSpeedChange: (Float) -> Unit,
     onDanmakuMaskChange: (Boolean) -> Unit = {},
     onDanmakuMergeChange: (Boolean) -> Unit = {},
     onDanmakuFilterLevelChange: (Int) -> Unit = {},
@@ -344,6 +355,8 @@ private fun MenuList(
                     onAspectRatioChange = onAspectRatioChange,
                     onRotationChange = onRotationChange,
                     onPlaySpeedChange = onPlaySpeedChange,
+                    onDanmakuSpeedModeChange = onDanmakuSpeedModeChange,
+                    onDanmakuPresentationSpeedChange = onDanmakuPresentationSpeedChange,
                     onAudioChange = onAudioChange,
                     onLiveQualityChange = onLiveQualityChange,
                     onLiveCodecChange = onLiveCodecChange,
@@ -357,6 +370,8 @@ private fun MenuList(
                     onDanmakuSizeChange = onDanmakuSizeChange,
                     onDanmakuOpacityChange = onDanmakuOpacityChange,
                     onDanmakuAreaChange = onDanmakuAreaChange,
+                    onDanmakuSpeedModeChange = onDanmakuSpeedModeChange,
+                    onDanmakuPresentationSpeedChange = onDanmakuPresentationSpeedChange,
                     onFocusStateChange = onFocusStateChange,
                     onDanmakuMaskChange = onDanmakuMaskChange,
                     onDanmakuMergeChange = onDanmakuMergeChange,
@@ -406,6 +421,8 @@ fun MenuControllerPreview() {
     var currentDanmakuSize by remember { mutableFloatStateOf(1f) }
     var currentDanmakuOpacity by remember { mutableFloatStateOf(1f) }
     var currentDanmakuArea by remember { mutableFloatStateOf(1f) }
+    var currentDanmakuSpeedMode by remember { mutableStateOf(DanmakuSpeedMode.FollowVideo) }
+    var currentDanmakuPresentationSpeed by remember { mutableFloatStateOf(1f) }
     var currentDanmakuMask by remember { mutableStateOf(false) }
     var currentDanmakuMergeEnabled by remember { mutableStateOf(false) }
 
@@ -490,6 +507,8 @@ fun MenuControllerPreview() {
                         currentDanmakuScale = currentDanmakuSize,
                         currentDanmakuOpacity = currentDanmakuOpacity,
                         currentDanmakuArea = currentDanmakuArea,
+                        currentDanmakuSpeedMode = currentDanmakuSpeedMode,
+                        currentDanmakuPresentationSpeed = currentDanmakuPresentationSpeed,
                         currentDanmakuMask = currentDanmakuMask,
                         currentDanmakuMergeEnabled = currentDanmakuMergeEnabled,
 
@@ -527,6 +546,8 @@ fun MenuControllerPreview() {
                         onDanmakuSizeChange = { currentDanmakuSize = it },
                         onDanmakuOpacityChange = { currentDanmakuOpacity = it },
                         onDanmakuAreaChange = { currentDanmakuArea = it },
+                        onDanmakuSpeedModeChange = { currentDanmakuSpeedMode = it },
+                        onDanmakuPresentationSpeedChange = { currentDanmakuPresentationSpeed = it },
                         onDanmakuMaskChange = { currentDanmakuMask = it },
                         onDanmakuMergeChange = { currentDanmakuMergeEnabled = it },
                         onSubtitleChange = { currentSubtitleId = it.id },

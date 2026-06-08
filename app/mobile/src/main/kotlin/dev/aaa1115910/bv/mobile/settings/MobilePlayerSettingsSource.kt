@@ -47,6 +47,18 @@ object MobilePlayerSettingsSource : PlayerSettingsSource {
         set(value) {
             MobilePrefs.defaultDanmakuArea = value
         }
+    override val defaultDanmakuSpeedMode get() = MobilePrefs.defaultDanmakuSpeedMode
+    override var defaultDanmakuSpeedModeMutable
+        get() = MobilePrefs.defaultDanmakuSpeedMode
+        set(value) {
+            MobilePrefs.defaultDanmakuSpeedMode = value
+        }
+    override val defaultDanmakuPresentationSpeed get() = MobilePrefs.defaultDanmakuPresentationSpeed
+    override var defaultDanmakuPresentationSpeedMutable
+        get() = MobilePrefs.defaultDanmakuPresentationSpeed
+        set(value) {
+            MobilePrefs.defaultDanmakuPresentationSpeed = value
+        }
     override val defaultDanmakuMask get() = MobilePrefs.defaultDanmakuMask
     override val defaultDanmakuFilterLevel get() = MobilePrefs.defaultDanmakuFilterLevel
     override val defaultDanmakuMergeEnabled get() = MobilePrefs.defaultDanmakuMergeEnabled

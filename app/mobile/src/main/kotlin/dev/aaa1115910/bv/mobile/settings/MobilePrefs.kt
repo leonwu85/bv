@@ -19,6 +19,7 @@ import dev.aaa1115910.bv.entity.PlayerType
 import dev.aaa1115910.bv.entity.ThemeType
 import dev.aaa1115910.bv.mobile.theme.MobileThemePalette
 import dev.aaa1115910.bv.player.entity.Audio
+import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.DanmakuType
 import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.PlayMode
@@ -28,6 +29,7 @@ import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.player.entity.SuperResolutionType
 import dev.aaa1115910.bv.player.entity.VideoCodec
+import dev.aaa1115910.bv.player.util.DanmakuSpeedPolicy
 import dev.aaa1115910.bv.util.PlaybackPreferenceSelector
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -182,6 +184,19 @@ object MobilePrefs {
     var defaultDanmakuArea: Float
         get() = read(MobilePrefKeys.defaultDanmakuAreaRequest)
         set(value) = write(MobilePrefKeys.defaultDanmakuAreaKey, value)
+
+    var defaultDanmakuSpeedMode: DanmakuSpeedMode
+        get() = DanmakuSpeedMode.fromOrdinal(read(MobilePrefKeys.defaultDanmakuSpeedModeRequest))
+        set(value) = write(MobilePrefKeys.defaultDanmakuSpeedModeKey, value.ordinal)
+
+    var defaultDanmakuPresentationSpeed: Float
+        get() = DanmakuSpeedPolicy.sanitizePresentationSpeed(
+            read(MobilePrefKeys.defaultDanmakuPresentationSpeedRequest)
+        )
+        set(value) = write(
+            MobilePrefKeys.defaultDanmakuPresentationSpeedKey,
+            DanmakuSpeedPolicy.sanitizePresentationSpeed(value)
+        )
 
     var defaultDanmakuMask: Boolean
         get() = read(MobilePrefKeys.defaultDanmakuMaskRequest)
@@ -368,6 +383,8 @@ object MobilePrefKeys {
     val defaultDanmakuEnabledKey = booleanPreferencesKey("mobile_default_danmaku_enabled")
     val defaultDanmakuTypesKey = stringPreferencesKey("mobile_default_danmaku_types")
     val defaultDanmakuAreaKey = floatPreferencesKey("mobile_default_danmaku_area")
+    val defaultDanmakuSpeedModeKey = intPreferencesKey("mobile_default_danmaku_speed_mode")
+    val defaultDanmakuPresentationSpeedKey = floatPreferencesKey("mobile_default_danmaku_presentation_speed")
     val defaultDanmakuMaskKey = booleanPreferencesKey("mobile_default_danmaku_mask")
     val defaultDanmakuFilterLevelKey = intPreferencesKey("mobile_default_danmaku_filter_level")
     val defaultDanmakuMergeEnabledKey = booleanPreferencesKey("mobile_default_danmaku_merge_enabled")
@@ -432,6 +449,12 @@ object MobilePrefKeys {
     val defaultDanmakuEnabledRequest = PreferenceRequest(defaultDanmakuEnabledKey, true)
     val defaultDanmakuTypesRequest = PreferenceRequest(defaultDanmakuTypesKey, "0,1,2,3")
     val defaultDanmakuAreaRequest = PreferenceRequest(defaultDanmakuAreaKey, 0.5f)
+    val defaultDanmakuSpeedModeRequest = PreferenceRequest(
+        defaultDanmakuSpeedModeKey,
+        DanmakuSpeedMode.FollowVideo.ordinal
+    )
+    val defaultDanmakuPresentationSpeedRequest =
+        PreferenceRequest(defaultDanmakuPresentationSpeedKey, 1f)
     val defaultDanmakuMaskRequest = PreferenceRequest(defaultDanmakuMaskKey, true)
     val defaultDanmakuFilterLevelRequest = PreferenceRequest(defaultDanmakuFilterLevelKey, 0)
     val defaultDanmakuMergeEnabledRequest = PreferenceRequest(defaultDanmakuMergeEnabledKey, false)

@@ -21,6 +21,7 @@ import dev.aaa1115910.bv.entity.LiveQualityPreference
 import dev.aaa1115910.bv.entity.PlayerType
 import dev.aaa1115910.bv.entity.ThemeType
 import dev.aaa1115910.bv.player.entity.Audio
+import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.DanmakuType
 import dev.aaa1115910.bv.player.entity.PlayMode
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
@@ -36,6 +37,7 @@ import dev.aaa1115910.bv.player.entity.PlayerLongPressAction
 import dev.aaa1115910.bv.player.entity.PlayerShortcutAction
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.player.entity.SuperResolutionType
+import dev.aaa1115910.bv.player.util.DanmakuSpeedPolicy
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -252,6 +254,29 @@ object Prefs {
             dsm.getPreferenceFlow(PrefKeys.prefDefaultDanmakuAreaRequest).first()
         }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDefaultDanmakuAreaKey, value) }
+
+    var defaultDanmakuSpeedMode: DanmakuSpeedMode
+        get() = runBlocking {
+            DanmakuSpeedMode.fromOrdinal(
+                dsm.getPreferenceFlow(PrefKeys.prefDefaultDanmakuSpeedModeRequest).first()
+            )
+        }
+        set(value) = runBlocking {
+            dsm.editPreference(PrefKeys.prefDefaultDanmakuSpeedModeKey, value.ordinal)
+        }
+
+    var defaultDanmakuPresentationSpeed: Float
+        get() = runBlocking {
+            DanmakuSpeedPolicy.sanitizePresentationSpeed(
+                dsm.getPreferenceFlow(PrefKeys.prefDefaultDanmakuPresentationSpeedRequest).first()
+            )
+        }
+        set(value) = runBlocking {
+            dsm.editPreference(
+                PrefKeys.prefDefaultDanmakuPresentationSpeedKey,
+                DanmakuSpeedPolicy.sanitizePresentationSpeed(value)
+            )
+        }
 
     var defaultVideoCodec: dev.aaa1115910.bv.player.entity.VideoCodec
         get() = dev.aaa1115910.bv.player.entity.VideoCodec.Companion.fromCode(
@@ -904,6 +929,8 @@ object PrefKeys {
     val prefDefaultDanmakuEnabledKey = booleanPreferencesKey("dde")
     val prefDefaultDanmakuTypesKey = stringPreferencesKey("ddts")
     val prefDefaultDanmakuAreaKey = floatPreferencesKey("dda")
+    val prefDefaultDanmakuSpeedModeKey = intPreferencesKey("default_danmaku_speed_mode")
+    val prefDefaultDanmakuPresentationSpeedKey = floatPreferencesKey("default_danmaku_presentation_speed")
     val prefDefaultVideoCodecKey = intPreferencesKey("dvc")
     val prefEnabledFirebaseCollectionKey = booleanPreferencesKey("efc_v2")
     val prefIncognitoModeKey = booleanPreferencesKey("im")
@@ -1016,6 +1043,12 @@ object PrefKeys {
     val prefDefaultDanmakuTypesRequest =
         PreferenceRequest(prefDefaultDanmakuTypesKey, "0,1,2,3")
     val prefDefaultDanmakuAreaRequest = PreferenceRequest(prefDefaultDanmakuAreaKey, 0.5f)
+    val prefDefaultDanmakuSpeedModeRequest = PreferenceRequest(
+        prefDefaultDanmakuSpeedModeKey,
+        DanmakuSpeedMode.FollowVideo.ordinal
+    )
+    val prefDefaultDanmakuPresentationSpeedRequest =
+        PreferenceRequest(prefDefaultDanmakuPresentationSpeedKey, 1f)
     val prefDefaultVideoCodecRequest =
         PreferenceRequest(prefDefaultVideoCodecKey, VideoCodec.HEVC.ordinal)
     val prefEnabledFirebaseCollectionRequest =

@@ -434,6 +434,8 @@ fun VideoPlayerV3Screen(
             currentDanmakuMask = playerViewModel.currentDanmakuMask,
             currentDanmakuFilterLevel = playerViewModel.currentDanmakuFilterLevel,
             currentDanmakuMergeEnabled = playerViewModel.currentDanmakuMergeEnabled,
+            currentDanmakuSpeedMode = playerViewModel.currentDanmakuSpeedMode,
+            currentDanmakuPresentationSpeed = playerViewModel.currentDanmakuPresentationSpeed,
             currentLiveDanmakuFilterLevel = playerViewModel.currentLiveDanmakuFilterLevel,
             currentSubtitleId = playerViewModel.currentSubtitleId,
             currentSubtitleData = playerViewModel.currentSubtitleData,
@@ -831,6 +833,14 @@ fun VideoPlayerV3Screen(
                 onDanmakuAreaChange = { area ->
                     Prefs.defaultDanmakuArea = area
                     playerViewModel.currentDanmakuArea = area
+                },
+                onDanmakuSpeedModeChange = { mode ->
+                    Prefs.defaultDanmakuSpeedMode = mode
+                    playerViewModel.currentDanmakuSpeedMode = mode
+                },
+                onDanmakuPresentationSpeedChange = { speed ->
+                    Prefs.defaultDanmakuPresentationSpeed = speed
+                    playerViewModel.currentDanmakuPresentationSpeed = speed
                 },
                 onDanmakuMaskChange = { mask ->
                     Prefs.defaultDanmakuMask = mask

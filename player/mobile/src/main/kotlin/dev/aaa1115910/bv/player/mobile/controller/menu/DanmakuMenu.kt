@@ -27,9 +27,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.DanmakuType
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.mobile.MaterialDarkTheme
+import dev.aaa1115910.bv.player.util.DanmakuSpeedPolicy
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,6 +42,8 @@ fun DanmakuMenu(
     onDanmakuScaleChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuAreaChange: (Float) -> Unit,
+    onDanmakuSpeedModeChange: (DanmakuSpeedMode) -> Unit,
+    onDanmakuPresentationSpeedChange: (Float) -> Unit,
     onClose: () -> Unit
 ) {
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
@@ -84,6 +89,20 @@ fun DanmakuMenu(
                     danmakuArea = videoPlayerConfigData.currentDanmakuArea,
                     onDanmakuAreaChange = onDanmakuAreaChange
                 )
+            }
+            item {
+                DanmakuSpeedModeSetting(
+                    speedMode = videoPlayerConfigData.currentDanmakuSpeedMode,
+                    onDanmakuSpeedModeChange = onDanmakuSpeedModeChange
+                )
+            }
+            if (videoPlayerConfigData.currentDanmakuSpeedMode == DanmakuSpeedMode.Custom) {
+                item {
+                    DanmakuPresentationSpeed(
+                        presentationSpeed = videoPlayerConfigData.currentDanmakuPresentationSpeed,
+                        onDanmakuPresentationSpeedChange = onDanmakuPresentationSpeedChange
+                    )
+                }
             }
             item {
                 DanmakuScale(
@@ -161,6 +180,74 @@ private fun EnabledDanmakuTypeButton(
         selected = selected,
         onClick = { onEnabledStateChange(!selected) }
     )
+}
+
+@Composable
+private fun DanmakuSpeedModeSetting(
+    modifier: Modifier = Modifier,
+    speedMode: DanmakuSpeedMode,
+    onDanmakuSpeedModeChange: (DanmakuSpeedMode) -> Unit
+) {
+    val context = LocalContext.current
+
+    Column(
+        modifier = modifier
+    ) {
+        Text(
+            text = "弹幕速度模式",
+            style = MaterialTheme.typography.titleSmall
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceAround
+        ) {
+            DanmakuSpeedMode.entries.forEach { mode ->
+                FilterChip(
+                    label = { Text(text = mode.getDisplayName(context)) },
+                    selected = speedMode == mode,
+                    onClick = { onDanmakuSpeedModeChange(mode) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DanmakuPresentationSpeed(
+    modifier: Modifier = Modifier,
+    presentationSpeed: Float,
+    onDanmakuPresentationSpeedChange: (Float) -> Unit
+) {
+    val sanitizedSpeed = DanmakuSpeedPolicy.sanitizePresentationSpeed(presentationSpeed)
+
+    Column(
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "弹幕速度",
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                text = String.format(Locale.US, "%.2fx", sanitizedSpeed),
+                style = MaterialTheme.typography.titleSmall
+            )
+        }
+
+        Slider(
+            value = sanitizedSpeed,
+            onValueChange = {
+                onDanmakuPresentationSpeedChange(
+                    DanmakuSpeedPolicy.sanitizePresentationSpeed(it)
+                )
+            },
+            valueRange = DanmakuSpeedPolicy.MIN_PRESENTATION_SPEED..DanmakuSpeedPolicy.MAX_PRESENTATION_SPEED
+        )
+    }
 }
 
 @Composable
@@ -260,6 +347,8 @@ private fun ResolutionMenuPreview() {
             onDanmakuScaleChange = {},
             onDanmakuOpacityChange = {},
             onDanmakuAreaChange = {},
+            onDanmakuSpeedModeChange = {},
+            onDanmakuPresentationSpeedChange = {},
             onClose = {}
         )
     }
