@@ -197,6 +197,14 @@
     <string name="settings_crash_test_title">崩溃测试</string>
     <string name="settings_create_logs_text">查看最近的崩溃日志，也可以手动保存日志</string>
     <string name="settings_create_logs_title">查看日志</string>
+    <string name="settings_logout_cancel">取消</string>
+    <string name="settings_logout_confirm">退出登录</string>
+    <string name="settings_logout_dialog_text">退出登录会请求 B 站退出接口，并从此设备移除当前账号。</string>
+    <string name="settings_logout_dialog_title">确认退出登录</string>
+    <string name="settings_logout_failed">退出登录失败：%1$s</string>
+    <string name="settings_logout_success">已退出登录</string>
+    <string name="settings_logout_text">退出当前账号并移除本地登录信息</string>
+    <string name="settings_logout_title">退出登录</string>
     <string name="settings_info_manufacturer">厂商: %1$s</string>
     <string name="settings_info_memory">内存: 可用 %1$s 共 %2$s</string>
     <string name="settings_info_model">型号: %1$s (%2$s)</string>
@@ -222,6 +230,7 @@
     <string name="settings_live_default_codec">默认直播编码</string>
     <string name="settings_live_default_codec_desc">进入直播时优先使用的编码格式</string>
     <string name="settings_item_network">网络设置</string>
+    <string name="settings_item_mpv">MPV 设置</string>
     <string name="settings_item_other">更多设置</string>
     <string name="settings_item_player_type">播放器内核</string>
     <string name="settings_item_resolution">默认分辨率</string>

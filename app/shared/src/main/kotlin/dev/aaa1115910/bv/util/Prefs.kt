@@ -919,6 +919,38 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefTvMpvVideoOutputRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefTvMpvVideoOutputKey, value) }
 
+    var tvMpvHardwareDecodeMode: String
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefTvMpvHardwareDecodeModeRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefTvMpvHardwareDecodeModeKey, value.trim()) }
+
+    var tvMpvHardwareDecodeCodecs: String
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefTvMpvHardwareDecodeCodecsRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefTvMpvHardwareDecodeCodecsKey, value.trim()) }
+
+    var tvMpvGpuContext: String
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefTvMpvGpuContextRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefTvMpvGpuContextKey, value.trim()) }
+
+    var tvMpvGpuApi: String
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefTvMpvGpuApiRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefTvMpvGpuApiKey, value.trim()) }
+
+    var tvMpvCache: String
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefTvMpvCacheRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefTvMpvCacheKey, value.trim()) }
+
+    var tvMpvDemuxerMaxBytes: String
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefTvMpvDemuxerMaxBytesRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefTvMpvDemuxerMaxBytesKey, value.trim()) }
+
+    var tvMpvDemuxerMaxBackBytes: String
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefTvMpvDemuxerMaxBackBytesRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefTvMpvDemuxerMaxBackBytesKey, value.trim()) }
+
+    var tvMpvVdQueueEnable: String
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefTvMpvVdQueueEnableRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefTvMpvVdQueueEnableKey, value.trim()) }
+
     var superResolutionType: SuperResolutionType
         get() = runBlocking {
             SuperResolutionType.fromValue(dsm.getPreferenceFlow(PrefKeys.prefSuperResolutionTypeRequest).first())
@@ -1087,6 +1119,14 @@ object PrefKeys {
     val prefTvTunnelingDefaultMigrationDone = booleanPreferencesKey("tv_tunneling_default_migration_done")
     val prefEnableAudioPlaybackParams = booleanPreferencesKey("enable_audio_playback_params")
     val prefTvMpvVideoOutputKey = stringPreferencesKey("tv_mpv_video_output")
+    val prefTvMpvHardwareDecodeModeKey = stringPreferencesKey("tv_mpv_hardware_decode_mode")
+    val prefTvMpvHardwareDecodeCodecsKey = stringPreferencesKey("tv_mpv_hardware_decode_codecs")
+    val prefTvMpvGpuContextKey = stringPreferencesKey("tv_mpv_gpu_context")
+    val prefTvMpvGpuApiKey = stringPreferencesKey("tv_mpv_gpu_api")
+    val prefTvMpvCacheKey = stringPreferencesKey("tv_mpv_cache")
+    val prefTvMpvDemuxerMaxBytesKey = stringPreferencesKey("tv_mpv_demuxer_max_bytes")
+    val prefTvMpvDemuxerMaxBackBytesKey = stringPreferencesKey("tv_mpv_demuxer_max_back_bytes")
+    val prefTvMpvVdQueueEnableKey = stringPreferencesKey("tv_mpv_vd_queue_enable")
     val prefSuperResolutionTypeKey = intPreferencesKey("super_resolution_type")
     val prefVlcLibsVersionKey = stringPreferencesKey("vlc_libs_version")
     val prefDefaultDanmakuFilterLevelKey = intPreferencesKey("default_danmaku_filter_level")
@@ -1227,6 +1267,15 @@ object PrefKeys {
     val prefTvTunnelingDefaultMigrationDoneRequest = PreferenceRequest(prefTvTunnelingDefaultMigrationDone, false)
     val prefEnableAudioPlaybackParamsRequest = PreferenceRequest(prefEnableAudioPlaybackParams, true)
     val prefTvMpvVideoOutputRequest = PreferenceRequest(prefTvMpvVideoOutputKey, "gpu")
+    val prefTvMpvHardwareDecodeModeRequest = PreferenceRequest(prefTvMpvHardwareDecodeModeKey, "mediacodec")
+    val prefTvMpvHardwareDecodeCodecsRequest =
+        PreferenceRequest(prefTvMpvHardwareDecodeCodecsKey, "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
+    val prefTvMpvGpuContextRequest = PreferenceRequest(prefTvMpvGpuContextKey, "android")
+    val prefTvMpvGpuApiRequest = PreferenceRequest(prefTvMpvGpuApiKey, "")
+    val prefTvMpvCacheRequest = PreferenceRequest(prefTvMpvCacheKey, "yes")
+    val prefTvMpvDemuxerMaxBytesRequest = PreferenceRequest(prefTvMpvDemuxerMaxBytesKey, "150MiB")
+    val prefTvMpvDemuxerMaxBackBytesRequest = PreferenceRequest(prefTvMpvDemuxerMaxBackBytesKey, "50MiB")
+    val prefTvMpvVdQueueEnableRequest = PreferenceRequest(prefTvMpvVdQueueEnableKey, "")
     val prefSuperResolutionTypeRequest =
         PreferenceRequest(prefSuperResolutionTypeKey, SuperResolutionType.Disable.value)
     val prefVlcLibsVersionRequest = PreferenceRequest(prefVlcLibsVersionKey, "")

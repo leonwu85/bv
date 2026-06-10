@@ -19,6 +19,7 @@ import dev.aaa1115910.bv.mobile.screen.settings.details.AdvanceContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.AudioVideoContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.AppearanceContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.DebugContent
+import dev.aaa1115910.bv.mobile.screen.settings.details.MpvContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.PlayContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.SponsorBlockContent
 
@@ -28,6 +29,7 @@ fun SettingsDetails(
     modifier: Modifier = Modifier,
     selectedSettings: MobileSettings?,
     showNavBack: Boolean,
+    onPlayerTypeChanged: (dev.aaa1115910.bv.entity.PlayerType) -> Unit = {},
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -58,8 +60,12 @@ fun SettingsDetails(
         val contentModifier = Modifier.padding(top = innerPadding.calculateTopPadding())
         when (selectedSettings) {
             null, MobileSettings.Appearance -> AppearanceContent(modifier = contentModifier)
-            MobileSettings.AudioVideo -> AudioVideoContent(modifier = contentModifier)
+            MobileSettings.AudioVideo -> AudioVideoContent(
+                modifier = contentModifier,
+                onPlayerTypeChanged = onPlayerTypeChanged
+            )
             MobileSettings.Play -> PlayContent(modifier = contentModifier)
+            MobileSettings.Mpv -> MpvContent(modifier = contentModifier)
             MobileSettings.SponsorBlock -> SponsorBlockContent(modifier = contentModifier)
             MobileSettings.About -> AboutContent(modifier = contentModifier)
             MobileSettings.Debug -> DebugContent(modifier = contentModifier)

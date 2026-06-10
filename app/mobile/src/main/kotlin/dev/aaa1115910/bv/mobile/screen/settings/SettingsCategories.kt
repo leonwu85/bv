@@ -16,8 +16,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.mobile.component.preferences.items.textPreference
 import dev.aaa1115910.bv.mobile.component.preferences.preferenceGroups
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
@@ -28,9 +30,15 @@ fun SettingsCategories(
     modifier: Modifier = Modifier,
     selectedSettings: MobileSettings?,
     onSelectedSettings: (MobileSettings) -> Unit,
+    showMpvSettings: Boolean,
     showNavBack: Boolean,
+    isLogin: Boolean,
+    onLogout: () -> Unit,
     onBack: () -> Unit
 ) {
+    val logoutTitle = stringResource(R.string.settings_logout_title)
+    val logoutText = stringResource(R.string.settings_logout_text)
+
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -64,7 +72,13 @@ fun SettingsCategories(
                         MobileSettings.SponsorBlock,
                         MobileSettings.Advance,
                         MobileSettings.Debug
-                    ).forEach { item ->
+                    ).let { items ->
+                        if (showMpvSettings) {
+                            items.toMutableList().apply { add(3, MobileSettings.Mpv) }
+                        } else {
+                            items
+                        }
+                    }.forEach { item ->
                         textPreference(
                             title = item.title,
                             summary = item.summary,
@@ -80,6 +94,15 @@ fun SettingsCategories(
                         onClick = { onSelectedSettings(MobileSettings.About) },
                         selected = selectedSettings == MobileSettings.About
                     )
+                },
+                null to {
+                    if (isLogin) {
+                        textPreference(
+                            title = logoutTitle,
+                            summary = logoutText,
+                            onClick = onLogout
+                        )
+                    }
                 }
             )
         }
@@ -94,7 +117,10 @@ private fun SettingsCategoriesPreview() {
             SettingsCategories(
                 selectedSettings = MobileSettings.Appearance,
                 onSelectedSettings = {},
+                showMpvSettings = true,
                 showNavBack = false,
+                isLogin = true,
+                onLogout = {},
                 onBack = {},
             )
         }

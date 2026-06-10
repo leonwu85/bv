@@ -326,6 +326,38 @@ object MobilePrefs {
         get() = read(MobilePrefKeys.hardwareDecodeModeRequest)
         set(value) = write(MobilePrefKeys.hardwareDecodeModeKey, value)
 
+    var mpvHardwareDecodeCodecs: String
+        get() = read(MobilePrefKeys.mpvHardwareDecodeCodecsRequest)
+        set(value) = write(MobilePrefKeys.mpvHardwareDecodeCodecsKey, value.trim())
+
+    var mpvVideoOutput: String
+        get() = read(MobilePrefKeys.mpvVideoOutputRequest)
+        set(value) = write(MobilePrefKeys.mpvVideoOutputKey, value.trim())
+
+    var mpvGpuContext: String
+        get() = read(MobilePrefKeys.mpvGpuContextRequest)
+        set(value) = write(MobilePrefKeys.mpvGpuContextKey, value.trim())
+
+    var mpvGpuApi: String
+        get() = read(MobilePrefKeys.mpvGpuApiRequest)
+        set(value) = write(MobilePrefKeys.mpvGpuApiKey, value.trim())
+
+    var mpvCache: String
+        get() = read(MobilePrefKeys.mpvCacheRequest)
+        set(value) = write(MobilePrefKeys.mpvCacheKey, value.trim())
+
+    var mpvDemuxerMaxBytes: String
+        get() = read(MobilePrefKeys.mpvDemuxerMaxBytesRequest)
+        set(value) = write(MobilePrefKeys.mpvDemuxerMaxBytesKey, value.trim())
+
+    var mpvDemuxerMaxBackBytes: String
+        get() = read(MobilePrefKeys.mpvDemuxerMaxBackBytesRequest)
+        set(value) = write(MobilePrefKeys.mpvDemuxerMaxBackBytesKey, value.trim())
+
+    var mpvVdQueueEnable: String
+        get() = read(MobilePrefKeys.mpvVdQueueEnableRequest)
+        set(value) = write(MobilePrefKeys.mpvVdQueueEnableKey, value.trim())
+
     var superResolutionType: SuperResolutionType
         get() = SuperResolutionType.fromValue(read(MobilePrefKeys.superResolutionTypeRequest))
         set(value) = write(MobilePrefKeys.superResolutionTypeKey, value.value)
@@ -417,6 +449,14 @@ object MobilePrefKeys {
     val autoSyncKey = stringPreferencesKey("mobile_auto_sync")
     val videoSyncKey = stringPreferencesKey("mobile_video_sync")
     val hardwareDecodeModeKey = stringPreferencesKey("mobile_hardware_decode_mode")
+    val mpvHardwareDecodeCodecsKey = stringPreferencesKey("mobile_mpv_hardware_decode_codecs")
+    val mpvVideoOutputKey = stringPreferencesKey("mobile_mpv_video_output")
+    val mpvGpuContextKey = stringPreferencesKey("mobile_mpv_gpu_context")
+    val mpvGpuApiKey = stringPreferencesKey("mobile_mpv_gpu_api")
+    val mpvCacheKey = stringPreferencesKey("mobile_mpv_cache")
+    val mpvDemuxerMaxBytesKey = stringPreferencesKey("mobile_mpv_demuxer_max_bytes")
+    val mpvDemuxerMaxBackBytesKey = stringPreferencesKey("mobile_mpv_demuxer_max_back_bytes")
+    val mpvVdQueueEnableKey = stringPreferencesKey("mobile_mpv_vd_queue_enable")
     val superResolutionTypeKey = intPreferencesKey("mobile_super_resolution_type")
     val audioOutputDevicesKey = stringPreferencesKey("mobile_audio_output_devices")
     val showLiveDanmakuEmojiKey = booleanPreferencesKey("mobile_show_live_danmaku_emoji")
@@ -487,6 +527,15 @@ object MobilePrefKeys {
     val autoSyncRequest = PreferenceRequest(autoSyncKey, "30")
     val videoSyncRequest = PreferenceRequest(videoSyncKey, "display-resample")
     val hardwareDecodeModeRequest = PreferenceRequest(hardwareDecodeModeKey, "auto-safe")
+    val mpvHardwareDecodeCodecsRequest =
+        PreferenceRequest(mpvHardwareDecodeCodecsKey, "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
+    val mpvVideoOutputRequest = PreferenceRequest(mpvVideoOutputKey, "gpu")
+    val mpvGpuContextRequest = PreferenceRequest(mpvGpuContextKey, "android")
+    val mpvGpuApiRequest = PreferenceRequest(mpvGpuApiKey, "")
+    val mpvCacheRequest = PreferenceRequest(mpvCacheKey, "yes")
+    val mpvDemuxerMaxBytesRequest = PreferenceRequest(mpvDemuxerMaxBytesKey, "150MiB")
+    val mpvDemuxerMaxBackBytesRequest = PreferenceRequest(mpvDemuxerMaxBackBytesKey, "50MiB")
+    val mpvVdQueueEnableRequest = PreferenceRequest(mpvVdQueueEnableKey, "")
     val superResolutionTypeRequest = PreferenceRequest(superResolutionTypeKey, SuperResolutionType.Disable.value)
     val audioOutputDevicesRequest = PreferenceRequest(audioOutputDevicesKey, "opensles,aaudio,audiotrack")
     val showLiveDanmakuEmojiRequest = PreferenceRequest(showLiveDanmakuEmojiKey, false)

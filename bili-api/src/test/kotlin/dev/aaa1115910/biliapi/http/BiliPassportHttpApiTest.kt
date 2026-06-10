@@ -58,7 +58,6 @@ class BiliPassportHttpApiTest {
         val response = runBlocking {
             BiliPassportHttpApi.getAppQRUrl(
                 localId = BiliLoginConf.LOCAL_ID,
-                ts = (System.currentTimeMillis() / 1000).toInt(),
                 platform = BiliLoginConf.PLATFORM,
                 mobiApp = BiliLoginConf.MOBI_APP
             )
@@ -74,7 +73,6 @@ class BiliPassportHttpApiTest {
         val qrUrlResponse = runBlocking {
             BiliPassportHttpApi.getAppQRUrl(
                 localId = BiliLoginConf.LOCAL_ID,
-                ts = (System.currentTimeMillis() / 1000).toInt(),
                 platform = BiliLoginConf.PLATFORM,
                 mobiApp = BiliLoginConf.MOBI_APP
             )
@@ -88,8 +86,7 @@ class BiliPassportHttpApiTest {
             val loginResponse = runBlocking {
                 BiliPassportHttpApi.loginWithAppQR(
                     authCode = key!!,
-                    localId = BiliLoginConf.LOCAL_ID,
-                    ts = (System.currentTimeMillis() / 1000).toInt()
+                    localId = BiliLoginConf.LOCAL_ID
                 )
             }
             println(loginResponse)

@@ -271,7 +271,6 @@ class VideoPlayerV3Activity : ComponentActivity() {
                 ApiType.App -> null
             }
         }
-        val mpvVideoOutput = Prefs.tvMpvVideoOutput
         val options = VideoPlayerOptions(
             userAgent = playbackUserAgent,
             referer = playbackReferer,
@@ -279,8 +278,15 @@ class VideoPlayerV3Activity : ComponentActivity() {
             enableAsyncQueueing = Prefs.enableAsyncQueueing,
             enableTunneling = enableTunneling,
             enableAudioPlaybackParams = Prefs.enableAudioPlaybackParams,
-            hardwareDecodeMode = resolveTvMpvHardwareDecodeMode(mpvVideoOutput),
-            mpvVideoOutput = mpvVideoOutput,
+            hardwareDecodeMode = Prefs.tvMpvHardwareDecodeMode,
+            mpvHardwareDecodeCodecs = Prefs.tvMpvHardwareDecodeCodecs,
+            mpvVideoOutput = Prefs.tvMpvVideoOutput,
+            mpvGpuContext = Prefs.tvMpvGpuContext,
+            mpvGpuApi = Prefs.tvMpvGpuApi,
+            mpvCache = Prefs.tvMpvCache,
+            mpvDemuxerMaxBytes = Prefs.tvMpvDemuxerMaxBytes,
+            mpvDemuxerMaxBackBytes = Prefs.tvMpvDemuxerMaxBackBytes,
+            mpvVdQueueEnable = Prefs.tvMpvVdQueueEnable,
             superResolutionType = Prefs.superResolutionType,
             enableVideoFrameRateStrategy = false,
             isLive = isLive
@@ -289,7 +295,8 @@ class VideoPlayerV3Activity : ComponentActivity() {
             "TV video player options: player=${Prefs.playerType}, " +
                     "superResolution=${options.superResolutionType}, " +
                     "enableHardwareDecode=${options.enableHardwareDecode}, " +
-                    "hardwareDecodeMode=${options.hardwareDecodeMode}, mpvVideoOutput=${options.mpvVideoOutput}"
+                    "hardwareDecodeMode=${options.hardwareDecodeMode}, " +
+                    "mpvVideoOutput=${options.mpvVideoOutput}, mpvGpuContext=${options.mpvGpuContext}"
         }
         val videoPlayer = when (Prefs.playerType) {
             PlayerType.Media3 -> ExoPlayerFactory().create(this, options)
@@ -297,14 +304,6 @@ class VideoPlayerV3Activity : ComponentActivity() {
             PlayerType.MPV -> MpvPlayerFactory().create(this, options)
         }
         playerViewModel.videoPlayer = videoPlayer
-    }
-
-    private fun resolveTvMpvHardwareDecodeMode(mpvVideoOutput: String): String {
-        return when (mpvVideoOutput) {
-            "mediacodec_embed" -> "mediacodec"
-            "gpu", "gpu-next" -> "mediacodec"
-            else -> "mediacodec"
-        }
     }
 
     private fun startVodPlayback(

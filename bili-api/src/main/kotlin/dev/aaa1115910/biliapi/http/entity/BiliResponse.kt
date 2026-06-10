@@ -26,6 +26,7 @@ data class BiliResponse<T>(
                 BiliAuthFailureHandler.notify(message)
             }
             -352 -> logger.error { "请求失败，风控异常: $message (code: $code)" }
+            86038, 86039, 86090 -> logger.debug { "二维码登录轮询: $message (code: $code)" }
             else -> logger.error { "请求失败: $message (code: $code)" }
         }
     }

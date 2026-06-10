@@ -341,7 +341,10 @@ class MpvMediaPlayer(
         MPVLib.setOptionString("gpu-shader-cache-dir", cacheDir.absolutePath)
         MPVLib.setOptionString("icc-cache-dir", cacheDir.absolutePath)
         MPVLib.setOptionString("profile", "fast")
-        MPVLib.setOptionString("gpu-context", "android")
+        MPVLib.setOptionString("gpu-context", options.mpvGpuContext.ifBlank { DEFAULT_GPU_CONTEXT })
+        options.mpvGpuApi.trim().takeIf { it.isNotBlank() }?.let { gpuApi ->
+            MPVLib.setOptionString("gpu-api", gpuApi)
+        }
         MPVLib.setOptionString("opengl-es", "yes")
         MPVLib.setOptionString("vo", videoOutput)
         MPVLib.setOptionString("ao", options.audioOutputDevices.ifBlank { DEFAULT_AUDIO_OUTPUT_DEVICES })
@@ -352,8 +355,17 @@ class MpvMediaPlayer(
             MPVLib.setOptionString("autosync", autoSync)
         }
         MPVLib.setOptionString("hwdec", resolveHardwareDecodeMode())
-        MPVLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
+        MPVLib.setOptionString(
+            "hwdec-codecs",
+            options.mpvHardwareDecodeCodecs.ifBlank { DEFAULT_HARDWARE_DECODE_CODECS }
+        )
+        options.mpvVdQueueEnable.trim().takeIf { it.isNotBlank() }?.let { vdQueueEnable ->
+            MPVLib.setOptionString("vd-queue-enable", vdQueueEnable)
+        }
         configureSuperResolutionShaders()
+        options.mpvCache.trim().takeIf { it.isNotBlank() }?.let { cache ->
+            MPVLib.setOptionString("cache", cache)
+        }
 
         val cacheBytes = if (options.expandBuffer) {
             EXPANDED_DEMUXER_CACHE_BYTES
@@ -362,8 +374,14 @@ class MpvMediaPlayer(
         } else {
             DEFAULT_DEMUXER_CACHE_BYTES
         }
-        MPVLib.setOptionString("demuxer-max-bytes", cacheBytes.toString())
-        MPVLib.setOptionString("demuxer-max-back-bytes", cacheBytes.toString())
+        MPVLib.setOptionString(
+            "demuxer-max-bytes",
+            options.mpvDemuxerMaxBytes.ifBlank { cacheBytes.toString() }
+        )
+        MPVLib.setOptionString(
+            "demuxer-max-back-bytes",
+            options.mpvDemuxerMaxBackBytes.ifBlank { cacheBytes.toString() }
+        )
 
         applyNetworkOptions()
     }
@@ -390,11 +408,7 @@ class MpvMediaPlayer(
 
     private fun resolveVideoOutputMode(): String {
         val mode = options.mpvVideoOutput.trim()
-        return if (mode in SUPPORTED_VIDEO_OUTPUTS) {
-            mode
-        } else {
-            DEFAULT_VIDEO_OUTPUT
-        }
+        return mode.ifBlank { DEFAULT_VIDEO_OUTPUT }
     }
 
     private fun applyNetworkOptions() {
@@ -910,9 +924,11 @@ class MpvMediaPlayer(
     companion object {
         private const val DEFAULT_VIDEO_OUTPUT = "gpu"
         private const val MEDIACODEC_EMBED_VIDEO_OUTPUT = "mediacodec_embed"
+        private const val DEFAULT_GPU_CONTEXT = "android"
         private const val DEFAULT_AUDIO_OUTPUT_DEVICES = "audiotrack,opensles"
         private const val DEFAULT_VIDEO_SYNC = "audio"
         private const val DEFAULT_HARDWARE_DECODE_MODE = "mediacodec,mediacodec-copy"
+        private const val DEFAULT_HARDWARE_DECODE_CODECS = "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1"
         private const val DEFAULT_DEMUXER_CACHE_BYTES = 64L * 1024L * 1024L
         private const val LIVE_DEMUXER_CACHE_BYTES = 32L * 1024L * 1024L
         private const val EXPANDED_DEMUXER_CACHE_BYTES = 256L * 1024L * 1024L
@@ -931,7 +947,6 @@ class MpvMediaPlayer(
         private const val ANIME4K_AUTO_DOWNSCALE_PRE_X4 = "Anime4K_AutoDownscalePre_x4.glsl"
         private const val FSRCNNX_FAST = "FSRCNNX_x2_8-0-4-1.glsl"
         private const val FSRCNNX_QUALITY = "FSRCNNX_x2_16-0-4-1.glsl"
-        private val SUPPORTED_VIDEO_OUTPUTS = setOf(MEDIACODEC_EMBED_VIDEO_OUTPUT, "gpu", "gpu-next")
         private val ANIME4K_MODE_A_FAST_SHADERS = listOf(
             ANIME4K_CLAMP_HIGHLIGHTS,
             ANIME4K_RESTORE_CNN_M,

@@ -97,6 +97,14 @@ object MobilePlayerSettingsSource : PlayerSettingsSource {
     override val autoSync get() = MobilePrefs.autoSync
     override val videoSync get() = MobilePrefs.videoSync
     override val hardwareDecodeMode get() = MobilePrefs.hardwareDecodeMode
+    override val mpvHardwareDecodeCodecs get() = MobilePrefs.mpvHardwareDecodeCodecs
+    override val mpvVideoOutput get() = MobilePrefs.mpvVideoOutput
+    override val mpvGpuContext get() = MobilePrefs.mpvGpuContext
+    override val mpvGpuApi get() = MobilePrefs.mpvGpuApi
+    override val mpvCache get() = MobilePrefs.mpvCache
+    override val mpvDemuxerMaxBytes get() = MobilePrefs.mpvDemuxerMaxBytes
+    override val mpvDemuxerMaxBackBytes get() = MobilePrefs.mpvDemuxerMaxBackBytes
+    override val mpvVdQueueEnable get() = MobilePrefs.mpvVdQueueEnable
     override val superResolutionType get() = MobilePrefs.superResolutionType
     override val audioOutputDevices get() = MobilePrefs.audioOutputDevices
     override val showLiveDanmakuEmoji get() = MobilePrefs.showLiveDanmakuEmoji

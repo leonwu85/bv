@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.NewReleases
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.Scaffold
@@ -70,11 +71,13 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.entity.PlayerType
 import dev.aaa1115910.bv.tv.screens.settings.content.AboutSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.ApiSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.DanmakuFilterSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.InfoSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.LiveStreamingSetting
+import dev.aaa1115910.bv.tv.screens.settings.content.MpvSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.NetworkSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.OtherSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.PlayerSetting
@@ -82,6 +85,7 @@ import dev.aaa1115910.bv.tv.screens.settings.content.SponsorBlockSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.StorageSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.UISetting
 import dev.aaa1115910.bv.ui.theme.BVTheme
+import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.requestFocus
 
 @Composable
@@ -90,9 +94,28 @@ fun SettingsScreen(
     initialMenu: SettingsMenuNavItem = SettingsMenuNavItem.Player
 ) {
     var currentMenu by remember(initialMenu) { mutableStateOf(initialMenu) }
+    var playerType by remember { mutableStateOf(Prefs.playerType) }
+    val onPlayerTypeChanged: (PlayerType) -> Unit = { nextPlayerType ->
+        playerType = nextPlayerType
+        if (nextPlayerType != PlayerType.MPV && currentMenu == SettingsMenuNavItem.Mpv) {
+            currentMenu = SettingsMenuNavItem.Player
+        }
+    }
     var focusInNav by remember { mutableStateOf(false) }
     var focusInContent by remember { mutableStateOf(false) }
     val navFocusRequester = remember { FocusRequester() }
+    val showMpvSettings = playerType == PlayerType.MPV
+    val effectiveCurrentMenu = if (!showMpvSettings && currentMenu == SettingsMenuNavItem.Mpv) {
+        SettingsMenuNavItem.Player
+    } else {
+        currentMenu
+    }
+
+    LaunchedEffect(showMpvSettings, currentMenu) {
+        if (!showMpvSettings && currentMenu == SettingsMenuNavItem.Mpv) {
+            currentMenu = SettingsMenuNavItem.Player
+        }
+    }
 
     BackHandler(enabled = focusInContent) {
         focusInNav = true
@@ -143,8 +166,9 @@ fun SettingsScreen(
                 SettingsNav(
                     modifier = Modifier
                         .onFocusChanged { focusInNav = it.hasFocus },
-                    currentMenu = currentMenu,
+                    currentMenu = effectiveCurrentMenu,
                     onMenuChanged = { currentMenu = it },
+                    showMpvSettings = showMpvSettings,
                     isFocusing = focusInNav,
                     focusRequester = navFocusRequester
                 )
@@ -157,7 +181,8 @@ fun SettingsScreen(
                     .padding(top = 48.dp),
                 onBackNav = { focusInNav = true },
                 onContentFocusChanged = { focusInContent = it },
-                currentMenu = currentMenu
+                currentMenu = effectiveCurrentMenu,
+                onPlayerTypeChanged = onPlayerTypeChanged
             )
         }
     }
@@ -168,13 +193,17 @@ fun SettingsNav(
     modifier: Modifier = Modifier,
     currentMenu: SettingsMenuNavItem,
     onMenuChanged: (SettingsMenuNavItem) -> Unit,
+    showMpvSettings: Boolean,
     isFocusing: Boolean,
     focusRequester: FocusRequester = remember { FocusRequester() }
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val visibleItems = SettingsMenuNavItem.entries.filter { it != SettingsMenuNavItem.Mpv || showMpvSettings }
     val initialMenu = remember { currentMenu }
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialMenu.ordinal)
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = visibleItems.indexOf(initialMenu).coerceAtLeast(0)
+    )
 
     LaunchedEffect(isFocusing) {
         if (isFocusing) focusRequester.requestFocus(scope)
@@ -192,7 +221,7 @@ fun SettingsNav(
         contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        for (item in SettingsMenuNavItem.entries) {
+        for (item in visibleItems) {
             val buttonModifier = if (currentMenu == item) Modifier
                 .focusRequester(focusRequester)
                 .fillMaxWidth()
@@ -217,6 +246,7 @@ enum class SettingsMenuNavItem(
     val icon: ImageVector
 ) {
     Player(R.string.settings_item_player, Icons.Rounded.PlayCircle),
+    Mpv(R.string.settings_item_mpv, Icons.Rounded.Settings),
     UI(R.string.settings_item_ui, Icons.Rounded.Palette),
     Live(R.string.settings_item_live, Icons.Rounded.LiveTv),
     DanmakuFilter(R.string.settings_item_danmaku_filter, Icons.Rounded.FilterAlt),
@@ -236,7 +266,8 @@ fun SettingContent(
     modifier: Modifier = Modifier,
     onBackNav: () -> Unit,
     onContentFocusChanged: (Boolean) -> Unit = {},
-    currentMenu: SettingsMenuNavItem
+    currentMenu: SettingsMenuNavItem,
+    onPlayerTypeChanged: (PlayerType) -> Unit = {}
 ) {
     Box(
         modifier = modifier
@@ -263,7 +294,8 @@ fun SettingContent(
                 label = "settings content"
             ) { menu ->
                 when (menu) {
-                    SettingsMenuNavItem.Player -> PlayerSetting()
+                    SettingsMenuNavItem.Player -> PlayerSetting(onPlayerTypeChanged = onPlayerTypeChanged)
+                    SettingsMenuNavItem.Mpv -> MpvSetting()
                     SettingsMenuNavItem.Info -> InfoSetting()
                     SettingsMenuNavItem.SponsorBlock -> SponsorBlockSetting()
                     SettingsMenuNavItem.About -> AboutSetting()

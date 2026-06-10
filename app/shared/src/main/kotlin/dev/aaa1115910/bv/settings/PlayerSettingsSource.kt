@@ -84,6 +84,14 @@ interface PlayerSettingsSource {
     val autoSync: String
     val videoSync: String
     val hardwareDecodeMode: String
+    val mpvHardwareDecodeCodecs: String
+    val mpvVideoOutput: String
+    val mpvGpuContext: String
+    val mpvGpuApi: String
+    val mpvCache: String
+    val mpvDemuxerMaxBytes: String
+    val mpvDemuxerMaxBackBytes: String
+    val mpvVdQueueEnable: String
     val superResolutionType: SuperResolutionType
     val audioOutputDevices: String
     val showLiveDanmakuEmoji: Boolean
@@ -184,6 +192,14 @@ object DefaultPlayerSettingsSource : PlayerSettingsSource {
     override val autoSync get() = ""
     override val videoSync get() = "audio"
     override val hardwareDecodeMode get() = "auto-safe"
+    override val mpvHardwareDecodeCodecs get() = "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1"
+    override val mpvVideoOutput get() = "gpu"
+    override val mpvGpuContext get() = "android"
+    override val mpvGpuApi get() = ""
+    override val mpvCache get() = "yes"
+    override val mpvDemuxerMaxBytes get() = "150MiB"
+    override val mpvDemuxerMaxBackBytes get() = "50MiB"
+    override val mpvVdQueueEnable get() = ""
     override val superResolutionType get() = Prefs.superResolutionType
     override val audioOutputDevices get() = ""
     override val showLiveDanmakuEmoji get() = Prefs.showLiveDanmakuEmoji

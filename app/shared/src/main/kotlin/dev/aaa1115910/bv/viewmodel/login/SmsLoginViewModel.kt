@@ -4,7 +4,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
-import dev.aaa1115910.biliapi.http.util.generateBuvid
 import dev.aaa1115910.biliapi.repositories.LoginRepository
 import dev.aaa1115910.biliapi.repositories.SendSmsState
 import dev.aaa1115910.bv.BVApp
@@ -20,7 +19,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.koin.core.annotation.KoinViewModel
-import java.net.URL
+import java.net.URI
+import java.net.URLDecoder
 
 @KoinViewModel
 class SmsLoginViewModel(
@@ -34,8 +34,9 @@ class SmsLoginViewModel(
     private var recaptchaToken: String? = null
     var geetestChallenge: String? = null
     var geetestValidate: String? = null
+    var geetestSeccode: String? = null
     private var geetestGt: String? = null
-    private val buvid = generateBuvid()
+    private val buvid = Prefs.buvid
     private var captchaKey: String? = null
 
     suspend fun sendSms(
@@ -50,7 +51,8 @@ class SmsLoginViewModel(
                 buvid = buvid,
                 recaptchaToken = recaptchaToken,
                 geetestChallenge = geetestChallenge,
-                geetestValidate = geetestValidate
+                geetestValidate = geetestValidate,
+                geetestSeccode = geetestSeccode
             )
             when (sendSmsResult.state) {
                 SendSmsState.Ready -> {
@@ -80,13 +82,14 @@ class SmsLoginViewModel(
                     logger.info { "Require manual recaptcha" }
                     logger.info { "recaptcha url: ${sendSmsResult.recaptchaUrl}" }
 
-                    URL(sendSmsResult.recaptchaUrl).query.split("&").forEach {
-                        val (key, value) = it.split("=")
-                        when (key) {
-                            "recaptcha_token" -> recaptchaToken = value
-                            "gee_gt" -> geetestGt = value
-                            "gee_challenge" -> geetestChallenge = value
+                    if (!loadCaptchaData(sendSmsResult.recaptchaUrl)) {
+                        logger.warn { "Load captcha data failed" }
+                        withContext(Dispatchers.Main) {
+                            sendSmsState = SendSmsState.Error
+                            "获取验证码失败，请尝试其它登录方式".toast(BVApp.context)
                         }
+                        clearCaptchaData()
+                        return
                     }
 
                     logger.info { "recaptchaToken: $recaptchaToken" }
@@ -104,6 +107,53 @@ class SmsLoginViewModel(
             }
         }
     }
+
+    private suspend fun loadCaptchaData(recaptchaUrl: String?): Boolean {
+        if (!recaptchaUrl.isNullOrBlank()) {
+            runCatching {
+                parseQuery(URI(recaptchaUrl).rawQuery.orEmpty()).forEach { (key, value) ->
+                    when (key) {
+                        "recaptcha_token" -> recaptchaToken = value
+                        "gee_gt" -> geetestGt = value
+                        "gee_challenge" -> geetestChallenge = value
+                    }
+                }
+            }.onFailure {
+                logger.warn { "Parse recaptcha url failed: ${it.message}" }
+            }
+        }
+
+        if (isCaptchaDataReady()) return true
+
+        return runCatching {
+            val captcha = loginRepository.preCapture()
+            recaptchaToken = captcha.token
+            geetestGt = captcha.gt
+            geetestChallenge = captcha.challenge
+            isCaptchaDataReady()
+        }.getOrElse {
+            logger.warn { "Pre capture failed: ${it.stackTraceToString()}" }
+            false
+        }
+    }
+
+    private fun parseQuery(query: String): Map<String, String> {
+        if (query.isBlank()) return emptyMap()
+        return query.split("&")
+            .mapNotNull { parameter ->
+                val index = parameter.indexOf("=")
+                if (index <= 0) return@mapNotNull null
+                val key = URLDecoder.decode(parameter.substring(0, index), "UTF-8")
+                val value = URLDecoder.decode(parameter.substring(index + 1), "UTF-8")
+                key to value
+            }
+            .toMap()
+    }
+
+    private fun isCaptchaDataReady(): Boolean =
+        recaptchaToken?.isNotBlank() == true &&
+                geetestGt?.isNotBlank() == true &&
+                geetestChallenge?.isNotBlank() == true
 
     suspend fun loginWithSms(code: Int, onSuccess: () -> Unit) {
         logger.info { "Login with sms code: $code" }
@@ -153,6 +203,7 @@ class SmsLoginViewModel(
         recaptchaToken = null
         geetestChallenge = null
         geetestValidate = null
+        geetestSeccode = null
         sendSmsState = SendSmsState.Ready
     }
 }

@@ -138,6 +138,7 @@ fun SmsLoginContent(
                         val geetestResult = Json.decodeFromString<GeetestResult>(result)
                         smsLoginViewModel.geetestChallenge = geetestResult.geetestChallenge
                         smsLoginViewModel.geetestValidate = geetestResult.geetestValidate
+                        smsLoginViewModel.geetestSeccode = geetestResult.geetestSeccode
                         smsLoginViewModel.sendSmsState = SendSmsState.Ready
                         gt3GeetestUtils?.showSuccessDialog()
                         scope.launch(Dispatchers.IO) {

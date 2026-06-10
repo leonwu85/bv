@@ -176,6 +176,7 @@ fun LoginScreen(
                         val geetestResult = Json.decodeFromString<GeetestResult>(result)
                         smsLoginViewModel.geetestChallenge = geetestResult.geetestChallenge
                         smsLoginViewModel.geetestValidate = geetestResult.geetestValidate
+                        smsLoginViewModel.geetestSeccode = geetestResult.geetestSeccode
                         smsLoginViewModel.sendSmsState = SendSmsState.Ready
                         gt3GeetestUtils?.showSuccessDialog()
                         scope.launch(Dispatchers.IO) {
@@ -194,8 +195,13 @@ fun LoginScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        appQrLoginViewModel.requestQRCode()
+    val showQrCodeByDefault = windowSize.widthSizeClass == WindowWidthSizeClass.Expanded
+    LaunchedEffect(showQrCodeByDefault) {
+        if (showQrCodeByDefault) {
+            appQrLoginViewModel.requestQRCode()
+        } else {
+            appQrLoginViewModel.cancelCheckLoginResultTimer()
+        }
     }
 
     LaunchedEffect(appQrLoginViewModel.state) {
@@ -226,7 +232,8 @@ fun LoginScreen(
         onBack = { context.finish() },
         onClearCaptchaData = { smsLoginViewModel.clearCaptchaData() },
         onSendSms = sendSms,
-        onLogin = loginWithSms
+        onLogin = loginWithSms,
+        onRequestQRCode = { appQrLoginViewModel.requestQRCode() }
     )
 }
 
@@ -239,7 +246,8 @@ fun LoginContent(
     onBack: () -> Unit,
     onClearCaptchaData: () -> Unit,
     onSendSms: (Long) -> Unit,
-    onLogin: (phoneNumber: Long, code: Int) -> Unit
+    onLogin: (phoneNumber: Long, code: Int) -> Unit,
+    onRequestQRCode: () -> Unit
 ) {
     Scaffold(
         modifier = modifier,
@@ -265,7 +273,8 @@ fun LoginContent(
                 qrLoginUrl = qrLoginUrl,
                 onClearCaptchaData = onClearCaptchaData,
                 onSendSms = onSendSms,
-                onLogin = onLogin
+                onLogin = onLogin,
+                onRequestQRCode = onRequestQRCode
             )
 
             WindowWidthSizeClass.Expanded -> LoginContentExpanded(
@@ -285,7 +294,8 @@ fun LoginContentCompact(
     qrLoginUrl: String,
     onClearCaptchaData: () -> Unit,
     onSendSms: (Long) -> Unit,
-    onLogin: (phoneNumber: Long, code: Int) -> Unit
+    onLogin: (phoneNumber: Long, code: Int) -> Unit,
+    onRequestQRCode: () -> Unit
 ) {
     var showQrCode by remember { mutableStateOf(false) }
 
@@ -317,7 +327,10 @@ fun LoginContentCompact(
         if (!showQrCode) {
             TextButton(
                 modifier = Modifier.align(Alignment.BottomCenter),
-                onClick = { showQrCode = true }
+                onClick = {
+                    showQrCode = true
+                    onRequestQRCode()
+                }
             ) {
                 Text(text = stringResource(dev.aaa1115910.bv.mobile.R.string.qr_login_button_login))
             }
@@ -515,7 +528,8 @@ private fun LoginScreenPreview() {
             onBack = {},
             onClearCaptchaData = {},
             onSendSms = { _ -> },
-            onLogin = { _, _ -> }
+            onLogin = { _, _ -> },
+            onRequestQRCode = {}
         )
     }
 }

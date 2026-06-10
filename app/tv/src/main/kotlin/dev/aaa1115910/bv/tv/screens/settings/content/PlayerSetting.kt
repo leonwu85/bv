@@ -29,7 +29,6 @@ import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
 import dev.aaa1115910.bv.player.entity.PlayerLoadNextAction
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.Resolution
-import dev.aaa1115910.bv.player.entity.SuperResolutionType
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.tv.component.settings.SettingListItemWithDialog
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
@@ -47,7 +46,8 @@ import androidx.tv.material3.Button
 
 @Composable
 fun PlayerSetting(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onPlayerTypeChanged: (PlayerType) -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -82,18 +82,10 @@ fun PlayerSetting(
     var enableAsyncQueueing by remember { mutableStateOf(Prefs.enableAsyncQueueing) }
     var enableTunneling by remember { mutableStateOf(Prefs.enableTvTunneling) }
     var enableAudioPlaybackParams by remember { mutableStateOf(Prefs.enableAudioPlaybackParams) }
-    var tvMpvVideoOutput by remember { mutableStateOf(Prefs.tvMpvVideoOutput) }
-    var superResolutionType by remember { mutableStateOf(Prefs.superResolutionType) }
     var showVlcDownloadConfirmDialog by remember { mutableStateOf(false) }
     var showVlcDownloaderDialog by remember { mutableStateOf(false) }
     var showMpvDownloadConfirmDialog by remember { mutableStateOf(false) }
     var showMpvDownloaderDialog by remember { mutableStateOf(false) }
-    val mpvVideoOutputs = listOf("mediacodec_embed", "gpu", "gpu-next")
-    val mpvVideoOutputDisplayNames = mapOf(
-        "mediacodec_embed" to "普通",
-        "gpu" to "gpu",
-        "gpu-next" to "gpu-next"
-    )
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -168,6 +160,7 @@ fun PlayerSetting(
                                 } else {
                                     selectedPlayerType = newType
                                     Prefs.playerType = newType
+                                    onPlayerTypeChanged(newType)
                                 }
                             }
                             PlayerType.MPV -> {
@@ -177,11 +170,13 @@ fun PlayerSetting(
                                 } else {
                                     selectedPlayerType = newType
                                     Prefs.playerType = newType
+                                    onPlayerTypeChanged(newType)
                                 }
                             }
                             else -> {
                                 selectedPlayerType = newType
                                 Prefs.playerType = newType
+                                onPlayerTypeChanged(newType)
                             }
                         }
                     }
@@ -472,35 +467,6 @@ fun PlayerSetting(
                     )
                 }
             }
-            // MPV 播放器专用设置
-            if (selectedPlayerType == PlayerType.MPV) {
-                item {
-                    SettingListItemWithDialog(
-                        title = "超分辨率",
-                        supportText = "仅 MPV 内核生效，重进播放器后生效",
-                        options = SuperResolutionType.entries,
-                        getDisplayName = { item, ctx -> item.displayName(ctx) },
-                        value = superResolutionType,
-                        onValueChange = {
-                            superResolutionType = it
-                            Prefs.superResolutionType = it
-                        }
-                    )
-                }
-                item {
-                    SettingListItemWithDialog(
-                        title = "MPV 视频输出",
-                        supportText = "用于测试 MPV --vo，重进播放器后生效",
-                        options = mpvVideoOutputs,
-                        getDisplayName = { item, _ -> mpvVideoOutputDisplayNames[item] ?: item },
-                        value = tvMpvVideoOutput,
-                        onValueChange = {
-                            tvMpvVideoOutput = it
-                            Prefs.tvMpvVideoOutput = it
-                        }
-                    )
-                }
-            }
             // ExoPlayer/Media3 专用设置
             if (selectedPlayerType == PlayerType.Media3) {
                 item {
@@ -579,6 +545,7 @@ fun PlayerSetting(
                 showVlcDownloaderDialog = false
                 selectedPlayerType = PlayerType.VLC
                 Prefs.playerType = PlayerType.VLC
+                onPlayerTypeChanged(PlayerType.VLC)
             },
             onDownloadFailed = { errorMessage ->
                 showVlcDownloaderDialog = false
@@ -629,6 +596,7 @@ fun PlayerSetting(
                 showMpvDownloaderDialog = false
                 selectedPlayerType = PlayerType.MPV
                 Prefs.playerType = PlayerType.MPV
+                onPlayerTypeChanged(PlayerType.MPV)
                 Toast.makeText(context, "MPV 组件下载完成", Toast.LENGTH_SHORT).show()
             },
             onDownloadFailed = { errorMessage ->

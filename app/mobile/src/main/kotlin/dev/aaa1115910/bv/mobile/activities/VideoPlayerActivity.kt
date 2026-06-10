@@ -380,6 +380,14 @@ class VideoPlayerActivity : ComponentActivity() {
             autoSync = settings.autoSync,
             videoSync = settings.videoSync,
             hardwareDecodeMode = settings.hardwareDecodeMode,
+            mpvHardwareDecodeCodecs = settings.mpvHardwareDecodeCodecs,
+            mpvVideoOutput = settings.mpvVideoOutput,
+            mpvGpuContext = settings.mpvGpuContext,
+            mpvGpuApi = settings.mpvGpuApi,
+            mpvCache = settings.mpvCache,
+            mpvDemuxerMaxBytes = settings.mpvDemuxerMaxBytes,
+            mpvDemuxerMaxBackBytes = settings.mpvDemuxerMaxBackBytes,
+            mpvVdQueueEnable = settings.mpvVdQueueEnable,
             superResolutionType = settings.superResolutionType,
             audioOutputDevices = settings.audioOutputDevices,
             isLive = launchArgs.isLive
@@ -388,7 +396,8 @@ class VideoPlayerActivity : ComponentActivity() {
             "Mobile video player options: player=${settings.playerType}, " +
                     "superResolution=${options.superResolutionType}, " +
                     "enableHardwareDecode=${options.enableHardwareDecode}, " +
-                    "hardwareDecodeMode=${options.hardwareDecodeMode}, mpvVideoOutput=${options.mpvVideoOutput}"
+                    "hardwareDecodeMode=${options.hardwareDecodeMode}, " +
+                    "mpvVideoOutput=${options.mpvVideoOutput}, mpvGpuContext=${options.mpvGpuContext}"
         }
         val videoPlayer = when (settings.playerType) {
             PlayerType.Media3 -> ExoPlayerFactory().create(this, options)

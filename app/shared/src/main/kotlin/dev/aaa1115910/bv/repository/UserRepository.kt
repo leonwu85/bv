@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.aaa1115910.biliapi.http.BiliHttpApi
+import dev.aaa1115910.biliapi.http.BiliPassportHttpApi
 import dev.aaa1115910.biliapi.repositories.AuthRepository
 import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.dao.AppDatabase
@@ -98,6 +99,20 @@ class UserRepository(
             logger.info { "Not found user $uid in user db" }
         }
         clearAuth()
+    }
+
+    suspend fun logoutFromServer() {
+        val logoutUid = uid
+        BiliPassportHttpApi.logout(
+            biliCSRF = biliJct,
+            sessData = sessData,
+            dedeUserID = uid,
+            dedeUserIDCkMd5 = uidCkMd5,
+            sid = sid
+        ).requireSuccess()
+        if (uid == logoutUid) {
+            logout()
+        }
     }
 
     suspend fun logoutOnAuthFailure(reason: String) {

@@ -78,7 +78,6 @@ class LoginRepository {
     suspend fun requestAppQrLogin(): QrLoginData {
         val response = BiliPassportHttpApi.getAppQRUrl(
             localId = BiliLoginConf.LOCAL_ID,
-            ts = (System.currentTimeMillis() / 1000).toInt(),
             platform = BiliLoginConf.PLATFORM,
             mobiApp = BiliLoginConf.MOBI_APP
         ).getResponseData()
@@ -96,8 +95,7 @@ class LoginRepository {
     suspend fun checkAppQrLoginState(authCode: String): QrLoginResult {
         val response = BiliPassportHttpApi.loginWithAppQR(
             authCode = authCode,
-            localId = BiliLoginConf.LOCAL_ID,
-            ts = (System.currentTimeMillis() / 1000).toInt(),
+            localId = BiliLoginConf.LOCAL_ID
         )
         println(response)
         var resultCookies: WebCookies? = null
@@ -145,6 +143,15 @@ class LoginRepository {
         )
     }
 
+    suspend fun preCapture(): Captcha {
+        val preCaptureData = BiliPassportHttpApi.preCapture().getResponseData()
+        return Captcha(
+            token = preCaptureData.recaptchaToken,
+            challenge = preCaptureData.geeChallenge,
+            gt = preCaptureData.geeGt
+        )
+    }
+
     /**
      * 请求验证码
      */
@@ -153,7 +160,8 @@ class LoginRepository {
         buvid: String,
         recaptchaToken: String? = null,
         geetestChallenge: String? = null,
-        geetestValidate: String? = null
+        geetestValidate: String? = null,
+        geetestSeccode: String? = null
     ): SendSmsResult {
         val timestampMillis = System.currentTimeMillis()
         val response = BiliPassportHttpApi.sendSms(
@@ -163,7 +171,7 @@ class LoginRepository {
             recaptchaToken = recaptchaToken,
             geeChallenge = geetestChallenge,
             geeValidate = geetestValidate,
-            geeSeccode = geetestValidate?.let { "$it|jordan" },
+            geeSeccode = geetestSeccode ?: geetestValidate?.let { "$it|jordan" },
             channel = BiliLoginConf.CHANNEL,
             buvid = buvid,
             statistics = BiliLoginConf.STATISTICS,
@@ -176,23 +184,35 @@ class LoginRepository {
             sLocale = BiliLoginConf.S_LOCALE,
             ts = timestampMillis / 1000
         )
-        return if (response.code == 0 && response.data != null) {
-            if (response.data.captchaKey != "") {
+        val responseData = response.data
+        return when {
+            response.code == 0 && responseData?.captchaKey?.isNotBlank() == true -> {
                 SendSmsResult(
                     state = SendSmsState.Success,
-                    captchaKey = response.data.captchaKey
-                )
-            } else {
-                SendSmsResult(
-                    state = SendSmsState.RecaptchaRequire,
-                    recaptchaUrl = response.data.recaptchaUrl
+                    captchaKey = responseData.captchaKey
                 )
             }
-        } else {
-            SendSmsResult(
-                state = SendSmsState.Error,
-                message = response.message
-            )
+
+            responseData?.recaptchaUrl?.isNotBlank() == true -> {
+                SendSmsResult(
+                    state = SendSmsState.RecaptchaRequire,
+                    recaptchaUrl = responseData.recaptchaUrl
+                )
+            }
+
+            response.code == 0 || response.code == -105 -> {
+                SendSmsResult(
+                    state = SendSmsState.RecaptchaRequire,
+                    recaptchaUrl = responseData?.recaptchaUrl
+                )
+            }
+
+            else -> {
+                SendSmsResult(
+                    state = SendSmsState.Error,
+                    message = response.message
+                )
+            }
         }
     }
 
