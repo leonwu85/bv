@@ -1076,8 +1076,8 @@ class VideoPlayerV3ViewModel(
             )
             val selectedAudio = when {
                 availableAudio.contains(preferredAudio) -> preferredAudio
-                preferredAudio == Audio.ADolbyAtoms && availableAudio.contains(Audio.AHiRes) -> Audio.AHiRes
-                preferredAudio == Audio.AHiRes && availableAudio.contains(Audio.ADolbyAtoms) -> Audio.ADolbyAtoms
+                preferredAudio == Audio.ADolbyAtmos && availableAudio.contains(Audio.AHiRes) -> Audio.AHiRes
+                preferredAudio == Audio.AHiRes && availableAudio.contains(Audio.ADolbyAtmos) -> Audio.ADolbyAtmos
                 availableAudio.contains(Audio.A192K) -> Audio.A192K
                 availableAudio.contains(Audio.A132K) -> Audio.A132K
                 availableAudio.contains(Audio.A64K) -> Audio.A64K
@@ -1140,8 +1140,10 @@ class VideoPlayerV3ViewModel(
         }
 
         val supportedCodec = playData!!.codec
-        val codecList =
-            supportedCodec[currentQuality.code]?.mapNotNull { VideoCodec.fromCodecString(it) } ?: emptyList()
+        val codecList = supportedCodec[currentQuality.code]
+            ?.mapNotNull { VideoCodec.fromCodecString(it) }
+            ?.distinct()
+            ?: emptyList()
 
         availableVideoCodec.swapListWithMainContext(codecList)
         logger.fInfo { "Video available codec: ${availableVideoCodec.toList()}" }
@@ -1198,10 +1200,10 @@ class VideoPlayerV3ViewModel(
 
         val videoItem = playData!!.dashVideos.find {
             when (settings.apiType) {
-                ApiType.Web -> it.quality == qn && it.codecs!!.startsWith(codec.prefix)
+                ApiType.Web -> it.quality == qn && codec.matchesCodecString(it.codecs)
                 ApiType.App -> {
                     if (playData!!.codec.isEmpty()) it.quality == qn
-                    else it.quality == qn && it.codecs!!.startsWith(codec.prefix)
+                    else it.quality == qn && codec.matchesCodecString(it.codecs)
                 }
             }
         }

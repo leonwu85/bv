@@ -14,7 +14,7 @@ enum class Resolution(val code: Int, private val strResLong: Int, private val st
     R1080P60(116, R.string.resolution_1080p_60, R.string.resolution_1080p_60_short),
     R4K(120, R.string.resolution_4k, R.string.resolution_4k_short),
     RHdr(125, R.string.resolution_hdr, R.string.resolution_hdr_short),
-    RDolby(126, R.string.resolution_dolby_vision, R.string.resolution_dolby_bision_short),
+    RDolby(126, R.string.resolution_dolby_vision, R.string.resolution_dolby_vision_short),
     R8K(127, R.string.resolution_8k, R.string.resolution_8k_short);
 
     companion object {

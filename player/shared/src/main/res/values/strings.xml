@@ -3,7 +3,7 @@
     <string name="audio_132k">132K</string>
     <string name="audio_192k">192K</string>
     <string name="audio_64k">64K</string>
-    <string name="audio_dolby_atoms">Dolby Atoms</string>
+    <string name="audio_dolby_atmos">Dolby Atmos</string>
     <string name="audio_hi_res">Hi-Res</string>
 
     <string name="play_mode_sequential">顺序播放</string>
@@ -31,7 +31,7 @@
     <string name="resolution_8k">8K 超高清</string>
     <string name="resolution_8k_short">8K</string>
     <string name="resolution__720p_60">720P60 高帧率</string>
-    <string name="resolution_dolby_bision_short">杜比视界</string>
+    <string name="resolution_dolby_vision_short">杜比视界</string>
     <string name="resolution_dolby_vision">杜比视界</string>
     <string name="resolution_hdr">HDR 真彩色</string>
     <string name="resolution_hdr_short">HDR</string>
@@ -41,9 +41,9 @@
     <string name="video_aspect_ratio_sixteen_to_nine">16:9</string>
     <string name="video_codec_av1" tools:ignore="Typos">AV1</string>
     <string name="video_codec_avc">H.264</string>
-    <string name="video_codec_dvh1" tools:ignore="Typos">Dolby Vision (DVH1)</string>
+    <string name="video_codec_dvh1" tools:ignore="Typos">H.265</string>
     <string name="video_codec_hevc">H.265</string>
-    <string name="video_codec_hvc1" tools:ignore="Typos">Dolby Vision (HVC1)</string>
+    <string name="video_codec_hvc1" tools:ignore="Typos">H.265</string>
 
     <!-- 直播编码格式选项 -->
     <string name="live_codec_hls">HLS（自动）</string>

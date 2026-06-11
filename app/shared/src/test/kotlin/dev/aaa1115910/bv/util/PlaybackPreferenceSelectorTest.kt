@@ -87,6 +87,14 @@ class PlaybackPreferenceSelectorTest {
     }
 
     @Test
+    fun mapsHevcCodecStringAliasesToH265Codec() {
+        assertEquals(VideoCodec.HEVC, VideoCodec.fromCodecString("hev1.1.6.L153.90"))
+        assertEquals(VideoCodec.HEVC, VideoCodec.fromCodecString("hvc1.1.6.L153.90"))
+        assertEquals(VideoCodec.HEVC, VideoCodec.fromCodecString("dvh1.05.06"))
+        assertEquals(VideoCodec.HEVC, VideoCodec.fromCodecString("dvhe.05.06"))
+    }
+
+    @Test
     fun normalizesLiveCdnHostAndBuildsOverrideUrl() {
         assertEquals("", PlaybackPreferenceSelector.normalizeLiveCdnHost("   "))
         assertEquals(
@@ -114,4 +122,3 @@ class PlaybackPreferenceSelectorTest {
         )
     }
 }
-

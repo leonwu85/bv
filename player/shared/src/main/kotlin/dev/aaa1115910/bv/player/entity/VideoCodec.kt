@@ -4,21 +4,28 @@ import android.content.Context
 import dev.aaa1115910.biliapi.entity.CodeType
 import dev.aaa1115910.bv.player.shared.R
 
-enum class VideoCodec(private val strRes: Int, val prefix: String, val codecId: Int) {
+enum class VideoCodec(
+    private val strRes: Int,
+    val prefix: String,
+    val codecId: Int,
+    vararg aliases: String
+) {
     AVC(R.string.video_codec_avc, "avc1", 7),
-    HEVC(R.string.video_codec_hevc, "hev1", 12),
+    HEVC(R.string.video_codec_hevc, "hev1", 12, "hvc1", "dvh1", "dvhe"),
     AV1(R.string.video_codec_av1, "av01", 13),
-    DVH1(R.string.video_codec_dvh1, "dvh1", 0),
-    HVC1(R.string.video_codec_hvc1, "hvc", 0);
+    DVH1(R.string.video_codec_hevc, "dvh1", 0),
+    HVC1(R.string.video_codec_hevc, "hvc1", 0);
+
+    private val codecPrefixes = listOf(prefix, *aliases)
 
     companion object {
         fun fromCode(code: Int?) = runCatching {
             entries.find { it.ordinal == code }!!
         }.getOrDefault(AVC)
 
-        fun fromCodecString(codec: String) = runCatching {
+        fun fromCodecString(codec: String?) = runCatching {
             entries.forEach {
-                if (codec.startsWith(it.prefix)) return@runCatching it
+                if (it.matchesCodecString(codec)) return@runCatching it
             }
             return@runCatching null
         }.getOrNull()
@@ -29,6 +36,10 @@ enum class VideoCodec(private val strRes: Int, val prefix: String, val codecId: 
     }
 
     fun getDisplayName(context: Context) = context.getString(strRes)
+
+    fun matchesCodecString(codec: String?) = codec?.let { codecString ->
+        codecPrefixes.any { codecString.startsWith(it, ignoreCase = true) }
+    } ?: false
 
     fun toBiliApiCodeType() = when (this) {
         AVC -> CodeType.Code264
