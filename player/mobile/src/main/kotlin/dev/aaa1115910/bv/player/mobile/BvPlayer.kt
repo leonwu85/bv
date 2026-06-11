@@ -131,6 +131,8 @@ fun BvPlayer(
     onDanmakuAreaChange: (Float) -> Unit,
     onDanmakuSpeedModeChange: (DanmakuSpeedMode) -> Unit,
     onDanmakuPresentationSpeedChange: (Float) -> Unit,
+    onDanmakuMergeChange: (Boolean) -> Unit,
+    onDanmakuFilterLevelChange: (Int) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit,
     onLoadNextVideo: () -> Unit,
     onLoadNewVideo: (VideoListItem) -> Unit,
@@ -769,6 +771,8 @@ fun BvPlayer(
                 onDanmakuPresentationSpeedChange(DanmakuSpeedPolicy.sanitizePresentationSpeed(speed))
                 applyDanmakuSpeedPolicy()
             },
+            onDanmakuMergeChange = onDanmakuMergeChange,
+            onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
             onPlayModeChange = onPlayModeChange,
             onPlayNewVideo = {
                 sendHeartbeat()

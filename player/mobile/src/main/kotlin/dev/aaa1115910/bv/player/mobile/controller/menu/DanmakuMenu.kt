@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -33,6 +34,7 @@ import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.mobile.MaterialDarkTheme
 import dev.aaa1115910.bv.player.util.DanmakuSpeedPolicy
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,9 +46,12 @@ fun DanmakuMenu(
     onDanmakuAreaChange: (Float) -> Unit,
     onDanmakuSpeedModeChange: (DanmakuSpeedMode) -> Unit,
     onDanmakuPresentationSpeedChange: (Float) -> Unit,
+    onDanmakuMergeChange: (Boolean) -> Unit,
+    onDanmakuFilterLevelChange: (Int) -> Unit,
     onClose: () -> Unit
 ) {
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
+    val isLive = videoPlayerConfigData.isLive
 
     Scaffold(
         modifier = modifier,
@@ -76,6 +81,25 @@ fun DanmakuMenu(
                 EnabledDanmakuType(
                     enabledDanmakuTypes = videoPlayerConfigData.currentDanmakuEnabledList,
                     onEnabledDanmakuTypeChange = onEnabledDanmakuTypeChange
+                )
+            }
+            if (!isLive) {
+                item {
+                    DanmakuMerge(
+                        danmakuMergeEnabled = videoPlayerConfigData.currentDanmakuMergeEnabled,
+                        onDanmakuMergeChange = onDanmakuMergeChange
+                    )
+                }
+            }
+            item {
+                DanmakuFilterLevel(
+                    filterLevel = if (isLive) {
+                        videoPlayerConfigData.currentLiveDanmakuFilterLevel
+                    } else {
+                        videoPlayerConfigData.currentDanmakuFilterLevel
+                    },
+                    isLive = isLive,
+                    onDanmakuFilterLevelChange = onDanmakuFilterLevelChange
                 )
             }
             item {
@@ -111,6 +135,68 @@ fun DanmakuMenu(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun DanmakuMerge(
+    modifier: Modifier = Modifier,
+    danmakuMergeEnabled: Boolean,
+    onDanmakuMergeChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "智能过滤",
+            style = MaterialTheme.typography.titleSmall
+        )
+        Switch(
+            checked = danmakuMergeEnabled,
+            onCheckedChange = onDanmakuMergeChange
+        )
+    }
+}
+
+@Composable
+private fun DanmakuFilterLevel(
+    modifier: Modifier = Modifier,
+    filterLevel: Int,
+    isLive: Boolean,
+    onDanmakuFilterLevelChange: (Int) -> Unit
+) {
+    val minValue = if (isLive) 0 else 1
+    val maxValue = if (isLive) 60 else 10
+    val normalizedLevel = filterLevel.coerceIn(minValue, maxValue)
+
+    Column(
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "过滤等级",
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                text = normalizedLevel.toString(),
+                style = MaterialTheme.typography.titleSmall
+            )
+        }
+
+        Slider(
+            value = normalizedLevel.toFloat(),
+            onValueChange = {
+                onDanmakuFilterLevelChange(it.roundToInt().coerceIn(minValue, maxValue))
+            },
+            valueRange = minValue.toFloat()..maxValue.toFloat(),
+            steps = (maxValue - minValue - 1).coerceAtLeast(0)
+        )
     }
 }
 
@@ -349,6 +435,8 @@ private fun ResolutionMenuPreview() {
             onDanmakuAreaChange = {},
             onDanmakuSpeedModeChange = {},
             onDanmakuPresentationSpeedChange = {},
+            onDanmakuMergeChange = {},
+            onDanmakuFilterLevelChange = {},
             onClose = {}
         )
     }
@@ -388,6 +476,33 @@ private fun DanmakuAreaPreview() {
             DanmakuArea(
                 danmakuArea = 0.6f,
                 onDanmakuAreaChange = {}
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun DanmakuMergePreview() {
+    MaterialDarkTheme {
+        Surface {
+            DanmakuMerge(
+                danmakuMergeEnabled = true,
+                onDanmakuMergeChange = {}
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun DanmakuFilterLevelPreview() {
+    MaterialDarkTheme {
+        Surface {
+            DanmakuFilterLevel(
+                filterLevel = 3,
+                isLive = false,
+                onDanmakuFilterLevelChange = {}
             )
         }
     }

@@ -52,8 +52,11 @@ interface PlayerSettingsSource {
     var defaultDanmakuPresentationSpeedMutable: Float
     val defaultDanmakuMask: Boolean
     val defaultDanmakuFilterLevel: Int
+    var defaultDanmakuFilterLevelMutable: Int
     val defaultDanmakuMergeEnabled: Boolean
+    var defaultDanmakuMergeEnabledMutable: Boolean
     val defaultLiveDanmakuFilterLevel: Int
+    var defaultLiveDanmakuFilterLevelMutable: Int
     val defaultSubtitleFontSize: TextUnit
     val defaultSubtitleBackgroundOpacity: Float
     val defaultSubtitleBottomPadding: Dp
@@ -156,8 +159,23 @@ object DefaultPlayerSettingsSource : PlayerSettingsSource {
         }
     override val defaultDanmakuMask get() = Prefs.defaultDanmakuMask
     override val defaultDanmakuFilterLevel get() = Prefs.defaultDanmakuFilterLevel
+    override var defaultDanmakuFilterLevelMutable: Int
+        get() = Prefs.defaultDanmakuFilterLevel
+        set(value) {
+            Prefs.defaultDanmakuFilterLevel = value
+        }
     override val defaultDanmakuMergeEnabled get() = Prefs.defaultDanmakuMergeEnabled
+    override var defaultDanmakuMergeEnabledMutable: Boolean
+        get() = Prefs.defaultDanmakuMergeEnabled
+        set(value) {
+            Prefs.defaultDanmakuMergeEnabled = value
+        }
     override val defaultLiveDanmakuFilterLevel get() = Prefs.defaultLiveDanmakuFilterLevel
+    override var defaultLiveDanmakuFilterLevelMutable: Int
+        get() = Prefs.defaultLiveDanmakuFilterLevel
+        set(value) {
+            Prefs.defaultLiveDanmakuFilterLevel = value
+        }
     override val defaultSubtitleFontSize get() = Prefs.defaultSubtitleFontSize
     override val defaultSubtitleBackgroundOpacity get() = Prefs.defaultSubtitleBackgroundOpacity
     override val defaultSubtitleBottomPadding get() = Prefs.defaultSubtitleBottomPadding

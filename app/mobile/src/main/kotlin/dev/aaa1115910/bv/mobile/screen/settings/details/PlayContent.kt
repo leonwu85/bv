@@ -108,6 +108,17 @@ fun PlayContent(
                         1f to "全屏"
                     )
                 )
+                switchPreference(
+                    title = "智能过滤",
+                    summary = "合并重复和相似弹幕",
+                    prefReq = MobilePrefKeys.defaultDanmakuMergeEnabledRequest,
+                    onCheckedChange = { true }
+                )
+                radioPreference(
+                    title = "弹幕过滤等级",
+                    prefReq = MobilePrefKeys.defaultDanmakuFilterLevelRequest,
+                    values = (1..10).associateWith { it.toString() }
+                )
                 radioPreference(
                     title = "默认弹幕速度模式",
                     prefReq = MobilePrefKeys.defaultDanmakuSpeedModeRequest,
@@ -125,6 +136,11 @@ fun PlayContent(
                     title = "直播弹幕表情",
                     prefReq = MobilePrefKeys.showLiveDanmakuEmojiRequest,
                     onCheckedChange = { true }
+                )
+                radioPreference(
+                    title = "直播弹幕过滤等级",
+                    prefReq = MobilePrefKeys.defaultLiveDanmakuFilterLevelRequest,
+                    values = (0..60).associateWith { it.toString() }
                 )
                 switchPreference(
                     title = "直播隐藏观看记录",

@@ -27,6 +27,7 @@ qrcode = "4.5.0"
 rememberPreference = "1.1.1"
 slf4j-android-mvysny = "2.0.13"
 slf4j-simple = "2.0.17"
+jpinyin = "1.1.8"
 vlc = "3.6.5"
 zxing = "3.5.4"
 
@@ -134,6 +135,9 @@ slf4j-android-mvysny = { module = "com.gitlab.mvysny.slf4j:slf4j-handroid", vers
 
 # https://www.slf4j.org
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j-simple" }
+
+# https://github.com/stuxuhai/jpinyin
+jpinyin = { module = "com.github.stuxuhai:jpinyin", version.ref = "jpinyin" }
 
 # https://code.videolan.org/videolan/vlc-android
 vlc-android-all = { module = "org.videolan.android:libvlc-all", version.ref = "vlc" }

@@ -61,8 +61,23 @@ object MobilePlayerSettingsSource : PlayerSettingsSource {
         }
     override val defaultDanmakuMask get() = MobilePrefs.defaultDanmakuMask
     override val defaultDanmakuFilterLevel get() = MobilePrefs.defaultDanmakuFilterLevel
+    override var defaultDanmakuFilterLevelMutable
+        get() = MobilePrefs.defaultDanmakuFilterLevel
+        set(value) {
+            MobilePrefs.defaultDanmakuFilterLevel = value
+        }
     override val defaultDanmakuMergeEnabled get() = MobilePrefs.defaultDanmakuMergeEnabled
+    override var defaultDanmakuMergeEnabledMutable
+        get() = MobilePrefs.defaultDanmakuMergeEnabled
+        set(value) {
+            MobilePrefs.defaultDanmakuMergeEnabled = value
+        }
     override val defaultLiveDanmakuFilterLevel get() = MobilePrefs.defaultLiveDanmakuFilterLevel
+    override var defaultLiveDanmakuFilterLevelMutable
+        get() = MobilePrefs.defaultLiveDanmakuFilterLevel
+        set(value) {
+            MobilePrefs.defaultLiveDanmakuFilterLevel = value
+        }
     override val defaultSubtitleFontSize get() = MobilePrefs.defaultSubtitleFontSize
     override val defaultSubtitleBackgroundOpacity get() = MobilePrefs.defaultSubtitleBackgroundOpacity
     override val defaultSubtitleBottomPadding get() = MobilePrefs.defaultSubtitleBottomPadding

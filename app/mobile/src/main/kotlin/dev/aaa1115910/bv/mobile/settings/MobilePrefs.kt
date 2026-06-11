@@ -42,6 +42,10 @@ object MobilePrefs {
 
     const val DEFAULT_SEED_COLOR = 0xFF5CB67B.toInt()
 
+    private fun sanitizeDanmakuFilterLevel(value: Int) = value.coerceIn(1, 10)
+
+    private fun sanitizeLiveDanmakuFilterLevel(value: Int) = value.coerceIn(0, 60)
+
     var themeType: ThemeType
         get() = ThemeType.entries[read(MobilePrefKeys.themeTypeRequest)]
         set(value) = write(MobilePrefKeys.themeTypeKey, value.ordinal)
@@ -203,16 +207,16 @@ object MobilePrefs {
         set(value) = write(MobilePrefKeys.defaultDanmakuMaskKey, value)
 
     var defaultDanmakuFilterLevel: Int
-        get() = read(MobilePrefKeys.defaultDanmakuFilterLevelRequest)
-        set(value) = write(MobilePrefKeys.defaultDanmakuFilterLevelKey, value)
+        get() = sanitizeDanmakuFilterLevel(read(MobilePrefKeys.defaultDanmakuFilterLevelRequest))
+        set(value) = write(MobilePrefKeys.defaultDanmakuFilterLevelKey, sanitizeDanmakuFilterLevel(value))
 
     var defaultDanmakuMergeEnabled: Boolean
         get() = read(MobilePrefKeys.defaultDanmakuMergeEnabledRequest)
         set(value) = write(MobilePrefKeys.defaultDanmakuMergeEnabledKey, value)
 
     var defaultLiveDanmakuFilterLevel: Int
-        get() = read(MobilePrefKeys.defaultLiveDanmakuFilterLevelRequest)
-        set(value) = write(MobilePrefKeys.defaultLiveDanmakuFilterLevelKey, value)
+        get() = sanitizeLiveDanmakuFilterLevel(read(MobilePrefKeys.defaultLiveDanmakuFilterLevelRequest))
+        set(value) = write(MobilePrefKeys.defaultLiveDanmakuFilterLevelKey, sanitizeLiveDanmakuFilterLevel(value))
 
     var defaultSubtitleFontSize: TextUnit
         get() = read(MobilePrefKeys.defaultSubtitleFontSizeRequest).sp
@@ -496,7 +500,7 @@ object MobilePrefKeys {
     val defaultDanmakuPresentationSpeedRequest =
         PreferenceRequest(defaultDanmakuPresentationSpeedKey, 1f)
     val defaultDanmakuMaskRequest = PreferenceRequest(defaultDanmakuMaskKey, true)
-    val defaultDanmakuFilterLevelRequest = PreferenceRequest(defaultDanmakuFilterLevelKey, 0)
+    val defaultDanmakuFilterLevelRequest = PreferenceRequest(defaultDanmakuFilterLevelKey, 1)
     val defaultDanmakuMergeEnabledRequest = PreferenceRequest(defaultDanmakuMergeEnabledKey, false)
     val defaultLiveDanmakuFilterLevelRequest = PreferenceRequest(defaultLiveDanmakuFilterLevelKey, 0)
     val defaultSubtitleFontSizeRequest = PreferenceRequest(defaultSubtitleFontSizeKey, 24)

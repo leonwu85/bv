@@ -108,6 +108,8 @@ fun BvPlayerController(
     onDanmakuAreaChange: (Float) -> Unit,
     onDanmakuSpeedModeChange: (DanmakuSpeedMode) -> Unit,
     onDanmakuPresentationSpeedChange: (Float) -> Unit,
+    onDanmakuMergeChange: (Boolean) -> Unit,
+    onDanmakuFilterLevelChange: (Int) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit,
     onPlayNewVideo: (VideoListItem) -> Unit,
     showSponsorBlockTip: Boolean = false,
@@ -220,6 +222,8 @@ fun BvPlayerController(
                 onDanmakuAreaChange = onDanmakuAreaChange,
                 onDanmakuSpeedModeChange = onDanmakuSpeedModeChange,
                 onDanmakuPresentationSpeedChange = onDanmakuPresentationSpeedChange,
+                onDanmakuMergeChange = onDanmakuMergeChange,
+                onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
                 onPlayModeChange = onPlayModeChange,
                 onPlayNewVideo = onPlayNewVideo
             )
@@ -246,6 +250,8 @@ private fun BvPlayerControllerSettings(
     onDanmakuAreaChange: (Float) -> Unit,
     onDanmakuSpeedModeChange: (DanmakuSpeedMode) -> Unit,
     onDanmakuPresentationSpeedChange: (Float) -> Unit,
+    onDanmakuMergeChange: (Boolean) -> Unit,
+    onDanmakuFilterLevelChange: (Int) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit,
     onPlayNewVideo: (VideoListItem) -> Unit
 ) {
@@ -282,6 +288,8 @@ private fun BvPlayerControllerSettings(
                         onDanmakuAreaChange = onDanmakuAreaChange,
                         onDanmakuSpeedModeChange = onDanmakuSpeedModeChange,
                         onDanmakuPresentationSpeedChange = onDanmakuPresentationSpeedChange,
+                        onDanmakuMergeChange = onDanmakuMergeChange,
+                        onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
                         onClose = onCloseMenu
                     )
                 }
@@ -854,6 +862,8 @@ private fun BvPlayerControllerPreview() {
                 onDanmakuScaleChange = {},
                 onDanmakuSpeedModeChange = {},
                 onDanmakuPresentationSpeedChange = {},
+                onDanmakuMergeChange = {},
+                onDanmakuFilterLevelChange = {},
                 onPlayModeChange = {},
                 onPlayNewVideo = {}
             ) {

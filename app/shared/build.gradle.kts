@@ -130,6 +130,7 @@ dependencies {
     api(project(":danmakuLibs:akdanmaku"))
     implementation(libs.gdx)
     implementation(libs.gdx.backend.android)
+    implementation(libs.jpinyin)
     implementation(libs.ashley)
     implementation("com.badlogicgames.gdx:gdx-platform:1.14.0:natives-armeabi-v7a")
     implementation("com.badlogicgames.gdx:gdx-platform:1.14.0:natives-arm64-v8a")

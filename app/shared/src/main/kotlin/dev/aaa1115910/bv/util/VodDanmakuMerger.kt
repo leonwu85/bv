@@ -1,13 +1,18 @@
 package dev.aaa1115910.bv.util
 
+import com.github.stuxuhai.jpinyin.PinyinFormat
+import com.github.stuxuhai.jpinyin.PinyinHelper
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
+import java.util.Locale
+import kotlin.math.abs
 
 internal data class MergedDanmakuEntry(
     val source: DanmakuData,
-    val totalCount: Int
+    val totalCount: Int,
+    val representativeText: String = source.text
 ) {
     val content: String
-        get() = if (totalCount > 1) "${source.text}(x$totalCount)" else source.text
+        get() = if (totalCount > 1) "$representativeText(x$totalCount)" else representativeText
 }
 
 internal data class DanmakuSegmentMergeResult(
@@ -17,22 +22,17 @@ internal data class DanmakuSegmentMergeResult(
 
 internal class VodDanmakuMergeState {
     private val lock = Any()
-    private val activeGroups = LinkedHashMap<VodDanmakuMergeKey, ActiveDanmakuGroup>()
+    private val activeGroups = LinkedHashMap<Int, ActiveDanmakuGroup>()
+    private var nextGroupId = 0
     internal var lastProcessedSegmentIndex: Int? = null
 
-    internal fun getGroup(key: VodDanmakuMergeKey): ActiveDanmakuGroup? = synchronized(lock) {
-        activeGroups[key]
+    internal fun activeGroups(): List<ActiveDanmakuGroup> = synchronized(lock) {
+        activeGroups.values.toList()
     }
 
-    internal fun putGroup(key: VodDanmakuMergeKey, group: ActiveDanmakuGroup) {
+    internal fun putGroup(group: ActiveDanmakuGroup) {
         synchronized(lock) {
-            activeGroups[key] = group
-        }
-    }
-
-    internal fun removeGroup(key: VodDanmakuMergeKey) {
-        synchronized(lock) {
-            activeGroups.remove(key)
+            activeGroups[nextGroupId++] = group
         }
     }
 
@@ -42,15 +42,15 @@ internal class VodDanmakuMergeState {
 
     internal fun takeMatchingGroups(
         predicate: (ActiveDanmakuGroup) -> Boolean
-    ): List<Pair<VodDanmakuMergeKey, ActiveDanmakuGroup>> = synchronized(lock) {
+    ): List<ActiveDanmakuGroup> = synchronized(lock) {
         if (activeGroups.isEmpty()) return emptyList()
 
-        val matchedGroups = mutableListOf<Pair<VodDanmakuMergeKey, ActiveDanmakuGroup>>()
+        val matchedGroups = mutableListOf<ActiveDanmakuGroup>()
         val iterator = activeGroups.entries.iterator()
         while (iterator.hasNext()) {
             val entry = iterator.next()
             if (!predicate(entry.value)) continue
-            matchedGroups += entry.toPair()
+            matchedGroups += entry.value
             iterator.remove()
         }
         matchedGroups
@@ -59,13 +59,15 @@ internal class VodDanmakuMergeState {
     fun clear() {
         synchronized(lock) {
             activeGroups.clear()
+            nextGroupId = 0
             lastProcessedSegmentIndex = null
         }
     }
 }
 
 internal object VodDanmakuMerger {
-    private const val MERGE_WINDOW_SECONDS = 20f
+    private const val MERGE_WINDOW_SECONDS = 30f
+    private val mergeableTypes = setOf(1, 4, 5)
 
     fun processSegment(
         segmentDanmaku: List<DanmakuData>,
@@ -73,11 +75,6 @@ internal object VodDanmakuMerger {
         segmentDurationMs: Long,
         state: VodDanmakuMergeState
     ): DanmakuSegmentMergeResult {
-        if (segmentDanmaku.isEmpty()) {
-            state.lastProcessedSegmentIndex = segmentIndex
-            return DanmakuSegmentMergeResult(emptyList(), 0)
-        }
-
         val emittedDanmaku = mutableListOf<MergedDanmakuEntry>()
         var mergedDuplicateCount = 0
 
@@ -86,20 +83,35 @@ internal object VodDanmakuMerger {
             emittedDanmaku += flushAll(state)
         }
 
+        if (segmentDanmaku.isEmpty()) {
+            state.lastProcessedSegmentIndex = segmentIndex
+            return DanmakuSegmentMergeResult(
+                emittedDanmaku = emittedDanmaku.sortedBy { it.source.time },
+                mergedDuplicateCount = mergedDuplicateCount
+            )
+        }
+
         segmentDanmaku.sortedBy { it.time }.forEach { danmaku ->
             emittedDanmaku += flushExpiredGroups(state, danmaku.time)
 
-            val key = VodDanmakuMergeKey.from(danmaku)
-            val activeGroup = state.getGroup(key)
-            if (activeGroup != null && danmaku.time - activeGroup.source.time <= MERGE_WINDOW_SECONDS) {
-                activeGroup.totalCount++
+            if (danmaku.shouldBypassMerge()) {
+                emittedDanmaku += MergedDanmakuEntry(
+                    source = danmaku,
+                    totalCount = 1
+                )
+                return@forEach
+            }
+
+            val analysis = DanmakuTextAnalyzer.analyze(danmaku.text)
+            val activeGroup = findMatchingGroup(state, danmaku, analysis)
+            if (activeGroup != null) {
+                activeGroup.add(danmaku, analysis)
                 mergedDuplicateCount++
             } else {
                 state.putGroup(
-                    key,
                     ActiveDanmakuGroup(
-                    source = danmaku,
-                    totalCount = 1
+                        source = danmaku,
+                        analysis = analysis
                     )
                 )
             }
@@ -149,38 +161,303 @@ internal object VodDanmakuMerger {
         if (state.isEmpty()) return emptyList()
 
         val matchedGroups = state.takeMatchingGroups(predicate)
-            .sortedBy { (_, group) -> group.source.time }
+            .sortedBy { group -> group.firstTime }
 
         if (matchedGroups.isEmpty()) return emptyList()
 
-        return matchedGroups.map { (_, group) ->
-            MergedDanmakuEntry(
-                source = group.source,
-                totalCount = group.totalCount
-            )
+        return matchedGroups.map { group -> group.toEntry() }
+    }
+
+    private fun findMatchingGroup(
+        state: VodDanmakuMergeState,
+        danmaku: DanmakuData,
+        analysis: DanmakuTextAnalysis
+    ): ActiveDanmakuGroup? {
+        return state.activeGroups().firstOrNull { group ->
+            group.type == danmaku.type &&
+                danmaku.time - group.firstTime <= MERGE_WINDOW_SECONDS &&
+                group.canMerge(analysis)
         }
     }
-}
 
-internal data class VodDanmakuMergeKey(
-    val text: String,
-    val color: Int,
-    val size: Int,
-    val type: Int
-) {
-    companion object {
-        fun from(danmaku: DanmakuData): VodDanmakuMergeKey {
-            return VodDanmakuMergeKey(
-                text = danmaku.text,
-                color = danmaku.color,
-                size = danmaku.size,
-                type = danmaku.type
-            )
-        }
+    private fun DanmakuData.shouldBypassMerge(): Boolean {
+        return pool == 1 || type !in mergeableTypes
     }
 }
 
 internal data class ActiveDanmakuGroup(
     val source: DanmakuData,
-    var totalCount: Int
+    val analysis: DanmakuTextAnalysis
+) {
+    private val peers = mutableListOf(source)
+    private val analyses = mutableListOf(analysis)
+    private val textCounts = linkedMapOf(source.text to 1)
+    val type: Int = source.type
+    val firstTime: Float = source.time
+
+    fun canMerge(candidate: DanmakuTextAnalysis): Boolean {
+        return analyses.any { existing ->
+            DanmakuSimilarity.isSimilar(existing, candidate)
+        }
+    }
+
+    fun add(danmaku: DanmakuData, analysis: DanmakuTextAnalysis) {
+        peers += danmaku
+        analyses += analysis
+        textCounts[danmaku.text] = (textCounts[danmaku.text] ?: 0) + 1
+    }
+
+    fun toEntry(): MergedDanmakuEntry {
+        val representativeText = chooseRepresentativeText()
+        val representativeSource = chooseRepresentativeSource()
+        return MergedDanmakuEntry(
+            source = representativeSource,
+            totalCount = peers.size,
+            representativeText = representativeText
+        )
+    }
+
+    private fun chooseRepresentativeText(): String {
+        val maxCount = textCounts.values.maxOrNull() ?: return source.text
+        val candidates = textCounts
+            .filterValues { it == maxCount }
+            .keys
+            .sortedBy { it.length }
+        return candidates[candidates.size / 2]
+    }
+
+    private fun chooseRepresentativeSource(): DanmakuData {
+        val representative = peers.first()
+        val representativeSize = peers
+            .map { it.size }
+            .filter { it <= 30 }
+            .maxOrNull()
+            ?: representative.size
+        return representative.copy(
+            size = representativeSize,
+            level = peers.maxOf { it.level }
+        )
+    }
+}
+
+internal data class DanmakuTextAnalysis(
+    val normalized: String,
+    val pinyinTokens: List<String>
 )
+
+private object DanmakuTextAnalyzer {
+    private const val MAX_PINYIN_CACHE_SIZE = 2048
+    private val force233Regex = Regex("^23{2,}$")
+    private val force666Regex = Regex("^6{3,}$")
+    private val pinyinCache = object : LinkedHashMap<String, List<String>>(MAX_PINYIN_CACHE_SIZE, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<String>>?): Boolean {
+            return size > MAX_PINYIN_CACHE_SIZE
+        }
+    }
+
+    fun analyze(text: String): DanmakuTextAnalysis {
+        val normalized = normalize(text)
+        return DanmakuTextAnalysis(
+            normalized = normalized,
+            pinyinTokens = pinyinTokens(normalized)
+        )
+    }
+
+    private fun normalize(text: String): String {
+        val halfWidth = text
+            .map { it.toHalfWidth() }
+            .joinToString(separator = "")
+            .lowercase(Locale.ROOT)
+        val withoutTrailingNoise = halfWidth.trimTrailingNoise()
+        val compressed = withoutTrailingNoise.compressSpaces()
+        val compacted = compressed.removeSpacesBetweenHan()
+        return when {
+            force233Regex.matches(compacted) -> "23333"
+            force666Regex.matches(compacted) -> "66666"
+            else -> compacted
+        }
+    }
+
+    private fun pinyinTokens(normalized: String): List<String> {
+        if (normalized.count { it.isChinese() } < 2) return emptyList()
+
+        synchronized(pinyinCache) {
+            pinyinCache[normalized]?.let { return it }
+        }
+
+        val tokens = normalized
+            .mapNotNull { char ->
+                if (!char.isChinese()) return@mapNotNull null
+                runCatching {
+                    PinyinHelper
+                        .convertToPinyinArray(char, PinyinFormat.WITHOUT_TONE)
+                        ?.firstOrNull()
+                        ?.lowercase(Locale.ROOT)
+                }.getOrNull()
+            }
+            .filter { it.isNotBlank() }
+        val result = if (tokens.size >= 2) tokens else emptyList()
+
+        synchronized(pinyinCache) {
+            pinyinCache[normalized] = result
+        }
+        return result
+    }
+
+    private fun Char.toHalfWidth(): Char {
+        return when (this) {
+            '\u3000' -> ' '
+            in '\uFF01'..'\uFF5E' -> (code - 0xFEE0).toChar()
+            else -> this
+        }
+    }
+
+    private fun String.trimTrailingNoise(): String {
+        var end = length
+        while (end > 0 && this[end - 1].isTrailingNoise()) {
+            end--
+        }
+        return substring(0, end).trim()
+    }
+
+    private fun String.compressSpaces(): String {
+        val builder = StringBuilder(length)
+        var lastWasSpace = false
+        forEach { char ->
+            if (char.isWhitespace()) {
+                if (!lastWasSpace) builder.append(' ')
+                lastWasSpace = true
+            } else {
+                builder.append(char)
+                lastWasSpace = false
+            }
+        }
+        return builder.toString().trim()
+    }
+
+    private fun String.removeSpacesBetweenHan(): String {
+        if (' ' !in this) return this
+
+        val builder = StringBuilder(length)
+        forEachIndexed { index, char ->
+            if (
+                char == ' ' &&
+                getOrNull(index - 1)?.isHan() == true &&
+                getOrNull(index + 1)?.isHan() == true
+            ) {
+                return@forEachIndexed
+            }
+            builder.append(char)
+        }
+        return builder.toString()
+    }
+
+    private fun Char.isTrailingNoise(): Boolean {
+        return when (Character.getType(this).toInt()) {
+            Character.CONNECTOR_PUNCTUATION.toInt(),
+            Character.DASH_PUNCTUATION.toInt(),
+            Character.START_PUNCTUATION.toInt(),
+            Character.END_PUNCTUATION.toInt(),
+            Character.INITIAL_QUOTE_PUNCTUATION.toInt(),
+            Character.FINAL_QUOTE_PUNCTUATION.toInt(),
+            Character.OTHER_PUNCTUATION.toInt(),
+            Character.MATH_SYMBOL.toInt(),
+            Character.CURRENCY_SYMBOL.toInt(),
+            Character.MODIFIER_SYMBOL.toInt(),
+            Character.OTHER_SYMBOL.toInt() -> true
+            else -> false
+        }
+    }
+
+    private fun Char.isChinese(): Boolean {
+        return isHan()
+    }
+
+    private fun Char.isHan(): Boolean {
+        return Character.UnicodeScript.of(code) == Character.UnicodeScript.HAN
+    }
+}
+
+private object DanmakuSimilarity {
+    fun isSimilar(
+        existing: DanmakuTextAnalysis,
+        candidate: DanmakuTextAnalysis
+    ): Boolean {
+        if (existing.normalized.isBlank() || candidate.normalized.isBlank()) return false
+        if (existing.normalized == candidate.normalized) return true
+        if (isTextEditDistanceSimilar(existing.normalized, candidate.normalized)) return true
+        return isPinyinSimilar(existing.pinyinTokens, candidate.pinyinTokens)
+    }
+
+    private fun isTextEditDistanceSimilar(left: String, right: String): Boolean {
+        val maxLength = maxOf(left.length, right.length)
+        val threshold = when (maxLength) {
+            in 0..1 -> return false
+            in 2..4 -> 1
+            in 5..12 -> 2
+            else -> minOf(3, maxLength / 6)
+        }
+        return boundedEditDistance(left, right, threshold) <= threshold
+    }
+
+    private fun isPinyinSimilar(left: List<String>, right: List<String>): Boolean {
+        if (left.size < 2 || right.size < 2) return false
+        if (left == right) return true
+
+        val maxLength = maxOf(left.size, right.size)
+        val threshold = if (maxLength <= 4) 1 else 2
+        return boundedEditDistance(left, right, threshold) <= threshold
+    }
+
+    private fun boundedEditDistance(left: String, right: String, maxDistance: Int): Int {
+        if (abs(left.length - right.length) > maxDistance) return maxDistance + 1
+        var previous = IntArray(right.length + 1) { it }
+        var current = IntArray(right.length + 1)
+
+        for (i in 1..left.length) {
+            current[0] = i
+            var rowMin = current[0]
+            for (j in 1..right.length) {
+                val cost = if (left[i - 1] == right[j - 1]) 0 else 1
+                current[j] = minOf(
+                    previous[j] + 1,
+                    current[j - 1] + 1,
+                    previous[j - 1] + cost
+                )
+                rowMin = minOf(rowMin, current[j])
+            }
+            if (rowMin > maxDistance) return maxDistance + 1
+            val temp = previous
+            previous = current
+            current = temp
+        }
+
+        return previous[right.length]
+    }
+
+    private fun boundedEditDistance(left: List<String>, right: List<String>, maxDistance: Int): Int {
+        if (abs(left.size - right.size) > maxDistance) return maxDistance + 1
+        var previous = IntArray(right.size + 1) { it }
+        var current = IntArray(right.size + 1)
+
+        for (i in 1..left.size) {
+            current[0] = i
+            var rowMin = current[0]
+            for (j in 1..right.size) {
+                val cost = if (left[i - 1] == right[j - 1]) 0 else 1
+                current[j] = minOf(
+                    previous[j] + 1,
+                    current[j - 1] + 1,
+                    previous[j - 1] + cost
+                )
+                rowMin = minOf(rowMin, current[j])
+            }
+            if (rowMin > maxDistance) return maxDistance + 1
+            val temp = previous
+            previous = current
+            current = temp
+        }
+
+        return previous[right.size]
+    }
+}

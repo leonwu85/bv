@@ -698,6 +698,21 @@ fun VideoPlayerScreen(
                                 playerViewModel.currentDanmakuPresentationSpeed = speed
                                 playerSettings.defaultDanmakuPresentationSpeedMutable = speed
                             },
+                            onDanmakuMergeChange = { enabled ->
+                                playerSettings.defaultDanmakuMergeEnabledMutable = enabled
+                                playerViewModel.updateDanmakuMergeEnabled(enabled)
+                            },
+                            onDanmakuFilterLevelChange = { filterLevel ->
+                                if (playerViewModel.isLive) {
+                                    val sanitizedLevel = filterLevel.coerceIn(0, 60)
+                                    playerViewModel.currentLiveDanmakuFilterLevel = sanitizedLevel
+                                    playerSettings.defaultLiveDanmakuFilterLevelMutable = sanitizedLevel
+                                } else {
+                                    val sanitizedLevel = filterLevel.coerceIn(1, 10)
+                                    playerViewModel.currentDanmakuFilterLevel = sanitizedLevel
+                                    playerSettings.defaultDanmakuFilterLevelMutable = sanitizedLevel
+                                }
+                            },
                             onPlayModeChange = { playMode ->
                                 playerViewModel.currentPlayMode = playMode
                                 playerSettings.defaultPlayModeMutable = playMode
