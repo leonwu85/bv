@@ -982,6 +982,63 @@ class UserRepository(
             }
         }
     }
+
+    suspend fun getFanUsers(
+        mid: Long,
+        preferApiType: ApiType = ApiType.Web
+    ): List<FollowedUser> {
+        return when (preferApiType) {
+            ApiType.Web -> {
+                val result = mutableListOf<FollowedUser>()
+                val firstResponse = BiliHttpApi.getUserFans(
+                    mid = mid,
+                    sessData = authRepository.sessionData!!
+                ).getResponseData()
+                val userCount = firstResponse.total
+                val pageCount = ceil((userCount.toFloat() / 50)).toInt()
+                result.addAll(firstResponse.list.map { FollowedUser.fromHttpFollowedUser(it) })
+                withContext(Dispatchers.IO) {
+                    (2..pageCount).map { pageNumber ->
+                        async {
+                            BiliHttpApi.getUserFans(
+                                mid = mid,
+                                pageNumber = pageNumber,
+                                sessData = authRepository.sessionData!!
+                            ).getResponseData()
+                        }
+                    }.awaitAll().forEach { userFollowData ->
+                        result.addAll(userFollowData.list.map { FollowedUser.fromHttpFollowedUser(it) })
+                    }
+                }
+                result
+            }
+
+            ApiType.App -> {
+                val result = mutableListOf<FollowedUser>()
+                val firstResponse = BiliHttpApi.getUserFans(
+                    mid = mid,
+                    accessKey = authRepository.accessToken!!
+                ).getResponseData()
+                val userCount = firstResponse.total
+                val pageCount = ceil((userCount.toFloat() / 50)).toInt()
+                result.addAll(firstResponse.list.map { FollowedUser.fromHttpFollowedUser(it) })
+                withContext(Dispatchers.IO) {
+                    (2..pageCount).map { pageNumber ->
+                        async {
+                            BiliHttpApi.getUserFans(
+                                mid = mid,
+                                pageNumber = pageNumber,
+                                accessKey = authRepository.accessToken!!
+                            ).getResponseData()
+                        }
+                    }.awaitAll().forEach { userFollowData ->
+                        result.addAll(userFollowData.list.map { FollowedUser.fromHttpFollowedUser(it) })
+                    }
+                }
+                result
+            }
+        }
+    }
     
     suspend fun getUserInfo(mid: Long): UserInfoData {
         val response = BiliHttpApi.getUserInfo(

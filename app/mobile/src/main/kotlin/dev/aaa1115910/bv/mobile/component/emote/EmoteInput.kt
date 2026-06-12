@@ -109,9 +109,11 @@ fun EmoteTextEditor(
     border: BorderStroke? = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     containerColor: Color = MaterialTheme.colorScheme.surface,
     contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+    onEditorTouched: () -> Unit = {},
     onValueChange: (String, EmoteTextSelection) -> Unit
 ) {
     val context = LocalContext.current
+    val currentOnEditorTouched by rememberUpdatedState(onEditorTouched)
     val currentOnValueChange by rememberUpdatedState(onValueChange)
     val applyingExternalChange = remember { mutableStateOf(false) }
     val emoteDrawables = remember { mutableStateMapOf<String, Drawable>() }
@@ -177,6 +179,10 @@ fun EmoteTextEditor(
                         includeFontPadding = true
                         setPadding(0, 0, 0, 0)
                         isEnabled = enabled
+                        setOnTouchListener { _, _ ->
+                            currentOnEditorTouched()
+                            false
+                        }
 
                         val editText = this
                         addTextChangedListener(object : TextWatcher {

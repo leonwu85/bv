@@ -44,6 +44,26 @@
             android:label="@string/title_mobile_activity_history"
             android:theme="@style/Theme.BV.Mobile" />
         <activity
+            android:name=".activities.InboxActivity"
+            android:exported="false"
+            android:label="@string/title_mobile_activity_inbox"
+            android:theme="@style/Theme.BV.Mobile" />
+        <activity
+            android:name=".activities.ConversationActivity"
+            android:exported="false"
+            android:label="@string/title_mobile_activity_conversation"
+            android:theme="@style/Theme.BV.Mobile" />
+        <activity
+            android:name=".activities.MessageFeedActivity"
+            android:exported="false"
+            android:label="@string/title_mobile_activity_message_feed"
+            android:theme="@style/Theme.BV.Mobile" />
+        <activity
+            android:name=".activities.ContactActivity"
+            android:exported="false"
+            android:label="@string/title_mobile_activity_contact"
+            android:theme="@style/Theme.BV.Mobile" />
+        <activity
             android:name=".activities.ToViewActivity"
             android:exported="false"
             android:label="@string/title_mobile_activity_toview"

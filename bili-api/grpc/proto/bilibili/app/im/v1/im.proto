@@ -1,0 +1,311 @@
+syntax = "proto3";
+
+package bilibili.app.im.v1;
+
+option java_multiple_files = true;
+
+import "bilibili/dagw/component/avatar/v1/avatar.proto";
+
+service im {
+  rpc ClearUnread(ClearUnreadReq) returns (ClearUnreadReply);
+  rpc DeleteSessionList(DeleteSessionListReq) returns (DeleteSessionListReply);
+  rpc SessionMain(SessionMainReq) returns (SessionMainReply);
+}
+
+message ClearUnreadReq {
+  SessionPageType page_type = 1;
+  SessionId session_id = 2;
+}
+
+message ClearUnreadReply {}
+
+message DeleteSessionListReq {
+  SessionPageType page_type = 1;
+}
+
+message DeleteSessionListReply {}
+
+message SessionMainReq {
+  RestrictedMode restricted_mode = 1;
+  PaginationParams pagination_params = 2;
+  SessionFilterType filter_type = 3;
+}
+
+message SessionMainReply {
+  PaginationParams pagination_params = 1;
+  UpdateSessionParams update_session_params = 2;
+  QuickLinkConfig quick_link_config = 3;
+  FilterConfig filter_config = 4;
+  repeated Session sessions = 5;
+  repeated ThreeDotItem three_dot_items = 6;
+  repeated ThreeDotItem outside_item = 7;
+  SessionListExtraInfo extra_info = 8;
+}
+
+message RestrictedMode {
+  bool teenagers = 1;
+  bool lessons = 2;
+}
+
+message PaginationParams {
+  map<int32, Offset> offsets = 1;
+  bool has_more = 2;
+}
+
+message Offset {
+  int64 normal_offset = 1;
+  int64 top_offset = 2;
+}
+
+message UpdateSessionParams {
+  map<int32, Offset> max_session_ts = 1;
+}
+
+message Session {
+  SessionId id = 1;
+  SessionInfo session_info = 2;
+  Unread unread = 3;
+  MsgSummary msg_summary = 4;
+  int64 timestamp = 5;
+  bool is_pinned = 6;
+  int64 sequence_number = 7;
+  bool is_muted = 8;
+  string chat_url = 9;
+  SessionOperation operation = 10;
+  map<string, string> trace_params = 11;
+}
+
+message SessionId {
+  oneof id {
+    PrivateId private_id = 1;
+    GroupId group_id = 2;
+    FoldId fold_id = 3;
+    SystemId system_id = 4;
+    CustomerId customer_id = 5;
+  }
+}
+
+message PrivateId {
+  int64 talker_uid = 1;
+}
+
+message GroupId {
+  int64 group_id = 1;
+}
+
+message FoldId {
+  SessionType type = 1;
+}
+
+message SystemId {
+  SessionType type = 1;
+}
+
+message CustomerId {
+  int64 shop_id = 1;
+  int64 shop_type = 2;
+}
+
+message SessionInfo {
+  string session_name = 1;
+  bilibili.dagw.component.avatar.v1.AvatarItem avatar = 3;
+  string vip_info = 4;
+  UserLabel user_label = 5;
+  bool is_live = 6;
+}
+
+message UserLabel {
+  LabelType type = 1;
+  UserLabelStyle style = 2;
+}
+
+message UserLabelStyle {
+  BorderedLabel bordered_label = 1;
+  FilledLabel filled_label = 2;
+  ImageLabel image_label = 3;
+}
+
+message BorderedLabel {
+  string text = 1;
+}
+
+message FilledLabel {
+  string text = 1;
+}
+
+message ImageLabel {
+  string url = 1;
+  int32 width = 2;
+  int32 height = 3;
+}
+
+message Unread {
+  UnreadStyle style = 1;
+  int64 number = 2;
+  string number_show = 3;
+}
+
+message MsgSummary {
+  string raw_msg = 1;
+  MsgSummaryPrefixType prefix_type = 2;
+  string prefix_text = 3;
+  bool is_group_owner = 4;
+}
+
+message SessionOperation {
+  OperationContent pin = 1;
+  OperationContent unpin = 2;
+  OperationContent delete = 3;
+  OperationContent clear_unread = 4;
+  OperationContent unblock = 5;
+}
+
+message OperationContent {
+  bool show = 1;
+  string text = 2;
+}
+
+message QuickLinkConfig {
+  repeated QuickLinkItem items = 1;
+  QuickLinkBubble bubble = 2;
+  bool is_legacy_style = 3;
+}
+
+message QuickLinkItem {
+  string title = 1;
+  string icon = 2;
+  string icon_dark = 3;
+  string url = 4;
+  Unread unread = 5;
+  QuickLinkItemType item_type = 6;
+}
+
+message QuickLinkBubble {
+  int64 mid = 1;
+  string avatar = 2;
+  string nick_name = 3;
+  string text = 4;
+}
+
+message FilterConfig {
+  repeated SessionsFilter filters = 1;
+  SessionFilterType current_filter = 2;
+}
+
+message SessionsFilter {
+  string text = 1;
+  SessionFilterType filter_type = 2;
+  bool selected = 3;
+}
+
+message ThreeDotItem {
+  string title = 1;
+  string icon = 2;
+  string url = 3;
+  ThreeDotItemType type = 4;
+  bool has_red_dot = 5;
+}
+
+message SessionListExtraInfo {
+  AutoReplyToast auto_reply_toast = 1;
+  bool show_anti_harassment_popup = 2;
+  string customer_hint_title = 3;
+  BehaviorAlertToast behavior_alert_toast = 4;
+}
+
+message AutoReplyToast {
+  string text = 1;
+}
+
+message BehaviorAlertToast {
+  AlertToastType type = 1;
+  string text = 2;
+}
+
+enum AlertToastType {
+  ALERT_TOAST_TYPE_UNSPECIFIED = 0;
+  ALERT_TOAST_TYPE_BANNED = 1;
+  ALERT_TOAST_TYPE_REPORT = 2;
+}
+
+enum LabelType {
+  LABEL_TYPE_DEFAULT = 0;
+  LABEL_TYPE_HUA_HUO = 1;
+  LABEL_TYPE_ORIGINAL_FANS = 2;
+  LABEL_TYPE_SPECIAL_ATTENTION = 3;
+  LABEL_TYPE_CONTRACT_UP = 4;
+  LABEL_TYPE_OLD_FANS = 5;
+  LABEL_TYPE_SPECIAL_ATTENTION_2 = 6;
+  LABEL_TYPE_FANS_MEDAL = 7;
+  LABEL_TYPE_GUARD_MEDAL = 8;
+}
+
+enum MsgSummaryPrefixType {
+  MSG_SUMMARY_PREFIX_TYPE_NONE = 0;
+  MSG_SUMMARY_PREFIX_TYPE_NOTIFICATION = 1;
+  MSG_SUMMARY_PREFIX_TYPE_GROUP_BLOCKED = 2;
+  MSG_SUMMARY_PREFIX_TYPE_MENTIONED = 3;
+  MSG_SUMMARY_PREFIX_TYPE_UNREAD = 4;
+}
+
+enum QuickLinkItemType {
+  QUICK_LINK_ITEM_TYPE_UNKNOWN = 0;
+  QUICK_LINK_ITEM_TYPE_OLD_LIKE = 1;
+  QUICK_LINK_ITEM_TYPE_OLD_REPLY = 2;
+  QUICK_LINK_ITEM_TYPE_AT = 3;
+  QUICK_LINK_ITEM_TYPE_SYSTEM = 4;
+  QUICK_LINK_ITEM_TYPE_HUA_HUO = 5;
+  QUICK_LINK_ITEM_TYPE_FOLLOW = 6;
+  QUICK_LINK_ITEM_TYPE_REPLY = 100;
+  QUICK_LINK_ITEM_TYPE_LIKE = 101;
+}
+
+enum SessionFilterType {
+  FILTER_DEFAULT = 0;
+  FILTER_FOLLOW = 1;
+}
+
+enum SessionPageType {
+  SESSION_PAGE_TYPE_UNKNOWN = 0;
+  SESSION_PAGE_TYPE_HOME = 1;
+  SESSION_PAGE_TYPE_UNFOLLOWED = 2;
+  SESSION_PAGE_TYPE_STRANGER = 3;
+  SESSION_PAGE_TYPE_DUSTBIN = 4;
+  SESSION_PAGE_TYPE_GROUP = 5;
+  SESSION_PAGE_TYPE_HUA_HUO = 6;
+  SESSION_PAGE_TYPE_AI = 7;
+  SESSION_PAGE_TYPE_CUSTOMER = 8;
+}
+
+enum SessionType {
+  SESSION_TYPE_UNKNOWN = 0;
+  SESSION_TYPE_PRIVATE = 1;
+  SESSION_TYPE_GROUP = 2;
+  SESSION_TYPE_GROUP_FOLD = 3;
+  SESSION_TYPE_UNFOLLOWED = 4;
+  SESSION_TYPE_STRANGER = 5;
+  SESSION_TYPE_DUSTBIN = 6;
+  SESSION_TYPE_CUSTOMER_FOLD = 7;
+  SESSION_TYPE_SYSTEM = 8;
+  SESSION_TYPE_AI_FOLD = 9;
+  SESSION_TYPE_CUSTOMER_ACCOUNT = 10;
+}
+
+enum ThreeDotItemType {
+  THREE_DOT_ITEM_TYPE_UNKNOWN = 0;
+  THREE_DOT_ITEM_TYPE_READ_ALL = 1;
+  THREE_DOT_ITEM_TYPE_MSG_SETTING = 2;
+  THREE_DOT_ITEM_TYPE_AUTO_REPLY = 3;
+  THREE_DOT_ITEM_TYPE_UP_HELPER = 4;
+  THREE_DOT_ITEM_TYPE_LIVE_HELPER = 5;
+  THREE_DOT_ITEM_TYPE_FANS_GROUP_HELPER = 6;
+  THREE_DOT_ITEM_TYPE_CONTRIBUTION_PUSH = 7;
+  THREE_DOT_ITEM_TYPE_CONTACTS = 8;
+  THREE_DOT_ITEM_TYPE_CLEAR_LIST = 9;
+}
+
+enum UnreadStyle {
+  UNREAD_STYLE_NONE = 0;
+  UNREAD_STYLE_DOT = 1;
+  UNREAD_STYLE_NUMBER = 2;
+}

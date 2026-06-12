@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.PersonRemove
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.MarkChatUnread
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SupervisorAccount
@@ -79,6 +80,7 @@ import dev.aaa1115910.bv.mobile.activities.FavoriteActivity
 import dev.aaa1115910.bv.mobile.activities.FollowingSeasonActivity
 import dev.aaa1115910.bv.mobile.activities.FollowingUserActivity
 import dev.aaa1115910.bv.mobile.activities.HistoryActivity
+import dev.aaa1115910.bv.mobile.activities.InboxActivity
 import dev.aaa1115910.bv.mobile.activities.LoginActivity
 import dev.aaa1115910.bv.mobile.activities.SettingsActivity
 import dev.aaa1115910.bv.mobile.activities.ToViewActivity
@@ -251,6 +253,9 @@ fun MineScreen(
                         },
                         onOpenFavorite = {
                             context.startActivity(Intent(context, FavoriteActivity::class.java))
+                        },
+                        onOpenInbox = {
+                            InboxActivity.actionStart(context)
                         },
                         onOpenLogin = ::openLogin
                     )
@@ -712,6 +717,7 @@ private fun MineQuickActions(
     onOpenFollowingSeason: () -> Unit,
     onOpenToView: () -> Unit,
     onOpenFavorite: () -> Unit,
+    onOpenInbox: () -> Unit,
     onOpenLogin: () -> Unit
 ) {
     Card(
@@ -721,34 +727,51 @@ private fun MineQuickActions(
         ),
         shape = MaterialTheme.shapes.extraLarge
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            QuickActionItem(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Rounded.History,
-                title = "观看记录",
-                onClick = if (enabled) onOpenHistory else onOpenLogin
-            )
-            QuickActionItem(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Rounded.SupervisorAccount,
-                title = "我的追番",
-                onClick = if (enabled) onOpenFollowingSeason else onOpenLogin
-            )
-            QuickActionItem(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Rounded.WatchLater,
-                title = "稍后再看",
-                onClick = if (enabled) onOpenToView else onOpenLogin
-            )
-            QuickActionItem(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Rounded.Favorite,
-                title = "我的收藏",
-                onClick = if (enabled) onOpenFavorite else onOpenLogin
-            )
+            item {
+                QuickActionItem(
+                    modifier = Modifier.width(86.dp),
+                    icon = Icons.Rounded.History,
+                    title = "观看记录",
+                    onClick = if (enabled) onOpenHistory else onOpenLogin
+                )
+            }
+            item {
+                QuickActionItem(
+                    modifier = Modifier.width(86.dp),
+                    icon = Icons.Rounded.MarkChatUnread,
+                    title = "私信",
+                    onClick = if (enabled) onOpenInbox else onOpenLogin
+                )
+            }
+            item {
+                QuickActionItem(
+                    modifier = Modifier.width(86.dp),
+                    icon = Icons.Rounded.SupervisorAccount,
+                    title = "我的追番",
+                    onClick = if (enabled) onOpenFollowingSeason else onOpenLogin
+                )
+            }
+            item {
+                QuickActionItem(
+                    modifier = Modifier.width(86.dp),
+                    icon = Icons.Rounded.WatchLater,
+                    title = "稍后再看",
+                    onClick = if (enabled) onOpenToView else onOpenLogin
+                )
+            }
+            item {
+                QuickActionItem(
+                    modifier = Modifier.width(86.dp),
+                    icon = Icons.Rounded.Favorite,
+                    title = "我的收藏",
+                    onClick = if (enabled) onOpenFavorite else onOpenLogin
+                )
+            }
         }
     }
 }

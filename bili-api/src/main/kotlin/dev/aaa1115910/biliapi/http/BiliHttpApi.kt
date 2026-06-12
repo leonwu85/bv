@@ -3,6 +3,7 @@ package dev.aaa1115910.biliapi.http
 import com.tfowl.ktor.client.plugins.JsoupPlugin
 import dev.aaa1115910.biliapi.entity.user.DynamicImageDraft
 import dev.aaa1115910.biliapi.entity.pgc.PgcType
+import dev.aaa1115910.biliapi.entity.message.MessageFeedType
 import dev.aaa1115910.biliapi.http.BiliHttpApi.getRegionDynamic
 import dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_APP
 import dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_WEB
@@ -140,10 +141,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.jsoup.nodes.Document
 import java.util.concurrent.ConcurrentHashMap
@@ -223,6 +230,146 @@ object BiliHttpApi {
         if (cookieParts.isNotEmpty()) {
             header("Cookie", cookieParts.joinToString(";") + ";")
         }
+    }
+
+    suspend fun getMessageFeedData(
+        type: MessageFeedType,
+        cursorId: Long? = null,
+        cursorTime: Long? = null,
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): JsonObject {
+        val path = when (type) {
+            MessageFeedType.Reply -> "/x/msgfeed/reply"
+            MessageFeedType.At -> "/x/msgfeed/at"
+            MessageFeedType.Like -> "/x/msgfeed/like"
+            MessageFeedType.System -> error("系统通知使用 getSystemMessageFeedData")
+        }
+        val timeKey = when (type) {
+            MessageFeedType.Reply -> "reply_time"
+            MessageFeedType.At -> "at_time"
+            MessageFeedType.Like -> "like_time"
+            MessageFeedType.System -> ""
+        }
+        val response = client.get(path) {
+            parameter("id", cursorId)
+            parameter(timeKey, cursorTime)
+            parameter("platform", "web")
+            parameter("mobi_app", "web")
+            parameter("build", 0)
+            parameter("web_location", 333.40164)
+            appendWebCookie(sessData = sessData, dedeUserID = dedeUserID, buvid3 = buvid3)
+        }.bodyAsText()
+        return responseData(response)
+    }
+
+    suspend fun getSystemMessageFeedData(
+        cursor: Long? = null,
+        pageSize: Int = 20,
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): JsonArray {
+        val response = client.get("https://message.bilibili.com/x/sys-msg/query_notify_list") {
+            parameter("cursor", cursor)
+            parameter("page_size", pageSize)
+            parameter("mobi_app", "web")
+            parameter("build", 0)
+            parameter("web_location", 333.40164)
+            appendWebCookie(sessData = sessData, dedeUserID = dedeUserID, buvid3 = buvid3)
+        }.bodyAsText()
+        return responseDataElement(response) as? JsonArray ?: JsonArray(emptyList())
+    }
+
+    suspend fun updateSystemMessageCursor(
+        cursor: Long,
+        csrf: String? = null,
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ) {
+        val response = client.get("https://message.bilibili.com/x/sys-msg/update_cursor") {
+            parameter("csrf", csrf)
+            parameter("cursor", cursor)
+            parameter("has_up", 0)
+            parameter("build", 0)
+            parameter("mobi_app", "web")
+            appendWebCookie(sessData = sessData, dedeUserID = dedeUserID, buvid3 = buvid3)
+        }.bodyAsText()
+        responseData(response)
+    }
+
+    suspend fun deleteMessageFeedItem(
+        type: MessageFeedType,
+        id: String,
+        csrf: String? = null,
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ) {
+        val deleteType = when (type) {
+            MessageFeedType.Like -> 0
+            MessageFeedType.Reply -> 1
+            MessageFeedType.At -> 2
+            MessageFeedType.System -> error("系统通知使用 deleteSystemMessageFeedItem")
+        }
+        val response = client.post("/x/msgfeed/del") {
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        append("tp", deleteType.toString())
+                        append("id", id)
+                        append("build", "0")
+                        append("mobi_app", "web")
+                        csrf?.let {
+                            append("csrf_token", it)
+                            append("csrf", it)
+                        }
+                    }
+                )
+            )
+            appendWebCookie(sessData = sessData, dedeUserID = dedeUserID, buvid3 = buvid3)
+        }.bodyAsText()
+        responseData(response)
+    }
+
+    suspend fun deleteSystemMessageFeedItem(
+        id: String,
+        csrf: String? = null,
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ) {
+        val response = client.post("https://message.bilibili.com/x/sys-msg/del_notify_list") {
+            parameter("mobi_app", "android")
+            parameter("csrf", csrf)
+            contentType(ContentType.Application.Json)
+            setBody(
+                buildJsonObject {
+                    csrf?.let { put("csrf", it) }
+                    put("ids", JsonArray(listOf(JsonPrimitive(id))))
+                    put("station_ids", JsonArray(emptyList()))
+                    put("type", 4)
+                    put("mobi_app", "android")
+                }
+            )
+            appendWebCookie(sessData = sessData, dedeUserID = dedeUserID, buvid3 = buvid3)
+        }.bodyAsText()
+        responseData(response)
+    }
+
+    private fun responseData(raw: String): JsonObject =
+        responseDataElement(raw).jsonObject
+
+    private fun responseDataElement(raw: String): JsonElement {
+        val root = json.parseToJsonElement(raw).jsonObject
+        val code = root["code"]?.jsonPrimitive?.int ?: -1
+        if (code != 0) {
+            throw IllegalStateException(root["message"]?.jsonPrimitive?.contentOrNull ?: "请求失败")
+        }
+        val data = root["data"]
+        return if (data == null || data is JsonNull) JsonObject(emptyMap()) else data
     }
 
     /**
@@ -687,7 +834,9 @@ object BiliHttpApi {
         csrf: String,
         sessData: String,
         dedeUserID: Long? = null,
-        buvid3: String? = null
+        buvid3: String? = null,
+        category: String? = "daily",
+        biz: String? = "new_dyn"
     ): BiliResponse<DynamicImageUploadData> = client.post("/x/dynamic/feed/draw/upload_bfs") {
         appendWebCookie(sessData, dedeUserID, buvid3)
         setBody(
@@ -700,8 +849,8 @@ object BiliHttpApi {
                             append(HttpHeaders.ContentDisposition, "filename=\"$fileName\"")
                         }
                     )
-                    append("category", "daily")
-                    append("biz", "new_dyn")
+                    category?.let { append("category", it) }
+                    biz?.let { append("biz", it) }
                     append("csrf", csrf)
                 }
             )
@@ -1704,6 +1853,34 @@ object BiliHttpApi {
         )
     }.body()
 
+    suspend fun reportDirectMessage(
+        accusedUid: Long,
+        msgKey: Long,
+        reasonType: Int,
+        reasonDesc: String,
+        csrf: String,
+        sessData: String,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponseWithoutData = client.post("https://t.bilibili.com/x/bplus/im/report/add") {
+        appendWebCookie(sessData, dedeUserID, buvid3)
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("biz_code", "4")
+                    append("accused_uid", accusedUid.toString())
+                    append("object_id", accusedUid.toString())
+                    append("reason_type", reasonType.toString())
+                    append("reason_desc", reasonDesc)
+                    append("module", "604")
+                    append("comment", """{"group_id":0,"msg_key":"$msgKey"}""")
+                    append("extra", """{"msg_keys":[]}""")
+                    append("csrf", csrf)
+                }
+            )
+        )
+    }.body()
+
     /**
      * 为视频[avid]或[bvid]点赞或取消赞
      *
@@ -2112,6 +2289,27 @@ object BiliHttpApi {
     ): BiliResponse<UserFollowData> = client.get("/x/relation/followings") {
         checkToken(accessKey, sessData)
         parameter("vmid", mid)
+        orderType?.let { parameter("order_type", orderType) }
+        parameter("ps", pageSize)
+        parameter("pn", pageNumber)
+        sessData?.let { header("Cookie", "SESSDATA=$sessData;") }
+        accessKey?.let { parameter("access_key", accessKey) }
+    }.body()
+
+    /**
+     * 获取用户[mid]的粉丝列表
+     */
+    suspend fun getUserFans(
+        mid: Long,
+        orderType: String? = null,
+        pageSize: Int = 50,
+        pageNumber: Int = 1,
+        accessKey: String? = null,
+        sessData: String? = null
+    ): BiliResponse<UserFollowData> = client.get("/x/relation/fans") {
+        checkToken(accessKey, sessData)
+        parameter("vmid", mid)
+        parameter("order", "desc")
         orderType?.let { parameter("order_type", orderType) }
         parameter("ps", pageSize)
         parameter("pn", pageNumber)

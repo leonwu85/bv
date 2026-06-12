@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FiberNew
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.MarkChatUnread
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
@@ -81,7 +82,9 @@ import com.origeek.imageViewer.previewer.ImagePreviewer
 import com.origeek.imageViewer.previewer.VerticalDragType
 import com.origeek.imageViewer.previewer.rememberPreviewerState
 import dev.aaa1115910.biliapi.entity.Picture
+import dev.aaa1115910.biliapi.repositories.MessageRepository
 import dev.aaa1115910.biliapi.repositories.UserRepository as BiliUserRepository
+import dev.aaa1115910.bv.mobile.activities.InboxActivity
 import dev.aaa1115910.bv.mobile.activities.SettingsActivity
 import dev.aaa1115910.bv.mobile.component.ImagePreviewerActions
 import dev.aaa1115910.bv.mobile.screen.home.DynamicScreen
@@ -110,7 +113,8 @@ fun MobileMainScreen(
     popularViewModel: PopularViewModel = koinViewModel(),
     userViewModel: UserViewModel = koinViewModel(),
     userSwitchViewModel: UserSwitchViewModel = koinViewModel(),
-    biliUserRepository: BiliUserRepository = koinInject()
+    biliUserRepository: BiliUserRepository = koinInject(),
+    messageRepository: MessageRepository = koinInject()
 ) {
     val logger = KotlinLogging.logger("MobileMainScreen")
     val state = rememberMobileMainScreenState(
@@ -127,6 +131,7 @@ fun MobileMainScreen(
     val pictures = remember { mutableStateListOf<Picture>() }
     var savingPreviewImage by remember { mutableStateOf(false) }
     var dynamicUnreadCount by remember { mutableStateOf(0) }
+    var messageUnreadCount by remember { mutableStateOf(0) }
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewerState = rememberPreviewerState(
         verticalDragType = VerticalDragType.UpAndDown,
@@ -152,8 +157,27 @@ fun MobileMainScreen(
         }
     }
 
+    fun refreshMessageUnreadCount() {
+        if (!userViewModel.isLogin) {
+            messageUnreadCount = 0
+            return
+        }
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                messageRepository.getUnreadCount()
+            }.onSuccess { count ->
+                withContext(Dispatchers.Main) {
+                    messageUnreadCount = count
+                }
+            }.onFailure {
+                logger.warn(it) { "Load message unread count failed" }
+            }
+        }
+    }
+
     LaunchedEffect(userViewModel.isLogin) {
         refreshDynamicUnreadCount()
+        refreshMessageUnreadCount()
     }
 
     LaunchedEffect(state.currentNavItem) {
@@ -166,6 +190,7 @@ fun MobileMainScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 refreshDynamicUnreadCount()
+                refreshMessageUnreadCount()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -273,8 +298,13 @@ fun MobileMainScreen(
                     rcmdGridState = state.rcmdGridState,
                     popularGridState = state.popularGridState,
                     windowSize = state.windowSizeClass.widthSizeClass,
+                    messageUnreadCount = messageUnreadCount,
                     onOpenSearch = { state.navigate(MobileMainScreenNav.Search) },
-                    onOpenMine = { state.navigate(MobileMainScreenNav.Mine) }
+                    onOpenMine = { state.navigate(MobileMainScreenNav.Mine) },
+                    onOpenInbox = {
+                        messageUnreadCount = 0
+                        InboxActivity.actionStart(context)
+                    }
                 )
             }
 

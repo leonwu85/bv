@@ -19,8 +19,11 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,8 +71,10 @@ fun HomeScreen(
     recommendViewModel: RecommendViewModel = koinViewModel(),
     userViewModel: UserViewModel = koinViewModel(),
     windowSize: WindowWidthSizeClass,
+    messageUnreadCount: Int = 0,
     onOpenSearch: () -> Unit,
-    onOpenMine: () -> Unit
+    onOpenMine: () -> Unit,
+    onOpenInbox: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val pageState = rememberPagerState(
@@ -84,8 +89,11 @@ fun HomeScreen(
             if (windowSize == WindowWidthSizeClass.Compact) {
                 HomeTopAppBar(
                     avatar = userViewModel.face,
+                    showInbox = userViewModel.isLogin,
+                    messageUnreadCount = messageUnreadCount,
                     onOpenSearch = onOpenSearch,
-                    onOpenMine = onOpenMine
+                    onOpenMine = onOpenMine,
+                    onOpenInbox = onOpenInbox
                 )
             }
         }
@@ -302,8 +310,11 @@ fun HomeScreenContent(
 private fun HomeTopAppBar(
     modifier: Modifier = Modifier,
     avatar: String,
+    showInbox: Boolean,
+    messageUnreadCount: Int,
     onOpenSearch: () -> Unit,
     onOpenMine: () -> Unit,
+    onOpenInbox: () -> Unit,
 ) {
     TopAppBar(
         modifier = modifier,
@@ -336,6 +347,23 @@ private fun HomeTopAppBar(
         },
         navigationIcon = {},
         actions = {
+            if (showInbox) {
+                IconButton(onClick = onOpenInbox) {
+                    if (messageUnreadCount > 0) {
+                        BadgedBox(
+                            badge = {
+                                Badge {
+                                    Text(text = if (messageUnreadCount > 99) "99+" else messageUnreadCount.toString())
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Outlined.Notifications, contentDescription = "消息")
+                        }
+                    } else {
+                        Icon(Icons.Outlined.Notifications, contentDescription = "消息")
+                    }
+                }
+            }
             IconButton(onClick = onOpenMine) {
                 if (avatar.isBlank()) {
                     Icon(

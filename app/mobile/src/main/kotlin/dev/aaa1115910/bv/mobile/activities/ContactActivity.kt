@@ -1,0 +1,26 @@
+package dev.aaa1115910.bv.mobile.activities
+
+import android.content.Context
+import android.content.Intent
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import dev.aaa1115910.bv.mobile.screen.message.ContactScreen
+import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
+
+class ContactActivity : ComponentActivity() {
+    companion object {
+        fun actionStart(context: Context) {
+            context.startActivity(Intent(context, ContactActivity::class.java))
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            BVMobileTheme {
+                ContactScreen()
+            }
+        }
+    }
+}

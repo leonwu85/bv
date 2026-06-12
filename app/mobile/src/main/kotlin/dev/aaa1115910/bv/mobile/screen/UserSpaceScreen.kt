@@ -98,6 +98,7 @@ import dev.aaa1115910.biliapi.http.entity.user.AppUserSpaceElecUser
 import dev.aaa1115910.biliapi.http.entity.user.AppUserSpaceTag
 import dev.aaa1115910.biliapi.http.entity.user.favorite.SpaceFavoriteData
 import dev.aaa1115910.biliapi.http.entity.user.favorite.SpaceFavoriteItem
+import dev.aaa1115910.bv.mobile.activities.ConversationActivity
 import dev.aaa1115910.bv.mobile.activities.DynamicDetailActivity
 import dev.aaa1115910.bv.mobile.activities.SeasonInfoActivity
 import dev.aaa1115910.bv.mobile.activities.VideoPlayerActivity
@@ -524,7 +525,18 @@ private fun UserSpaceHeader(
                 }
                 if (viewModel.upMid != Prefs.uid) {
                     FilledTonalButton(
-                        onClick = { "私信功能暂未实现".toast(context) }
+                        onClick = {
+                            if (!Prefs.isLogin) {
+                                "请先登录".toast(context)
+                            } else {
+                                ConversationActivity.actionStart(
+                                    context = context,
+                                    talkerId = viewModel.upMid,
+                                    name = viewModel.upName,
+                                    face = viewModel.upFace
+                                )
+                            }
+                        }
                     ) {
                         Icon(
                             modifier = Modifier.size(18.dp),

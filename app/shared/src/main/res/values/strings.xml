@@ -404,6 +404,8 @@
     <string name="title_mobile_activity_following_season">我的追番</string>
     <string name="title_mobile_activity_following_user">我的关注</string>
     <string name="title_mobile_activity_history">历史记录</string>
+    <string name="title_mobile_activity_inbox">私信</string>
+    <string name="title_mobile_activity_conversation">私信</string>
     <string name="title_mobile_activity_login">用户登录</string>
     <string name="title_mobile_activity_settings">设置</string>
     <string name="title_mobile_activity_toview">稍后再看</string>

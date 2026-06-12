@@ -14,8 +14,8 @@ import kotlinx.serialization.Serializable
 data class UserFollowData(
     val list: List<FollowedUser> = emptyList(),
     @SerialName("re_version")
-    val reVersion: Int,
-    val total: Int
+    val reVersion: Int = 0,
+    val total: Int = 0
 ) {
     /**
      * 关注的用户信息
@@ -36,23 +36,23 @@ data class UserFollowData(
      */
     @Serializable
     data class FollowedUser(
-        val mid: Long,
-        val attribute: Int,
-        val mtime: Int,
+        val mid: Long = 0L,
+        val attribute: Int = 0,
+        val mtime: Int = 0,
         val tag: List<Int>? = null,
-        val special: Int,
-        val uname: String,
-        val face: String,
-        val sign: String,
+        val special: Int = 0,
+        val uname: String = "",
+        val face: String = "",
+        val sign: String = "",
         @SerialName("official_verify")
-        val officialVerify: OfficialVerify,
-        val vip: Vip,
+        val officialVerify: OfficialVerify? = null,
+        val vip: Vip? = null,
         @SerialName("nft_icon")
-        val nftIcon: String,
+        val nftIcon: String = "",
         @SerialName("rec_reason")
-        val recReason: String,
+        val recReason: String = "",
         @SerialName("track_id")
-        val trackId: String
+        val trackId: String = ""
     ) {
         /**
          * 会员信息
