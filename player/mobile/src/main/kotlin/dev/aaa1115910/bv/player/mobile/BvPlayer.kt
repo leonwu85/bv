@@ -38,6 +38,7 @@ import dev.aaa1115910.bv.player.VideoPlayerListener
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.DanmakuType
+import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerClockData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerDanmakuMasksData
@@ -123,6 +124,9 @@ fun BvPlayer(
     onChangeResolution: (Resolution, afterChange: suspend () -> Unit) -> Unit,
     onChangeVideoCodec: (VideoCodec, afterChange: suspend () -> Unit) -> Unit,
     onChangeAudio: (Audio, afterChange: suspend () -> Unit) -> Unit,
+    onChangeLiveQuality: (Int) -> Unit = {},
+    onChangeLiveCodec: (LiveCodec) -> Unit = {},
+    onChangeLiveLine: (Int) -> Unit = {},
     onChangeSpeed: (Float) -> Unit,
     onToggleDanmaku: (Boolean) -> Unit,
     onEnabledDanmakuTypesChange: (List<DanmakuType>) -> Unit,
@@ -727,6 +731,9 @@ fun BvPlayer(
                     }
                 }
             },
+            onChangeLiveQuality = onChangeLiveQuality,
+            onChangeLiveCodec = onChangeLiveCodec,
+            onChangeLiveLine = onChangeLiveLine,
             onChangeAudio = {
                 val currentTime = currentPosition
                 pendingDanmakuPlaySyncPosition = currentTime

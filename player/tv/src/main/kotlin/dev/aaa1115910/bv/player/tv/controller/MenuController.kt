@@ -82,6 +82,7 @@ fun MenuController(
     onAudioChange: (Audio) -> Unit,
     onLiveQualityChange: (Int) -> Unit = {},
     onLiveCodecChange: (LiveCodec) -> Unit = {},
+    onLiveLineChange: (Int) -> Unit = {},
     onDanmakuSwitchChange: (List<DanmakuType>) -> Unit,
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
@@ -135,6 +136,7 @@ fun MenuController(
                 onAudioChange = onAudioChange,
                 onLiveQualityChange = onLiveQualityChange,
                 onLiveCodecChange = onLiveCodecChange,
+                onLiveLineChange = onLiveLineChange,
                 onDanmakuSwitchChange = onDanmakuSwitchChange,
                 onDanmakuSizeChange = onDanmakuSizeChange,
                 onDanmakuOpacityChange = onDanmakuOpacityChange,
@@ -171,6 +173,7 @@ fun MenuController(
     onAudioChange: (Audio) -> Unit,
     onLiveQualityChange: (Int) -> Unit = {},
     onLiveCodecChange: (LiveCodec) -> Unit = {},
+    onLiveLineChange: (Int) -> Unit = {},
     onDanmakuSwitchChange: (List<DanmakuType>) -> Unit,
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
@@ -252,6 +255,7 @@ fun MenuController(
                     onAudioChange = onAudioChange,
                     onLiveQualityChange = onLiveQualityChange,
                     onLiveCodecChange = onLiveCodecChange,
+                    onLiveLineChange = onLiveLineChange,
                     onDanmakuSwitchChange = onDanmakuSwitchChange,
                     onDanmakuSizeChange = onDanmakuSizeChange,
                     onDanmakuOpacityChange = onDanmakuOpacityChange,
@@ -322,6 +326,7 @@ private fun MenuList(
     onAudioChange: (Audio) -> Unit,
     onLiveQualityChange: (Int) -> Unit = {},
     onLiveCodecChange: (LiveCodec) -> Unit = {},
+    onLiveLineChange: (Int) -> Unit = {},
     onDanmakuSwitchChange: (List<DanmakuType>) -> Unit,
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
@@ -360,6 +365,7 @@ private fun MenuList(
                     onAudioChange = onAudioChange,
                     onLiveQualityChange = onLiveQualityChange,
                     onLiveCodecChange = onLiveCodecChange,
+                    onLiveLineChange = onLiveLineChange,
                     onFocusStateChange = onFocusStateChange
                 )
             }

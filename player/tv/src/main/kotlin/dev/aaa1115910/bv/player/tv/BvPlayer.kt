@@ -181,6 +181,7 @@ fun BvPlayer(
     onPlaybackMediaModeChange: (PlaybackMediaMode, Long, afterChange: suspend () -> Unit) -> Unit,
     onLiveQualityChange: (Int) -> Unit = {},
     onLiveCodecChange: (LiveCodec) -> Unit = {},
+    onLiveLineChange: (Int) -> Unit = {},
     onDanmakuSwitchChange: (List<DanmakuType>) -> Unit,
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
@@ -1578,6 +1579,7 @@ fun BvPlayer(
             },
             onLiveQualityChange = onLiveQualityChange,
             onLiveCodecChange = onLiveCodecChange,
+            onLiveLineChange = onLiveLineChange,
             onDanmakuSwitchChange = { enabledDanmakuTypes ->
                 logger.info { "On enabled danmaku type change: $enabledDanmakuTypes" }
                 onDanmakuSwitchChange(enabledDanmakuTypes)

@@ -66,6 +66,7 @@ import coil.compose.AsyncImage
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.DanmakuType
+import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerSeekData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
@@ -100,6 +101,9 @@ fun BvPlayerController(
     onChangeResolution: (Resolution) -> Unit,
     onChangeVideoCodec: (VideoCodec) -> Unit,
     onChangeAudio: (Audio) -> Unit,
+    onChangeLiveQuality: (Int) -> Unit = {},
+    onChangeLiveCodec: (LiveCodec) -> Unit = {},
+    onChangeLiveLine: (Int) -> Unit = {},
     onChangeSpeed: (Float) -> Unit,
     onToggleDanmaku: (Boolean) -> Unit,
     onEnabledDanmakuTypesChange: (List<DanmakuType>) -> Unit,
@@ -215,6 +219,9 @@ fun BvPlayerController(
                 onChangeResolution = onChangeResolution,
                 onChangeVideoCodec = onChangeVideoCodec,
                 onChangeAudio = onChangeAudio,
+                onChangeLiveQuality = onChangeLiveQuality,
+                onChangeLiveCodec = onChangeLiveCodec,
+                onChangeLiveLine = onChangeLiveLine,
                 onChangeSpeed = onChangeSpeed,
                 onEnabledDanmakuTypesChange = onEnabledDanmakuTypesChange,
                 onDanmakuOpacityChange = onDanmakuOpacityChange,
@@ -243,6 +250,9 @@ private fun BvPlayerControllerSettings(
     onChangeResolution: (Resolution) -> Unit,
     onChangeVideoCodec: (VideoCodec) -> Unit,
     onChangeAudio: (Audio) -> Unit,
+    onChangeLiveQuality: (Int) -> Unit = {},
+    onChangeLiveCodec: (LiveCodec) -> Unit = {},
+    onChangeLiveLine: (Int) -> Unit = {},
     onChangeSpeed: (Float) -> Unit,
     onEnabledDanmakuTypesChange: (List<DanmakuType>) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
@@ -276,6 +286,9 @@ private fun BvPlayerControllerSettings(
                         onChangeResolution = onChangeResolution,
                         onChangeVideoCodec = onChangeVideoCodec,
                         onChangeAudio = onChangeAudio,
+                        onChangeLiveQuality = onChangeLiveQuality,
+                        onChangeLiveCodec = onChangeLiveCodec,
+                        onChangeLiveLine = onChangeLiveLine,
                         onClose = onCloseMenu
                     )
                 }

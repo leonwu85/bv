@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.aaa1115910.bv.player.entity.Audio
+import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoCodec
@@ -48,6 +49,9 @@ fun DashMenu(
     onChangeResolution: (Resolution) -> Unit,
     onChangeVideoCodec: (VideoCodec) -> Unit,
     onChangeAudio: (Audio) -> Unit,
+    onChangeLiveQuality: (Int) -> Unit = {},
+    onChangeLiveCodec: (LiveCodec) -> Unit = {},
+    onChangeLiveLine: (Int) -> Unit = {},
     onClose: () -> Unit
 ) {
     Scaffold(
@@ -76,7 +80,10 @@ fun DashMenu(
             item {
                 ResolutionContent(
                     onClickResolution = onChangeResolution,
-                    onClickCodec = onChangeVideoCodec
+                    onClickCodec = onChangeVideoCodec,
+                    onClickLiveQuality = onChangeLiveQuality,
+                    onClickLiveCodec = onChangeLiveCodec,
+                    onClickLiveLine = onChangeLiveLine
                 )
             }
             item {
@@ -93,7 +100,10 @@ fun DashMenu(
 private fun ResolutionContent(
     modifier: Modifier = Modifier,
     onClickResolution: (Resolution) -> Unit,
-    onClickCodec: (VideoCodec) -> Unit
+    onClickCodec: (VideoCodec) -> Unit,
+    onClickLiveQuality: (Int) -> Unit = {},
+    onClickLiveCodec: (LiveCodec) -> Unit = {},
+    onClickLiveLine: (Int) -> Unit = {}
 ) {
     val context = LocalContext.current
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
@@ -101,6 +111,59 @@ private fun ResolutionContent(
     Column(
         modifier = modifier
     ) {
+        if (videoPlayerConfigData.isLive) {
+            Text(text = "直播清晰度")
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                videoPlayerConfigData.availableLiveQualities.forEach { (qn, description) ->
+                    ChipItem(
+                        text = description,
+                        selected = videoPlayerConfigData.currentLiveQn == qn,
+                        onClick = {
+                            println("click live quality item: $qn")
+                            onClickLiveQuality(qn)
+                        }
+                    )
+                }
+            }
+
+            Text(text = "直播编码")
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                videoPlayerConfigData.availableLiveCodecs.forEach { codec ->
+                    ChipItem(
+                        text = codec.getDisplayName(context),
+                        selected = videoPlayerConfigData.currentLiveCodec == codec,
+                        onClick = {
+                            println("click live codec item: $codec")
+                            onClickLiveCodec(codec)
+                        }
+                    )
+                }
+            }
+
+            if (videoPlayerConfigData.availableLiveLines.isNotEmpty()) {
+                Text(text = "直播线路")
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    videoPlayerConfigData.availableLiveLines.forEach { line ->
+                        ChipItem(
+                            text = line.displayName,
+                            selected = videoPlayerConfigData.currentLiveLineIndex == line.index,
+                            onClick = {
+                                println("click live line item: ${line.index}")
+                                onClickLiveLine(line.index)
+                            }
+                        )
+                    }
+                }
+            }
+            return@Column
+        }
+
         Text(text = "视频清晰度")
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),

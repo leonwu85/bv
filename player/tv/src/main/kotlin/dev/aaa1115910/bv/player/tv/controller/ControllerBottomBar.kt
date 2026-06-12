@@ -240,6 +240,7 @@ fun ControllerBottomBar(
     onRefreshVideo: () -> Unit,
     onOpenDanmaku: () -> Unit,
     onHideDanmaku: () -> Unit,
+    onLiveLineChange: (Int) -> Unit = {},
     onOpenPlayList: () -> Unit,
     onOpenRelatedVideo: () -> Unit,
     onOpenSetting: () -> Unit,
@@ -290,12 +291,18 @@ fun ControllerBottomBar(
     val autoHideState = remember { ControllerBottomBarAutoHideState() }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showRotationDialog by remember { mutableStateOf(false) }
+    var showLiveLineDialog by remember { mutableStateOf(false) }
     var speed by remember { mutableFloatStateOf(playSpeed) }
     val danmakuIconId =
         if (showDanmaku) R.drawable.ic_danmaku_on else R.drawable.ic_danmaku_hide
     val subtitleIconId =
         if (currentSubtitleId > 0) R.drawable.ic_subtitle_on else R.drawable.ic_subtitle_off
     val hasSubtitles = availableSubtitleTracks.isNotEmpty()
+    val availableLiveLines = videoPlayerConfigData.availableLiveLines
+    val currentLiveLineButtonText = availableLiveLines
+        .firstOrNull { it.index == videoPlayerConfigData.currentLiveLineIndex }
+        ?.let { "线路 ${it.index + 1}" }
+        ?: "线路"
     val seekBarPlayedTrackBrush = remember(bottomProgressBarColor) {
         controllerSeekBarPlayedTrackBrush(bottomProgressBarColor)
     }
@@ -394,7 +401,14 @@ fun ControllerBottomBar(
     }
 
     // ── 直播专用按钮 ──
-    val liveButtons = remember(showDanmaku, isLive, isFollowingUp, liveIncognitoMode) {
+    val liveButtons = remember(
+        showDanmaku,
+        isLive,
+        isFollowingUp,
+        liveIncognitoMode,
+        availableLiveLines,
+        currentLiveLineButtonText
+    ) {
         if (!isLive) emptyList()
         else buildList {
             add(ControlButton(
@@ -409,6 +423,15 @@ fun ControllerBottomBar(
                 painterId = danmakuIconId,
                 onClick = { if (showDanmaku) onHideDanmaku() else onOpenDanmaku() }
             ))
+            if (availableLiveLines.isNotEmpty()) {
+                add(ControlButton(
+                    id = "liveLine",
+                    text = currentLiveLineButtonText,
+                    width = 80,
+                    onClick = { showLiveLineDialog = true },
+                    alwaysShowBorder = true
+                ))
+            }
             if (liveIncognitoMode) {
                 add(ControlButton(
                     id = "liveHistory",
@@ -487,6 +510,7 @@ fun ControllerBottomBar(
             show &&
             !showSpeedDialog &&
             !showRotationDialog &&
+            !showLiveLineDialog &&
             !autoHideState.pauseAutoHide
         ) {
             autoHideState.hideVideoInfoJob = scope.launch {
@@ -496,7 +520,7 @@ fun ControllerBottomBar(
         }
     }
 
-    LaunchedEffect(show, showSpeedDialog, showRotationDialog) {
+    LaunchedEffect(show, showSpeedDialog, showRotationDialog, showLiveLineDialog) {
         scheduleHideJob()
     }
     DisposableEffect(Unit) {
@@ -733,6 +757,20 @@ fun ControllerBottomBar(
                                     color = button.tint
                                 )
                             }
+                        } else if (button.text != null) {
+                            Text(
+                                text = button.text,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = button.tint,
+                                fontWeight = button.fontWeight,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .wrapContentSize(Alignment.Center)
+                                    .ifElse(
+                                        button.scale != 1f,
+                                        Modifier.scale(button.scale)
+                                    )
+                            )
                         } else if (button.painterId != null) {
                             Row(
                                 modifier = Modifier.fillMaxSize(),
@@ -1104,6 +1142,15 @@ fun ControllerBottomBar(
             onHideDialog = { showRotationDialog = false },
             rotation = rotation,
             onRotationChange = onRotationChange
+        )
+    }
+
+    if (showLiveLineDialog && availableLiveLines.isNotEmpty()) {
+        LiveLineDialog(
+            lines = availableLiveLines,
+            currentLineIndex = videoPlayerConfigData.currentLiveLineIndex,
+            onHideDialog = { showLiveLineDialog = false },
+            onLineChange = onLiveLineChange
         )
     }
 

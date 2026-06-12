@@ -607,7 +607,9 @@ fun VideoPlayerScreen(
                             availableLiveQualities = playerViewModel.availableLiveQualities,
                             currentLiveQn = playerViewModel.currentLiveQn,
                             currentLiveQualityDescription = playerViewModel.currentLiveQualityDescription,
-                            currentLiveCodec = playerViewModel.currentLiveCodec
+                            currentLiveCodec = playerViewModel.currentLiveCodec,
+                            availableLiveLines = playerViewModel.availableLiveLines.toList(),
+                            currentLiveLineIndex = playerViewModel.currentLiveLineIndex
                         ),
                         LocalVideoPlayerDanmakuMasksData provides VideoPlayerDanmakuMasksData(
                             danmakuMasks = playerViewModel.danmakuMasks,
@@ -666,6 +668,15 @@ fun VideoPlayerScreen(
                                     playerViewModel.playQuality(audio = audio)
                                     afterChange()
                                 }
+                            },
+                            onChangeLiveQuality = { qn ->
+                                playerViewModel.changeLiveQuality(qn)
+                            },
+                            onChangeLiveCodec = { codec ->
+                                playerViewModel.changeLiveCodec(codec)
+                            },
+                            onChangeLiveLine = { lineIndex ->
+                                playerViewModel.changeLiveLine(lineIndex)
                             },
                             onChangeSpeed = { speed ->
                                 playerViewModel.currentPlaySpeed = speed
@@ -818,6 +829,7 @@ fun VideoPlayerScreen(
                             onRefresh = { playerViewModel.loadLiveStreamWithQuality(playerViewModel.liveRoomId, playerViewModel.currentLiveQn) },
                             onQualitySelected = playerViewModel::changeLiveQuality,
                             onCodecSelected = playerViewModel::changeLiveCodec,
+                            onLineSelected = playerViewModel::changeLiveLine,
                             onCopyLink = copyLiveRoomUrl,
                             onShare = shareLiveRoom,
                             onOpenBrowser = openLiveInBrowser,
@@ -856,6 +868,7 @@ fun VideoPlayerScreen(
                                     onLikeClick = likeLiveRoom,
                                     onQualitySelected = playerViewModel::changeLiveQuality,
                                     onCodecSelected = playerViewModel::changeLiveCodec,
+                                    onLineSelected = playerViewModel::changeLiveLine,
                                     onRefresh = { playerViewModel.loadLiveStreamWithQuality(playerViewModel.liveRoomId, playerViewModel.currentLiveQn) },
                                     onCopyLink = copyLiveRoomUrl,
                                     onShare = shareLiveRoom,
@@ -1275,6 +1288,7 @@ fun VideoPlayerScreen(
                         onRefresh = { playerViewModel.loadLiveStreamWithQuality(playerViewModel.liveRoomId, playerViewModel.currentLiveQn) },
                         onQualitySelected = playerViewModel::changeLiveQuality,
                         onCodecSelected = playerViewModel::changeLiveCodec,
+                        onLineSelected = playerViewModel::changeLiveLine,
                         onCopyLink = copyLiveRoomUrl,
                         onShare = shareLiveRoom,
                         onOpenBrowser = openLiveInBrowser,
@@ -2351,6 +2365,7 @@ private fun LiveRoomPanel(
     onRefresh: () -> Unit,
     onQualitySelected: (Int) -> Unit,
     onCodecSelected: (LiveCodec) -> Unit,
+    onLineSelected: (Int) -> Unit,
     onCopyLink: () -> Unit,
     onShare: () -> Unit,
     onOpenBrowser: () -> Unit,
@@ -2427,6 +2442,7 @@ private fun LiveRoomPanel(
                     onLikeClick = onLikeClick,
                     onQualitySelected = onQualitySelected,
                     onCodecSelected = onCodecSelected,
+                    onLineSelected = onLineSelected,
                     onRefresh = onRefresh,
                     onCopyLink = onCopyLink,
                     onShare = onShare,
@@ -2445,6 +2461,7 @@ private fun LiveRoomInputBar(
     onLikeClick: () -> Unit,
     onQualitySelected: (Int) -> Unit,
     onCodecSelected: (LiveCodec) -> Unit,
+    onLineSelected: (Int) -> Unit,
     onRefresh: () -> Unit,
     onCopyLink: () -> Unit,
     onShare: () -> Unit,
@@ -2452,7 +2469,13 @@ private fun LiveRoomInputBar(
 ) {
     var showQualityMenu by remember { mutableStateOf(false) }
     var showCodecMenu by remember { mutableStateOf(false) }
+    var showLineMenu by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
+    val currentLiveLine = playerViewModel.availableLiveLines
+        .firstOrNull { it.index == playerViewModel.currentLiveLineIndex }
+    val currentLiveLineButtonText = currentLiveLine
+        ?.let { "线路 ${it.index + 1}" }
+        ?: "线路"
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -2518,6 +2541,32 @@ private fun LiveRoomInputBar(
                                 onQualitySelected(qn)
                             }
                         )
+                    }
+                }
+            }
+            if (playerViewModel.availableLiveLines.isNotEmpty()) {
+                Box {
+                    TextButton(onClick = { showLineMenu = true }) {
+                        Text(
+                            text = currentLiveLineButtonText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = Color(0xFFEEEEEE)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showLineMenu,
+                        onDismissRequest = { showLineMenu = false }
+                    ) {
+                        playerViewModel.availableLiveLines.forEach { line ->
+                            DropdownMenuItem(
+                                text = { Text(line.displayName) },
+                                onClick = {
+                                    showLineMenu = false
+                                    onLineSelected(line.index)
+                                }
+                            )
+                        }
                     }
                 }
             }

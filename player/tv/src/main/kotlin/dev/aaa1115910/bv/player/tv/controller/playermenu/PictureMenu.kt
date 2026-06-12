@@ -61,6 +61,7 @@ fun PictureMenuList(
     onAudioChange: (Audio) -> Unit,
     onLiveQualityChange: (Int) -> Unit = {},
     onLiveCodecChange: (LiveCodec) -> Unit = {},
+    onLiveLineChange: (Int) -> Unit = {},
     onFocusStateChange: (MenuFocusState) -> Unit
 ) {
     val context = LocalContext.current
@@ -70,6 +71,7 @@ fun PictureMenuList(
     val parentMenuPositionFocusRequester = remember { FocusRequester() }
     val pictureMenuItems = remember(
         videoPlayerConfigData.isLive,
+        videoPlayerConfigData.availableLiveLines,
         videoPlayerConfigData.supportManualVideoRotation,
         videoPlayerConfigData.currentDanmakuSpeedMode
     ) {
@@ -77,6 +79,8 @@ fun PictureMenuList(
             (videoPlayerConfigData.isLive && it == VideoPlayerPictureMenuItem.PlaySpeed) ||
                 (videoPlayerConfigData.isLive && it == VideoPlayerPictureMenuItem.DanmakuSpeedMode) ||
                 (videoPlayerConfigData.isLive && it == VideoPlayerPictureMenuItem.DanmakuPresentationSpeed) ||
+                (!videoPlayerConfigData.isLive && it == VideoPlayerPictureMenuItem.LiveLine) ||
+                (videoPlayerConfigData.isLive && it == VideoPlayerPictureMenuItem.LiveLine && videoPlayerConfigData.availableLiveLines.isEmpty()) ||
                 (!videoPlayerConfigData.supportManualVideoRotation && it == VideoPlayerPictureMenuItem.Rotation) ||
                 (
                     it == VideoPlayerPictureMenuItem.DanmakuPresentationSpeed &&
@@ -168,6 +172,23 @@ fun PictureMenuList(
                             }
                         )
                     }
+                }
+
+                VideoPlayerPictureMenuItem.LiveLine -> {
+                    val liveLines = videoPlayerConfigData.availableLiveLines
+                    val selectedIndex = liveLines
+                        .indexOfFirst { it.index == videoPlayerConfigData.currentLiveLineIndex }
+                        .coerceAtLeast(0)
+                    RadioMenuList(
+                        modifier = menuItemsModifier,
+                        items = liveLines.map { it.displayName },
+                        selected = selectedIndex,
+                        onSelectedChanged = { onLiveLineChange(liveLines[it].index) },
+                        onFocusBackToParent = {
+                            onFocusStateChange(MenuFocusState.Menu)
+                            parentMenuFocusRequester.requestFocus()
+                        }
+                    )
                 }
 
                 VideoPlayerPictureMenuItem.AspectRatio -> RadioMenuList(

@@ -170,6 +170,8 @@ data class VideoPlayerConfigData(
     val currentLiveQualityDescription: String = "",
     val availableLiveCodecs: List<LiveCodec> = LiveCodec.entries,
     val currentLiveCodec: LiveCodec = LiveCodec.HLS,
+    val availableLiveLines: List<LiveStreamLine> = emptyList(),
+    val currentLiveLineIndex: Int = 0,
     val bottomControlPanelConfig: PlayerBottomControlPanelConfig = PlayerBottomControlPanelConfig.Default,
 )
 

@@ -37,6 +37,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.aaa1115910.biliapi.entity.video.Subtitle
+import dev.aaa1115910.bv.player.entity.LiveStreamLine
 import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.player.shared.R
 import dev.aaa1115910.bv.player.tv.theme.PlayerColors
@@ -119,6 +120,88 @@ internal fun SpeedDialog(
                         contentDescription = null,
                         tint = PlayerColors.textPrimary
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun LiveLineDialog(
+    modifier: Modifier = Modifier,
+    lines: List<LiveStreamLine>,
+    currentLineIndex: Int,
+    onHideDialog: () -> Unit,
+    onLineChange: (Int) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val focusRequesters = remember(lines) {
+        lines.associate { it.index to FocusRequester() }
+    }
+    var lastInteractionTime by remember { mutableStateOf(System.currentTimeMillis()) }
+
+    fun touch() {
+        lastInteractionTime = System.currentTimeMillis()
+    }
+
+    LaunchedEffect(lines, currentLineIndex) {
+        val requester = focusRequesters[currentLineIndex]
+            ?: lines.firstOrNull()?.let { focusRequesters[it.index] }
+        requester?.requestFocus(scope)
+    }
+
+    LaunchedEffect(lastInteractionTime) {
+        val base = lastInteractionTime
+        delay(15000)
+        if (base == lastInteractionTime) onHideDialog()
+    }
+
+    Dialog(onDismissRequest = { onHideDialog() }) {
+        Surface(
+            modifier = modifier.width(360.dp),
+            color = PlayerColors.dialogBackground,
+            shape = MaterialTheme.shapes.medium
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Text(
+                    text = "直播线路",
+                    color = PlayerColors.textPrimary,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontSize = 18.sp
+                )
+
+                Column {
+                    lines.forEach { line ->
+                        val selected = line.index == currentLineIndex
+                        Button(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp, start = 8.dp, end = 8.dp)
+                                .focusRequester(focusRequesters[line.index]!!),
+                            shape = ButtonDefaults.shape(MaterialTheme.shapes.medium),
+                            scale = ButtonDefaults.scale(focusedScale = 1f),
+                            colors = ButtonDefaults.colors(
+                                containerColor = if (selected) MaterialTheme.colorScheme.inverseSurface.copy(
+                                    alpha = 0.4f
+                                ) else PlayerColors.buttonDefault,
+                                contentColor = PlayerColors.textPrimary,
+                                focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
+                                focusedContentColor = androidx.compose.ui.graphics.Color.Black
+                            ),
+                            onClick = {
+                                touch()
+                                onLineChange(line.index)
+                                onHideDialog()
+                            }
+                        ) {
+                            Text(
+                                modifier = Modifier.fillMaxWidth(),
+                                text = line.displayName,
+                                textAlign = TextAlign.Center,
+                                fontSize = 16.sp
+                            )
+                        }
+                    }
                 }
             }
         }

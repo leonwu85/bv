@@ -75,6 +75,7 @@
     <string name="video_player_menu_nav_danmaku">弹幕设置</string>
     <string name="video_player_menu_nav_others">其它设置</string>
     <string name="video_player_menu_nav_picture">画面音频</string>
+    <string name="video_player_menu_picture_live_line">直播线路</string>
     <string name="video_player_menu_nav_subtitle">字幕设置</string>
     <string name="video_player_menu_nav_triple_like">一键三连</string>
     <string name="video_player_menu_others_play_mode">播放模式</string>

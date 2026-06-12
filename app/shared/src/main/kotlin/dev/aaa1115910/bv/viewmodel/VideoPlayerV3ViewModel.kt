@@ -70,6 +70,7 @@ import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoAspectRatio
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.player.entity.LiveCodec
+import dev.aaa1115910.bv.player.entity.LiveStreamLine
 import dev.aaa1115910.bv.player.entity.VideoListInteractiveNode
 import dev.aaa1115910.bv.player.entity.VideoListItemData
 import dev.aaa1115910.bv.player.entity.VideoPlayerViewPoint
@@ -440,6 +441,11 @@ class VideoPlayerV3ViewModel(
 
     // 直播编码管理
     var currentLiveCodec by mutableStateOf(settings.defaultLiveCodec)
+
+    // 直播线路管理
+    var availableLiveLines = mutableStateListOf<LiveStreamLine>()
+    var currentLiveLineIndex by mutableIntStateOf(0)
+    private var preferredLiveLineIndex: Int? = null
 
     // 直播流URL过期时间（毫秒时间戳）
     var liveStreamExpiresAt by mutableLongStateOf(0L)
@@ -3429,6 +3435,9 @@ class VideoPlayerV3ViewModel(
                 liveStreamExpiresAt = playInfo.expiresAt
                 currentLiveQn = playInfo.currentQn
                 liveQnDescMap = playInfo.qnDescMap
+                currentLiveLineIndex = playInfo.currentLineIndex
+                availableLiveLines.clear()
+                availableLiveLines.addAll(playInfo.availableLines)
 
                 // 更新可用画质列表（按 qn 降序，即最高画质在前）
                 val qualities = playInfo.acceptQn
@@ -3651,6 +3660,16 @@ class VideoPlayerV3ViewModel(
     }
 
     /**
+     * 切换直播线路
+     * @param lineIndex 目标线路序号，对应当前播放信息中的 url_info 下标
+     */
+    fun changeLiveLine(lineIndex: Int) {
+        logger.fInfo { "Change live line to: $lineIndex" }
+        preferredLiveLineIndex = lineIndex
+        loadLiveStreamWithQuality(liveRoomId, currentLiveQn)
+    }
+
+    /**
      * 直播流错误时自动重连
      * 延迟 2 秒后重新获取直播流 URL 并播放。
      * 使用 liveRetryJob 做防抖：新的重连请求会取消上一次未执行的延迟重试。
@@ -3696,6 +3715,9 @@ class VideoPlayerV3ViewModel(
                 liveStreamUrl = playInfo.streamUrl
                 liveStreamExpiresAt = playInfo.expiresAt
                 currentLiveQn = playInfo.currentQn
+                currentLiveLineIndex = playInfo.currentLineIndex
+                availableLiveLines.clear()
+                availableLiveLines.addAll(playInfo.availableLines)
                 videoPlayer?.playUrl(videoUrl = playInfo.streamUrl)
                 videoPlayer?.prepare()
                 videoPlayer?.start()
@@ -3778,6 +3800,9 @@ class VideoPlayerV3ViewModel(
                 liveStreamUrl = playInfo.streamUrl
                 liveStreamExpiresAt = playInfo.expiresAt
                 currentLiveQn = playInfo.currentQn
+                currentLiveLineIndex = playInfo.currentLineIndex
+                availableLiveLines.clear()
+                availableLiveLines.addAll(playInfo.availableLines)
             }
 
             // 无缝切换：更新播放器URL
@@ -3809,7 +3834,8 @@ class VideoPlayerV3ViewModel(
             roomId = roomId,
             qn = preferredQn,
             preferredCodec = codec,
-            liveCdnHost = liveCdnHost
+            liveCdnHost = liveCdnHost,
+            preferredLineIndex = preferredLiveLineIndex
         )
             ?: return null
         val resolvedQn = LiveQualityPreference.resolveRequestedQn(preferredQn, initialPlayInfo.acceptQn)
@@ -3825,7 +3851,8 @@ class VideoPlayerV3ViewModel(
             roomId = roomId,
             qn = resolvedQn,
             preferredCodec = codec,
-            liveCdnHost = liveCdnHost
+            liveCdnHost = liveCdnHost,
+            preferredLineIndex = preferredLiveLineIndex
         ) ?: initialPlayInfo
     }
 

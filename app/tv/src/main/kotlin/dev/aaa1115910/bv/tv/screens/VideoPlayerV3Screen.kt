@@ -464,6 +464,8 @@ fun VideoPlayerV3Screen(
             currentLiveQn = playerViewModel.currentLiveQn,
             currentLiveQualityDescription = playerViewModel.currentLiveQualityDescription,
             currentLiveCodec = playerViewModel.currentLiveCodec,
+            availableLiveLines = playerViewModel.availableLiveLines.toList(),
+            currentLiveLineIndex = playerViewModel.currentLiveLineIndex,
             bottomControlPanelConfig = Prefs.playerBottomControlPanelConfig
         ),
         LocalVideoPlayerDanmakuMasksData provides VideoPlayerDanmakuMasksData(
@@ -820,6 +822,9 @@ fun VideoPlayerV3Screen(
                 onLiveCodecChange = { codec ->
                     println("VideoPlayerV3Screen: onLiveCodecChange called with codec=$codec")
                     playerViewModel.changeLiveCodec(codec)
+                },
+                onLiveLineChange = { lineIndex ->
+                    playerViewModel.changeLiveLine(lineIndex)
                 },
                 onDanmakuSwitchChange = { enabledDanmakuTypes ->
                     Prefs.defaultDanmakuTypes = enabledDanmakuTypes

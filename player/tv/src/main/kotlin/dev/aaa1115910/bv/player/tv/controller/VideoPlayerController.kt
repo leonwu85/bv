@@ -133,6 +133,7 @@ fun VideoPlayerController(
     onPlaybackMediaModeChange: (PlaybackMediaMode) -> Unit,
     onLiveQualityChange: (Int) -> Unit = {},
     onLiveCodecChange: (LiveCodec) -> Unit = {},
+    onLiveLineChange: (Int) -> Unit = {},
     onDanmakuSwitchChange: (List<DanmakuType>) -> Unit,
     onDanmakuSizeChange: (Float) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
@@ -738,6 +739,7 @@ fun VideoPlayerController(
             },
             onOpenDanmaku = onOpenDanmaku,
             onHideDanmaku = onHideDanmaku,
+            onLiveLineChange = onLiveLineChange,
             onOpenPlayList = {
                 showInfo = false
                 showListController = true
@@ -806,6 +808,7 @@ fun VideoPlayerController(
             onAudioChange = onAudioChange,
             onLiveQualityChange = onLiveQualityChange,
             onLiveCodecChange = onLiveCodecChange,
+            onLiveLineChange = onLiveLineChange,
             onDanmakuSwitchChange = onDanmakuSwitchChange,
             onDanmakuSizeChange = onDanmakuSizeChange,
             onDanmakuOpacityChange = onDanmakuOpacityChange,
