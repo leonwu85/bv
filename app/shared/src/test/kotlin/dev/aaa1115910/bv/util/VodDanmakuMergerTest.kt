@@ -54,6 +54,45 @@ class VodDanmakuMergerTest {
     }
 
     @Test
+    fun mergesRepeatedPureQuestionMarks() {
+        val state = VodDanmakuMergeState()
+
+        val result = VodDanmakuMerger.processSegment(
+            segmentDanmaku = listOf(
+                danmaku(time = 1f, dmid = 1L, text = "？"),
+                danmaku(time = 2f, dmid = 2L, text = "？？？"),
+                danmaku(time = 3f, dmid = 3L, text = "？？")
+            ),
+            segmentIndex = 1,
+            segmentDurationMs = 360_000L,
+            state = state
+        )
+
+        assertEquals(1, result.emittedDanmaku.size)
+        assertEquals(2, result.mergedDuplicateCount)
+        assertEquals("？？(x3)", result.emittedDanmaku.single().content)
+    }
+
+    @Test
+    fun doesNotMergeDifferentPurePunctuation() {
+        val state = VodDanmakuMergeState()
+
+        val result = VodDanmakuMerger.processSegment(
+            segmentDanmaku = listOf(
+                danmaku(time = 1f, dmid = 1L, text = "？"),
+                danmaku(time = 2f, dmid = 2L, text = "！！！"),
+                danmaku(time = 3f, dmid = 3L, text = "？！")
+            ),
+            segmentIndex = 1,
+            segmentDurationMs = 360_000L,
+            state = state
+        )
+
+        assertEquals(3, result.emittedDanmaku.size)
+        assertEquals(0, result.mergedDuplicateCount)
+    }
+
+    @Test
     fun mergesWhenVisualAttributesDifferButKeepsTypesSeparate() {
         val state = VodDanmakuMergeState()
 

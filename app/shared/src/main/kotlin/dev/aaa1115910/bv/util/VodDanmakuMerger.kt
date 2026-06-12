@@ -242,7 +242,8 @@ internal data class ActiveDanmakuGroup(
 
 internal data class DanmakuTextAnalysis(
     val normalized: String,
-    val pinyinTokens: List<String>
+    val pinyinTokens: List<String>,
+    val isPureNoise: Boolean
 )
 
 private object DanmakuTextAnalyzer {
@@ -258,24 +259,39 @@ private object DanmakuTextAnalyzer {
     fun analyze(text: String): DanmakuTextAnalysis {
         val normalized = normalize(text)
         return DanmakuTextAnalysis(
-            normalized = normalized,
-            pinyinTokens = pinyinTokens(normalized)
+            normalized = normalized.text,
+            pinyinTokens = if (normalized.isPureNoise) emptyList() else pinyinTokens(normalized.text),
+            isPureNoise = normalized.isPureNoise
         )
     }
 
-    private fun normalize(text: String): String {
+    private fun normalize(text: String): NormalizedText {
         val halfWidth = text
             .map { it.toHalfWidth() }
             .joinToString(separator = "")
             .lowercase(Locale.ROOT)
+        normalizePureNoise(halfWidth)?.let {
+            return NormalizedText(text = it, isPureNoise = true)
+        }
         val withoutTrailingNoise = halfWidth.trimTrailingNoise()
         val compressed = withoutTrailingNoise.compressSpaces()
         val compacted = compressed.removeSpacesBetweenHan()
-        return when {
-            force233Regex.matches(compacted) -> "23333"
-            force666Regex.matches(compacted) -> "66666"
-            else -> compacted
-        }
+        return NormalizedText(
+            text = when {
+                force233Regex.matches(compacted) -> "23333"
+                force666Regex.matches(compacted) -> "66666"
+                else -> compacted
+            },
+            isPureNoise = false
+        )
+    }
+
+    private fun normalizePureNoise(text: String): String? {
+        val compacted = text.filterNot { it.isWhitespace() }
+        if (compacted.isEmpty() || compacted.any { !it.isTrailingNoise() }) return null
+
+        val first = compacted.first()
+        return if (compacted.all { it == first }) first.toString() else compacted
     }
 
     private fun pinyinTokens(normalized: String): List<String> {
@@ -353,7 +369,7 @@ private object DanmakuTextAnalyzer {
     }
 
     private fun Char.isTrailingNoise(): Boolean {
-        return when (Character.getType(this).toInt()) {
+        return when (Character.getType(this)) {
             Character.CONNECTOR_PUNCTUATION.toInt(),
             Character.DASH_PUNCTUATION.toInt(),
             Character.START_PUNCTUATION.toInt(),
@@ -378,6 +394,11 @@ private object DanmakuTextAnalyzer {
     }
 }
 
+private data class NormalizedText(
+    val text: String,
+    val isPureNoise: Boolean
+)
+
 private object DanmakuSimilarity {
     fun isSimilar(
         existing: DanmakuTextAnalysis,
@@ -385,6 +406,7 @@ private object DanmakuSimilarity {
     ): Boolean {
         if (existing.normalized.isBlank() || candidate.normalized.isBlank()) return false
         if (existing.normalized == candidate.normalized) return true
+        if (existing.isPureNoise || candidate.isPureNoise) return false
         if (isTextEditDistanceSimilar(existing.normalized, candidate.normalized)) return true
         return isPinyinSimilar(existing.pinyinTokens, candidate.pinyinTokens)
     }
