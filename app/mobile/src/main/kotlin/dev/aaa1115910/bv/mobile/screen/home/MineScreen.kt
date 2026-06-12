@@ -235,7 +235,10 @@ fun MineScreen(
                             }
                         )
                     } else {
-                        MineGuestCard(onLogin = ::openLogin)
+                        MineGuestCard(
+                            centerContent = windowSize != WindowWidthSizeClass.Compact,
+                            onLogin = ::openLogin
+                        )
                     }
                 }
 
@@ -316,6 +319,7 @@ private fun MineHeaderActions(
 @Composable
 private fun MineGuestCard(
     modifier: Modifier = Modifier,
+    centerContent: Boolean = false,
     onLogin: () -> Unit
 ) {
     Card(
@@ -326,7 +330,13 @@ private fun MineGuestCard(
         shape = MaterialTheme.shapes.extraLarge
     ) {
         Column(
-            modifier = Modifier.padding(24.dp),
+            modifier = if (centerContent) {
+                Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+            } else {
+                Modifier.padding(24.dp)
+            },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {

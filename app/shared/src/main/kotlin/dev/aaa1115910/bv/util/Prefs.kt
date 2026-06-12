@@ -1280,7 +1280,7 @@ object PrefKeys {
         PreferenceRequest(prefSuperResolutionTypeKey, SuperResolutionType.Disable.value)
     val prefVlcLibsVersionRequest = PreferenceRequest(prefVlcLibsVersionKey, "")
     val prefDefaultDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultDanmakuFilterLevelKey, 1)
-    val prefDefaultDanmakuMergeEnabledRequest = PreferenceRequest(prefDefaultDanmakuMergeEnabledKey, false)
+    val prefDefaultDanmakuMergeEnabledRequest = PreferenceRequest(prefDefaultDanmakuMergeEnabledKey, true)
     val prefDefaultLiveDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultLiveDanmakuFilterLevelKey, 0)
     val prefDynamicPageStyleRequest = PreferenceRequest(prefDynamicPageStyleKey, DynamicPageStyle.New.value)
     val prefDynamicDefaultTabRequest = PreferenceRequest(prefDynamicDefaultTabKey, DynamicTabType.All.value)

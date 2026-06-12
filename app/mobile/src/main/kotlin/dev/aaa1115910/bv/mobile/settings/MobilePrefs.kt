@@ -501,7 +501,7 @@ object MobilePrefKeys {
         PreferenceRequest(defaultDanmakuPresentationSpeedKey, 1f)
     val defaultDanmakuMaskRequest = PreferenceRequest(defaultDanmakuMaskKey, true)
     val defaultDanmakuFilterLevelRequest = PreferenceRequest(defaultDanmakuFilterLevelKey, 1)
-    val defaultDanmakuMergeEnabledRequest = PreferenceRequest(defaultDanmakuMergeEnabledKey, false)
+    val defaultDanmakuMergeEnabledRequest = PreferenceRequest(defaultDanmakuMergeEnabledKey, true)
     val defaultLiveDanmakuFilterLevelRequest = PreferenceRequest(defaultLiveDanmakuFilterLevelKey, 0)
     val defaultSubtitleFontSizeRequest = PreferenceRequest(defaultSubtitleFontSizeKey, 24)
     val defaultSubtitleBackgroundOpacityRequest = PreferenceRequest(defaultSubtitleBackgroundOpacityKey, 0.4f)
