@@ -64,6 +64,18 @@ class RecommendVideoRepository(
         }
     }
 
+    suspend fun getRankVideos(
+        rid: Int,
+        type: String = "all"
+    ): List<UgcItem> {
+        val response = BiliHttpApi.getRankVideoData(
+            rid = rid,
+            type = type,
+            sessData = authRepository.sessionData
+        ).getResponseData()
+        return response.list.map { UgcItem.fromVideoInfo(it) }
+    }
+
     suspend fun getRecommendVideos(
         page: RecommendPage = RecommendPage(),
         preferApiType: ApiType = ApiType.Web

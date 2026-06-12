@@ -2544,32 +2544,6 @@ private fun LiveRoomInputBar(
                     }
                 }
             }
-            if (playerViewModel.availableLiveLines.isNotEmpty()) {
-                Box {
-                    TextButton(onClick = { showLineMenu = true }) {
-                        Text(
-                            text = currentLiveLineButtonText,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = Color(0xFFEEEEEE)
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showLineMenu,
-                        onDismissRequest = { showLineMenu = false }
-                    ) {
-                        playerViewModel.availableLiveLines.forEach { line ->
-                            DropdownMenuItem(
-                                text = { Text(line.displayName) },
-                                onClick = {
-                                    showLineMenu = false
-                                    onLineSelected(line.index)
-                                }
-                            )
-                        }
-                    }
-                }
-            }
             IconButton(onClick = onLikeClick) {
                 Box {
                     Icon(
@@ -2638,6 +2612,15 @@ private fun LiveRoomInputBar(
                             showCodecMenu = true
                         }
                     )
+                    if (playerViewModel.availableLiveLines.isNotEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text("线路：$currentLiveLineButtonText") },
+                            onClick = {
+                                showMoreMenu = false
+                                showLineMenu = true
+                            }
+                        )
+                    }
                 }
                 DropdownMenu(
                     expanded = showCodecMenu,
@@ -2649,6 +2632,20 @@ private fun LiveRoomInputBar(
                             onClick = {
                                 showCodecMenu = false
                                 onCodecSelected(codec)
+                            }
+                        )
+                    }
+                }
+                DropdownMenu(
+                    expanded = showLineMenu,
+                    onDismissRequest = { showLineMenu = false }
+                ) {
+                    playerViewModel.availableLiveLines.forEach { line ->
+                        DropdownMenuItem(
+                            text = { Text(line.displayName) },
+                            onClick = {
+                                showLineMenu = false
+                                onLineSelected(line.index)
                             }
                         )
                     }

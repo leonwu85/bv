@@ -102,6 +102,7 @@ import dev.aaa1115910.bv.util.resizedImageUrl
 import dev.aaa1115910.bv.viewmodel.live.LiveTabType
 import dev.aaa1115910.bv.viewmodel.live.LiveViewModel
 import dev.aaa1115910.bv.viewmodel.home.PopularViewModel
+import dev.aaa1115910.bv.viewmodel.home.RankViewModel
 import dev.aaa1115910.bv.viewmodel.pgc.FeedListType
 import dev.aaa1115910.bv.viewmodel.pgc.PgcAnimeViewModel
 import dev.aaa1115910.bv.viewmodel.pgc.PgcDocumentaryViewModel
@@ -164,6 +165,7 @@ fun ContentCenterScreen(
     ugcKichikuViewModel: UgcKichikuViewModel = koinViewModel(),
     ugcFashionViewModel: UgcFashionViewModel = koinViewModel(),
     popularViewModel: PopularViewModel = koinViewModel(),
+    rankViewModel: RankViewModel = koinViewModel(),
     liveViewModel: LiveViewModel = koinViewModel()
 ) {
     var section by rememberSaveable(lockedSection, initialSection) {
@@ -223,7 +225,7 @@ fun ContentCenterScreen(
                     windowSize = windowSize,
                     initialType = initialUgcType,
                     rankItems = listOf(
-                        RankContentItem.Popular("全站", popularViewModel),
+                        RankContentItem.Rank("全站", rankViewModel),
                         RankContentItem.Pgc("番剧", PgcType.Anime, pgcAnimeViewModel),
                         RankContentItem.Pgc("国创", PgcType.GuoChuang, pgcGuoChuangViewModel),
                         RankContentItem.Ugc(UgcTypeV2.Douga, ugcDougaViewModel),
@@ -798,6 +800,13 @@ private fun UgcChannelPage(
 
     LaunchedEffect(selectedItem) {
         when (selectedItem) {
+            is RankContentItem.Rank -> {
+                if (selectedItem.viewModel.allRankVideoList.isEmpty()) {
+                    withContext(Dispatchers.IO) {
+                        selectedItem.viewModel.loadAllRank()
+                    }
+                }
+            }
             is RankContentItem.Popular -> {
                 if (selectedItem.viewModel.popularVideoList.isEmpty()) {
                     withContext(Dispatchers.IO) {
@@ -823,11 +832,13 @@ private fun UgcChannelPage(
     }
 
     val loading = when (selectedItem) {
+        is RankContentItem.Rank -> selectedItem.viewModel.loading
         is RankContentItem.Popular -> selectedItem.viewModel.loading
         is RankContentItem.Pgc -> selectedItem.viewModel.updating
         is RankContentItem.Ugc -> selectedItem.viewModel.updating
     }
     val hasMore = when (selectedItem) {
+        is RankContentItem.Rank -> false
         is RankContentItem.Popular -> true
         is RankContentItem.Pgc -> selectedItem.viewModel.hasNext
         is RankContentItem.Ugc -> selectedItem.viewModel.hasMore
@@ -837,6 +848,7 @@ private fun UgcChannelPage(
         loading = loading || !hasMore,
         loadMore = {
             when (selectedItem) {
+                is RankContentItem.Rank -> Unit
                 is RankContentItem.Popular -> scope.launch(Dispatchers.IO) { selectedItem.viewModel.loadMore() }
                 is RankContentItem.Pgc -> selectedItem.viewModel.loadMore()
                 is RankContentItem.Ugc -> scope.launch { selectedItem.viewModel.loadMore() }
@@ -1975,6 +1987,15 @@ private sealed class RankContentItem {
     abstract fun label(context: Context): String
     abstract fun videoItems(): List<UgcItem>
     abstract fun pgcItems(): List<PgcItem>
+
+    data class Rank(
+        val title: String,
+        val viewModel: RankViewModel
+    ) : RankContentItem() {
+        override fun label(context: Context): String = title
+        override fun videoItems(): List<UgcItem> = viewModel.allRankVideoList
+        override fun pgcItems(): List<PgcItem> = emptyList()
+    }
 
     data class Popular(
         val title: String,

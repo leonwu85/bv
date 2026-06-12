@@ -84,6 +84,7 @@ import dev.aaa1115910.biliapi.http.entity.video.InteractiveEdgeInfo
 import dev.aaa1115910.biliapi.http.entity.video.PlayUrlData
 import dev.aaa1115910.biliapi.http.entity.video.PlayUrlV2Data
 import dev.aaa1115910.biliapi.http.entity.video.PopularVideoData
+import dev.aaa1115910.biliapi.http.entity.video.RankVideoData
 import dev.aaa1115910.biliapi.http.entity.video.RelatedVideosResponse
 import dev.aaa1115910.biliapi.http.entity.video.SetVideoFavorite
 import dev.aaa1115910.biliapi.http.entity.video.Tag
@@ -100,6 +101,7 @@ import dev.aaa1115910.biliapi.http.entity.video.VideoShot
 import dev.aaa1115910.biliapi.http.entity.web.NavResponseData
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
 import dev.aaa1115910.biliapi.http.util.BiliAppConf
+import dev.aaa1115910.biliapi.http.util.encWbi
 import dev.aaa1115910.biliapi.http.util.encApiSign
 import dev.aaa1115910.biliapi.http.util.signWbi
 import io.ktor.client.HttpClient
@@ -234,6 +236,20 @@ object BiliHttpApi {
         parameter("pn", pageNumber)
         parameter("ps", pageSize)
         header("Cookie", "SESSDATA=$sessData;")
+    }.body()
+
+    /**
+     * 获取视频排行榜
+     */
+    suspend fun getRankVideoData(
+        rid: Int,
+        type: String = "all",
+        sessData: String? = null
+    ): BiliResponse<RankVideoData> = client.get("/x/web-interface/ranking/v2") {
+        parameter("rid", rid)
+        parameter("type", type)
+        sessData?.let { header("Cookie", "SESSDATA=$it;") }
+        encWbi()
     }.body()
 
     /**
