@@ -1272,6 +1272,13 @@ fun BvPlayer(
     }
 
     LaunchedEffect(danmakuPlayer) {
+        if (
+            mDanmakuPlayer !== danmakuPlayer &&
+            danmakuPlayer != null &&
+            pendingReloadDanmakuPosition < 0L
+        ) {
+            hasStartedPlaybackOnce = false
+        }
         mDanmakuPlayer = danmakuPlayer
         danmakuLayerHandle.updateDanmakuPlayer(danmakuPlayer)
         applyDanmakuConfig(
@@ -1752,11 +1759,16 @@ fun BvPlayer(
                     mDanmakuPlayer = boundPlayer
                     updateAllDanmakuPlayerConfig(danmakuConfig)
 
-                    val position = runCatching { videoPlayer.currentPosition }
+                    val rawPosition = runCatching { videoPlayer.currentPosition }
                         .getOrDefault(0L)
                         .coerceAtLeast(0L)
-	                    val shouldPlay = videoPlayer.isPlaying || isPlaying
-	                    boundPlayer.seekTo(position)
+                    val shouldPlay = videoPlayer.isPlaying || isPlaying
+                    val position = if (!hasStartedPlaybackOnce && !shouldPlay) {
+                        0L
+                    } else {
+                        rawPosition
+                    }
+                    boundPlayer.seekTo(position)
                     if (shouldPlay) {
                         boundPlayer.start()
                     } else {
