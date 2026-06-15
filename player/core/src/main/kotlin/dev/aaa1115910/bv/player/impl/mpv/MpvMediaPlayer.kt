@@ -29,6 +29,7 @@ class MpvMediaPlayer(
     private var currentVideoUrl: String? = null
     private var currentAudioUrl: String? = null
     private var headers: Map<String, String> = emptyMap()
+    private var offlinePlaybackMode = false
 
     private var loadRequested = false
     private var mediaLoading = false
@@ -110,6 +111,12 @@ class MpvMediaPlayer(
     override fun setHeader(headers: Map<String, String>) {
         this.headers = headers
         applyNetworkOptions()
+    }
+
+    override fun setOfflinePlaybackMode(enabled: Boolean) {
+        if (offlinePlaybackMode == enabled) return
+        offlinePlaybackMode = enabled
+        applyOfflinePlaybackMode()
     }
 
     override fun playUrl(videoUrl: String?, audioUrl: String?) {
@@ -391,6 +398,7 @@ class MpvMediaPlayer(
         MPVLib.setOptionString("force-window", "no")
         MPVLib.setOptionString("idle", "yes")
         MPVLib.setPropertyBoolean("pause", true)
+        applyOfflinePlaybackMode()
         logSuperResolutionMpvOption()
     }
 
@@ -482,6 +490,23 @@ class MpvMediaPlayer(
         }
     }
 
+    private fun applyOfflinePlaybackMode() {
+        runMpv("apply offline playback mode") {
+            if (offlinePlaybackMode) {
+                setOptionString("hwdec", "no")
+                setOptionString("glsl-shaders", "")
+                logger.info { "MPV offline playback compatibility enabled: hwdec=no, glsl-shaders=<empty>" }
+            } else {
+                setOptionString("hwdec", resolveHardwareDecodeMode())
+                setOptionString("glsl-shaders", superResolutionShaderPaths)
+                logger.info {
+                    "MPV offline playback compatibility disabled: hwdec=${resolveHardwareDecodeMode()}, " +
+                        "glsl-shaders=${superResolutionShaderPaths.ifBlank { "<empty>" }}"
+                }
+            }
+        }
+    }
+
     private fun logSuperResolutionState(reason: String) {
         val videoWidth = _videoWidth
         val videoHeight = _videoHeight
@@ -550,6 +575,7 @@ class MpvMediaPlayer(
         }
 
         applyNetworkOptions()
+        applyOfflinePlaybackMode()
         val videoUrl = url.toMpvMediaUrl()
         val audioUrl = externalAudioUrl()?.toMpvMediaUrl()
         audioTrackAdded = audioUrl != null

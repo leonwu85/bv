@@ -52,6 +52,7 @@ data class VideoLaunchArgs(
     val cid: Long,
     val fromSeason: Boolean,
     val fromToView: Boolean,
+    val playOfflineCache: Boolean,
     val cover: String,
     val partTitle: String,
     val epid: Int?,
@@ -74,6 +75,7 @@ data class VideoLaunchArgs(
                 cid = intent.getLongExtra("cid", 0),
                 fromSeason = intent.getBooleanExtra("fromSeason", false),
                 fromToView = intent.getBooleanExtra("fromToView", false),
+                playOfflineCache = intent.getBooleanExtra("playOfflineCache", false),
                 cover = intent.getStringExtra("cover") ?: "",
                 partTitle = intent.getStringExtra("partTitle") ?: "",
                 epid = intent.getIntExtra("epid", 0).takeIf { it != 0 },
@@ -118,7 +120,7 @@ class VideoPlayerActivity : ComponentActivity() {
         fun actionStart(
             context: Context,
             aid: Long,
-            //cid: Long,
+            cid: Long = 0L,
             fromSeason: Boolean = false,
             fromToView: Boolean = false,
             cover: String = "",
@@ -132,13 +134,15 @@ class VideoPlayerActivity : ComponentActivity() {
             pubTime: String = "",
             epid: Int? = null,
             seasonId: Int? = null,
+            playOfflineCache: Boolean = false,
         ) {
             context.startActivity(
                 Intent(context, VideoPlayerActivity::class.java).apply {
                     putExtra("aid", aid)
-                    //putExtra("cid", cid)
+                    putExtra("cid", cid)
                     putExtra("fromSeason", fromSeason)
                     putExtra("fromToView", fromToView)
+                    putExtra("playOfflineCache", playOfflineCache)
                     putExtra("cover", cover)
                     putExtra("title", title)
                     putExtra("partTitle", partTitle)
@@ -465,16 +469,43 @@ class VideoPlayerActivity : ComponentActivity() {
             commentViewModel.commentType = 1
             commentViewModel.commentId = aid
 
-            runCatching {
-                videoDetailViewModel.setInToView(launchArgs.fromToView)
-                videoDetailViewModel.loadDetail(aid, fromSeason)
-            }.onFailure {
-                withContext(Dispatchers.Main) {
-                    it.message?.toast(this@VideoPlayerActivity)
+            val offlineEntry = if (launchArgs.playOfflineCache && aid > 0L && cid > 0L) {
+                playerViewModel.completedOfflineCacheEntry(aid, cid)
+            } else {
+                null
+            }
+
+            suspend fun applyOfflineDetailFallback() {
+                val entry = offlineEntry ?: return
+                videoDetailViewModel.applyOfflineCacheFallback(
+                    entry = entry,
+                    entries = playerViewModel.completedOfflineCacheEntries(entry.aid)
+                )
+            }
+
+            applyOfflineDetailFallback()
+            videoDetailViewModel.setInToView(launchArgs.fromToView)
+
+            val useOfflineOnly = offlineEntry != null
+            if (useOfflineOnly) {
+                logger.fInfo { "Use offline detail without online detail request: [avid=$aid, cid=$cid]" }
+            } else {
+                runCatching {
+                    videoDetailViewModel.loadDetail(aid, fromSeason)
+                }.onFailure {
+                    withContext(Dispatchers.Main) {
+                        it.message?.toast(this@VideoPlayerActivity)
+                    }
                 }
             }
             runCatching {
-                val target = if (fromSeason) {
+                val target = if (useOfflineOnly) {
+                    resolveUgcPlaybackTarget(
+                        aid = aid,
+                        cid = cid,
+                        settings = settings
+                    )
+                } else if (fromSeason) {
                     resolveSeasonPlaybackTarget(
                         aid = aid,
                         cid = cid,
@@ -490,7 +521,7 @@ class VideoPlayerActivity : ComponentActivity() {
                     )
                 }
 
-                playerViewModel.fromSeason = fromSeason
+                playerViewModel.fromSeason = fromSeason && !useOfflineOnly
                 playerViewModel.lastPlayed = target.playedMs
                 playerViewModel.subType = target.subType
                 playerViewModel.epid = target.epid ?: 0
@@ -499,7 +530,9 @@ class VideoPlayerActivity : ComponentActivity() {
                     avid = target.aid,
                     cid = target.cid,
                     epid = target.epid,
-                    seasonId = target.seasonId
+                    seasonId = target.seasonId,
+                    forceStartPlayback = launchArgs.playOfflineCache,
+                    preferOfflineCache = launchArgs.playOfflineCache
                 )
             }.onFailure {
                 withContext(Dispatchers.Main) {
@@ -603,21 +636,24 @@ class VideoPlayerActivity : ComponentActivity() {
 
     private fun applyUgcDetailMetadata(detail: VideoDetail, targetCid: Long) {
         val page = detail.pages.firstOrNull { it.cid == targetCid } ?: detail.pages.firstOrNull()
+        val formattedPubTime = detail.publishDate
+            .takeIf { it.time > 0L }
+            ?.formatPubTimeString(this@VideoPlayerActivity)
         playerViewModel.apply {
-            title = detail.title
-            partTitle = page?.title ?: ""
-            cover = detail.cover
+            title = detail.title.ifBlank { title }
+            partTitle = page?.title?.ifBlank { partTitle } ?: partTitle
+            cover = detail.cover.ifBlank { cover }
             playerIconIdle = detail.playerIcon?.idle ?: ""
             playerIconMoving = detail.playerIcon?.moving ?: ""
-            play = detail.stat.view
-            danmaku = detail.stat.danmaku
+            play = detail.stat.view.takeIf { it > 0L } ?: play
+            danmaku = detail.stat.danmaku.takeIf { it > 0 } ?: danmaku
             like = detail.stat.like
             coin = detail.stat.coin
             favorite = detail.stat.favorite
-            upName = detail.author.name
-            upId = detail.author.mid
-            upFace = detail.author.face
-            pubTime = detail.publishDate.formatPubTimeString(this@VideoPlayerActivity)
+            upName = detail.author.name.ifBlank { upName }
+            upId = detail.author.mid.takeIf { it > 0L } ?: upId
+            upFace = detail.author.face.ifBlank { upFace }
+            pubTime = formattedPubTime ?: pubTime
             isVerticalVideo = page?.dimension?.isVertical ?: false
         }
     }

@@ -6,6 +6,8 @@ import org.koin.core.annotation.Single
 class AuthRepository {
     var sessionData: String? = null
     var biliJct: String? = null
+    var dedeUserIDCkMd5: String? = null
+    var sid: String? = null
     var accessToken: String? = null
     var mid: Long? = null
     var buvid3: String? = null

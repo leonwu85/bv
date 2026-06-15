@@ -17,6 +17,7 @@ import androidx.media3.common.Player.DISCONTINUITY_REASON_SEEK
 import androidx.media3.common.Player.PositionInfo
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -80,7 +81,7 @@ class ExoMediaPlayer(
     }
 
     @OptIn(UnstableApi::class)
-    private val dataSourceFactory =
+    private val httpDataSourceFactory =
         OkHttpDataSource.Factory(
             if (options.isLive) OkHttpUtil.generateLiveOkHttpClient(context)
             else OkHttpUtil.generateCustomSslOkHttpClient(context)
@@ -88,6 +89,7 @@ class ExoMediaPlayer(
             options.userAgent?.let { setUserAgent(it) }
             options.referer?.let { setDefaultRequestProperties(mapOf("referer" to it)) }
         }
+    private val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
 
     init {
         initPlayer()

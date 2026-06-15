@@ -17,6 +17,9 @@ abstract class AbstractVideoPlayer {
         pendingSeekPosition = 0L
     }
 
+    /** 切换离线播放兼容模式，由具体播放器按需处理本地文件源。 */
+    open fun setOfflinePlaybackMode(enabled: Boolean) = Unit
+
     /**
      * 初始化播放器实例
      * 视频播放器第一步：创建视频播放器

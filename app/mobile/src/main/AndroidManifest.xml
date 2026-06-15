@@ -69,6 +69,11 @@
             android:label="@string/title_mobile_activity_toview"
             android:theme="@style/Theme.BV.Mobile" />
         <activity
+            android:name=".activities.OfflineCacheActivity"
+            android:exported="false"
+            android:label="离线缓存"
+            android:theme="@style/Theme.BV.Mobile" />
+        <activity
             android:name=".activities.FavoriteActivity"
             android:exported="false"
             android:label="@string/title_mobile_activity_favorite"

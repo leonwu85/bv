@@ -207,10 +207,21 @@ fun BvPlayer(
     val danmakuMaskBitmapPool = remember { DanmakuMaskBitmapPool() }
 
 
+    fun updatePlaybackProgress(position: Long, durationMs: Long, buffered: Int) {
+        if (isBuffering && (videoPlayer.isPlaying || position > currentPosition)) {
+            isBuffering = false
+        }
+        currentPosition = position
+        duration = durationMs
+        bufferedPercentage = buffered
+    }
+
     val updatePosition = {
-        currentPosition = videoPlayer.currentPosition
-        duration = videoPlayer.duration
-        bufferedPercentage = videoPlayer.bufferedPercentage
+        updatePlaybackProgress(
+            position = videoPlayer.currentPosition,
+            durationMs = videoPlayer.duration,
+            buffered = videoPlayer.bufferedPercentage
+        )
     }
 
     val updateEnabledDanmakuTypeFilter: (List<DanmakuType>) -> Unit = { danmakuTypes ->
@@ -496,6 +507,10 @@ fun BvPlayer(
             logger.info { "onBuffering" }
             isBuffering = true
             mDanmakuPlayer?.pause()
+        }
+
+        override fun onProgress(position: Long, duration: Long, buffered: Int) {
+            updatePlaybackProgress(position, duration, buffered)
         }
 
         override fun onEnd() {

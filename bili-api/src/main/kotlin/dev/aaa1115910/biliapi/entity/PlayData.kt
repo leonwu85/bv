@@ -140,17 +140,23 @@ data class PlayData(
             val audios = playUrlData.dash?.audio
             val dolbyItem = playUrlData.dash?.dolby?.audio?.firstOrNull()
             val flacItem = playUrlData.dash?.flac?.audio
-            val codec = playUrlData.supportFormats.associate {
-                it.quality to it.codecs!!
-            }
+            val codec = playUrlData.supportFormats
+                .mapNotNull { format ->
+                    format.codecs?.takeIf { it.isNotEmpty() }?.let { format.quality to it }
+                }
+                .toMap()
             val needPay = playUrlData.isPreview == 1
+            val timeLength = playUrlData.timeLength
+                .takeIf { it > 0 }
+                ?.toLong()
+                ?: ((playUrlData.dash?.duration ?: 0) * 1000L)
 
             val dashVideos = videos.map {
                 DashVideo(
                     quality = it.id,
                     baseUrl = it.baseUrl,
                     bandwidth = it.bandwidth,
-                    codecId = it.id,
+                    codecId = it.codecId,
                     width = it.width,
                     height = it.height,
                     frameRate = it.frameRate,
@@ -191,7 +197,7 @@ data class PlayData(
                 codec = codec,
                 needPay = needPay,
                 clipInfoList = playUrlData.clipInfoList,
-                timeLength = playUrlData.timeLength.toLong()
+                timeLength = timeLength
             )
         }
 

@@ -8,7 +8,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,6 +34,7 @@ import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.PersonRemove
 import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.MarkChatUnread
@@ -82,6 +86,7 @@ import dev.aaa1115910.bv.mobile.activities.FollowingUserActivity
 import dev.aaa1115910.bv.mobile.activities.HistoryActivity
 import dev.aaa1115910.bv.mobile.activities.InboxActivity
 import dev.aaa1115910.bv.mobile.activities.LoginActivity
+import dev.aaa1115910.bv.mobile.activities.OfflineCacheActivity
 import dev.aaa1115910.bv.mobile.activities.SettingsActivity
 import dev.aaa1115910.bv.mobile.activities.ToViewActivity
 import dev.aaa1115910.bv.mobile.activities.UserSpaceActivity
@@ -244,6 +249,7 @@ fun MineScreen(
 
                 item {
                     MineQuickActions(
+                        windowSize = windowSize,
                         enabled = userViewModel.isLogin,
                         onOpenHistory = {
                             context.startActivity(Intent(context, HistoryActivity::class.java))
@@ -256,6 +262,9 @@ fun MineScreen(
                         },
                         onOpenFavorite = {
                             context.startActivity(Intent(context, FavoriteActivity::class.java))
+                        },
+                        onOpenOfflineCache = {
+                            context.startActivity(Intent(context, OfflineCacheActivity::class.java))
                         },
                         onOpenInbox = {
                             InboxActivity.actionStart(context)
@@ -720,16 +729,52 @@ private fun AccountActionRow(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MineQuickActions(
+    windowSize: WindowWidthSizeClass,
     enabled: Boolean,
     onOpenHistory: () -> Unit,
     onOpenFollowingSeason: () -> Unit,
     onOpenToView: () -> Unit,
     onOpenFavorite: () -> Unit,
+    onOpenOfflineCache: () -> Unit,
     onOpenInbox: () -> Unit,
     onOpenLogin: () -> Unit
 ) {
+    val actions = listOf(
+        QuickAction(
+            icon = Icons.Rounded.History,
+            title = "观看记录",
+            onClick = if (enabled) onOpenHistory else onOpenLogin
+        ),
+        QuickAction(
+            icon = Icons.Rounded.MarkChatUnread,
+            title = "私信",
+            onClick = if (enabled) onOpenInbox else onOpenLogin
+        ),
+        QuickAction(
+            icon = Icons.Rounded.SupervisorAccount,
+            title = "我的追番",
+            onClick = if (enabled) onOpenFollowingSeason else onOpenLogin
+        ),
+        QuickAction(
+            icon = Icons.Rounded.WatchLater,
+            title = "稍后再看",
+            onClick = if (enabled) onOpenToView else onOpenLogin
+        ),
+        QuickAction(
+            icon = Icons.Rounded.Favorite,
+            title = "我的收藏",
+            onClick = if (enabled) onOpenFavorite else onOpenLogin
+        ),
+        QuickAction(
+            icon = Icons.Rounded.Download,
+            title = "离线缓存",
+            onClick = onOpenOfflineCache
+        )
+    )
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -737,54 +782,56 @@ private fun MineQuickActions(
         ),
         shape = MaterialTheme.shapes.extraLarge
     ) {
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item {
-                QuickActionItem(
-                    modifier = Modifier.width(86.dp),
-                    icon = Icons.Rounded.History,
-                    title = "观看记录",
-                    onClick = if (enabled) onOpenHistory else onOpenLogin
-                )
+        if (windowSize == WindowWidthSizeClass.Compact) {
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 12.dp)
+            ) {
+                val itemWidth = (maxWidth - MineQuickActionSpacing * 3f) / 4f
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    maxItemsInEachRow = 4,
+                    horizontalArrangement = Arrangement.spacedBy(MineQuickActionSpacing),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    actions.forEach { action ->
+                        QuickActionItem(
+                            modifier = Modifier.width(itemWidth),
+                            icon = action.icon,
+                            title = action.title,
+                            onClick = action.onClick
+                        )
+                    }
+                }
             }
-            item {
-                QuickActionItem(
-                    modifier = Modifier.width(86.dp),
-                    icon = Icons.Rounded.MarkChatUnread,
-                    title = "私信",
-                    onClick = if (enabled) onOpenInbox else onOpenLogin
-                )
-            }
-            item {
-                QuickActionItem(
-                    modifier = Modifier.width(86.dp),
-                    icon = Icons.Rounded.SupervisorAccount,
-                    title = "我的追番",
-                    onClick = if (enabled) onOpenFollowingSeason else onOpenLogin
-                )
-            }
-            item {
-                QuickActionItem(
-                    modifier = Modifier.width(86.dp),
-                    icon = Icons.Rounded.WatchLater,
-                    title = "稍后再看",
-                    onClick = if (enabled) onOpenToView else onOpenLogin
-                )
-            }
-            item {
-                QuickActionItem(
-                    modifier = Modifier.width(86.dp),
-                    icon = Icons.Rounded.Favorite,
-                    title = "我的收藏",
-                    onClick = if (enabled) onOpenFavorite else onOpenLogin
-                )
+        } else {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(MineQuickActionSpacing)
+            ) {
+                items(actions) { action ->
+                    QuickActionItem(
+                        modifier = Modifier.width(86.dp),
+                        icon = action.icon,
+                        title = action.title,
+                        onClick = action.onClick
+                    )
+                }
             }
         }
     }
 }
+
+private val MineQuickActionSpacing = 4.dp
+
+private data class QuickAction(
+    val icon: ImageVector,
+    val title: String,
+    val onClick: () -> Unit
+)
 
 @Composable
 private fun QuickActionItem(

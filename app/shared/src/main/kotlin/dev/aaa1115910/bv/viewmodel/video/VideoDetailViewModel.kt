@@ -7,6 +7,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
+import dev.aaa1115910.biliapi.entity.user.Author
+import dev.aaa1115910.biliapi.entity.video.Dimension
 import dev.aaa1115910.biliapi.repositories.CoinRepository
 import dev.aaa1115910.biliapi.repositories.FavoriteRepository
 import dev.aaa1115910.biliapi.repositories.LikeRepository
@@ -14,6 +16,8 @@ import dev.aaa1115910.biliapi.repositories.TripleLikeRepository
 import dev.aaa1115910.biliapi.repositories.ToViewRepository
 import dev.aaa1115910.biliapi.repositories.UserRepository
 import dev.aaa1115910.biliapi.entity.video.VideoDetail
+import dev.aaa1115910.biliapi.entity.video.UserActions
+import dev.aaa1115910.biliapi.entity.video.VideoPage
 import dev.aaa1115910.biliapi.repositories.VideoDetailRepository
 import dev.aaa1115910.bv.player.autoplay.toInteractivePlaybackContextOrNull
 import dev.aaa1115910.bv.player.autoplay.toRelatedVideoCardDataList
@@ -24,6 +28,7 @@ import dev.aaa1115910.bv.player.entity.VideoListInteractiveNode
 import dev.aaa1115910.bv.player.entity.VideoListPart
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisode
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisodeTitle
+import dev.aaa1115910.bv.offline.OfflineVideoCacheEntry
 import dev.aaa1115910.bv.repository.VideoInfoRepository
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
@@ -32,6 +37,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.core.annotation.KoinViewModel
+import java.util.Date
 
 data class UpOwnerStats(
     val followerCount: Int,
@@ -113,6 +119,22 @@ class VideoDetailViewModel(
         }
     }
 
+    suspend fun applyOfflineCacheFallback(
+        entry: OfflineVideoCacheEntry,
+        entries: List<OfflineVideoCacheEntry> = listOf(entry)
+    ) {
+        val offlineDetail = entry.toOfflineVideoDetail(entries)
+        logger.fInfo { "Apply offline detail fallback: [avid=${entry.aid}, cid=${entry.cid}]" }
+        withContext(Dispatchers.Main) {
+            videoDetail = offlineDetail
+            state = VideoInfoState.Success
+            upOwnerStats = null
+            relatedVideos.clear()
+            videoInfoRepository.videoList.clear()
+            videoInfoRepository.videoList.addAll(offlineDetail.toVideoListForTargetCid(entry.cid))
+        }
+    }
+
     private suspend fun updateRelatedVideos() {
         logger.fInfo { "Start update relate video" }
         val relateVideoCardDataList = videoDetail?.toRelatedVideoCardDataList() ?: emptyList()
@@ -129,6 +151,64 @@ class VideoDetailViewModel(
         val detail = videoDetail ?: return
         videoInfoRepository.videoList.clear()
         videoInfoRepository.videoList.addAll(detail.toVideoListForTargetCid(detail.cid))
+    }
+
+    private fun OfflineVideoCacheEntry.toOfflineVideoDetail(entries: List<OfflineVideoCacheEntry>): VideoDetail {
+        val pages = entries
+            .filter { it.aid == aid && it.completed }
+            .distinctBy { it.cid }
+            .ifEmpty { listOf(this) }
+            .mapIndexed { index, item ->
+                VideoPage(
+                    cid = item.cid,
+                    index = index + 1,
+                    title = item.partTitle.ifBlank { item.title },
+                    duration = (item.durationMs / 1000L)
+                        .coerceAtMost(Int.MAX_VALUE.toLong())
+                        .toInt(),
+                    dimension = Dimension(
+                        width = item.width,
+                        height = item.height
+                    )
+                )
+            }
+
+        return VideoDetail(
+            bvid = bvid,
+            aid = aid,
+            cid = cid,
+            cover = cover,
+            title = title.ifBlank { partTitle },
+            publishDate = Date(0L),
+            description = "",
+            stat = VideoDetail.Stat(
+                view = 0,
+                danmaku = 0,
+                reply = 0,
+                favorite = 0,
+                coin = 0,
+                share = 0,
+                like = 0,
+                historyRank = 0
+            ),
+            author = Author(
+                mid = 0L,
+                name = upName,
+                face = ""
+            ),
+            pages = pages,
+            ugcSeason = null,
+            relatedVideos = emptyList(),
+            redirectToEp = false,
+            epid = null,
+            argueTip = null,
+            tags = emptyList(),
+            userActions = UserActions(),
+            history = VideoDetail.History(
+                progress = 0,
+                lastPlayedCid = cid
+            )
+        )
     }
 
     fun updateUgcSeasonSectionVideoList(sectionIndex: Int) {

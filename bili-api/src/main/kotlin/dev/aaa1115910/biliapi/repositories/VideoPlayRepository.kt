@@ -103,6 +103,10 @@ class VideoPlayRepository(
                     fourk = 1,
                     sessData = authRepository.sessionData,
                     dedeUserID = authRepository.mid,
+                    buvid3 = authRepository.buvid3,
+                    dedeUserIDCkMd5 = authRepository.dedeUserIDCkMd5,
+                    biliJct = authRepository.biliJct,
+                    sid = authRepository.sid,
                     tryLook = tryLook
                 ).getResponseData()
                 PlayData.fromPlayUrlData(playUrlData)
@@ -149,6 +153,70 @@ class VideoPlayRepository(
                 }
             }
         }
+    }
+
+    suspend fun getDownloadPlayData(
+        aid: Long,
+        bvid: String,
+        cid: Long,
+        qn: Int,
+        tryLook1080P: Boolean = false
+    ): PlayData {
+        val tryLook = shouldTryLook1080P(tryLook1080P, authRepository.sessionData)
+        val qnCandidates = downloadQnCandidates(qn)
+        var lastFailure: Throwable? = null
+
+        qnCandidates.forEach { candidateQn ->
+            val result = runCatching {
+                val playUrlData = BiliHttpApi.getVideoWbiPlayUrl(
+                    av = aid,
+                    bv = bvid.takeIf { it.isNotBlank() },
+                    cid = cid,
+                    fnval = 4048,
+                    qn = candidateQn,
+                    fnver = 0,
+                    fourk = 1,
+                    sessData = authRepository.sessionData,
+                    dedeUserID = authRepository.mid,
+                    buvid3 = authRepository.buvid3,
+                    dedeUserIDCkMd5 = authRepository.dedeUserIDCkMd5,
+                    biliJct = authRepository.biliJct,
+                    sid = authRepository.sid,
+                    tryLook = tryLook
+                ).getResponseData()
+                val playData = PlayData.fromPlayUrlData(playUrlData)
+                if (!playData.hasCacheableDownloadStreams()) {
+                    val audioCount = playData.dashAudios.size +
+                        listOfNotNull(playData.dolby, playData.flac).size
+                    throw IllegalStateException(
+                        "WBI qn=$candidateQn 未返回可缓存音视频流：" +
+                            "video=${playData.dashVideos.size}, " +
+                            "audio=$audioCount, " +
+                            "acceptQuality=${playUrlData.acceptQuality}, " +
+                            "responseQuality=${playUrlData.quality}, " +
+                            "result=${playUrlData.result}, " +
+                            "message=${playUrlData.message}"
+                    )
+                }
+                playData
+            }
+
+            result.onSuccess { return it }
+            lastFailure = result.exceptionOrNull()
+        }
+
+        throw lastFailure ?: IllegalStateException("WBI 未返回可缓存音视频流")
+    }
+
+    private fun PlayData.hasCacheableDownloadStreams(): Boolean {
+        return dashVideos.isNotEmpty() && (dashAudios.isNotEmpty() || dolby != null || flac != null)
+    }
+
+    private fun downloadQnCandidates(qn: Int): List<Int> {
+        val knownQualities = listOf(127, 126, 125, 120, 116, 112, 80, 74, 64, 32, 16, 6)
+        return (listOf(qn) + knownQualities.filter { it < qn })
+            .filter { it > 0 }
+            .distinct()
     }
 
     suspend fun getPgcPlayData(

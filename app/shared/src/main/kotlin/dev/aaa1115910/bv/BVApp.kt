@@ -124,6 +124,8 @@ class BVApp : Application() {
         val authRepository by koinApplication.koin.inject<AuthRepository>()
         authRepository.sessionData = Prefs.sessData.takeIf { it.isNotEmpty() }
         authRepository.biliJct = Prefs.biliJct.takeIf { it.isNotEmpty() }
+        authRepository.dedeUserIDCkMd5 = Prefs.uidCkMd5.takeIf { it.isNotEmpty() }
+        authRepository.sid = Prefs.sid.takeIf { it.isNotEmpty() }
         authRepository.accessToken = Prefs.accessToken.takeIf { it.isNotEmpty() }
         authRepository.mid = Prefs.uid.takeIf { it != 0L }
         authRepository.buvid3 = Prefs.buvid3

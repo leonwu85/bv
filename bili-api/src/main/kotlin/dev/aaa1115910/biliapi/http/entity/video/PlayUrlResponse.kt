@@ -1,8 +1,12 @@
+@file:OptIn(ExperimentalSerializationApi::class)
+
 package dev.aaa1115910.biliapi.http.entity.video
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNames
 
 /**
  * 跳过片头/片尾配置
@@ -104,34 +108,42 @@ data class PlayUrlData(
     @SerialName("has_paid")
     val hasPaid: Boolean = false,
     val status: Int = 0,
-    val from: String,
-    val result: String,
-    val message: String,
-    val quality: Int,
-    val format: String,
+    val from: String = "",
+    val result: String = "",
+    val message: String = "",
+    val quality: Int = 0,
+    val format: String = "",
     @SerialName("timelength")
-    val timeLength: Int,
+    val timeLength: Int = 0,
     @SerialName("accept_format")
-    val acceptFormat: String,
+    val acceptFormat: String = "",
     @SerialName("accept_description")
+    @JsonNames("acceptDescription")
     val acceptDescription: List<String> = emptyList(),
     @SerialName("accept_quality")
+    @JsonNames("acceptQuality")
     val acceptQuality: List<Int> = emptyList(),
     @SerialName("video_codecid")
-    val videoCodecId: Int,
+    @JsonNames("videoCodecid")
+    val videoCodecId: Int = 0,
     @SerialName("seek_param")
-    val seekParam: String,
+    @JsonNames("seekParam")
+    val seekParam: String = "",
     @SerialName("seek_type")
-    val seekType: String,
+    @JsonNames("seekType")
+    val seekType: String = "",
     val durl: List<Durl> = emptyList(),
     val dash: Dash? = null,
     @SerialName("support_formats")
     val supportFormats: List<SupportFormat> = emptyList(),
     @SerialName("last_play_time")
+    @JsonNames("lastPlayTime")
     val lastPlayTime: Int = 0,
     @SerialName("last_play_cid")
+    @JsonNames("lastPlayCid")
     val lastPlaycid: Long = 0,
     @SerialName("clip_info_list")
+    @JsonNames("clipInfoList")
     val clipInfoList: List<ClipInfo> = emptyList(),
     @SerialName("record_info")
     val recordInfo: RecordInfo? = null
@@ -319,14 +331,15 @@ data class Durl(
     val vhead: String,
     val url: String,
     @SerialName("backup_url")
+    @JsonNames("backupUrl")
     val backupUrl: List<String> = emptyList()
 )
 
 //TODO
 @Serializable
 data class Dash(
-    val duration: Int,
-    val minBufferTime: Float,
+    val duration: Int = 0,
+    val minBufferTime: Float = 0f,
     val video: List<DashData> = emptyList(),
     val audio: List<DashData>? = null,
     val dolby: DashDolby = DashDolby(),
@@ -347,32 +360,41 @@ data class DashFlac(
 
 @Serializable
 data class DashData(
-    val id: Int,
+    val id: Int = 0,
     @SerialName("base_url")
-    val baseUrl: String,
+    @JsonNames("baseUrl")
+    val baseUrl: String = "",
+    @SerialName("backup_url")
+    @JsonNames("backupUrl")
     val backupUrl: List<String> = emptyList(),
-    val bandwidth: Int,
+    @JsonNames("bandWidth")
+    val bandwidth: Int = 0,
     @SerialName("mime_type")
-    val mimeType: String,
-    val codecs: String,
-    val width: Int,
-    val height: Int,
+    @JsonNames("mimeType")
+    val mimeType: String = "",
+    val codecs: String = "",
+    val width: Int = 0,
+    val height: Int = 0,
     @SerialName("frame_rate")
-    val frameRate: String,
-    val sar: String,
+    @JsonNames("frameRate")
+    val frameRate: String = "",
+    val sar: String = "",
     @SerialName("start_with_sap")
-    val startWithSap: Int,
+    @JsonNames("startWithSap")
+    val startWithSap: Int = 0,
     @SerialName("segment_base")
-    val segmentBase: SegmentBase,
+    @JsonNames("segmentBase")
+    val segmentBase: SegmentBase = SegmentBase(),
     @SerialName("codecid")
-    val codecId: Int
+    val codecId: Int = 0
 )
 
 @Serializable
 data class SegmentBase(
-    val initialization: String,
+    val initialization: String = "",
     @SerialName("index_range")
-    val indexRange: String
+    @JsonNames("indexRange")
+    val indexRange: String = ""
 )
 
 /**

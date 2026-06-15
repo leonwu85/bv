@@ -155,6 +155,9 @@ import kotlinx.serialization.json.put
 import org.jsoup.nodes.Document
 import java.util.concurrent.ConcurrentHashMap
 import javax.xml.parsers.DocumentBuilderFactory
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlin.random.Random
 
 @Suppress("SpellCheckingInspection")
 object BiliHttpApi {
@@ -221,11 +224,17 @@ object BiliHttpApi {
     private fun HttpRequestBuilder.appendWebCookie(
         sessData: String? = null,
         dedeUserID: Long? = null,
-        buvid3: String? = null
+        buvid3: String? = null,
+        dedeUserIDCkMd5: String? = null,
+        biliJct: String? = null,
+        sid: String? = null
     ) {
         val cookieParts = mutableListOf<String>()
         sessData?.takeIf { it.isNotBlank() }?.let { cookieParts.add("SESSDATA=$it") }
         dedeUserID?.let { cookieParts.add("DedeUserID=$it") }
+        dedeUserIDCkMd5?.takeIf { it.isNotBlank() }?.let { cookieParts.add("DedeUserID__ckMd5=$it") }
+        biliJct?.takeIf { it.isNotBlank() }?.let { cookieParts.add("bili_jct=$it") }
+        sid?.takeIf { it.isNotBlank() }?.let { cookieParts.add("sid=$it") }
         buvid3?.takeIf { it.isNotBlank() }?.let { cookieParts.add("buvid3=$it") }
         if (cookieParts.isNotEmpty()) {
             header("Cookie", cookieParts.joinToString(";") + ";")
@@ -442,6 +451,10 @@ object BiliHttpApi {
         platform: String = "oc",
         sessData: String? = null,
         dedeUserID: Long? = null,
+        buvid3: String? = null,
+        dedeUserIDCkMd5: String? = null,
+        biliJct: String? = null,
+        sid: String? = null,
         tryLook: Boolean = false
     ): BiliResponse<PlayUrlData> = client.get("/x/player/playurl") {
         require(av != null || bv != null) { "av and bv cannot be null at the same time" }
@@ -457,8 +470,76 @@ object BiliHttpApi {
         parameter("type", type)
         parameter("platform", platform)
         if (tryLook) parameter("try_look", 1)
-        sessData?.let { header("Cookie", "SESSDATA=$sessData;DedeUserID=$dedeUserID") }
+        appendWebCookie(
+            sessData = sessData,
+            dedeUserID = dedeUserID,
+            buvid3 = buvid3,
+            dedeUserIDCkMd5 = dedeUserIDCkMd5,
+            biliJct = biliJct,
+            sid = sid
+        )
     }.body()
+
+    suspend fun getVideoWbiPlayUrl(
+        av: Long? = null,
+        bv: String? = null,
+        cid: Long,
+        qn: Int? = null,
+        fnval: Int? = null,
+        fnver: Int? = null,
+        fourk: Int? = 0,
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null,
+        dedeUserIDCkMd5: String? = null,
+        biliJct: String? = null,
+        sid: String? = null,
+        tryLook: Boolean = false
+    ): BiliResponse<PlayUrlData> {
+        require(av != null || bv != null) { "av and bv cannot be null at the same time" }
+        val params = Parameters.build {
+            av?.let { append("avid", it.toString()) }
+            bv?.takeIf { it.isNotBlank() }?.let { append("bvid", it) }
+            append("cid", cid.toString())
+            qn?.let { append("qn", it.toString()) }
+            fnval?.let { append("fnval", it.toString()) }
+            fnver?.let { append("fnver", it.toString()) }
+            fourk?.let { append("fourk", it.toString()) }
+            append("voice_balance", "0")
+            append("gaia_source", "pre-load")
+            append("isGaiaAvoided", "true")
+            append("web_location", "1315873")
+            if (tryLook) append("try_look", "1")
+            append("dm_img_list", "[]")
+            append("dm_img_str", randomWbiDmString(minLength = 16, maxLength = 64))
+            append("dm_cover_img_str", randomWbiDmString(minLength = 32, maxLength = 128))
+            append("dm_img_inter", """{"ds":[],"wh":[0,0,0],"of":[0,0,0]}""")
+        }
+
+        return client.get("/x/player/wbi/playurl") {
+            params.entries().forEach { (key, values) ->
+                values.forEach { value -> parameter(key, value) }
+            }
+            appendWebCookie(
+                sessData = sessData,
+                dedeUserID = dedeUserID,
+                buvid3 = buvid3,
+                dedeUserIDCkMd5 = dedeUserIDCkMd5,
+                biliJct = biliJct,
+                sid = sid
+            )
+        }.body()
+    }
+
+    @OptIn(ExperimentalEncodingApi::class)
+    private fun randomWbiDmString(minLength: Int, maxLength: Int): String {
+        val length = Random.nextInt(from = minLength, until = maxLength + 1)
+        val bytes = ByteArray(length) {
+            (0x26 + Random.nextInt(0x59)).toByte()
+        }
+        return Base64.encode(bytes)
+            .dropLast(2)
+    }
 
     suspend fun getVideoPlayerInfo(
         av: Long? = null,

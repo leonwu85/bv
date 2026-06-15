@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,12 +38,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -70,7 +73,9 @@ import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Paid
 import androidx.compose.material.icons.outlined.Star
@@ -155,6 +160,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -174,9 +180,12 @@ import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
 import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
+import dev.aaa1115910.biliapi.entity.video.VideoDetail
+import dev.aaa1115910.biliapi.entity.video.VideoPage
 import dev.aaa1115910.biliapi.http.entity.live.LiveEmotePackage
 import dev.aaa1115910.biliapi.http.entity.live.LiveEmoticon
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.mobile.activities.OfflineCacheActivity
 import dev.aaa1115910.bv.mobile.activities.VideoPlayerActivity
 import dev.aaa1115910.bv.mobile.component.emote.EmoteInputToken
 import dev.aaa1115910.bv.mobile.component.emote.EmoteTextSelection
@@ -190,6 +199,9 @@ import dev.aaa1115910.bv.mobile.component.videocard.RelatedVideoItem
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.mobile.R as MobileR
 import dev.aaa1115910.bv.mobile.util.saveImageToGallery
+import dev.aaa1115910.bv.offline.OfflineVideoCacheStatus
+import dev.aaa1115910.bv.offline.OfflineVideoCacheTaskState
+import dev.aaa1115910.bv.offline.OfflineVideoCacheTarget
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerDanmakuMasksData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerHistoryData
@@ -314,6 +326,9 @@ fun VideoPlayerScreen(
     var showVideoDanmakuSheet by remember { mutableStateOf(false) }
     var savingPreviewImage by remember { mutableStateOf(false) }
     var savingCoverImage by remember { mutableStateOf(false) }
+    var showOfflineCacheDialog by remember { mutableStateOf(false) }
+    var offlineCacheDialogLoading by remember { mutableStateOf(false) }
+    val offlineCacheState = playerViewModel.offlineCacheState
 
     val setPreviewerPictures: (List<Picture>, () -> Unit) -> Unit =
         { newPictures, afterSetPictures ->
@@ -330,6 +345,28 @@ fun VideoPlayerScreen(
                     .onFailure { (it.localizedMessage ?: "操作失败").toast(context) }
             }
         }
+    }
+    val launchOfflineCache: (OfflineVideoCacheTarget, Resolution) -> Unit = launchOfflineCache@{ target, quality ->
+        if (offlineCacheDialogLoading) return@launchOfflineCache
+        offlineCacheDialogLoading = true
+        scope.launch(Dispatchers.IO) {
+            val result = playerViewModel.cacheVideoTarget(target, quality)
+            withContext(Dispatchers.Main) {
+                offlineCacheDialogLoading = false
+                result
+                    .onSuccess { it.toast(context) }
+                    .onFailure { (it.localizedMessage ?: "操作失败").toast(context) }
+            }
+        }
+    }
+    val launchOfflineCacheAll: (List<OfflineVideoCacheTarget>, Resolution) -> Unit = { targets, quality ->
+        val result = playerViewModel.cacheVideoTargets(targets, quality)
+        result
+            .onSuccess {
+                showOfflineCacheDialog = false
+                it.toast(context)
+            }
+            .onFailure { (it.localizedMessage ?: "操作失败").toast(context) }
     }
     val openVideoReplyInput = {
         replyDraftTarget = ReplyDraftTarget(
@@ -513,6 +550,24 @@ fun VideoPlayerScreen(
     BackHandler(isVideoFullscreen) {
         isVideoFullscreen = false
     }
+
+    OfflineCacheBottomSheet(
+        show = showOfflineCacheDialog,
+        videoDetail = videoDetailViewModel.videoDetail,
+        currentCid = playerViewModel.currentCid,
+        currentQuality = playerViewModel.currentQuality,
+        loading = offlineCacheDialogLoading,
+        cacheStateOf = playerViewModel::offlineCacheStateOf,
+        onDismiss = {
+            if (!offlineCacheDialogLoading) showOfflineCacheDialog = false
+        },
+        onCacheOne = launchOfflineCache,
+        onCacheAll = launchOfflineCacheAll,
+        onOpenCachePage = {
+            showOfflineCacheDialog = false
+            context.startActivity(Intent(context, OfflineCacheActivity::class.java))
+        }
+    )
 
     Scaffold(
         containerColor = if (windowSizeClass.widthSizeClass != WindowWidthSizeClass.Expanded) Color.Black else MaterialTheme.colorScheme.surfaceContainer
@@ -925,19 +980,19 @@ fun VideoPlayerScreen(
                                                 VideoPlayerInfo(
                                                     modifier = Modifier.padding(12.dp),
                                                     upAvatar = videoDetailViewModel.videoDetail?.author?.face
-                                                        ?: "",
+                                                        ?: playerViewModel.upFace,
                                                     upName = videoDetailViewModel.videoDetail?.author?.name
-                                                        ?: "",
+                                                        ?: playerViewModel.upName,
                                                     upFollowerCount = videoDetailViewModel.upOwnerStats?.followerCount,
                                                     upArchiveCount = videoDetailViewModel.upOwnerStats?.archiveCount,
                                                     title = videoDetailViewModel.videoDetail?.title
-                                                        ?: "",
+                                                        ?: playerViewModel.title,
                                                     description = videoDetailViewModel.videoDetail?.description
                                                         ?: "",
                                                     playCount = videoDetailViewModel.videoDetail?.stat?.view
-                                                        ?: 0,
+                                                        ?: playerViewModel.play,
                                                     danmakuCount = videoDetailViewModel.videoDetail?.stat?.danmaku
-                                                        ?: 0,
+                                                        ?: playerViewModel.danmaku,
                                                     likeCount = videoDetailViewModel.videoDetail?.stat?.like
                                                         ?: 0,
                                                     coinCount = videoDetailViewModel.videoDetail?.stat?.coin
@@ -947,9 +1002,11 @@ fun VideoPlayerScreen(
                                                     shareCount = videoDetailViewModel.videoDetail?.stat?.share
                                                         ?: 0,
                                                     date = videoDetailViewModel.videoDetail?.publishDate
-                                                        ?.formatPubTimeString(context) ?: "",
+                                                        ?.takeIf { it.time > 0L }
+                                                        ?.formatPubTimeString(context)
+                                                        ?: playerViewModel.pubTime,
                                                     avid = videoDetailViewModel.videoDetail?.aid
-                                                        ?: 0,
+                                                        ?: playerViewModel.currentAid,
                                                     liked = videoDetailViewModel.videoDetail?.userActions?.like == true,
                                                     disliked = videoDetailViewModel.videoDetail?.userActions?.dislike == true,
                                                     coined = videoDetailViewModel.videoDetail?.userActions?.coin == true,
@@ -959,6 +1016,8 @@ fun VideoPlayerScreen(
                                                     favoriteFolderIds = videoDetailViewModel.favoriteFolderIds,
                                                     userActionUpdating = videoDetailViewModel.userActionUpdating,
                                                     savingCover = savingCoverImage,
+                                                    offlineCacheState = offlineCacheState,
+                                                    offlinePlayback = playerViewModel.currentPlaybackOffline,
                                                     onToggleLike = { launchVideoAction { videoDetailViewModel.toggleLike() } },
                                                     onTripleLike = { launchVideoAction { videoDetailViewModel.tripleLike() } },
                                                     onToggleDislike = { launchVideoAction { videoDetailViewModel.toggleDislike() } },
@@ -971,7 +1030,12 @@ fun VideoPlayerScreen(
                                                     },
                                                     onToggleToView = { launchVideoAction { videoDetailViewModel.toggleToView() } },
                                                     onShare = shareVideo,
-                                                    onSaveCover = saveCover
+                                                    onSaveCover = saveCover,
+                                                    onCacheVideo = { showOfflineCacheDialog = true },
+                                                    onPauseCache = { launchVideoAction { playerViewModel.pauseOfflineCache() } },
+                                                    onResumeCache = { launchVideoAction { playerViewModel.resumeOfflineCache() } },
+                                                    onClearCacheTask = { launchVideoAction { playerViewModel.clearOfflineCacheTask() } },
+                                                    onPlayCache = { launchVideoAction { playerViewModel.playOfflineCache() } }
                                                 )
                                             }
                                             item {
@@ -1102,23 +1166,25 @@ fun VideoPlayerScreen(
                             VideoPlayerInfo(
                                 modifier = Modifier.padding(12.dp),
                                 upAvatar = videoDetailViewModel.videoDetail?.author?.face
-                                    ?: "",
-                                upName = videoDetailViewModel.videoDetail?.author?.name ?: "",
+                                    ?: playerViewModel.upFace,
+                                upName = videoDetailViewModel.videoDetail?.author?.name ?: playerViewModel.upName,
                                 upFollowerCount = videoDetailViewModel.upOwnerStats?.followerCount,
                                 upArchiveCount = videoDetailViewModel.upOwnerStats?.archiveCount,
-                                title = videoDetailViewModel.videoDetail?.title ?: "",
+                                title = videoDetailViewModel.videoDetail?.title ?: playerViewModel.title,
                                 description = videoDetailViewModel.videoDetail?.description
                                     ?: "",
-                                playCount = videoDetailViewModel.videoDetail?.stat?.view ?: 0,
+                                playCount = videoDetailViewModel.videoDetail?.stat?.view ?: playerViewModel.play,
                                 danmakuCount = videoDetailViewModel.videoDetail?.stat?.danmaku
-                                    ?: 0,
+                                    ?: playerViewModel.danmaku,
                                 likeCount = videoDetailViewModel.videoDetail?.stat?.like ?: 0,
                                 coinCount = videoDetailViewModel.videoDetail?.stat?.coin ?: 0,
                                 favoriteCount = videoDetailViewModel.videoDetail?.stat?.favorite ?: 0,
                                 shareCount = videoDetailViewModel.videoDetail?.stat?.share ?: 0,
                                 date = videoDetailViewModel.videoDetail?.publishDate
-                                    ?.formatPubTimeString(context) ?: "",
-                                avid = videoDetailViewModel.videoDetail?.aid ?: 0,
+                                    ?.takeIf { it.time > 0L }
+                                    ?.formatPubTimeString(context)
+                                    ?: playerViewModel.pubTime,
+                                avid = videoDetailViewModel.videoDetail?.aid ?: playerViewModel.currentAid,
                                 liked = videoDetailViewModel.videoDetail?.userActions?.like == true,
                                 disliked = videoDetailViewModel.videoDetail?.userActions?.dislike == true,
                                 coined = videoDetailViewModel.videoDetail?.userActions?.coin == true,
@@ -1128,6 +1194,8 @@ fun VideoPlayerScreen(
                                 favoriteFolderIds = videoDetailViewModel.favoriteFolderIds,
                                 userActionUpdating = videoDetailViewModel.userActionUpdating,
                                 savingCover = savingCoverImage,
+                                offlineCacheState = offlineCacheState,
+                                offlinePlayback = playerViewModel.currentPlaybackOffline,
                                 onToggleLike = { launchVideoAction { videoDetailViewModel.toggleLike() } },
                                 onTripleLike = { launchVideoAction { videoDetailViewModel.tripleLike() } },
                                 onToggleDislike = { launchVideoAction { videoDetailViewModel.toggleDislike() } },
@@ -1141,6 +1209,11 @@ fun VideoPlayerScreen(
                                 onToggleToView = { launchVideoAction { videoDetailViewModel.toggleToView() } },
                                 onShare = shareVideo,
                                 onSaveCover = saveCover,
+                                onCacheVideo = { showOfflineCacheDialog = true },
+                                onPauseCache = { launchVideoAction { playerViewModel.pauseOfflineCache() } },
+                                onResumeCache = { launchVideoAction { playerViewModel.resumeOfflineCache() } },
+                                onClearCacheTask = { launchVideoAction { playerViewModel.clearOfflineCacheTask() } },
+                                onPlayCache = { launchVideoAction { playerViewModel.playOfflineCache() } },
                                 backgroundColor = MaterialTheme.colorScheme.surfaceContainer
                             )
                         }
@@ -1553,6 +1626,8 @@ fun VideoPlayerInfo(
     favoriteFolderIds: List<Long> = emptyList(),
     userActionUpdating: Boolean = false,
     savingCover: Boolean = false,
+    offlineCacheState: OfflineVideoCacheTaskState = OfflineVideoCacheTaskState(aid = 0L, cid = 0L),
+    offlinePlayback: Boolean = false,
     onToggleLike: () -> Unit = {},
     onTripleLike: () -> Unit = {},
     onToggleDislike: () -> Unit = {},
@@ -1562,6 +1637,11 @@ fun VideoPlayerInfo(
     onToggleToView: () -> Unit = {},
     onShare: () -> Unit = {},
     onSaveCover: () -> Unit = {},
+    onCacheVideo: () -> Unit = {},
+    onPauseCache: () -> Unit = {},
+    onResumeCache: () -> Unit = {},
+    onClearCacheTask: () -> Unit = {},
+    onPlayCache: () -> Unit = {},
     backgroundColor: Color = MaterialTheme.colorScheme.surface
 ) {
     val summaryTextStyle = MaterialTheme.typography.bodySmall.copy(
@@ -1674,6 +1754,8 @@ fun VideoPlayerInfo(
                 favoriteFolderIds = favoriteFolderIds,
                 enabled = !userActionUpdating,
                 savingCover = savingCover,
+                offlineCacheState = offlineCacheState,
+                offlinePlayback = offlinePlayback,
                 onToggleLike = onToggleLike,
                 onTripleLike = onTripleLike,
                 onToggleDislike = onToggleDislike,
@@ -1682,7 +1764,12 @@ fun VideoPlayerInfo(
                 onUpdateFavoriteFolders = onUpdateFavoriteFolders,
                 onToggleToView = onToggleToView,
                 onShare = onShare,
-                onSaveCover = onSaveCover
+                onSaveCover = onSaveCover,
+                onCacheVideo = onCacheVideo,
+                onPauseCache = onPauseCache,
+                onResumeCache = onResumeCache,
+                onClearCacheTask = onClearCacheTask,
+                onPlayCache = onPlayCache
             )
             LongPressCopyText(
                 text = description,
@@ -1764,6 +1851,8 @@ private fun VideoActionGrid(
     favoriteFolderIds: List<Long>,
     enabled: Boolean,
     savingCover: Boolean,
+    offlineCacheState: OfflineVideoCacheTaskState,
+    offlinePlayback: Boolean,
     onToggleLike: () -> Unit,
     onTripleLike: () -> Unit,
     onToggleDislike: () -> Unit,
@@ -1772,10 +1861,29 @@ private fun VideoActionGrid(
     onUpdateFavoriteFolders: (List<Long>) -> Unit,
     onToggleToView: () -> Unit,
     onShare: () -> Unit,
-    onSaveCover: () -> Unit
+    onSaveCover: () -> Unit,
+    onCacheVideo: () -> Unit,
+    onPauseCache: () -> Unit,
+    onResumeCache: () -> Unit,
+    onClearCacheTask: () -> Unit,
+    onPlayCache: () -> Unit
 ) {
     var showFavoriteDialog by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
+    val cachePercent = (offlineCacheState.progress * 100).toInt().coerceIn(0, 100)
+    val cacheMenuText = when (offlineCacheState.status) {
+        OfflineVideoCacheStatus.Completed -> if (offlinePlayback) "正在播放缓存" else "播放缓存"
+        OfflineVideoCacheStatus.Paused -> "继续缓存"
+        OfflineVideoCacheStatus.Failed -> "重新选择缓存"
+        OfflineVideoCacheStatus.Queued -> "暂停缓存"
+        OfflineVideoCacheStatus.Fetching -> "暂停缓存"
+        OfflineVideoCacheStatus.DownloadingVideo,
+        OfflineVideoCacheStatus.DownloadingAudio,
+        OfflineVideoCacheStatus.DownloadingDanmaku -> "暂停缓存 $cachePercent%"
+        OfflineVideoCacheStatus.Idle -> "选择缓存"
+    }
+    val hasClearableCacheTask = offlineCacheState.status != OfflineVideoCacheStatus.Idle &&
+        offlineCacheState.status != OfflineVideoCacheStatus.Completed
 
     Row(
         modifier = Modifier
@@ -1862,6 +1970,45 @@ private fun VideoActionGrid(
                 expanded = showMoreMenu,
                 onDismissRequest = { showMoreMenu = false }
             ) {
+                DropdownMenuItem(
+                    text = { Text(text = cacheMenuText) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Download,
+                            contentDescription = null
+                        )
+                    },
+                    enabled = !offlinePlayback || offlineCacheState.status != OfflineVideoCacheStatus.Completed,
+                    onClick = {
+                        showMoreMenu = false
+                        when (offlineCacheState.status) {
+                            OfflineVideoCacheStatus.Completed -> onPlayCache()
+                            OfflineVideoCacheStatus.Paused -> onResumeCache()
+                            OfflineVideoCacheStatus.Queued,
+                            OfflineVideoCacheStatus.Fetching,
+                            OfflineVideoCacheStatus.DownloadingVideo,
+                            OfflineVideoCacheStatus.DownloadingAudio,
+                            OfflineVideoCacheStatus.DownloadingDanmaku -> onPauseCache()
+                            OfflineVideoCacheStatus.Failed,
+                            OfflineVideoCacheStatus.Idle -> onCacheVideo()
+                        }
+                    }
+                )
+                if (hasClearableCacheTask) {
+                    DropdownMenuItem(
+                        text = { Text(text = "清除缓存任务") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Delete,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            showMoreMenu = false
+                            onClearCacheTask()
+                        }
+                    )
+                }
                 DropdownMenuItem(
                     text = {
                         Text(text = if (savingCover) "保存中..." else "保存封面")
@@ -2015,6 +2162,449 @@ private fun FavoriteFolderDialog(
             }
         }
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OfflineCacheBottomSheet(
+    show: Boolean,
+    videoDetail: VideoDetail?,
+    currentCid: Long,
+    currentQuality: Resolution,
+    loading: Boolean,
+    cacheStateOf: (Long, Long) -> OfflineVideoCacheTaskState,
+    onDismiss: () -> Unit,
+    onCacheOne: (OfflineVideoCacheTarget, Resolution) -> Unit,
+    onCacheAll: (List<OfflineVideoCacheTarget>, Resolution) -> Unit,
+    onOpenCachePage: () -> Unit
+) {
+    if (!show) return
+
+    var selectedQuality by remember(show, currentQuality) { mutableStateOf(currentQuality) }
+    var showQualityMenu by remember { mutableStateOf(false) }
+    var showCacheAllConfirm by remember { mutableStateOf(false) }
+    val qualityOptions = remember { Resolution.entries.sortedByDescending { it.code } }
+    val context = LocalContext.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val items = remember(videoDetail, currentCid) {
+        buildOfflineCacheSheetItems(videoDetail, currentCid)
+    }
+    val bottomBarColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    val cacheableTargets = items
+        .filter { item ->
+            val state = cacheStateOf(item.target.aid, item.target.cid)
+            state.status != OfflineVideoCacheStatus.Completed && !state.isActive
+        }
+        .map { it.target }
+
+    if (showCacheAllConfirm) {
+        AlertDialog(
+            onDismissRequest = { showCacheAllConfirm = false },
+            title = { Text(text = "确定缓存全部？") },
+            text = {
+                Text(
+                    text = if (cacheableTargets.isEmpty()) {
+                        "当前列表没有可添加的缓存任务"
+                    } else {
+                        "将以 ${selectedQuality.getDisplayName(context)} 作为最高画质添加 ${cacheableTargets.size} 个缓存任务。"
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = cacheableTargets.isNotEmpty(),
+                    onClick = {
+                        showCacheAllConfirm = false
+                        onCacheAll(cacheableTargets, selectedQuality)
+                    }
+                ) {
+                    Text(text = "缓存全部")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCacheAllConfirm = false }) {
+                    Text(text = "取消")
+                }
+            }
+        )
+    }
+
+    ModalBottomSheet(
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        onDismissRequest = {
+            if (!loading) onDismiss()
+        },
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 620.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 8.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    modifier = Modifier.weight(1f),
+                    text = "离线缓存",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Row(
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "最高画质",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Box {
+                        TextButton(
+                            enabled = !loading,
+                            onClick = { showQualityMenu = true }
+                        ) {
+                            Text(text = selectedQuality.getDisplayName(context))
+                        }
+                        DropdownMenu(
+                            expanded = showQualityMenu,
+                            onDismissRequest = { showQualityMenu = false }
+                        ) {
+                            qualityOptions.forEach { quality ->
+                                val selected = quality == selectedQuality
+
+                                DropdownMenuItem(
+                                    modifier = Modifier.background(
+                                        if (selected) {
+                                            MaterialTheme.colorScheme.secondaryContainer
+                                        } else {
+                                            Color.Transparent
+                                        }
+                                    ),
+                                    text = {
+                                        Text(
+                                            text = quality.getDisplayName(context),
+                                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                            color = if (selected) {
+                                                MaterialTheme.colorScheme.onSecondaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurface
+                                            }
+                                        )
+                                    },
+                                    trailingIcon = if (selected) {
+                                        {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Check,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                    onClick = {
+                                        selectedQuality = quality
+                                        showQualityMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider()
+
+            if (items.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "视频列表尚未加载完成",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(
+                        items = items,
+                        key = { "${it.target.aid}:${it.target.cid}" }
+                    ) { item ->
+                        OfflineCacheSheetItemRow(
+                            item = item,
+                            state = cacheStateOf(item.target.aid, item.target.cid),
+                            loading = loading,
+                            onCache = { onCacheOne(item.target, selectedQuality) }
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider()
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(bottomBarColor)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        enabled = !loading && cacheableTargets.isNotEmpty(),
+                        onClick = { showCacheAllConfirm = true }
+                    ) {
+                        Text(text = "缓存全部")
+                    }
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(22.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant)
+                    )
+                    TextButton(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        onClick = onOpenCachePage
+                    ) {
+                        Text(text = "查看缓存")
+                    }
+                }
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .windowInsetsBottomHeight(WindowInsets.navigationBars)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OfflineCacheSheetItemRow(
+    item: OfflineCacheSheetItem,
+    state: OfflineVideoCacheTaskState,
+    loading: Boolean,
+    onCache: () -> Unit
+) {
+    val enabled = !loading &&
+        state.status != OfflineVideoCacheStatus.Completed &&
+        !state.isActive
+    val statusText = state.toSheetStatusText()
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (item.isCurrent) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
+                }
+            )
+            .clickable(enabled = enabled, onClick = onCache)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        AsyncImage(
+            modifier = Modifier
+                .width(96.dp)
+                .height(54.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            model = item.cover,
+            contentDescription = null,
+            contentScale = ContentScale.Crop
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = item.title,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (item.isCurrent) FontWeight.SemiBold else FontWeight.Normal
+            )
+            Text(
+                text = item.subtitle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (statusText != null) {
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.labelSmall,
+                color = when (state.status) {
+                    OfflineVideoCacheStatus.Completed -> MaterialTheme.colorScheme.primary
+                    OfflineVideoCacheStatus.Failed -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Rounded.Download,
+                contentDescription = "缓存",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private data class OfflineCacheSheetItem(
+    val target: OfflineVideoCacheTarget,
+    val title: String,
+    val subtitle: String,
+    val cover: String,
+    val isCurrent: Boolean
+)
+
+private fun buildOfflineCacheSheetItems(
+    videoDetail: VideoDetail?,
+    currentCid: Long
+): List<OfflineCacheSheetItem> {
+    if (videoDetail == null) return emptyList()
+
+    val ugcItems = videoDetail.ugcSeason?.sections
+        ?.flatMap { section ->
+            section.episodes.flatMap { episode ->
+                val pages = episode.pages
+                if (pages.size > 1) {
+                    pages.map { page ->
+                        val title = "${episode.title} - P${page.index} ${page.title}"
+                        val target = OfflineVideoCacheTarget(
+                            aid = episode.aid,
+                            bvid = episode.bvid,
+                            cid = page.cid,
+                            title = episode.title,
+                            partTitle = "${episode.title} - ${page.title}",
+                            cover = episode.cover.ifBlank { videoDetail.cover },
+                            upName = videoDetail.author.name,
+                            durationMs = page.duration * 1000L,
+                            width = page.dimension.width,
+                            height = page.dimension.height
+                        )
+                        OfflineCacheSheetItem(
+                            target = target,
+                            title = title,
+                            subtitle = buildOfflineCacheItemSubtitle(
+                                sectionTitle = section.title,
+                                durationMs = target.durationMs,
+                                isCurrent = page.cid == currentCid
+                            ),
+                            cover = target.cover,
+                            isCurrent = page.cid == currentCid
+                        )
+                    }
+                } else {
+                    val page = pages.firstOrNull()
+                    val cid = page?.cid ?: episode.cid
+                    val target = OfflineVideoCacheTarget(
+                        aid = episode.aid,
+                        bvid = episode.bvid,
+                        cid = cid,
+                        title = episode.title,
+                        partTitle = "",
+                        cover = episode.cover.ifBlank { videoDetail.cover },
+                        upName = videoDetail.author.name,
+                        durationMs = ((page?.duration ?: episode.duration) * 1000L),
+                        width = page?.dimension?.width ?: episode.dimension?.width ?: 0,
+                        height = page?.dimension?.height ?: episode.dimension?.height ?: 0
+                    )
+                    listOf(
+                        OfflineCacheSheetItem(
+                            target = target,
+                            title = episode.title,
+                            subtitle = buildOfflineCacheItemSubtitle(
+                                sectionTitle = section.title,
+                                durationMs = target.durationMs,
+                                isCurrent = cid == currentCid
+                            ),
+                            cover = target.cover,
+                            isCurrent = cid == currentCid
+                        )
+                    )
+                }
+            }
+        }
+        .orEmpty()
+
+    if (ugcItems.isNotEmpty()) return ugcItems
+
+    return videoDetail.pages.map { page ->
+        val target = OfflineVideoCacheTarget(
+            aid = videoDetail.aid,
+            bvid = videoDetail.bvid,
+            cid = page.cid,
+            title = videoDetail.title,
+            partTitle = page.title,
+            cover = videoDetail.cover,
+            upName = videoDetail.author.name,
+            durationMs = page.duration * 1000L,
+            width = page.dimension.width,
+            height = page.dimension.height
+        )
+        OfflineCacheSheetItem(
+            target = target,
+            title = "P${page.index} ${page.title}",
+            subtitle = buildOfflineCacheItemSubtitle(
+                sectionTitle = "",
+                durationMs = target.durationMs,
+                isCurrent = page.cid == currentCid
+            ),
+            cover = target.cover,
+            isCurrent = page.cid == currentCid
+        )
+    }
+}
+
+private fun buildOfflineCacheItemSubtitle(
+    sectionTitle: String,
+    durationMs: Long,
+    isCurrent: Boolean
+): String = listOfNotNull(
+    sectionTitle.takeIf { it.isNotBlank() },
+    durationMs.takeIf { it > 0L }?.formatHourMinSec(),
+    "正在播放".takeIf { isCurrent }
+).joinToString(" · ")
+
+private fun OfflineVideoCacheTaskState.toSheetStatusText(): String? = when (status) {
+    OfflineVideoCacheStatus.Completed -> "已缓存"
+    OfflineVideoCacheStatus.Queued -> "等待中"
+    OfflineVideoCacheStatus.Fetching -> "准备中"
+    OfflineVideoCacheStatus.DownloadingVideo,
+    OfflineVideoCacheStatus.DownloadingAudio,
+    OfflineVideoCacheStatus.DownloadingDanmaku -> "${(progress * 100).toInt().coerceIn(0, 100)}%"
+    OfflineVideoCacheStatus.Paused -> "已暂停"
+    OfflineVideoCacheStatus.Failed -> "失败"
+    OfflineVideoCacheStatus.Idle -> null
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
