@@ -4,7 +4,7 @@ import java.net.URLEncoder
 import java.security.KeyFactory
 import java.security.SecureRandom
 import java.security.spec.X509EncodedKeySpec
-import java.time.LocalDateTime
+import java.util.Calendar
 import javax.crypto.Cipher
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -15,16 +15,20 @@ private const val LOGIN_RANDOM_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN
 fun generateLoginSessionId(buvid: String, timestampMillis: Long): String =
     md5(buvid + timestampMillis.toString())
 
-fun generateLoginDeviceId(now: LocalDateTime = LocalDateTime.now()): String {
+fun generateLoginDeviceId(timestampMillis: Long = System.currentTimeMillis()): String {
+    val now = Calendar.getInstance().apply {
+        timeInMillis = timestampMillis
+    }
     val bytes = buildList {
         repeat(16) { add(loginSecureRandom.nextInt(256)) }
-        add(dec2bcd(now.year / 100))
-        add(dec2bcd(now.year % 100))
-        add(dec2bcd(now.monthValue))
-        add(dec2bcd(now.dayOfMonth))
-        add(dec2bcd(now.hour))
-        add(dec2bcd(now.minute))
-        add(dec2bcd(now.second))
+        val year = now.get(Calendar.YEAR)
+        add(dec2bcd(year / 100))
+        add(dec2bcd(year % 100))
+        add(dec2bcd(now.get(Calendar.MONTH) + 1))
+        add(dec2bcd(now.get(Calendar.DAY_OF_MONTH)))
+        add(dec2bcd(now.get(Calendar.HOUR_OF_DAY)))
+        add(dec2bcd(now.get(Calendar.MINUTE)))
+        add(dec2bcd(now.get(Calendar.SECOND)))
         repeat(8) { add(loginSecureRandom.nextInt(256)) }
     }
     val check = bytes.sum() and 0xff
