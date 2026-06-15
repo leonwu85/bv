@@ -2141,7 +2141,7 @@ fun VideoPartRow(
             contentPadding = PaddingValues(12.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            itemsIndexed(items = pages, key = { _, page -> page.cid }) { index, page ->
+            itemsIndexed(items = pages, key = { index, page -> "$index:${page.cid}" }) { index, page ->
                 VideoPartButton(
                     modifier = Modifier
                         .ifElse(index == initialFocusIndex, Modifier.focusRequester(focusRequester)),
@@ -2720,7 +2720,7 @@ private fun VideoPartListDialog(
                     ) {
                         itemsIndexed(
                             items = selectedVideoPart,
-                            key = { _, video -> video.cid }
+                            key = { index, video -> "$index:${video.cid}" }
                         ) { index, page ->
                             val buttonModifier =
                                 if (index == 0) Modifier.focusRequester(videoListFocusRequester) else Modifier
@@ -2840,7 +2840,7 @@ private fun VideoUgcListDialog(
                     ) {
                         itemsIndexed(
                             items = selectedVideoPart,
-                            key = { _, video -> video.cid }
+                            key = { index, video -> "$index:${video.cid}" }
                         ) { index, episode ->
                             val buttonModifier =
                                 if (index == 0) Modifier.focusRequester(videoListFocusRequester) else Modifier

@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
@@ -88,7 +89,7 @@ fun PopularPage(
                 vertical = if (isCompact) 8.dp else 12.dp
             )
         ) {
-            items(videos, key = { it.aid }) { video ->
+            itemsIndexed(videos, key = { index, video -> "$index:${video.aid}:${video.bvid}" }) { _, video ->
                 PopularVideoListCard(
                     data = video.toPopularVideoCardData(),
                     compact = isCompact,

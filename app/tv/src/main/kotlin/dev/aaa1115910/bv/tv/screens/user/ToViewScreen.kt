@@ -263,7 +263,7 @@ fun ToViewScreen(
                     ) {
                         itemsIndexed(
                             items = ToViewViewModel.histories,
-                            key = { _, item -> item.avid }
+                            key = { index, item -> "$index:${item.avid}" }
                         ) { index, item ->
                             val itemFocusRequester = remember(item.avid) { FocusRequester() }
                             DisposableEffect(item.avid, itemFocusRequester) {

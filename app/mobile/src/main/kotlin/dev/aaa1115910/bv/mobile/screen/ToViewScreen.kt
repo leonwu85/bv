@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -112,10 +113,10 @@ fun ToViewScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(8.dp)
             ) {
-                items(
+                itemsIndexed(
                     items = toViewViewModel.histories,
-                    key = { it.avid }
-                ) { video ->
+                    key = { index, video -> "$index:${video.avid}" }
+                ) { _, video ->
                     SmallVideoCard(
                         data = video,
                         onClick = {

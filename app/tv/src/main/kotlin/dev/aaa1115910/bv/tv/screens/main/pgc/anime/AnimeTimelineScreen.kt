@@ -220,7 +220,7 @@ fun AnimeTimelineScreen(
             ) {
                 itemsIndexed(
                     items = selectedEpisodes,
-                    key = { _, episode -> episode.seasonId }
+                    key = { index, episode -> "$index:${episode.seasonId}" }
                 ) { index, episode ->
                     SeasonCard(
                         data = SeasonCardData(

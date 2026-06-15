@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -395,7 +396,7 @@ private fun PgcChannelPage(
                         onMoreClick = { PgcIndexActivity.actionStart(context, selectedType) }
                     )
                 }
-                items(pgcItems, key = { it.seasonId }) { item ->
+                itemsIndexed(pgcItems, key = { index, item -> "$index:${item.seasonId}" }) { _, item ->
                     PgcCard(
                         modifier = Modifier.height(itemHeight),
                         item = item,
@@ -1241,7 +1242,7 @@ private fun LazyGridScope.liveRoomItems(
     rooms: List<LiveRoomItem>,
     onClickRoom: (LiveRoomItem) -> Unit
 ) {
-    items(rooms, key = { it.roomId }) { room ->
+    itemsIndexed(rooms, key = { index, room -> "$index:${room.roomId}" }) { _, room ->
         LiveRoomCard(
             modifier = Modifier.height(itemHeight),
             room = room,
@@ -1255,7 +1256,7 @@ private fun LazyGridScope.liveHistoryItems(
     histories: List<LiveHistoryItem>,
     onClickHistory: (LiveHistoryItem) -> Unit
 ) {
-    items(histories, key = { "${it.roomId}:${it.viewAt}" }) { history ->
+    itemsIndexed(histories, key = { index, history -> "$index:${history.roomId}:${history.viewAt}" }) { _, history ->
         LiveHistoryCard(
             modifier = Modifier.height(itemHeight),
             history = history,
@@ -1284,7 +1285,7 @@ private fun VideoRankGrid(
             bottom = HomeContentStyle.BottomContentPadding
         )
     ) { itemHeight ->
-        items(items, key = { it.aid }) { item ->
+        itemsIndexed(items, key = { index, item -> "$index:${item.aid}:${item.bvid}" }) { _, item ->
             ZoneVideoCard(
                 modifier = Modifier.height(itemHeight),
                 item = item,
@@ -1314,7 +1315,7 @@ private fun PgcRankGrid(
             bottom = HomeContentStyle.BottomContentPadding
         )
     ) { itemHeight ->
-        items(items, key = { it.seasonId }) { item ->
+        itemsIndexed(items, key = { index, item -> "$index:${item.seasonId}" }) { _, item ->
             PgcRankItem(
                 modifier = Modifier.height(itemHeight),
                 item = item,

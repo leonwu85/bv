@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -436,7 +437,7 @@ private fun PgcSearchResult(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(8.dp)
             ) {
-                items(pgcList, key = { it.seasonId }) { pgc ->
+                itemsIndexed(pgcList, key = { index, pgc -> "$index:${pgc.seasonId}" }) { _, pgc ->
                     SeasonCard(
                         data = SeasonCardData(
                             seasonId = pgc.seasonId,
@@ -541,7 +542,7 @@ private fun LiveRoomSearchResult(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(8.dp)
             ) {
-                items(liveRoomList, key = { it.roomId }) { room ->
+                itemsIndexed(liveRoomList, key = { index, room -> "$index:${room.roomId}" }) { _, room ->
                     LiveRoomGridCard(
                         room = room,
                         onClick = { onClickLiveRoom(room) }

@@ -1324,7 +1324,7 @@ fun SeasonEpisodesDialog(
                     ) {
                         itemsIndexed(
                             items = selectedEpisodes,
-                            key = { _, episode -> episode.aid + episode.cid }
+                            key = { index, episode -> "$index:${episode.aid}:${episode.cid}" }
                         ) { index, episode ->
                             val episodeTitle by remember { mutableStateOf(generateEpisodeTitle(episode, title)) }
                             val buttonModifier =

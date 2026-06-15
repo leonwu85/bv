@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -184,7 +185,7 @@ fun PgcIndexScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(pgcItems, key = { it.seasonId }) { pgcItem ->
+                itemsIndexed(pgcItems, key = { index, pgcItem -> "$index:${pgcItem.seasonId}" }) { _, pgcItem ->
                     SeasonCard(
                         data = SeasonCardData.fromPgcItem(pgcItem),
                         onClick = {

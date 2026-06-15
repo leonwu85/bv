@@ -135,7 +135,7 @@ fun RelatedVideosPanel(
                         ) {
                             itemsIndexed(
                                 items = videos,
-                                key = { _, video -> video.avid }
+                                key = { index, video -> "$index:${video.avid}" }
                             ) { index, videoData ->
                                 SmallVideoCard(
                                     modifier = Modifier

@@ -501,7 +501,7 @@ fun LiveContent(
                     if (liveViewModel.currentTabType == LiveTabType.History) {
                         itemsIndexed(
                             items = currentHistoryList,
-                            key = { _, room -> "${room.roomId}:${room.viewAt}" }
+                            key = { index, room -> "$index:${room.roomId}:${room.viewAt}" }
                         ) { index, room ->
                             LiveHistoryCard(
                                 modifier = if (index == 0) {
@@ -530,7 +530,7 @@ fun LiveContent(
                     } else {
                         itemsIndexed(
                             items = currentRoomList,
-                            key = { _, room -> room.roomId }
+                            key = { index, room -> "$index:${room.roomId}" }
                         ) { index, room ->
                             LiveRoomCard(
                                 modifier = if (index == 0) {

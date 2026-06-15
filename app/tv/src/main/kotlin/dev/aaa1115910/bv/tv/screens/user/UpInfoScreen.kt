@@ -777,7 +777,7 @@ private fun UpSpaceDynamicContent(
             ) {
                 itemsIndexed(
                     items = viewModel.dynamicItems,
-                    key = { index, item -> item.id ?: "dynamic-$index" }
+                    key = { index, item -> "$index:${item.id ?: "dynamic"}" }
                 ) { index, item ->
                     val itemModifier = Modifier
                         .then(if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier)
@@ -849,7 +849,7 @@ private fun UpSpaceVideoContent(
             ) {
                 itemsIndexed(
                     items = viewModel.tvSpaceVideos,
-                    key = { index, video -> video.bvid.ifBlank { "${video.avid}-$index" } }
+                    key = { index, video -> "$index:${video.bvid.ifBlank { video.avid.toString() }}" }
                 ) { index, video ->
                     val itemModifier = Modifier
                         .then(if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier)
