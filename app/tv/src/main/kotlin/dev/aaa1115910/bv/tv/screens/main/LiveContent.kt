@@ -43,6 +43,7 @@ import dev.aaa1115910.bv.tv.component.TopNavItem
 import dev.aaa1115910.bv.tv.component.live.LiveRoomCard
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.viewmodel.live.LiveViewModel
 import dev.aaa1115910.bv.viewmodel.live.LiveTabType
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -139,7 +140,7 @@ fun LiveContent(
 
     LaunchedEffect(currentContentKey) {
         suppressLoadMore = true
-        gridState.scrollToItem(0)
+        gridState.scrollToItemIfAvailable(0)
         suppressLoadMore = false
     }
 
@@ -165,7 +166,7 @@ fun LiveContent(
     LaunchedEffect(currentContentKey, currentListSize) {
         if (liveViewModel.lastFocusedRoomIndex > 0 &&
             liveViewModel.lastFocusedRoomIndex < currentListSize) {
-            gridState.scrollToItem(liveViewModel.lastFocusedRoomIndex)
+            gridState.scrollToItemIfAvailable(liveViewModel.lastFocusedRoomIndex)
         }
     }
 
@@ -356,28 +357,28 @@ fun LiveContent(
                                     if (liveViewModel.currentTabType == LiveTabType.Recommend) {
                                         liveViewModel.lastFocusedRoomIndex = 0
                                         liveViewModel.refresh()
-                                        scope.launch { gridState.scrollToItem(0) }
+                                        scope.launch { gridState.scrollToItemIfAvailable(0) }
                                     }
                                 }
                                 is LiveParentNavItem.Following -> {
                                     if (liveViewModel.currentTabType == LiveTabType.Following) {
                                         liveViewModel.lastFocusedRoomIndex = 0
                                         liveViewModel.refresh()
-                                        scope.launch { gridState.scrollToItem(0) }
+                                        scope.launch { gridState.scrollToItemIfAvailable(0) }
                                     }
                                 }
                                 is LiveParentNavItem.History -> {
                                     if (liveViewModel.currentTabType == LiveTabType.History) {
                                         liveViewModel.lastFocusedRoomIndex = 0
                                         liveViewModel.refresh()
-                                        scope.launch { gridState.scrollToItem(0) }
+                                        scope.launch { gridState.scrollToItemIfAvailable(0) }
                                     }
                                 }
                                 is LiveParentNavItem.Area -> {
                                     if (nav.group.id == liveViewModel.currentParentGroup?.id) {
                                         liveViewModel.lastFocusedRoomIndex = 0
                                         liveViewModel.refresh()
-                                        scope.launch { gridState.scrollToItem(0) }
+                                        scope.launch { gridState.scrollToItemIfAvailable(0) }
                                     }
                                 }
                             }
@@ -428,7 +429,7 @@ fun LiveContent(
                                 if (item.area.id == liveViewModel.currentSubArea?.id) {
                                     liveViewModel.lastFocusedRoomIndex = 0
                                     liveViewModel.refresh()
-                                    scope.launch { gridState.scrollToItem(0) }
+                                    scope.launch { gridState.scrollToItemIfAvailable(0) }
                                 }
                             }
                         },

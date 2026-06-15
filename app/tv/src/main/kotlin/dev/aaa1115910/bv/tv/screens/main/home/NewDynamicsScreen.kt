@@ -106,6 +106,7 @@ import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.viewmodel.home.DynamicViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -163,10 +164,10 @@ fun NewDynamicsScreen(
     fun scrollToTabTop(tabType: DynamicTabType) {
         scope.launch {
             when (tabType) {
-                DynamicTabType.Video -> lazyGridState.scrollToItem(0)
-                DynamicTabType.All, DynamicTabType.Up -> allStaggeredGridState.scrollToItem(0)
-                DynamicTabType.Pgc -> pgcGridState.scrollToItem(0)
-                DynamicTabType.Article -> articleStaggeredGridState.scrollToItem(0)
+                DynamicTabType.Video -> lazyGridState.scrollToItemIfAvailable(0)
+                DynamicTabType.All, DynamicTabType.Up -> allStaggeredGridState.scrollToItemIfAvailable(0)
+                DynamicTabType.Pgc -> pgcGridState.scrollToItemIfAvailable(0)
+                DynamicTabType.Article -> articleStaggeredGridState.scrollToItemIfAvailable(0)
             }
         }
     }

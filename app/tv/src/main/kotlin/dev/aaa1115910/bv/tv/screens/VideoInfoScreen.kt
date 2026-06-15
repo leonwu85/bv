@@ -162,6 +162,7 @@ import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.onBackPressed
 import dev.aaa1115910.bv.util.requestFocus
 import dev.aaa1115910.bv.util.resizedImageUrl
+import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.util.swapList
 import dev.aaa1115910.bv.util.swapListWithMainContext
 import dev.aaa1115910.bv.util.toast
@@ -2075,7 +2076,7 @@ fun VideoPartRow(
         if (lastPlayedCid != 0L && pages.isNotEmpty()) {
             val index = pages.indexOfFirst { it.cid == lastPlayedCid }
             if (index > 0) {
-                listState.scrollToItem(index)
+                listState.scrollToItemIfAvailable(index)
             }
         }
     }
@@ -2221,7 +2222,7 @@ fun VideoUgcSeasonRow(
         }
 
         if (index > 0) {
-            listState.scrollToItem(index)
+            listState.scrollToItemIfAvailable(index)
         }
     }
 
@@ -2676,7 +2677,7 @@ private fun VideoPartListDialog(
                             .onFocusChanged {
                                 if (it.hasFocus) {
                                     scope.launch(Dispatchers.Main) {
-                                        listState.scrollToItem(0)
+                                        listState.scrollToItemIfAvailable(0)
                                     }
                                 }
                             }
@@ -2796,7 +2797,7 @@ private fun VideoUgcListDialog(
                             .onFocusChanged {
                                 if (it.hasFocus) {
                                     scope.launch(Dispatchers.Main) {
-                                        listState.scrollToItem(0)
+                                        listState.scrollToItemIfAvailable(0)
                                     }
                                 }
                             }

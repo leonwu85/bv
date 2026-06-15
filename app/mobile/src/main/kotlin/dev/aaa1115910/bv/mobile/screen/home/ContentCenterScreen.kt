@@ -99,6 +99,7 @@ import dev.aaa1115910.bv.util.OnBottomReached
 import dev.aaa1115910.bv.util.getDisplayName
 import dev.aaa1115910.bv.util.removeHtmlTags
 import dev.aaa1115910.bv.util.resizedImageUrl
+import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.viewmodel.live.LiveTabType
 import dev.aaa1115910.bv.viewmodel.live.LiveViewModel
 import dev.aaa1115910.bv.viewmodel.home.PopularViewModel
@@ -828,7 +829,7 @@ private fun UgcChannelPage(
     }
 
     LaunchedEffect(selectedIndex) {
-        gridState.scrollToItem(0)
+        gridState.scrollToItemIfAvailable(0)
     }
 
     val loading = when (selectedItem) {
@@ -927,7 +928,7 @@ private fun LiveChannelPage(
     val histories = liveViewModel.historyList
 
     LaunchedEffect(currentContentKey) {
-        gridState.scrollToItem(0)
+        gridState.scrollToItemIfAvailable(0)
     }
 
     LaunchedEffect(liveViewModel.currentTabType, liveViewModel.parentAreaGroups.size) {

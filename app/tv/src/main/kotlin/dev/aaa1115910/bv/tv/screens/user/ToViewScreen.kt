@@ -69,6 +69,7 @@ import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.viewmodel.user.ToViewViewModel
 import org.koin.androidx.compose.koinViewModel
 
@@ -153,7 +154,7 @@ fun ToViewScreen(
             return@LaunchedEffect
         }
         currentIndex = targetIndex
-        lazyGridState.scrollToItem(targetIndex)
+        lazyGridState.scrollToItemIfAvailable(targetIndex)
         withFrameNanos { }
         withFrameNanos { }
         focusRequesters[targetHistory.avid]?.requestFocus(scope)

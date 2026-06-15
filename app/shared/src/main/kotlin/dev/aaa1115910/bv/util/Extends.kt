@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.snapshots.SnapshotStateMap
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -178,6 +179,45 @@ fun LazyStaggeredGridState.isScrolledToEnd() =
 
 fun LazyStaggeredGridState.getLane() =
     layoutInfo.visibleItemsInfo.maxOfOrNull { it.lane + 1 }
+
+suspend fun LazyListState.scrollToItemIfAvailable(index: Int, scrollOffset: Int = 0) {
+    awaitNextFrameIfAvailable()
+    val totalItemsCount = layoutInfo.totalItemsCount
+    if (totalItemsCount <= 0) return
+
+    scrollToItem(
+        index = index.coerceIn(0, totalItemsCount - 1),
+        scrollOffset = scrollOffset
+    )
+}
+
+suspend fun LazyGridState.scrollToItemIfAvailable(index: Int, scrollOffset: Int = 0) {
+    awaitNextFrameIfAvailable()
+    val totalItemsCount = layoutInfo.totalItemsCount
+    if (totalItemsCount <= 0) return
+
+    scrollToItem(
+        index = index.coerceIn(0, totalItemsCount - 1),
+        scrollOffset = scrollOffset
+    )
+}
+
+suspend fun LazyStaggeredGridState.scrollToItemIfAvailable(index: Int, scrollOffset: Int = 0) {
+    awaitNextFrameIfAvailable()
+    val totalItemsCount = layoutInfo.totalItemsCount
+    if (totalItemsCount <= 0) return
+
+    scrollToItem(
+        index = index.coerceIn(0, totalItemsCount - 1),
+        scrollOffset = scrollOffset
+    )
+}
+
+private suspend fun awaitNextFrameIfAvailable() {
+    runCatching {
+        withFrameNanos { }
+    }
+}
 
 @Composable
 fun LazyListState.OnBottomReached(

@@ -56,6 +56,7 @@ import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.onDelayFocusChanged
 import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.viewmodel.user.FavoriteViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -101,7 +102,7 @@ fun FavoriteScreen(
         enabled = focusOnGrid
     ) {
         scope.launch(Dispatchers.Main) {
-            lazyGridState.scrollToItem(0)
+            lazyGridState.scrollToItemIfAvailable(0)
             defaultFocusRequester.requestFocus()
             focusOnGrid = false
         }

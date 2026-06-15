@@ -104,6 +104,7 @@ import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.resizedImageUrl
+import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.viewmodel.user.UserSpaceTab
 import dev.aaa1115910.bv.viewmodel.user.UserSpaceViewModel
@@ -226,8 +227,8 @@ fun UpSpaceScreen(
         contentHasFocus = false
         scope.launch {
             when (selectedTab) {
-                TvUpSpaceTab.Dynamic -> dynamicGridState.scrollToItem(0)
-                TvUpSpaceTab.Video -> videoGridState.scrollToItem(0)
+                TvUpSpaceTab.Dynamic -> dynamicGridState.scrollToItemIfAvailable(0)
+                TvUpSpaceTab.Video -> videoGridState.scrollToItemIfAvailable(0)
             }
             userSpaceViewModel.refreshSelectedTab()
         }

@@ -125,6 +125,7 @@ import dev.aaa1115910.bv.util.onBackPressed
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.requestFocus
 import dev.aaa1115910.bv.util.resizedImageUrl
+import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.util.swapList
 import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.viewmodel.SeasonViewModel
@@ -1279,7 +1280,7 @@ fun SeasonEpisodesDialog(
                                 .onFocusChanged {
                                     if (it.hasFocus) {
                                         scope.launch(Dispatchers.Main) {
-                                            listState.scrollToItem(0)
+                                            listState.scrollToItemIfAvailable(0)
                                         }
                                     }
                                 }

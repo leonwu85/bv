@@ -47,6 +47,7 @@ import dev.aaa1115910.bv.tv.util.parseHomeNavItemsOrder
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.viewmodel.UserViewModel
 import dev.aaa1115910.bv.entity.DynamicPageStyle
 import dev.aaa1115910.bv.viewmodel.home.DynamicViewModel
@@ -140,7 +141,7 @@ fun HomeContent(
 
     fun scrollToTabTop(tab: HomeTopNavItem) {
         scope.launch {
-            lazyGridStateFor(tab).scrollToItem(0)
+            lazyGridStateFor(tab).scrollToItemIfAvailable(0)
         }
     }
 
