@@ -49,16 +49,21 @@ import dev.aaa1115910.bv.tv.screens.main.PgcContent
 import dev.aaa1115910.bv.tv.screens.main.SettingsContent
 import dev.aaa1115910.bv.tv.screens.main.UgcContent
 import dev.aaa1115910.bv.tv.screens.main.UserContent
+import dev.aaa1115910.bv.tv.component.update.TvAutoUpdateTip
 import dev.aaa1115910.bv.tv.screens.search.SearchInputScreen
 import dev.aaa1115910.bv.tv.util.drawerNavItemsFlow
 import dev.aaa1115910.bv.tv.util.parseDrawerItemsOrder
+import dev.aaa1115910.bv.update.AutoUpdateChecker
+import dev.aaa1115910.bv.update.AutoUpdateInfo
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fException
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.viewmodel.UserViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -104,6 +109,7 @@ fun MainScreen(
     val userFocusRequester = remember { FocusRequester() }
     val settingsFocusRequester = remember { FocusRequester() }
     var pendingContentFocusItem by remember { mutableStateOf<DrawerItem?>(null) }
+    var autoUpdateInfo by remember { mutableStateOf<AutoUpdateInfo?>(null) }
 
     fun requestDrawerFocus(item: DrawerItem): Boolean {
         return runCatching {
@@ -184,6 +190,18 @@ fun MainScreen(
             userViewModel.updateUserInfo()
         } else {
             userViewModel.clearUserInfo()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        runCatching {
+            withContext(Dispatchers.IO) {
+                AutoUpdateChecker.checkOnceDaily()
+            }
+        }.onSuccess { updateInfo ->
+            autoUpdateInfo = updateInfo
+        }.onFailure {
+            logger.warn(it) { "Auto update check failed" }
         }
     }
 
@@ -328,6 +346,14 @@ fun MainScreen(
                     fontSize = 24.sp
                 ),
                 color = MaterialTheme.colorScheme.onSurface
+            )
+
+            TvAutoUpdateTip(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 72.dp, bottom = 18.dp),
+                updateInfo = autoUpdateInfo,
+                onHidden = { autoUpdateInfo = null }
             )
         }
     }

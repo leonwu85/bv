@@ -566,6 +566,10 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefLastVersionCodeRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefLastVersionCodeKey, value) }
 
+    var lastAutoUpdateCheckDay: Long
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefLastAutoUpdateCheckDayRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefLastAutoUpdateCheckDayKey, value) }
+
     var showedRemoteControllerPanelDemo: Boolean
         get() = runBlocking {
             dsm.getPreferenceFlow(PrefKeys.prefShowedRemoteControllerPanelDemoRequest).first()
@@ -1063,6 +1067,7 @@ object PrefKeys {
     val prefProxyHttpServerKey = stringPreferencesKey("proxy_http_server")
     val prefProxyGRPCServerKey = stringPreferencesKey("proxy_grpc_server")
     val prefLastVersionCodeKey = intPreferencesKey("last_version_code")
+    val prefLastAutoUpdateCheckDayKey = longPreferencesKey("last_auto_update_check_day")
     val prefShowedRemoteControllerPanelDemoKey = booleanPreferencesKey("showed_rcpd")
     val prefPreferOfficialCdn = booleanPreferencesKey("prefer_official_cdn")
     val prefCdnServiceKey = intPreferencesKey("cdn_service")
@@ -1202,6 +1207,7 @@ object PrefKeys {
     val prefProxyHttpServerRequest = PreferenceRequest(prefProxyHttpServerKey, "")
     val prefProxyGRPCServerRequest = PreferenceRequest(prefProxyGRPCServerKey, "")
     val prefLastVersionCodeRequest = PreferenceRequest(prefLastVersionCodeKey, 0)
+    val prefLastAutoUpdateCheckDayRequest = PreferenceRequest(prefLastAutoUpdateCheckDayKey, 0L)
     val prefShowedRemoteControllerPanelDemoRequest =
         PreferenceRequest(prefShowedRemoteControllerPanelDemoKey, false)
     val prefPreferOfficialCdnRequest = PreferenceRequest(prefPreferOfficialCdn, false)

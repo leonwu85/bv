@@ -87,10 +87,13 @@ import dev.aaa1115910.biliapi.repositories.UserRepository as BiliUserRepository
 import dev.aaa1115910.bv.mobile.activities.InboxActivity
 import dev.aaa1115910.bv.mobile.activities.SettingsActivity
 import dev.aaa1115910.bv.mobile.component.ImagePreviewerActions
+import dev.aaa1115910.bv.mobile.component.update.MobileAutoUpdateDialog
 import dev.aaa1115910.bv.mobile.screen.home.DynamicScreen
 import dev.aaa1115910.bv.mobile.screen.home.HomeScreen
 import dev.aaa1115910.bv.mobile.screen.home.MineScreen
 import dev.aaa1115910.bv.mobile.screen.home.SearchScreen
+import dev.aaa1115910.bv.update.AutoUpdateChecker
+import dev.aaa1115910.bv.update.AutoUpdateInfo
 import dev.aaa1115910.bv.mobile.util.saveImageToGallery
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.swapList
@@ -132,6 +135,7 @@ fun MobileMainScreen(
     var savingPreviewImage by remember { mutableStateOf(false) }
     var dynamicUnreadCount by remember { mutableStateOf(0) }
     var messageUnreadCount by remember { mutableStateOf(0) }
+    var autoUpdateInfo by remember { mutableStateOf<AutoUpdateInfo?>(null) }
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewerState = rememberPreviewerState(
         verticalDragType = VerticalDragType.UpAndDown,
@@ -178,6 +182,18 @@ fun MobileMainScreen(
     LaunchedEffect(userViewModel.isLogin) {
         refreshDynamicUnreadCount()
         refreshMessageUnreadCount()
+    }
+
+    LaunchedEffect(Unit) {
+        runCatching {
+            withContext(Dispatchers.IO) {
+                AutoUpdateChecker.checkOnceDaily()
+            }
+        }.onSuccess { updateInfo ->
+            autoUpdateInfo = updateInfo
+        }.onFailure {
+            logger.warn(it) { "Auto update check failed" }
+        }
     }
 
     LaunchedEffect(state.currentNavItem) {
@@ -422,6 +438,11 @@ fun MobileMainScreen(
                 )
             }
         }
+    )
+
+    MobileAutoUpdateDialog(
+        updateInfo = autoUpdateInfo,
+        onDismiss = { autoUpdateInfo = null }
     )
 }
 
