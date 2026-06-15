@@ -73,7 +73,7 @@ internal class BiliHttpApiTest {
     fun `get video play url`() {
         assertDoesNotThrow {
             runBlocking {
-                val response = BiliHttpApi.getVideoPlayUrl(
+                val response = BiliHttpApi.getVideoWbiPlayUrl(
                     av = 648092492,
                     cid = 903675075,
                     fnval = 4048,

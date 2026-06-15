@@ -138,6 +138,7 @@ class VideoPlayerActivity : ComponentActivity() {
         ) {
             context.startActivity(
                 Intent(context, VideoPlayerActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
                     putExtra("aid", aid)
                     putExtra("cid", cid)
                     putExtra("fromSeason", fromSeason)
@@ -306,6 +307,7 @@ class VideoPlayerActivity : ComponentActivity() {
         ) {
             context.startActivity(
                 Intent(context, VideoPlayerActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
                     putExtra("isLive", true)
                     putExtra("liveRoomId", roomId)
                     putExtra("title", title)
@@ -348,6 +350,29 @@ class VideoPlayerActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+
+        val launchArgs = VideoLaunchArgs.fromIntent(intent)
+        logger.fInfo { "Handle new video player intent: isLive=${launchArgs.isLive}" }
+        if (playerViewModel.videoPlayer == null) {
+            initVideoPlayer(launchArgs = launchArgs)
+            if (!launchArgs.isLive) initDanmakuPlayer()
+            return
+        }
+
+        if (playerViewModel.isLive != launchArgs.isLive) {
+            releasePlayerForRelaunch()
+            initVideoPlayer(launchArgs = launchArgs)
+            if (!launchArgs.isLive) initDanmakuPlayer()
+            return
+        }
+
+        if (!launchArgs.isLive) initDanmakuPlayer()
+        parseIntent(launchArgs)
     }
 
     private fun initVideoPlayer(launchArgs: VideoLaunchArgs) {
@@ -413,6 +438,15 @@ class VideoPlayerActivity : ComponentActivity() {
         parseIntent(launchArgs)
     }
 
+    private fun releasePlayerForRelaunch() {
+        playerViewModel.videoPlayer?.release()
+        playerViewModel.videoPlayer = null
+        playerViewModel.danmakuPlayer?.release()
+        playerViewModel.danmakuPlayer = null
+        playerViewModel.liveDanmakuPlayer?.release()
+        playerViewModel.liveDanmakuPlayer = null
+    }
+
     private fun initDanmakuPlayer() {
         if (playerViewModel.danmakuPlayer != null) return
         logger.fInfo { "initDanmakuPlayer" }
@@ -436,6 +470,7 @@ class VideoPlayerActivity : ComponentActivity() {
             return
         }
 
+        playerViewModel.isLive = false
         playerViewModel.cover = launchArgs.cover
         playerViewModel.title = launchArgs.title
         playerViewModel.partTitle = launchArgs.partTitle

@@ -88,28 +88,55 @@ class VideoPlayRepository(
     suspend fun getPlayData(
         aid: Long,
         cid: Long,
+        bvid: String = "",
         preferApiType: ApiType = ApiType.Web,
         tryLook1080P: Boolean = false
     ): PlayData {
         return when (preferApiType) {
             ApiType.Web -> {
                 val tryLook = shouldTryLook1080P(tryLook1080P, authRepository.sessionData)
-                val playUrlData = BiliHttpApi.getVideoPlayUrl(
-                    av = aid,
-                    cid = cid,
-                    fnval = 4048,
-                    qn = 127,
-                    fnver = 0,
-                    fourk = 1,
-                    sessData = authRepository.sessionData,
-                    dedeUserID = authRepository.mid,
-                    buvid3 = authRepository.buvid3,
-                    dedeUserIDCkMd5 = authRepository.dedeUserIDCkMd5,
-                    biliJct = authRepository.biliJct,
-                    sid = authRepository.sid,
-                    tryLook = tryLook
-                ).getResponseData()
-                PlayData.fromPlayUrlData(playUrlData)
+                val qnCandidates = playUrlQnCandidates(127)
+                var lastFailure: Throwable? = null
+
+                qnCandidates.forEach { candidateQn ->
+                    val result = runCatching {
+                        val playUrlData = BiliHttpApi.getVideoWbiPlayUrl(
+                            av = aid,
+                            bv = bvid.takeIf { it.isNotBlank() },
+                            cid = cid,
+                            fnval = 4048,
+                            qn = candidateQn,
+                            fnver = 0,
+                            fourk = 1,
+                            sessData = authRepository.sessionData,
+                            dedeUserID = authRepository.mid,
+                            buvid3 = authRepository.buvid3,
+                            dedeUserIDCkMd5 = authRepository.dedeUserIDCkMd5,
+                            biliJct = authRepository.biliJct,
+                            sid = authRepository.sid,
+                            tryLook = tryLook
+                        ).getResponseData()
+                        val playData = PlayData.fromPlayUrlData(playUrlData)
+                        if (!playData.needPay && !playData.hasPlayableVodStreams()) {
+                            val audioCount = playData.playableAudioCount()
+                            throw IllegalStateException(
+                                "WBI qn=$candidateQn 未返回可播放音视频流：" +
+                                    "video=${playData.dashVideos.size}, " +
+                                    "audio=$audioCount, " +
+                                    "acceptQuality=${playUrlData.acceptQuality}, " +
+                                    "responseQuality=${playUrlData.quality}, " +
+                                    "result=${playUrlData.result}, " +
+                                    "message=${playUrlData.message}"
+                            )
+                        }
+                        playData
+                    }
+
+                    result.onSuccess { return it }
+                    lastFailure = result.exceptionOrNull()
+                }
+
+                throw lastFailure ?: IllegalStateException("WBI 未返回可播放音视频流")
             }
 
             ApiType.App -> {
@@ -212,11 +239,23 @@ class VideoPlayRepository(
         return dashVideos.isNotEmpty() && (dashAudios.isNotEmpty() || dolby != null || flac != null)
     }
 
-    private fun downloadQnCandidates(qn: Int): List<Int> {
+    private fun PlayData.hasPlayableVodStreams(): Boolean {
+        return dashVideos.isNotEmpty() && playableAudioCount() > 0
+    }
+
+    private fun PlayData.playableAudioCount(): Int {
+        return dashAudios.size + listOfNotNull(dolby, flac).size
+    }
+
+    private fun playUrlQnCandidates(qn: Int): List<Int> {
         val knownQualities = listOf(127, 126, 125, 120, 116, 112, 80, 74, 64, 32, 16, 6)
         return (listOf(qn) + knownQualities.filter { it < qn })
             .filter { it > 0 }
             .distinct()
+    }
+
+    private fun downloadQnCandidates(qn: Int): List<Int> {
+        return playUrlQnCandidates(qn)
     }
 
     suspend fun getPgcPlayData(

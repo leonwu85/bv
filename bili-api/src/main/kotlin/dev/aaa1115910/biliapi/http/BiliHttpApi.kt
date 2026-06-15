@@ -2749,7 +2749,7 @@ object BiliHttpApi {
         buvid3: String? = buvid3Provider()
     ) {
         val needToUpdate =
-            wbiImgKey == null || wbiSubKey == null || System.currentTimeMillis() - wbiLastRefreshDate < 2 * 60 * 60 * 1000L
+            wbiImgKey == null || wbiSubKey == null || System.currentTimeMillis() - wbiLastRefreshDate >= 2 * 60 * 60 * 1000L
         if (!needToUpdate) {
             println("Skip update wbi keys")
             return

@@ -756,9 +756,16 @@ class VideoPlayerV3ViewModel(
                 val playData = videoPlayRepository.getPlayData(
                     aid = transitionContext.aid,
                     cid = transitionContext.cid,
+                    bvid = AvBvConverter.av2bv(transitionContext.aid),
                     preferApiType = settings.apiType,
                     tryLook1080P = settings.tryLook1080P,
                 )
+                if (!playData.needPay && !playData.hasPlayableVodStreams()) {
+                    logger.fWarn {
+                        "Prefetched play data has empty streams: [aid=${transitionContext.aid}, cid=${transitionContext.cid}]"
+                    }
+                    return@launch
+                }
 
                 withContext(Dispatchers.Main) {
                     if (!isPreparedAutoPlayCandidateActive(candidate, prepareToken)) return@withContext
@@ -1267,28 +1274,27 @@ class VideoPlayerV3ViewModel(
             }
         }
         return try {
-            val playData = preparedPlayData ?: if (fromSeason) {
-                videoPlayRepository.getPgcPlayData(
-                    aid = avid,
+            val playData = when {
+                preparedPlayData == null -> fetchPlayableVodPlayData(
+                    avid = avid,
                     cid = cid,
                     epid = epid,
-                    preferCodec = settings.defaultVideoCodec.toBiliApiCodeType(),
-                    preferApiType = settings.apiType,
-                    enableProxy = proxyArea != ProxyArea.MainLand,
-                    proxyArea = when (proxyArea) {
-                        ProxyArea.MainLand -> ""
-                        ProxyArea.HongKong -> "hk"
-                        ProxyArea.TaiWan -> "tw"
-                    },
-                    tryLook1080P = settings.tryLook1080P,
+                    preferApi = preferApi,
+                    proxyArea = proxyArea
                 )
-            } else {
-                videoPlayRepository.getPlayData(
-                    aid = avid,
-                    cid = cid,
-                    preferApiType = settings.apiType,
-                    tryLook1080P = settings.tryLook1080P,
-                )
+
+                preparedPlayData.needPay || preparedPlayData.hasPlayableVodStreams() -> preparedPlayData
+
+                else -> {
+                    logger.fWarn { "Prepared play data has empty streams, reload play url: [av=$avid, cid=$cid]" }
+                    fetchPlayableVodPlayData(
+                        avid = avid,
+                        cid = cid,
+                        epid = epid,
+                        preferApi = preferApi,
+                        proxyArea = proxyArea
+                    )
+                }
             }
 
             ensureVodPlaybackSessionActive(playbackSessionToken)
@@ -1319,6 +1325,9 @@ class VideoPlayerV3ViewModel(
 
             logger.fInfo { "Video available resolution: $resolutionList" }
             availableQuality.swapListWithMainContext(resolutionList)
+            if (resolutionList.isEmpty()) {
+                throw IllegalStateException("接口未返回可播放视频流")
+            }
 
             ensureVodPlaybackSessionActive(playbackSessionToken)
 
@@ -1342,6 +1351,9 @@ class VideoPlayerV3ViewModel(
 
             logger.fInfo { "Video available audio: $audioList" }
             availableAudio.swapListWithMainContext(audioList)
+            if (audioList.isEmpty()) {
+                throw IllegalStateException("接口未返回可播放音频流")
+            }
 
             ensureVodPlaybackSessionActive(playbackSessionToken)
 
@@ -1382,13 +1394,13 @@ class VideoPlayerV3ViewModel(
                 cellularAudio = settings.defaultCellularAudio
             )
             val selectedAudio = when {
-                availableAudio.contains(preferredAudio) -> preferredAudio
-                preferredAudio == Audio.ADolbyAtmos && availableAudio.contains(Audio.AHiRes) -> Audio.AHiRes
-                preferredAudio == Audio.AHiRes && availableAudio.contains(Audio.ADolbyAtmos) -> Audio.ADolbyAtmos
-                availableAudio.contains(Audio.A192K) -> Audio.A192K
-                availableAudio.contains(Audio.A132K) -> Audio.A132K
-                availableAudio.contains(Audio.A64K) -> Audio.A64K
-                else -> availableAudio.first()
+                audioList.contains(preferredAudio) -> preferredAudio
+                preferredAudio == Audio.ADolbyAtmos && audioList.contains(Audio.AHiRes) -> Audio.AHiRes
+                preferredAudio == Audio.AHiRes && audioList.contains(Audio.ADolbyAtmos) -> Audio.ADolbyAtmos
+                audioList.contains(Audio.A192K) -> Audio.A192K
+                audioList.contains(Audio.A132K) -> Audio.A132K
+                audioList.contains(Audio.A64K) -> Audio.A64K
+                else -> audioList.first()
             }
             withContext(Dispatchers.Main) {
                 if (isVodPlaybackSessionActive(playbackSessionToken)) {
@@ -1430,6 +1442,95 @@ class VideoPlayerV3ViewModel(
             }
             logger.fException(e) { "Load video failed" }
             false
+        }
+    }
+
+    private suspend fun fetchPlayableVodPlayData(
+        avid: Long,
+        cid: Long,
+        epid: Int,
+        preferApi: ApiType,
+        proxyArea: ProxyArea,
+    ): PlayData {
+        val primaryResult = runCatching {
+            fetchVodPlayDataOnce(
+                avid = avid,
+                cid = cid,
+                epid = epid,
+                preferApi = preferApi,
+                proxyArea = proxyArea
+            )
+        }
+        val primaryPlayData = primaryResult.getOrNull()
+        primaryPlayData?.let {
+            if (it.needPay || it.hasPlayableVodStreams()) return it
+        }
+        val primaryFailure = primaryResult.exceptionOrNull()
+
+        if (preferApi == ApiType.Web) {
+            if (primaryFailure != null) {
+                logger.fWarn { "WEB play data failed, fallback to APP API: ${primaryFailure.localizedMessage}" }
+            } else {
+                logger.fWarn { "WEB play data has empty streams, fallback to APP API: [av=$avid, cid=$cid]" }
+            }
+            addLogs("WEB 接口未返回可播放流，尝试 APP 接口")
+            val fallbackPlayData = runCatching {
+                fetchVodPlayDataOnce(
+                    avid = avid,
+                    cid = cid,
+                    epid = epid,
+                    preferApi = ApiType.App,
+                    proxyArea = proxyArea
+                )
+            }.onFailure {
+                logger.fWarn { "APP play data fallback failed: ${it.localizedMessage}" }
+            }.getOrNull()
+
+            if (fallbackPlayData != null) {
+                if (fallbackPlayData.needPay || fallbackPlayData.hasPlayableVodStreams()) {
+                    logger.fInfo { "APP play data fallback success: [av=$avid, cid=$cid]" }
+                    return fallbackPlayData
+                }
+                logger.fWarn {
+                    "APP play data fallback has empty streams: [av=$avid, cid=$cid, video=${fallbackPlayData.dashVideos.size}, audio=${fallbackPlayData.playableAudioCount()}]"
+                }
+            }
+        }
+
+        primaryPlayData?.let { return it.requirePlayableVodStreams(preferApi.playUrlSourceName()) }
+        throw primaryFailure ?: IllegalStateException("${preferApi.playUrlSourceName()} 未返回可播放音视频流")
+    }
+
+    private suspend fun fetchVodPlayDataOnce(
+        avid: Long,
+        cid: Long,
+        epid: Int,
+        preferApi: ApiType,
+        proxyArea: ProxyArea,
+    ): PlayData {
+        return if (fromSeason) {
+            videoPlayRepository.getPgcPlayData(
+                aid = avid,
+                cid = cid,
+                epid = epid,
+                preferCodec = settings.defaultVideoCodec.toBiliApiCodeType(),
+                preferApiType = preferApi,
+                enableProxy = proxyArea != ProxyArea.MainLand,
+                proxyArea = when (proxyArea) {
+                    ProxyArea.MainLand -> ""
+                    ProxyArea.HongKong -> "hk"
+                    ProxyArea.TaiWan -> "tw"
+                },
+                tryLook1080P = settings.tryLook1080P,
+            )
+        } else {
+            videoPlayRepository.getPlayData(
+                aid = avid,
+                cid = cid,
+                bvid = AvBvConverter.av2bv(avid),
+                preferApiType = preferApi,
+                tryLook1080P = settings.tryLook1080P,
+            )
         }
     }
 
@@ -1556,15 +1657,37 @@ class VideoPlayerV3ViewModel(
             ?: flac
     }
 
+    private fun PlayData.hasPlayableVodStreams(): Boolean {
+        return dashVideos.isNotEmpty() && playableAudioCount() > 0
+    }
+
+    private fun PlayData.playableAudioCount(): Int {
+        return dashAudios.size + listOfNotNull(dolby, flac).size
+    }
+
+    private fun PlayData.requirePlayableVodStreams(source: String): PlayData {
+        val audioCount = playableAudioCount()
+        if (dashVideos.isEmpty() || audioCount == 0) {
+            throw IllegalStateException(
+                "$source 未返回可播放音视频流：video=${dashVideos.size}, audio=$audioCount, qualities=${dashVideos.map { it.quality }.distinct()}"
+            )
+        }
+        return this
+    }
+
     private fun PlayData.requireOfflineCacheStreams(source: String): PlayData {
-        val audioCount = dashAudios.size +
-            listOfNotNull(dolby, flac).size
+        val audioCount = playableAudioCount()
         if (dashVideos.isEmpty() || audioCount == 0) {
             throw IllegalStateException(
                 "$source 未返回可缓存音视频流：video=${dashVideos.size}, audio=$audioCount, qualities=${dashVideos.map { it.quality }.distinct()}"
             )
         }
         return this
+    }
+
+    private fun ApiType.playUrlSourceName(): String = when (this) {
+        ApiType.Web -> "WEB 接口"
+        ApiType.App -> "APP 接口"
     }
 
     private fun Int.toOfflineQualityText(preferredQuality: Resolution? = null): String {

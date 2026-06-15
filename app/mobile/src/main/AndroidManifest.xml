@@ -12,6 +12,7 @@
             android:configChanges="orientation|screenSize"
             android:exported="true"
             android:label="@string/title_mobile_activity_video_player"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.BV.Mobile" />
         <activity
             android:name=".activities.LoginActivity"
