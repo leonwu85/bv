@@ -17,6 +17,11 @@ class LauncherActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!isTaskRoot && intent.isLauncherEntryIntent()) {
+            logger.info { "Skip duplicate launcher entry, existing task will resume" }
+            finish()
+            return
+        }
         routeToCorrectActivity()
     }
     
@@ -37,6 +42,7 @@ class LauncherActivity : ComponentActivity() {
         
         // 传递原始Intent中的所有数据
         intent.putExtras(getIntent())
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         
         // 启动相应的MainActivity
         startActivity(intent)
@@ -54,4 +60,10 @@ class LauncherActivity : ComponentActivity() {
             context.startActivity(intent)
         }
     }
+}
+
+private fun Intent?.isLauncherEntryIntent(): Boolean {
+    if (this == null || action != Intent.ACTION_MAIN) return false
+    return hasCategory(Intent.CATEGORY_LAUNCHER) ||
+        hasCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
 }

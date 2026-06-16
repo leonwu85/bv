@@ -42,6 +42,13 @@ fun BVTheme(
     val themeType = if (view.isInEditMode) ThemeType.Auto
     else Prefs.themeTypeFlow.collectAsState(Prefs.themeType).value
 
+    val resolvedDarkTheme = forceDark || when (themeType) {
+        ThemeType.Auto -> darkTheme
+        ThemeType.Dark -> true
+        ThemeType.Light -> false
+    }
+    val useDarkStatusBarIcons = !resolvedDarkTheme
+
     val tvLightColorScheme = lightColorScheme()
     val tvDarkColorScheme = darkColorScheme(
         border = Color.White
@@ -70,7 +77,7 @@ fun BVTheme(
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = colorSchemeTv.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkTheme
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = useDarkStatusBarIcons
         }
     }
 

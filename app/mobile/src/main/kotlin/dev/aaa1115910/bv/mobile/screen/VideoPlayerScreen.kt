@@ -146,6 +146,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -296,6 +297,7 @@ fun VideoPlayerScreen(
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger("VideoPlayerScreen")
     val playerSettings = PlayerSettingsProvider.current
+    val useDarkSystemBarIcons = MaterialTheme.colorScheme.surface.luminance() > 0.5f
 
     var isVideoFullscreen by rememberSaveable { mutableStateOf(false) }
     val forcePortrait =
@@ -520,8 +522,9 @@ fun VideoPlayerScreen(
         }
 
         // 设置系统栏外观
-        if (windowSizeClass.widthSizeClass != WindowWidthSizeClass.Expanded) {
-            insetsController.isAppearanceLightStatusBars = false
+        if (!isVideoFullscreen) {
+            insetsController.isAppearanceLightStatusBars = useDarkSystemBarIcons
+            insetsController.isAppearanceLightNavigationBars = useDarkSystemBarIcons
         }
 
         // 设置屏幕方向
@@ -570,7 +573,7 @@ fun VideoPlayerScreen(
     )
 
     Scaffold(
-        containerColor = if (windowSizeClass.widthSizeClass != WindowWidthSizeClass.Expanded) Color.Black else MaterialTheme.colorScheme.surfaceContainer
+        containerColor = if (isVideoFullscreen) Color.Black else Color.Transparent
     ) { innerPadding ->
         Row(
             modifier = Modifier
@@ -2015,7 +2018,7 @@ private fun VideoActionGrid(
                     },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Rounded.Download,
+                            imageVector = Icons.Filled.Image,
                             contentDescription = null
                         )
                     },

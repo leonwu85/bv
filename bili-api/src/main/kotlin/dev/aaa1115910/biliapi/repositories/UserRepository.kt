@@ -25,6 +25,7 @@ import dev.aaa1115910.biliapi.entity.user.ArticleParagraph
 import dev.aaa1115910.biliapi.entity.user.ArticlePicture
 import dev.aaa1115910.biliapi.entity.user.DynamicVoteDraft
 import dev.aaa1115910.biliapi.entity.user.ArticleTextNode
+import dev.aaa1115910.biliapi.entity.user.OpusDetailResult
 import dev.aaa1115910.biliapi.entity.user.TextNodeType
 import dev.aaa1115910.biliapi.entity.user.SpaceVideoData
 import dev.aaa1115910.biliapi.entity.user.SpaceVideoOrder
@@ -803,58 +804,58 @@ class UserRepository(
     suspend fun getOpusDetail(
         opusId: String,
         preferApiType: ApiType = ApiType.Web
-    ): List<ArticleParagraph> {
+    ): List<ArticleParagraph> = getOpusDetailResult(opusId, preferApiType).paragraphs
+
+    /**
+     * 获取 Opus (专栏/图文) 详情及评论区元数据
+     */
+    suspend fun getOpusDetailResult(
+        opusId: String,
+        preferApiType: ApiType = ApiType.Web
+    ): OpusDetailResult {
         return when (preferApiType) {
-            ApiType.Web -> {
-                runCatching {
-                    val responseData = BiliHttpApi.getOpusDetail(
-                        opusId = opusId,
-                        sessData = authRepository.sessionData ?: ""
-                    ).getResponseData()
-
-                    // 检查是否需要 fallback 到传统专栏 API
-                    val fallbackId = responseData.fallback?.id
-                    if (fallbackId != null) {
-                        // 使用传统专栏 API 获取内容
-                        val articleData = BiliHttpApi.getArticleView(
-                            cvId = fallbackId,
-                            sessData = authRepository.sessionData ?: ""
-                        ).getResponseData()
-                        // 从 articleView 的 opus.content.paragraphs 获取段落
-                        parseOpusParagraphs(articleData.opus?.content?.paragraphs ?: emptyList())
-                    } else {
-                        // 从 modules 列表中找到 MODULE_TYPE_CONTENT 类型的模块
-                        val contentModule = responseData.item?.modules?.find { it.moduleType == "MODULE_TYPE_CONTENT" }
-                        parseOpusParagraphs(contentModule?.moduleContent?.paragraphs ?: emptyList())
-                    }
-                }.getOrElse { emptyList() }
-            }
-
+            ApiType.Web -> getOpusDetailResultFromWeb(opusId)
             ApiType.App -> {
                 // App 端暂时使用 Web API
-                runCatching {
-                    val responseData = BiliHttpApi.getOpusDetail(
-                        opusId = opusId,
-                        sessData = authRepository.sessionData ?: ""
-                    ).getResponseData()
-
-                    // 检查是否需要 fallback 到传统专栏 API
-                    val fallbackId = responseData.fallback?.id
-                    if (fallbackId != null) {
-                        // 使用传统专栏 API 获取内容
-                        val articleData = BiliHttpApi.getArticleView(
-                            cvId = fallbackId,
-                            sessData = authRepository.sessionData ?: ""
-                        ).getResponseData()
-                        // 从 articleView 的 opus.content.paragraphs 获取段落
-                        parseOpusParagraphs(articleData.opus?.content?.paragraphs ?: emptyList())
-                    } else {
-                        // 从 modules 列表中找到 MODULE_TYPE_CONTENT 类型的模块
-                        val contentModule = responseData.item?.modules?.find { it.moduleType == "MODULE_TYPE_CONTENT" }
-                        parseOpusParagraphs(contentModule?.moduleContent?.paragraphs ?: emptyList())
-                    }
-                }.getOrElse { emptyList() }
+                getOpusDetailResultFromWeb(opusId)
             }
+        }
+    }
+
+    private suspend fun getOpusDetailResultFromWeb(opusId: String): OpusDetailResult {
+        return runCatching {
+            val responseData = BiliHttpApi.getOpusDetail(
+                opusId = opusId,
+                sessData = authRepository.sessionData ?: ""
+            ).getResponseData()
+
+            val basic = responseData.item?.basic
+            val commentId = basic?.commentIdStr?.toLongOrNull() ?: 0L
+            val commentType = basic?.commentType?.toLong() ?: 0L
+
+            // 检查是否需要 fallback 到传统专栏 API
+            val fallbackId = responseData.fallback?.id
+            val paragraphs = if (fallbackId != null) {
+                // 使用传统专栏 API 获取内容
+                val articleData = BiliHttpApi.getArticleView(
+                    cvId = fallbackId,
+                    sessData = authRepository.sessionData ?: ""
+                ).getResponseData()
+                // 从 articleView 的 opus.content.paragraphs 获取段落
+                parseOpusParagraphs(articleData.opus?.content?.paragraphs ?: emptyList())
+            } else {
+                // 从 modules 列表中找到 MODULE_TYPE_CONTENT 类型的模块
+                val contentModule = responseData.item?.modules?.find { it.moduleType == "MODULE_TYPE_CONTENT" }
+                parseOpusParagraphs(contentModule?.moduleContent?.paragraphs ?: emptyList())
+            }
+
+            OpusDetailResult(
+                paragraphs = paragraphs,
+                commentId = commentId,
+                commentType = commentType
+            )
+        }.getOrElse {
+            OpusDetailResult(paragraphs = emptyList())
         }
     }
 

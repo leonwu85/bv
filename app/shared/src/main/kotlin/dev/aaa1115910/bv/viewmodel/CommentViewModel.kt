@@ -62,7 +62,35 @@ class CommentViewModel(
     val emotePackages = mutableStateListOf<DynamicEmotePackageDraft>()
     var loadingEmotes by mutableStateOf(false)
 
+    fun setCommentTarget(commentId: Long, commentType: Long) {
+        if (commentId <= 0L || commentType <= 0L) return
+        if (this.commentId == commentId && this.commentType == commentType) return
+        this.commentId = commentId
+        this.commentType = commentType
+        nextCommentPage = CommentPage()
+        hasMoreComments = true
+        refreshingComments = false
+        updatingComments = false
+        comments.clear()
+        nextCommentReplyPage = CommentReplyPage()
+        hasMoreReplies = true
+        refreshingReplies = false
+        updatingReplies = false
+        replies.clear()
+        replyRootComment = null
+        rpid = 0L
+        rpCount = 0
+    }
+
     suspend fun loadMoreComment() {
+        if (commentId <= 0L || commentType <= 0L) {
+            logger.warn { "Skip loading comments for invalid target: commentId=$commentId, commentType=$commentType" }
+            withContext(Dispatchers.Main) {
+                updatingComments = false
+                refreshingComments = false
+            }
+            return
+        }
         if (updatingComments) return
         withContext(Dispatchers.Main) {
             updatingComments = true
@@ -120,6 +148,14 @@ class CommentViewModel(
     }
 
     suspend fun loadMoreReplies() {
+        if (commentId <= 0L || commentType <= 0L || rpid <= 0L) {
+            logger.warn { "Skip loading replies for invalid target: commentId=$commentId, commentType=$commentType, rpid=$rpid" }
+            withContext(Dispatchers.Main) {
+                updatingReplies = false
+                refreshingReplies = false
+            }
+            return
+        }
         if (updatingReplies) return
         withContext(Dispatchers.Main) {
             updatingReplies = true
@@ -189,6 +225,9 @@ class CommentViewModel(
         }
         if (!Prefs.isLogin) {
             return Result.failure(IllegalStateException("账号未登录"))
+        }
+        if (commentId <= 0L || commentType <= 0L) {
+            return Result.failure(IllegalStateException("评论区不可用"))
         }
         if (sendingComment) {
             return Result.failure(IllegalStateException("正在发送中"))

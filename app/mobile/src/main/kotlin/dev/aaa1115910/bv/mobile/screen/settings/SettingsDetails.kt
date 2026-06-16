@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import dev.aaa1115910.bv.mobile.screen.settings.details.AboutContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.AdvanceContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.AudioVideoContent
@@ -50,11 +51,11 @@ fun SettingsDetails(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    containerColor = Color.Transparent
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        containerColor = Color.Transparent
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding))
         val contentModifier = Modifier.padding(top = innerPadding.calculateTopPadding())

@@ -63,4 +63,7 @@ java {
 
 dependencies {
     implementation(project(":app:shared"))
+    implementation(libs.markwon.core)
+    implementation(libs.markwon.html)
+    implementation(libs.markwon.image.coil)
 }

@@ -203,10 +203,20 @@ fun MobileMainScreen(
     }
 
     DisposableEffect(lifecycleOwner, userViewModel.isLogin) {
+        var leaveFromThisPage = false
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                refreshDynamicUnreadCount()
-                refreshMessageUnreadCount()
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> leaveFromThisPage = true
+                Lifecycle.Event.ON_RESUME -> {
+                    refreshDynamicUnreadCount()
+                    refreshMessageUnreadCount()
+                    if (leaveFromThisPage) {
+                        userViewModel.updateUserInfo(forceUpdate = true)
+                    }
+                    leaveFromThisPage = false
+                }
+
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -484,7 +494,7 @@ private fun NavigationSuit(
         NavigationSuiteType.NavigationRail -> {
             NavigationRail(
                 modifier = modifier,
-                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f)
             ) {
                 NavigationRailItem(
                     icon = {
@@ -666,12 +676,6 @@ fun rememberMobileMainScreenState(
     val currentNavItem by remember {
         derivedStateOf {
             MobileMainScreenNav.fromName(currentBackStackEntry?.destination?.route ?: "")
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        if (popularViewModel.popularVideoList.isNotEmpty()) {
-            scope.launch(Dispatchers.IO) { popularViewModel.loadMore() }
         }
     }
 

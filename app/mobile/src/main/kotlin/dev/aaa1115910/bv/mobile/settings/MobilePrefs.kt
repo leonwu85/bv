@@ -40,11 +40,19 @@ import kotlin.math.roundToInt
 object MobilePrefs {
     private val dsm get() = BVApp.dataStoreManager
 
-    const val DEFAULT_SEED_COLOR = 0xFF5CB67B.toInt()
+    const val DEFAULT_SEED_COLOR = 0xFF2F8F8F.toInt()
 
     private fun sanitizeDanmakuFilterLevel(value: Int) = value.coerceIn(1, 10)
 
     private fun sanitizeLiveDanmakuFilterLevel(value: Int) = value.coerceIn(0, 60)
+
+    private fun resolveMobileThemePalette(value: Int): MobileThemePalette {
+        val palette = MobileThemePalette.entries.getOrElse(value) { MobileThemePalette.Default }
+        return when (palette) {
+            MobileThemePalette.FantasyScroll -> MobileThemePalette.Default
+            else -> palette
+        }
+    }
 
     var themeType: ThemeType
         get() = ThemeType.entries[read(MobilePrefKeys.themeTypeRequest)]
@@ -55,15 +63,13 @@ object MobilePrefs {
             .transform { emit(ThemeType.entries[it]) }
 
     var themePalette: MobileThemePalette
-        get() = MobileThemePalette.entries.getOrElse(
-            read(MobilePrefKeys.themePaletteRequest)
-        ) { MobileThemePalette.Default }
-        set(value) = write(MobilePrefKeys.themePaletteKey, value.ordinal)
+        get() = resolveMobileThemePalette(read(MobilePrefKeys.themePaletteRequest))
+        set(value) = write(MobilePrefKeys.themePaletteKey, resolveMobileThemePalette(value.ordinal).ordinal)
 
     val themePaletteFlow: Flow<MobileThemePalette>
         get() = dsm.getPreferenceFlow(MobilePrefKeys.themePaletteRequest)
             .transform { ordinal ->
-                emit(MobileThemePalette.entries.getOrElse(ordinal) { MobileThemePalette.Default })
+                emit(resolveMobileThemePalette(ordinal))
             }
 
     var dynamicColor: Boolean
@@ -79,6 +85,20 @@ object MobilePrefs {
 
     val seedColorFlow: Flow<Int>
         get() = dsm.getPreferenceFlow(MobilePrefKeys.seedColorRequest)
+
+    var lightThemeBackgroundUri: String
+        get() = read(MobilePrefKeys.lightThemeBackgroundUriRequest)
+        set(value) = write(MobilePrefKeys.lightThemeBackgroundUriKey, value)
+
+    val lightThemeBackgroundUriFlow: Flow<String>
+        get() = dsm.getPreferenceFlow(MobilePrefKeys.lightThemeBackgroundUriRequest)
+
+    var darkThemeBackgroundUri: String
+        get() = read(MobilePrefKeys.darkThemeBackgroundUriRequest)
+        set(value) = write(MobilePrefKeys.darkThemeBackgroundUriKey, value)
+
+    val darkThemeBackgroundUriFlow: Flow<String>
+        get() = dsm.getPreferenceFlow(MobilePrefKeys.darkThemeBackgroundUriRequest)
 
     var playerType: PlayerType
         get() = resolveMobilePlayerType(read(MobilePrefKeys.playerTypeRequest))
@@ -396,6 +416,8 @@ object MobilePrefKeys {
     val themePaletteKey = intPreferencesKey("mobile_theme_palette")
     val dynamicColorKey = booleanPreferencesKey("mobile_theme_dynamic_color")
     val seedColorKey = intPreferencesKey("mobile_theme_seed_color")
+    val lightThemeBackgroundUriKey = stringPreferencesKey("mobile_theme_light_background_uri")
+    val darkThemeBackgroundUriKey = stringPreferencesKey("mobile_theme_dark_background_uri")
     val playerTypeKey = intPreferencesKey("mobile_player_type")
     val apiTypeKey = intPreferencesKey("mobile_api_type")
     val defaultQualityKey = intPreferencesKey("mobile_default_quality")
@@ -470,6 +492,8 @@ object MobilePrefKeys {
     val themePaletteRequest = PreferenceRequest(themePaletteKey, MobileThemePalette.Default.ordinal)
     val dynamicColorRequest = PreferenceRequest(dynamicColorKey, false)
     val seedColorRequest = PreferenceRequest(seedColorKey, MobilePrefs.DEFAULT_SEED_COLOR)
+    val lightThemeBackgroundUriRequest = PreferenceRequest(lightThemeBackgroundUriKey, "")
+    val darkThemeBackgroundUriRequest = PreferenceRequest(darkThemeBackgroundUriKey, "")
     val playerTypeRequest = PreferenceRequest(playerTypeKey, PlayerType.Media3.ordinal)
     val apiTypeRequest = PreferenceRequest(apiTypeKey, ApiType.App.ordinal)
     val defaultQualityRequest = PreferenceRequest(defaultQualityKey, Resolution.R1080P.code)

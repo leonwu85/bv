@@ -1,5 +1,7 @@
 package dev.aaa1115910.bv.mobile.screen.home
 
+import android.os.SystemClock
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -35,8 +37,16 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +71,8 @@ import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import kotlin.Int
 
+private const val HOME_FOREGROUND_REFRESH_INTERVAL_MS = 5 * 60 * 1000L
+
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -84,7 +96,7 @@ fun HomeScreen(
 
     Scaffold(
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = Color.Transparent,
         topBar = {
             if (windowSize == WindowWidthSizeClass.Compact) {
                 HomeTopAppBar(
@@ -126,6 +138,50 @@ fun HomeScreenContent(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var lastForegroundRefreshAt by rememberSaveable {
+        mutableStateOf(SystemClock.elapsedRealtime())
+    }
+
+    fun refreshRecommend() {
+        scope.launch(Dispatchers.IO) {
+            recommendViewModel.resetPage()
+            delay(300)
+            recommendViewModel.loadMore {
+                recommendViewModel.clearData()
+            }
+            recommendViewModel.refreshing = false
+        }
+    }
+
+    fun refreshPopular() {
+        scope.launch(Dispatchers.IO) {
+            popularViewModel.resetPage()
+            delay(300)
+            popularViewModel.loadMore {
+                popularViewModel.clearData()
+            }
+            popularViewModel.refreshing = false
+        }
+    }
+
+    fun refreshCurrentTabIfReady() {
+        when (MobileHomeTab.entries[selectedTabIndex]) {
+            MobileHomeTab.Recommend -> {
+                if (recommendViewModel.recommendVideoList.isNotEmpty() && !recommendViewModel.loading) {
+                    refreshRecommend()
+                }
+            }
+
+            MobileHomeTab.Popular -> {
+                if (popularViewModel.popularVideoList.isNotEmpty() && !popularViewModel.loading) {
+                    refreshPopular()
+                }
+            }
+
+            else -> Unit
+        }
+    }
 
     LaunchedEffect(selectedTabIndex) {
         when (MobileHomeTab.entries[selectedTabIndex]) {
@@ -151,14 +207,40 @@ fun HomeScreenContent(
         }
     }
 
+    DisposableEffect(lifecycleOwner, selectedTabIndex) {
+        var leaveFromThisPage = false
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> leaveFromThisPage = true
+                Lifecycle.Event.ON_RESUME -> {
+                    if (leaveFromThisPage) {
+                        val now = SystemClock.elapsedRealtime()
+                        if (now - lastForegroundRefreshAt >= HOME_FOREGROUND_REFRESH_INTERVAL_MS) {
+                            lastForegroundRefreshAt = now
+                            refreshCurrentTabIfReady()
+                        }
+                    }
+                    leaveFromThisPage = false
+                }
+
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     Column(
         modifier = modifier
-            .background(MaterialTheme.colorScheme.surface),
+            .background(Color.Transparent),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
+                .background(Color.Transparent)
                 .padding(top = 4.dp)
                 .height(42.dp)
                 .zIndex(1f),
@@ -169,14 +251,14 @@ fun HomeScreenContent(
                 selectedTabIndex = selectedTabIndex,
                 tabs = MobileHomeTab.entries.map { it.title },
                 onTabSelected = onChangeTabIndex,
-                containerColor = MaterialTheme.colorScheme.surface,
+                containerColor = Color.Transparent,
                 horizontalArrangement = Arrangement.Center,
                 tabHeight = 42.dp
             )
         }
 
         Surface(
-            color = MaterialTheme.colorScheme.surface,
+            color = Color.Transparent,
             shape = if (windowSize == WindowWidthSizeClass.Compact) RoundedCornerShape(0.dp) else MaterialTheme.shapes.medium,
         ) {
             HorizontalPager(
@@ -209,16 +291,8 @@ fun HomeScreenContent(
                             enabled = selectedTabIndex == MobileHomeTab.Recommend.ordinal &&
                                 recommendViewModel.recommendVideoList.isNotEmpty(),
                             onRefresh = {
-                                scope.launch(Dispatchers.IO) {
-                                    recommendViewModel.resetPage()
-                                    //避免刷新太快
-                                    delay(300)
-                                    recommendViewModel.loadMore {
-                                        //clear data before set new data
-                                        recommendViewModel.clearData()
-                                    }
-                                    recommendViewModel.refreshing = false
-                                }
+                                lastForegroundRefreshAt = SystemClock.elapsedRealtime()
+                                refreshRecommend()
                             },
                             loadMore = {
                                 scope.launch(Dispatchers.IO) {
@@ -242,16 +316,8 @@ fun HomeScreenContent(
                             enabled = selectedTabIndex == MobileHomeTab.Popular.ordinal &&
                                 popularViewModel.popularVideoList.isNotEmpty(),
                             onRefresh = {
-                                scope.launch(Dispatchers.IO) {
-                                    popularViewModel.resetPage()
-                                    //避免刷新太快
-                                    delay(300)
-                                    popularViewModel.loadMore {
-                                        //clear data before set new data
-                                        popularViewModel.clearData()
-                                    }
-                                    popularViewModel.refreshing = false
-                                }
+                                lastForegroundRefreshAt = SystemClock.elapsedRealtime()
+                                refreshPopular()
                             },
                             loadMore = {
                                 scope.launch(Dispatchers.IO) {
@@ -324,12 +390,14 @@ private fun HomeTopAppBar(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
                     .clickable(onClick = onOpenSearch),
-                color = MaterialTheme.colorScheme.surface,
+                color = MaterialTheme.colorScheme.surfaceBright,
                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                shape = RoundedCornerShape(20.dp)
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
+                tonalElevation = 2.dp
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -338,7 +406,7 @@ private fun HomeTopAppBar(
                         contentDescription = null
                     )
                     Text(
-                        text = "搜索",
+                        text = "搜索视频、番剧、UP主",
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1
                     )
@@ -388,7 +456,7 @@ private fun HomeTopAppBar(
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            containerColor = Color.Transparent,
         )
     )
 }

@@ -501,8 +501,10 @@ class VideoPlayerActivity : ComponentActivity() {
                 }
             }
 
-            commentViewModel.commentType = 1
-            commentViewModel.commentId = aid
+            commentViewModel.setCommentTarget(
+                commentId = aid,
+                commentType = 1
+            )
 
             val offlineEntry = if (launchArgs.playOfflineCache && aid > 0L && cid > 0L) {
                 playerViewModel.completedOfflineCacheEntry(aid, cid)

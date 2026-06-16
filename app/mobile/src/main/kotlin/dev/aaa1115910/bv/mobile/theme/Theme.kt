@@ -3,9 +3,14 @@ package dev.aaa1115910.bv.mobile.theme
 import android.app.Activity
 import android.content.Context
 import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -17,13 +22,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import coil.compose.AsyncImage
 import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import dev.aaa1115910.bv.entity.ThemeType
 import dev.aaa1115910.bv.mobile.settings.MobilePrefs
 import dev.aaa1115910.bv.mobile.settings.MobileRuntime
+import dev.aaa1115910.bv.mobile.R as MobileR
 
 @Composable
 fun BVMobileTheme(
@@ -67,6 +77,20 @@ fun BVMobileTheme(
     } else {
         MobilePrefs.seedColorFlow.collectAsState(initial = MobilePrefs.seedColor)
     }
+    val lightBackgroundUri by if (view.isInEditMode) {
+        androidx.compose.runtime.remember {
+            androidx.compose.runtime.mutableStateOf("")
+        }
+    } else {
+        MobilePrefs.lightThemeBackgroundUriFlow.collectAsState(initial = MobilePrefs.lightThemeBackgroundUri)
+    }
+    val darkBackgroundUri by if (view.isInEditMode) {
+        androidx.compose.runtime.remember {
+            androidx.compose.runtime.mutableStateOf("")
+        }
+    } else {
+        MobilePrefs.darkThemeBackgroundUriFlow.collectAsState(initial = MobilePrefs.darkThemeBackgroundUri)
+    }
     val resolvedDarkTheme = when (themeType) {
         ThemeType.Auto -> isSystemInDarkTheme()
         ThemeType.Dark -> true
@@ -80,33 +104,124 @@ fun BVMobileTheme(
         resolvedDarkTheme = resolvedDarkTheme,
         dynamicColorEnabled = dynamicColorEnabled,
         seedColor = Color(seedColorArgb)
-    )
+    ).withImageBackgroundSurfaces(resolvedDarkTheme)
 
     if (!view.isInEditMode) {
         val currentWindow = (view.context as Activity).window
         SideEffect {
             (view.context as Activity).window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(currentWindow, view)
-                .isAppearanceLightStatusBars = useDarkIcons
+            WindowCompat.getInsetsController(currentWindow, view).apply {
+                isAppearanceLightStatusBars = useDarkIcons
+                isAppearanceLightNavigationBars = useDarkIcons
+            }
         }
     }
 
     SideEffect {
-        systemUiController.setStatusBarColor(color = Color.Transparent)
-        systemUiController.setNavigationBarColor(color = Color.Transparent)
+        systemUiController.setStatusBarColor(
+            color = Color.Transparent,
+            darkIcons = useDarkIcons
+        )
+        systemUiController.setNavigationBarColor(
+            color = Color.Transparent,
+            darkIcons = useDarkIcons
+        )
         if (!view.isInEditMode) {
             WindowCompat.setDecorFitsSystemWindows(window, false)
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars =
-                useDarkIcons
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = useDarkIcons
+                isAppearanceLightNavigationBars = useDarkIcons
+            }
         }
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
+        shapes = mobileShapes,
     ) {
+        MobileThemeBackground(
+            resolvedDarkTheme = resolvedDarkTheme,
+            customBackgroundUri = if (resolvedDarkTheme) darkBackgroundUri else lightBackgroundUri,
+            enabled = !view.isInEditMode,
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun MobileThemeBackground(
+    resolvedDarkTheme: Boolean,
+    customBackgroundUri: String,
+    enabled: Boolean,
+    content: @Composable () -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val configuration = LocalConfiguration.current
+    val useTabletAsset = configuration.screenWidthDp >= 600 || configuration.screenWidthDp > configuration.screenHeightDp
+    val defaultBackground = when {
+        resolvedDarkTheme && useTabletAsset -> MobileR.drawable.mobile_bg_fantasy_scroll_dark_tablet
+        resolvedDarkTheme -> MobileR.drawable.mobile_bg_fantasy_scroll_dark
+        useTabletAsset -> MobileR.drawable.mobile_bg_fantasy_scroll_light_tablet
+        else -> MobileR.drawable.mobile_bg_fantasy_scroll_light
+    }
+    val showImageBackground = enabled
+    val backgroundModel: Any = customBackgroundUri.takeIf { it.isNotBlank() } ?: defaultBackground
+
+    Box(
+        modifier = androidx.compose.ui.Modifier
+            .fillMaxSize()
+            .background(colorScheme.surface)
+    ) {
+        if (showImageBackground) {
+            AsyncImage(
+                modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                model = backgroundModel,
+                contentDescription = null,
+                contentScale = ContentScale.Crop
+            )
+            Box(
+                modifier = androidx.compose.ui.Modifier
+                    .fillMaxSize()
+                    .background(
+                        colorScheme.surface.copy(
+                            alpha = if (resolvedDarkTheme) 0.58f else 0.34f
+                        )
+                    )
+            )
+        }
         content()
     }
 }
+
+private fun ColorScheme.withImageBackgroundSurfaces(resolvedDarkTheme: Boolean): ColorScheme {
+    val backgroundAlpha = if (resolvedDarkTheme) 0.92f else 0.88f
+    val surfaceAlpha = if (resolvedDarkTheme) 0.96f else 0.95f
+    val lowContainerAlpha = if (resolvedDarkTheme) 0.93f else 0.91f
+    val containerAlpha = if (resolvedDarkTheme) 0.96f else 0.95f
+    val floatingContainerAlpha = if (resolvedDarkTheme) 0.99f else 0.98f
+
+    return copy(
+        background = background.copy(alpha = backgroundAlpha),
+        surface = surface.copy(alpha = surfaceAlpha),
+        surfaceVariant = surfaceVariant.copy(alpha = floatingContainerAlpha),
+        surfaceTint = surfaceTint.copy(alpha = floatingContainerAlpha),
+        surfaceDim = surfaceDim.copy(alpha = backgroundAlpha),
+        surfaceBright = surfaceBright.copy(alpha = floatingContainerAlpha),
+        surfaceContainerLowest = surfaceContainerLowest.copy(alpha = 0.86f),
+        surfaceContainerLow = surfaceContainerLow.copy(alpha = lowContainerAlpha),
+        surfaceContainer = surfaceContainer.copy(alpha = containerAlpha),
+        surfaceContainerHigh = surfaceContainerHigh.copy(alpha = floatingContainerAlpha),
+        surfaceContainerHighest = surfaceContainerHighest.copy(alpha = floatingContainerAlpha),
+    )
+}
+
+private val mobileShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(28.dp)
+)
 
 private fun mobileColorScheme(
     context: Context,
@@ -119,13 +234,37 @@ private fun mobileColorScheme(
         if (resolvedDarkTheme) traditionalDarkColorScheme() else traditionalLightColorScheme()
     }
 
-    MobileThemePalette.Default -> when {
+    MobileThemePalette.Default,
+    MobileThemePalette.FantasyScroll -> {
+        if (resolvedDarkTheme) fantasyScrollDarkColorScheme() else fantasyScrollLightColorScheme()
+    }
+
+    MobileThemePalette.MaterialDynamic -> when {
         dynamicColorEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             if (resolvedDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
 
         resolvedDarkTheme -> mobileDarkColorScheme(seedColor)
         else -> mobileLightColorScheme(seedColor)
+    }
+}
+
+internal fun mobilePreviewColorScheme(
+    palette: MobileThemePalette,
+    resolvedDarkTheme: Boolean,
+    seedColor: Color
+): ColorScheme = when (palette) {
+    MobileThemePalette.ChineseTraditional -> {
+        if (resolvedDarkTheme) traditionalDarkColorScheme() else traditionalLightColorScheme()
+    }
+
+    MobileThemePalette.Default,
+    MobileThemePalette.FantasyScroll -> {
+        if (resolvedDarkTheme) fantasyScrollDarkColorScheme() else fantasyScrollLightColorScheme()
+    }
+
+    MobileThemePalette.MaterialDynamic -> {
+        if (resolvedDarkTheme) mobileDarkColorScheme(seedColor) else mobileLightColorScheme(seedColor)
     }
 }
 
@@ -167,6 +306,80 @@ private fun mobileDarkColorScheme(seed: Color) = darkColorScheme(
     surfaceContainer = Color(0xFF171C18),
     surfaceContainerLow = Color(0xFF121713),
     surfaceContainerHighest = Color(0xFF292F2A),
+)
+
+private fun fantasyScrollLightColorScheme() = lightColorScheme(
+    primary = Color(0xFF2F8F8F),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFC5E7E2),
+    onPrimaryContainer = Color(0xFF073D3F),
+    secondary = Color(0xFFA7782E),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFF1DEB9),
+    onSecondaryContainer = Color(0xFF3A2600),
+    tertiary = Color(0xFF627FA6),
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFD8E5F8),
+    onTertiaryContainer = Color(0xFF1A314F),
+    error = Color(0xFFBA1A1A),
+    onError = Color.White,
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
+    background = Color(0xFFFFF8EA),
+    onBackground = Color(0xFF241D13),
+    surface = Color(0xFFFFF8EA),
+    onSurface = Color(0xFF241D13),
+    surfaceVariant = Color(0xFFE9DDC8),
+    onSurfaceVariant = Color(0xFF5E5343),
+    surfaceContainerLowest = Color(0xFFFFFCF4),
+    surfaceContainerLow = Color(0xFFFFF4E2),
+    surfaceContainer = Color(0xFFF7EBD6),
+    surfaceContainerHigh = Color(0xFFF0E3CD),
+    surfaceContainerHighest = Color(0xFFE6D8C0),
+    surfaceBright = Color(0xFFFFFAF1),
+    surfaceDim = Color(0xFFE4D6BE),
+    outline = Color(0xFF9A8357),
+    outlineVariant = Color(0xFFD5C39E),
+    inverseSurface = Color(0xFF3B3022),
+    inverseOnSurface = Color(0xFFFFEED4),
+    inversePrimary = Color(0xFF91D5CF),
+)
+
+private fun fantasyScrollDarkColorScheme() = darkColorScheme(
+    primary = Color(0xFF91D5CF),
+    onPrimary = Color(0xFF003737),
+    primaryContainer = Color(0xFF145456),
+    onPrimaryContainer = Color(0xFFC5E7E2),
+    secondary = Color(0xFFE7C37F),
+    onSecondary = Color(0xFF3D2A00),
+    secondaryContainer = Color(0xFF604611),
+    onSecondaryContainer = Color(0xFFF1DEB9),
+    tertiary = Color(0xFFB8C8E8),
+    onTertiary = Color(0xFF25324A),
+    tertiaryContainer = Color(0xFF3C4A64),
+    onTertiaryContainer = Color(0xFFD8E5F8),
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6),
+    background = Color(0xFF121720),
+    onBackground = Color(0xFFF2E5D0),
+    surface = Color(0xFF121720),
+    onSurface = Color(0xFFF2E5D0),
+    surfaceVariant = Color(0xFF4C4639),
+    onSurfaceVariant = Color(0xFFD8C9AC),
+    surfaceContainerLowest = Color(0xFF0C1118),
+    surfaceContainerLow = Color(0xFF171D27),
+    surfaceContainer = Color(0xFF1D2430),
+    surfaceContainerHigh = Color(0xFF28303D),
+    surfaceContainerHighest = Color(0xFF343C49),
+    surfaceBright = Color(0xFF373F4D),
+    surfaceDim = Color(0xFF121720),
+    outline = Color(0xFFBBA674),
+    outlineVariant = Color(0xFF6C5E3F),
+    inverseSurface = Color(0xFFF2E5D0),
+    inverseOnSurface = Color(0xFF332B20),
+    inversePrimary = Color(0xFF2F8F8F),
 )
 
 private fun traditionalLightColorScheme() = lightColorScheme(

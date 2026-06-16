@@ -67,6 +67,7 @@ class PreferenceGroupScope internal constructor(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier
                         .padding(vertical = 8.dp, horizontal = 4.dp)
                         .animateItem()

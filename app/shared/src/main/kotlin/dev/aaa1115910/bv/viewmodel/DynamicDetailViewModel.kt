@@ -82,10 +82,12 @@ class DynamicDetailViewModel(
 
         logger.fInfo { "Loading article content for: $dynamicId" }
         runCatching {
-            articleParagraphs = userRepository.getOpusDetail(
+            val opusDetail = userRepository.getOpusDetailResult(
                 opusId = dynamicId,
                 preferApiType = Prefs.apiType
             )
+            articleParagraphs = opusDetail.paragraphs
+            updateCommentTarget(opusDetail.commentId, opusDetail.commentType)
             logger.fInfo { "Loaded ${articleParagraphs.size} paragraphs" }
         }.onFailure {
             logger.fException(it) { "Failed to load article content" }
@@ -94,6 +96,16 @@ class DynamicDetailViewModel(
         }
 
         isLoadingArticle = false
+    }
+
+    private fun updateCommentTarget(commentId: Long, commentType: Long) {
+        if (commentId <= 0L || commentType <= 0L) return
+        val item = dynamicItem ?: return
+        if (item.commentId == commentId && item.commentType == commentType) return
+        dynamicItem = item.copy(
+            commentId = commentId,
+            commentType = commentType
+        )
     }
 
     fun toggleLike() {

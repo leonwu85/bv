@@ -1497,6 +1497,12 @@ sealed class ArticleParagraph {
     ) : ArticleParagraph()
 }
 
+data class OpusDetailResult(
+    val paragraphs: List<ArticleParagraph>,
+    val commentId: Long = 0L,
+    val commentType: Long = 0L
+)
+
 /**
  * 文本节点
  */

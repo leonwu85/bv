@@ -342,7 +342,10 @@ fun DynamicDetailMobileContent(
                                 contentDescription = null
                             )
                         }
-                    }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent
+                    )
                 )
             },
             bottomBar = {
@@ -357,7 +360,8 @@ fun DynamicDetailMobileContent(
                         onLike = dynamicDetailState::toggleLike
                     )
                 }
-            }
+            },
+            containerColor = Color.Transparent
         ) { innerPadding ->
             if (dynamicDetailState.dynamicItem != null) {
                 CommentPart(
@@ -514,7 +518,10 @@ fun DynamicDetailScreenPadContent(
                             contentDescription = null
                         )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
+                )
             )
         },
         bottomBar = {
@@ -529,7 +536,8 @@ fun DynamicDetailScreenPadContent(
                     onLike = dynamicDetailState::toggleLike
                 )
             }
-        }
+        },
+        containerColor = Color.Transparent
     ) { innerPadding ->
         Box(
             modifier = Modifier.padding(
@@ -789,8 +797,7 @@ data class DynamicDetailState(
 
     fun updateCurrentComment(comment: Comment) {
         replyComment = comment
-        commentViewModel.commentId = comment.oid
-        commentViewModel.commentType = comment.type
+        commentViewModel.setCommentTarget(comment.oid, comment.type)
         commentViewModel.rpid = comment.rpid
     }
 
@@ -922,10 +929,11 @@ fun rememberDynamicDetailState(
         scope.launch(Dispatchers.IO) {
             dynamicDetailViewModel.loadDynamic()
             dynamicDetailViewModel.loadArticleContent()
-            if (dynamicDetailViewModel.dynamicItem?.commentId != null && dynamicDetailViewModel.dynamicItem?.commentType != null) {
-                commentViewModel.commentId = dynamicDetailViewModel.dynamicItem!!.commentId
-                commentViewModel.commentType = dynamicDetailViewModel.dynamicItem!!.commentType
-                //commentViewModel.loadMoreComment()
+            dynamicDetailViewModel.dynamicItem?.let { item ->
+                if (item.commentId > 0L && item.commentType > 0L) {
+                    commentViewModel.setCommentTarget(item.commentId, item.commentType)
+                    commentViewModel.loadMoreComment()
+                }
             }
         }
     }
@@ -1056,9 +1064,13 @@ private fun ReplyPart(
                     }
                 },
                 windowInsets = if (enableTopPadding) TopAppBarDefaults.windowInsets
-                else WindowInsets.systemBars.only(WindowInsetsSides.Horizontal)
+                else WindowInsets.systemBars.only(WindowInsetsSides.Horizontal),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
+                )
             )
-        }
+        },
+        containerColor = Color.Transparent
     ) { innerPadding ->
         Replies(
             modifier = Modifier.padding(top = innerPadding.calculateTopPadding()),
