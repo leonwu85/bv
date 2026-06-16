@@ -18,6 +18,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -40,6 +42,7 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuite
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldLayout
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
@@ -57,6 +60,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -468,26 +472,41 @@ private fun NavigationSuit(
 ) {
     when (navigationSuiteType) {
         NavigationSuiteType.NavigationBar -> {
-            NavigationSuite(
-                modifier = modifier
-            ) {
-                listOf(
-                    MobileMainScreenNav.Home,
-                    MobileMainScreenNav.Dynamic,
-                    MobileMainScreenNav.Setting,
-                ).forEach { navItem ->
-                    item(
-                        icon = {
-                            NavigationIcon(
-                                navItem = navItem,
-                                dynamicUnreadCount = dynamicUnreadCount
-                            )
-                        },
-                        label = { Text(navItem.displayName) },
-                        selected = mobileMainScreenState.currentNavItem == navItem,
-                        onClick = { onNavigate(navItem) }
+            Box(modifier = modifier) {
+                NavigationSuite(
+                    layoutType = NavigationSuiteType.NavigationBar,
+                    colors = NavigationSuiteDefaults.colors(
+                        shortNavigationBarContainerColor = Color.Transparent,
+                        shortNavigationBarContentColor = MaterialTheme.colorScheme.onSurface,
+                        navigationBarContainerColor = Color.Transparent,
+                        navigationBarContentColor = MaterialTheme.colorScheme.onSurface
                     )
+                ) {
+                    listOf(
+                        MobileMainScreenNav.Home,
+                        MobileMainScreenNav.Dynamic,
+                        MobileMainScreenNav.Setting,
+                    ).forEach { navItem ->
+                        item(
+                            icon = {
+                                NavigationIcon(
+                                    navItem = navItem,
+                                    dynamicUnreadCount = dynamicUnreadCount
+                                )
+                            },
+                            label = { Text(navItem.displayName) },
+                            selected = mobileMainScreenState.currentNavItem == navItem,
+                            onClick = { onNavigate(navItem) }
+                        )
+                    }
                 }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                )
             }
         }
 

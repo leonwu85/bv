@@ -93,12 +93,26 @@ object MobilePrefs {
     val lightThemeBackgroundUriFlow: Flow<String>
         get() = dsm.getPreferenceFlow(MobilePrefKeys.lightThemeBackgroundUriRequest)
 
+    var lightThemeBackgroundEnabled: Boolean
+        get() = read(MobilePrefKeys.lightThemeBackgroundEnabledRequest)
+        set(value) = write(MobilePrefKeys.lightThemeBackgroundEnabledKey, value)
+
+    val lightThemeBackgroundEnabledFlow: Flow<Boolean>
+        get() = dsm.getPreferenceFlow(MobilePrefKeys.lightThemeBackgroundEnabledRequest)
+
     var darkThemeBackgroundUri: String
         get() = read(MobilePrefKeys.darkThemeBackgroundUriRequest)
         set(value) = write(MobilePrefKeys.darkThemeBackgroundUriKey, value)
 
     val darkThemeBackgroundUriFlow: Flow<String>
         get() = dsm.getPreferenceFlow(MobilePrefKeys.darkThemeBackgroundUriRequest)
+
+    var darkThemeBackgroundEnabled: Boolean
+        get() = read(MobilePrefKeys.darkThemeBackgroundEnabledRequest)
+        set(value) = write(MobilePrefKeys.darkThemeBackgroundEnabledKey, value)
+
+    val darkThemeBackgroundEnabledFlow: Flow<Boolean>
+        get() = dsm.getPreferenceFlow(MobilePrefKeys.darkThemeBackgroundEnabledRequest)
 
     var playerType: PlayerType
         get() = resolveMobilePlayerType(read(MobilePrefKeys.playerTypeRequest))
@@ -417,7 +431,9 @@ object MobilePrefKeys {
     val dynamicColorKey = booleanPreferencesKey("mobile_theme_dynamic_color")
     val seedColorKey = intPreferencesKey("mobile_theme_seed_color")
     val lightThemeBackgroundUriKey = stringPreferencesKey("mobile_theme_light_background_uri")
+    val lightThemeBackgroundEnabledKey = booleanPreferencesKey("mobile_theme_light_background_enabled")
     val darkThemeBackgroundUriKey = stringPreferencesKey("mobile_theme_dark_background_uri")
+    val darkThemeBackgroundEnabledKey = booleanPreferencesKey("mobile_theme_dark_background_enabled")
     val playerTypeKey = intPreferencesKey("mobile_player_type")
     val apiTypeKey = intPreferencesKey("mobile_api_type")
     val defaultQualityKey = intPreferencesKey("mobile_default_quality")
@@ -493,7 +509,9 @@ object MobilePrefKeys {
     val dynamicColorRequest = PreferenceRequest(dynamicColorKey, false)
     val seedColorRequest = PreferenceRequest(seedColorKey, MobilePrefs.DEFAULT_SEED_COLOR)
     val lightThemeBackgroundUriRequest = PreferenceRequest(lightThemeBackgroundUriKey, "")
+    val lightThemeBackgroundEnabledRequest = PreferenceRequest(lightThemeBackgroundEnabledKey, true)
     val darkThemeBackgroundUriRequest = PreferenceRequest(darkThemeBackgroundUriKey, "")
+    val darkThemeBackgroundEnabledRequest = PreferenceRequest(darkThemeBackgroundEnabledKey, true)
     val playerTypeRequest = PreferenceRequest(playerTypeKey, PlayerType.Media3.ordinal)
     val apiTypeRequest = PreferenceRequest(apiTypeKey, ApiType.App.ordinal)
     val defaultQualityRequest = PreferenceRequest(defaultQualityKey, Resolution.R1080P.code)

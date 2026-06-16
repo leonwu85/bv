@@ -91,8 +91,14 @@ fun AppearanceContent(
     val lightBackgroundUri by MobilePrefs.lightThemeBackgroundUriFlow.collectAsState(
         initial = MobilePrefs.lightThemeBackgroundUri
     )
+    val lightBackgroundEnabled by MobilePrefs.lightThemeBackgroundEnabledFlow.collectAsState(
+        initial = MobilePrefs.lightThemeBackgroundEnabled
+    )
     val darkBackgroundUri by MobilePrefs.darkThemeBackgroundUriFlow.collectAsState(
         initial = MobilePrefs.darkThemeBackgroundUri
+    )
+    val darkBackgroundEnabled by MobilePrefs.darkThemeBackgroundEnabledFlow.collectAsState(
+        initial = MobilePrefs.darkThemeBackgroundEnabled
     )
     val isFixedPalette = themePalette != MobileThemePalette.MaterialDynamic
     var showCustomColorDialog by remember { mutableStateOf(false) }
@@ -102,6 +108,7 @@ fun AppearanceContent(
         uri?.let {
             persistBackgroundUri(context, it) { persistedUri ->
                 MobilePrefs.lightThemeBackgroundUri = persistedUri
+                MobilePrefs.lightThemeBackgroundEnabled = true
             }
         }
     }
@@ -111,6 +118,7 @@ fun AppearanceContent(
         uri?.let {
             persistBackgroundUri(context, it) { persistedUri ->
                 MobilePrefs.darkThemeBackgroundUri = persistedUri
+                MobilePrefs.darkThemeBackgroundEnabled = true
             }
         }
     }
@@ -209,7 +217,12 @@ fun AppearanceContent(
             ScrollSectionCard(title = "背景图片", icon = Icons.Rounded.Image) {
                 BackgroundPickerRow(
                     title = "浅色背景",
-                    summary = if (lightBackgroundUri.isBlank()) "使用内置手机/平板响应式浅色背景" else "已使用自定义浅色背景",
+                    summary = backgroundSummary(
+                        enabled = lightBackgroundEnabled,
+                        uri = lightBackgroundUri,
+                        modeName = "浅色"
+                    ),
+                    enabled = lightBackgroundEnabled,
                     previewModel = lightBackgroundUri.takeIf { it.isNotBlank() }
                         ?: MobileR.drawable.mobile_bg_fantasy_scroll_light,
                     onPick = {
@@ -217,12 +230,21 @@ fun AppearanceContent(
                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                         )
                     },
-                    onReset = { MobilePrefs.lightThemeBackgroundUri = "" }
+                    onEnabledChange = { MobilePrefs.lightThemeBackgroundEnabled = it },
+                    onReset = {
+                        MobilePrefs.lightThemeBackgroundUri = ""
+                        MobilePrefs.lightThemeBackgroundEnabled = true
+                    }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 BackgroundPickerRow(
                     title = "深色背景",
-                    summary = if (darkBackgroundUri.isBlank()) "使用内置手机/平板响应式深色背景" else "已使用自定义深色背景",
+                    summary = backgroundSummary(
+                        enabled = darkBackgroundEnabled,
+                        uri = darkBackgroundUri,
+                        modeName = "深色"
+                    ),
+                    enabled = darkBackgroundEnabled,
                     previewModel = darkBackgroundUri.takeIf { it.isNotBlank() }
                         ?: MobileR.drawable.mobile_bg_fantasy_scroll_dark,
                     onPick = {
@@ -230,7 +252,11 @@ fun AppearanceContent(
                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                         )
                     },
-                    onReset = { MobilePrefs.darkThemeBackgroundUri = "" }
+                    onEnabledChange = { MobilePrefs.darkThemeBackgroundEnabled = it },
+                    onReset = {
+                        MobilePrefs.darkThemeBackgroundUri = ""
+                        MobilePrefs.darkThemeBackgroundEnabled = true
+                    }
                 )
             }
         }
@@ -534,8 +560,10 @@ private fun ScrollSectionCard(
 private fun BackgroundPickerRow(
     title: String,
     summary: String,
+    enabled: Boolean,
     previewModel: Any,
     onPick: () -> Unit,
+    onEnabledChange: (Boolean) -> Unit,
     onReset: () -> Unit
 ) {
     Row(
@@ -547,25 +575,57 @@ private fun BackgroundPickerRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        AsyncImage(
-            modifier = Modifier
-                .size(width = 72.dp, height = 52.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                    shape = RoundedCornerShape(12.dp)
-                ),
-            model = previewModel,
-            contentDescription = null,
-            contentScale = ContentScale.Crop
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold
+        if (enabled) {
+            AsyncImage(
+                modifier = Modifier
+                    .size(width = 72.dp, height = 52.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                        shape = RoundedCornerShape(12.dp)
+                    ),
+                model = previewModel,
+                contentDescription = null,
+                contentScale = ContentScale.Crop
             )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(width = 72.dp, height = 52.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                        shape = RoundedCornerShape(12.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Image,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    modifier = Modifier.weight(1f),
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = onEnabledChange
+                )
+            }
             Text(
                 text = summary,
                 style = MaterialTheme.typography.bodySmall,
@@ -913,6 +973,16 @@ private fun paletteSummary(palette: MobileThemePalette): String = when (palette)
     MobileThemePalette.FantasyScroll -> "卷轴米白、云青主色与细金点缀"
     MobileThemePalette.ChineseTraditional -> "青绿、陶土与金色的固定配色"
     MobileThemePalette.MaterialDynamic -> "支持动态取色和自定义主色"
+}
+
+private fun backgroundSummary(
+    enabled: Boolean,
+    uri: String,
+    modeName: String
+): String = when {
+    !enabled -> "不显示背景图片"
+    uri.isBlank() -> "使用内置手机/平板响应式${modeName}背景"
+    else -> "已使用自定义${modeName}背景"
 }
 
 private fun visibleThemePalettes(): List<MobileThemePalette> = listOf(

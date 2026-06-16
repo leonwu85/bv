@@ -84,6 +84,13 @@ fun BVMobileTheme(
     } else {
         MobilePrefs.lightThemeBackgroundUriFlow.collectAsState(initial = MobilePrefs.lightThemeBackgroundUri)
     }
+    val lightBackgroundEnabled by if (view.isInEditMode) {
+        androidx.compose.runtime.remember {
+            androidx.compose.runtime.mutableStateOf(true)
+        }
+    } else {
+        MobilePrefs.lightThemeBackgroundEnabledFlow.collectAsState(initial = MobilePrefs.lightThemeBackgroundEnabled)
+    }
     val darkBackgroundUri by if (view.isInEditMode) {
         androidx.compose.runtime.remember {
             androidx.compose.runtime.mutableStateOf("")
@@ -91,20 +98,37 @@ fun BVMobileTheme(
     } else {
         MobilePrefs.darkThemeBackgroundUriFlow.collectAsState(initial = MobilePrefs.darkThemeBackgroundUri)
     }
+    val darkBackgroundEnabled by if (view.isInEditMode) {
+        androidx.compose.runtime.remember {
+            androidx.compose.runtime.mutableStateOf(true)
+        }
+    } else {
+        MobilePrefs.darkThemeBackgroundEnabledFlow.collectAsState(initial = MobilePrefs.darkThemeBackgroundEnabled)
+    }
     val resolvedDarkTheme = when (themeType) {
         ThemeType.Auto -> isSystemInDarkTheme()
         ThemeType.Dark -> true
         ThemeType.Light -> false
     }
     val useDarkIcons = !resolvedDarkTheme
+    val backgroundEnabled = !view.isInEditMode && if (resolvedDarkTheme) {
+        darkBackgroundEnabled
+    } else {
+        lightBackgroundEnabled
+    }
 
-    val colorScheme = mobileColorScheme(
+    val baseColorScheme = mobileColorScheme(
         context = context,
         palette = palette,
         resolvedDarkTheme = resolvedDarkTheme,
         dynamicColorEnabled = dynamicColorEnabled,
         seedColor = Color(seedColorArgb)
-    ).withImageBackgroundSurfaces(resolvedDarkTheme)
+    )
+    val colorScheme = if (backgroundEnabled) {
+        baseColorScheme.withImageBackgroundSurfaces(resolvedDarkTheme)
+    } else {
+        baseColorScheme
+    }
 
     if (!view.isInEditMode) {
         val currentWindow = (view.context as Activity).window
@@ -142,7 +166,7 @@ fun BVMobileTheme(
         MobileThemeBackground(
             resolvedDarkTheme = resolvedDarkTheme,
             customBackgroundUri = if (resolvedDarkTheme) darkBackgroundUri else lightBackgroundUri,
-            enabled = !view.isInEditMode,
+            enabled = backgroundEnabled,
             content = content
         )
     }
