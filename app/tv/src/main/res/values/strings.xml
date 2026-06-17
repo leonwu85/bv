@@ -6,6 +6,10 @@
     <string name="title_activity_follow">已关注</string>
     <string name="title_activity_following_season">正在追</string>
     <string name="title_activity_history">历史记录</string>
+    <string name="title_activity_inbox">私信</string>
+    <string name="title_activity_conversation">私信会话</string>
+    <string name="title_activity_message_feed">消息通知</string>
+    <string name="title_activity_contact">通讯录</string>
     <string name="title_activity_login">登录</string>
     <string name="title_activity_logs">日志列表</string>
     <string name="title_activity_media_codec">解码器信息</string>
@@ -27,4 +31,5 @@
     <string name="title_activity_video_player_v3">视频播放</string>
     <string name="title_activity_dynamic_detail">动态详情</string>
     <string name="entry_follow_screen">按菜单键打开已关注UP列表</string>
+    <string name="user_homepage_message_desc">查看私信和通知</string>
 </resources>

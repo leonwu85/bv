@@ -460,7 +460,12 @@ private fun InboxSessionRow(
                     modifier = Modifier.weight(1f),
                     text = session.summary.ifBlank { " " },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (session.hasUnread) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    fontWeight = if (session.hasUnread) FontWeight.Medium else FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -472,9 +477,13 @@ private fun InboxSessionRow(
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
-                if (session.unreadCount > 0) {
-                    Badge {
-                        Text(text = if (session.unreadCount > 99) "99+" else session.unreadCount.toString())
+                if (session.hasUnread) {
+                    if (session.unreadCount > 0) {
+                        Badge {
+                            Text(text = if (session.unreadCount > 99) "99+" else session.unreadCount.toString())
+                        }
+                    } else {
+                        Badge()
                     }
                 }
             }

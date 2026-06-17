@@ -12,6 +12,30 @@
 
     <application tools:targetApi="tiramisu">
         <activity
+            android:name=".activities.message.ContactActivity"
+            android:enableOnBackInvokedCallback="false"
+            android:exported="false"
+            android:label="@string/title_activity_contact"
+            android:theme="@style/Theme.BV.TV" />
+        <activity
+            android:name=".activities.message.MessageFeedActivity"
+            android:enableOnBackInvokedCallback="false"
+            android:exported="false"
+            android:label="@string/title_activity_message_feed"
+            android:theme="@style/Theme.BV.TV" />
+        <activity
+            android:name=".activities.message.ConversationActivity"
+            android:enableOnBackInvokedCallback="false"
+            android:exported="false"
+            android:label="@string/title_activity_conversation"
+            android:theme="@style/Theme.BV.TV" />
+        <activity
+            android:name=".activities.message.InboxActivity"
+            android:enableOnBackInvokedCallback="false"
+            android:exported="false"
+            android:label="@string/title_activity_inbox"
+            android:theme="@style/Theme.BV.TV" />
+        <activity
             android:name=".activities.dynamic.DynamicDetailActivity"
             android:enableOnBackInvokedCallback="false"
             android:exported="false"

@@ -155,7 +155,7 @@ class InboxViewModel(
             }.onSuccess {
                 withContext(Dispatchers.Main) {
                     for (index in sessions.indices) {
-                        sessions[index] = sessions[index].copy(unreadCount = 0)
+                        sessions[index] = sessions[index].copy(unreadCount = 0, hasUnread = false)
                     }
                     unreadCount = 0
                     feedUnread = DirectMessageFeedUnread()
@@ -195,7 +195,7 @@ class InboxViewModel(
         val index = sessions.indexOfFirst { it.talkerId == talkerId }
         if (index == -1) return
         val count = sessions[index].unreadCount
-        sessions[index] = sessions[index].copy(unreadCount = 0)
+        sessions[index] = sessions[index].copy(unreadCount = 0, hasUnread = false)
         unreadCount = (unreadCount - count).coerceAtLeast(0)
     }
 

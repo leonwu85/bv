@@ -2,6 +2,7 @@ package dev.aaa1115910.biliapi.repositories
 
 import bilibili.app.im.v1.Session as AppDirectSession
 import bilibili.app.im.v1.ThreeDotItem
+import bilibili.app.im.v1.UnreadStyle
 import bilibili.app.im.v1.imGrpcKt as AppImGrpcKt
 import bilibili.app.im.v1.SessionPageType
 import bilibili.app.im.v1.clearUnreadReq
@@ -660,6 +661,7 @@ class MessageRepository(
             summary = summary,
             timestampMicros = session.timestamp,
             unreadCount = session.unread.number.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+            hasUnread = session.hasUnread() && session.unread.style != UnreadStyle.UNREAD_STYLE_NONE,
             maxSeqno = session.sequenceNumber,
             isPinned = session.isPinned,
             isMuted = session.isMuted,
@@ -731,6 +733,7 @@ class MessageRepository(
             summary = summarize(session.lastMsg),
             timestampMicros = session.sessionTs,
             unreadCount = session.unreadCount,
+            hasUnread = session.unreadCount > 0,
             maxSeqno = session.maxSeqno,
             isPinned = session.topTs > 0L,
             isMuted = session.isDnd != 0,

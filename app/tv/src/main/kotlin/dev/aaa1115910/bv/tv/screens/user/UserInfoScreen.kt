@@ -65,6 +65,7 @@ import dev.aaa1115910.biliapi.http.entity.AuthFailureException
 import dev.aaa1115910.biliapi.repositories.UserRepository
 import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.tv.activities.message.InboxActivity
 import dev.aaa1115910.bv.tv.activities.user.FollowActivity
 import dev.aaa1115910.bv.tv.activities.user.FollowingSeasonActivity
 import dev.aaa1115910.bv.tv.activities.user.HistoryActivity
@@ -224,6 +225,9 @@ fun UserInfoScreen(
                     },
                     onOpenFavorite = {
                         context.startActivity(Intent(context, FavoriteActivity::class.java))
+                    },
+                    onOpenInbox = {
+                        InboxActivity.actionStart(context)
                     },
                     onOpenFollowingUser = {
                         context.startActivity(Intent(context, FollowActivity::class.java))
@@ -418,6 +422,7 @@ private fun UserQuickAccessSection(
     onOpenHistory: () -> Unit,
     onOpenFollowingSeason: () -> Unit,
     onOpenFavorite: () -> Unit,
+    onOpenInbox: () -> Unit,
     onOpenFollowingUser: () -> Unit,
     onOpenUserSwitch: () -> Unit,
     onToggleIncognito: () -> Unit,
@@ -425,6 +430,7 @@ private fun UserQuickAccessSection(
     val focusRequesters = remember(initialFocusRequester) {
         listOf(
             initialFocusRequester,
+            FocusRequester(),
             FocusRequester(),
             FocusRequester(),
             FocusRequester(),
@@ -538,15 +544,18 @@ private fun UserQuickAccessSection(
                                 focusRequesters[0].requestFocus()
                                 true
                             }
-                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> true
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                focusRequesters[6].requestFocus()
+                                true
+                            }
                             else -> false
                         }
                     },
-                title = stringResource(R.string.user_homepage_follow),
-                subtitle = stringResource(R.string.user_homepage_follow_desc),
-                badgeText = followingUpCount.toString(),
-                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f),
-                onClick = onOpenFollowingUser
+                title = stringResource(R.string.title_activity_inbox),
+                subtitle = stringResource(R.string.user_homepage_message_desc),
+                badgeText = "",
+                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.78f),
+                onClick = onOpenInbox
             )
             UserActionCard(
                 modifier = Modifier
@@ -567,15 +576,18 @@ private fun UserQuickAccessSection(
                                 focusRequesters[1].requestFocus()
                                 true
                             }
-                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> true
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                focusRequesters[6].requestFocus()
+                                true
+                            }
                             else -> false
                         }
                     },
-                title = stringResource(R.string.user_homepage_user_switch),
-                subtitle = stringResource(R.string.user_homepage_user_switch_desc),
-                badgeText = "",
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.78f),
-                onClick = onOpenUserSwitch
+                title = stringResource(R.string.user_homepage_follow),
+                subtitle = stringResource(R.string.user_homepage_follow_desc),
+                badgeText = followingUpCount.toString(),
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f),
+                onClick = onOpenFollowingUser
             )
             UserActionCard(
                 modifier = Modifier
@@ -593,6 +605,35 @@ private fun UserQuickAccessSection(
                                 focusRequesters[2].requestFocus()
                                 true
                             }
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                focusRequesters[6].requestFocus()
+                                true
+                            }
+                            else -> false
+                        }
+                    },
+                title = stringResource(R.string.user_homepage_user_switch),
+                subtitle = stringResource(R.string.user_homepage_user_switch_desc),
+                badgeText = "",
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.78f),
+                onClick = onOpenUserSwitch
+            )
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            UserActionCard(
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequesters[6])
+                    .onPreviewKeyEvent {
+                        if (!it.isKeyDown()) return@onPreviewKeyEvent false
+                        when {
+                            it.isDpadLeft() -> false
+                            it.isDpadRight() -> true
+                            it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP -> {
+                                focusRequesters[3].requestFocus()
+                                true
+                            }
                             it.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> true
                             else -> false
                         }
@@ -607,6 +648,8 @@ private fun UserQuickAccessSection(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 onClick = onToggleIncognito
             )
+            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.weight(1f))
         }
     }
 }
@@ -697,6 +740,7 @@ private fun UserQuickAccessSectionPreview() {
             onOpenHistory = {},
             onOpenFollowingSeason = {},
             onOpenFavorite = {},
+            onOpenInbox = {},
             onOpenFollowingUser = {},
             onOpenUserSwitch = {},
             onToggleIncognito = {}

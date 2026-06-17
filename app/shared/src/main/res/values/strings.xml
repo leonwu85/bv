@@ -394,6 +394,8 @@
     <string name="main_user_feature_following">追番追剧</string>
     <string name="main_user_feature_favorite">我的收藏</string>
     <string name="main_user_feature_later">稍后再看</string>
+    <string name="title_activity_inbox">私信</string>
+    <string name="user_homepage_message_desc">查看私信和通知</string>
     <string name="title_activity_user_info">用户信息</string>
     <string name="title_activity_user_lock_settings">用户锁设置</string>
     <string name="title_activity_user_switch">用户切换</string>

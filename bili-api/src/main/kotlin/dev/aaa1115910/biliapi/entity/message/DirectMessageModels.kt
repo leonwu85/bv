@@ -35,6 +35,7 @@ data class DirectMessageSession(
     val summary: String,
     val timestampMicros: Long,
     val unreadCount: Int,
+    val hasUnread: Boolean,
     val maxSeqno: Long,
     val isPinned: Boolean,
     val isMuted: Boolean,

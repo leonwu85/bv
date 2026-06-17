@@ -420,9 +420,7 @@ private fun HomeTopAppBar(
                     if (messageUnreadCount > 0) {
                         BadgedBox(
                             badge = {
-                                Badge {
-                                    Text(text = if (messageUnreadCount > 99) "99+" else messageUnreadCount.toString())
-                                }
+                                Badge()
                             }
                         ) {
                             Icon(Icons.Outlined.Notifications, contentDescription = "消息")
