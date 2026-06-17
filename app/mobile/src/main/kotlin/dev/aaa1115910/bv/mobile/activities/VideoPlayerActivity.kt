@@ -344,7 +344,7 @@ class VideoPlayerActivity : ComponentActivity() {
         if (!launchArgs.isLive) initDanmakuPlayer()
         setContent {
             val windowSizeClass = calculateWindowSizeClass(this)
-            BVMobileTheme {
+            BVMobileTheme(themeBackgroundEnabled = !playerViewModel.isLive) {
                 VideoPlayerScreen(
                     windowSizeClass = windowSizeClass
                 )

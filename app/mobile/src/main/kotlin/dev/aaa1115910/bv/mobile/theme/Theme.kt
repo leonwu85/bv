@@ -2,6 +2,7 @@ package dev.aaa1115910.bv.mobile.theme
 
 import android.app.Activity
 import android.content.Context
+import android.graphics.Typeface
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,21 +12,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import coil.compose.AsyncImage
@@ -34,17 +41,20 @@ import dev.aaa1115910.bv.entity.ThemeType
 import dev.aaa1115910.bv.mobile.settings.MobilePrefs
 import dev.aaa1115910.bv.mobile.settings.MobileRuntime
 import dev.aaa1115910.bv.mobile.R as MobileR
+import java.io.File
 
 @Composable
 fun BVMobileTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     themePalette: MobileThemePalette = MobileThemePalette.Default,
+    themeBackgroundEnabled: Boolean = true,
     content: @Composable () -> Unit
 ) {
     MobileRuntime.install()
 
     val context = LocalContext.current
+    val density = LocalDensity.current
     val window by lazy { (context as Activity).window }
     val view = LocalView.current
     val systemUiController = rememberSystemUiController()
@@ -105,13 +115,27 @@ fun BVMobileTheme(
     } else {
         MobilePrefs.darkThemeBackgroundEnabledFlow.collectAsState(initial = MobilePrefs.darkThemeBackgroundEnabled)
     }
+    val fontSizeLevel by if (view.isInEditMode) {
+        androidx.compose.runtime.remember {
+            androidx.compose.runtime.mutableStateOf(MobilePrefs.STANDARD_FONT_SIZE_LEVEL)
+        }
+    } else {
+        MobilePrefs.fontSizeLevelFlow.collectAsState(initial = MobilePrefs.fontSizeLevel)
+    }
+    val customFontPath by if (view.isInEditMode) {
+        androidx.compose.runtime.remember {
+            androidx.compose.runtime.mutableStateOf("")
+        }
+    } else {
+        MobilePrefs.customFontPathFlow.collectAsState(initial = MobilePrefs.customFontPath)
+    }
     val resolvedDarkTheme = when (themeType) {
         ThemeType.Auto -> isSystemInDarkTheme()
         ThemeType.Dark -> true
         ThemeType.Light -> false
     }
     val useDarkIcons = !resolvedDarkTheme
-    val backgroundEnabled = !view.isInEditMode && if (resolvedDarkTheme) {
+    val backgroundEnabled = themeBackgroundEnabled && !view.isInEditMode && if (resolvedDarkTheme) {
         darkBackgroundEnabled
     } else {
         lightBackgroundEnabled
@@ -128,6 +152,16 @@ fun BVMobileTheme(
         baseColorScheme.withImageBackgroundSurfaces(resolvedDarkTheme)
     } else {
         baseColorScheme
+    }
+    val fontScale = MobilePrefs.fontScaleForLevel(fontSizeLevel)
+    val appDensity = remember(density.density, density.fontScale, fontScale) {
+        Density(density = density.density, fontScale = density.fontScale * fontScale)
+    }
+    val customFontFamily = remember(customFontPath) {
+        loadCustomFontFamily(customFontPath)
+    }
+    val typography = remember(customFontFamily) {
+        Typography().withFontFamily(customFontFamily)
     }
 
     if (!view.isInEditMode) {
@@ -162,14 +196,52 @@ fun BVMobileTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         shapes = mobileShapes,
+        typography = typography,
     ) {
-        MobileThemeBackground(
-            resolvedDarkTheme = resolvedDarkTheme,
-            customBackgroundUri = if (resolvedDarkTheme) darkBackgroundUri else lightBackgroundUri,
-            enabled = backgroundEnabled,
-            content = content
-        )
+        CompositionLocalProvider(LocalDensity provides appDensity) {
+            MobileThemeBackground(
+                resolvedDarkTheme = resolvedDarkTheme,
+                customBackgroundUri = if (resolvedDarkTheme) darkBackgroundUri else lightBackgroundUri,
+                enabled = backgroundEnabled,
+                content = content
+            )
+        }
     }
+}
+
+private fun loadCustomFontFamily(fontPath: String): FontFamily? {
+    if (fontPath.isBlank()) return null
+
+    return runCatching {
+        val fontFile = File(fontPath)
+        if (!fontFile.exists() || !fontFile.canRead()) {
+            null
+        } else {
+            FontFamily(Typeface.createFromFile(fontFile))
+        }
+    }.getOrNull()
+}
+
+private fun Typography.withFontFamily(fontFamily: FontFamily?): Typography {
+    if (fontFamily == null) return this
+
+    return copy(
+        displayLarge = displayLarge.copy(fontFamily = fontFamily),
+        displayMedium = displayMedium.copy(fontFamily = fontFamily),
+        displaySmall = displaySmall.copy(fontFamily = fontFamily),
+        headlineLarge = headlineLarge.copy(fontFamily = fontFamily),
+        headlineMedium = headlineMedium.copy(fontFamily = fontFamily),
+        headlineSmall = headlineSmall.copy(fontFamily = fontFamily),
+        titleLarge = titleLarge.copy(fontFamily = fontFamily),
+        titleMedium = titleMedium.copy(fontFamily = fontFamily),
+        titleSmall = titleSmall.copy(fontFamily = fontFamily),
+        bodyLarge = bodyLarge.copy(fontFamily = fontFamily),
+        bodyMedium = bodyMedium.copy(fontFamily = fontFamily),
+        bodySmall = bodySmall.copy(fontFamily = fontFamily),
+        labelLarge = labelLarge.copy(fontFamily = fontFamily),
+        labelMedium = labelMedium.copy(fontFamily = fontFamily),
+        labelSmall = labelSmall.copy(fontFamily = fontFamily)
+    )
 }
 
 @Composable

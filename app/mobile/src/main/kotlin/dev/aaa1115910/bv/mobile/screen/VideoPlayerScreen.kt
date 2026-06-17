@@ -298,6 +298,7 @@ fun VideoPlayerScreen(
     val logger = KotlinLogging.logger("VideoPlayerScreen")
     val playerSettings = PlayerSettingsProvider.current
     val useDarkSystemBarIcons = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+    val useLightSystemBarIcons = playerViewModel.isLive || !useDarkSystemBarIcons
 
     var isVideoFullscreen by rememberSaveable { mutableStateOf(false) }
     val forcePortrait =
@@ -523,8 +524,8 @@ fun VideoPlayerScreen(
 
         // 设置系统栏外观
         if (!isVideoFullscreen) {
-            insetsController.isAppearanceLightStatusBars = useDarkSystemBarIcons
-            insetsController.isAppearanceLightNavigationBars = useDarkSystemBarIcons
+            insetsController.isAppearanceLightStatusBars = !useLightSystemBarIcons
+            insetsController.isAppearanceLightNavigationBars = !useLightSystemBarIcons
         }
 
         // 设置屏幕方向
@@ -575,14 +576,18 @@ fun VideoPlayerScreen(
     Scaffold(
         containerColor = if (isVideoFullscreen) Color.Black else Color.Transparent
     ) { innerPadding ->
-        Row(
-            modifier = Modifier
-                .ifElse(
-                    !isVideoFullscreen,
-                    Modifier.padding(top = innerPadding.calculateTopPadding())
-                )
-            //.padding(top = innerPadding.calculateTopPadding())
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (playerViewModel.isLive && !isVideoFullscreen) {
+                LiveRoomScreenBackground(backgroundUrl = playerViewModel.liveBackground)
+            }
+            Row(
+                modifier = Modifier
+                    .ifElse(
+                        !isVideoFullscreen,
+                        Modifier.padding(top = innerPadding.calculateTopPadding())
+                    )
+                //.padding(top = innerPadding.calculateTopPadding())
+            ) {
             val leftPartWidth by animateFloatAsState(
                 targetValue = if (windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded && !isVideoFullscreen) 0.6f else 1f,
                 label = "VideoPlayerLeftPartWidth"
@@ -1418,6 +1423,7 @@ fun VideoPlayerScreen(
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -2933,6 +2939,32 @@ private fun VideoDanmakuColorSwatch(
             }
         )
     ) {}
+}
+
+@Composable
+private fun LiveRoomScreenBackground(
+    backgroundUrl: String
+) {
+    val liveBackgroundModel: Any = backgroundUrl.takeIf { it.isNotBlank() }
+        ?: R.drawable.live_default_bg
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        AsyncImage(
+            modifier = Modifier.fillMaxSize(),
+            model = liveBackgroundModel,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            alpha = 0.62f
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.28f))
+        )
+    }
 }
 
 @Composable

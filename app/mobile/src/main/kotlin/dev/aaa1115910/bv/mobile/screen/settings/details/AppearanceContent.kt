@@ -2,8 +2,10 @@ package dev.aaa1115910.bv.mobile.screen.settings.details
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.content.res.Configuration
+import android.graphics.Typeface
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -23,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,8 +40,9 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Devices
-import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material3.AlertDialog
@@ -48,11 +53,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -78,6 +85,8 @@ import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.mobile.theme.MobileThemePalette
 import dev.aaa1115910.bv.mobile.theme.mobilePreviewColorScheme
 import dev.aaa1115910.bv.mobile.R as MobileR
+import java.io.File
+import kotlin.math.roundToInt
 
 @Composable
 fun AppearanceContent(
@@ -100,8 +109,18 @@ fun AppearanceContent(
     val darkBackgroundEnabled by MobilePrefs.darkThemeBackgroundEnabledFlow.collectAsState(
         initial = MobilePrefs.darkThemeBackgroundEnabled
     )
+    val fontSizeLevel by MobilePrefs.fontSizeLevelFlow.collectAsState(
+        initial = MobilePrefs.fontSizeLevel
+    )
+    val customFontPath by MobilePrefs.customFontPathFlow.collectAsState(
+        initial = MobilePrefs.customFontPath
+    )
+    val customFontName by MobilePrefs.customFontNameFlow.collectAsState(
+        initial = MobilePrefs.customFontName
+    )
     val isFixedPalette = themePalette != MobileThemePalette.MaterialDynamic
     var showCustomColorDialog by remember { mutableStateOf(false) }
+    var fontInstallError by remember { mutableStateOf<String?>(null) }
     val lightBackgroundPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
@@ -119,6 +138,20 @@ fun AppearanceContent(
             persistBackgroundUri(context, it) { persistedUri ->
                 MobilePrefs.darkThemeBackgroundUri = persistedUri
                 MobilePrefs.darkThemeBackgroundEnabled = true
+            }
+        }
+    }
+    val fontPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        fontInstallError = null
+        uri?.let {
+            val result = installCustomFont(context, it)
+            if (result == null) {
+                fontInstallError = "字体文件无法读取或格式不受支持"
+            } else {
+                MobilePrefs.customFontPath = result.path
+                MobilePrefs.customFontName = result.displayName
             }
         }
     }
@@ -143,6 +176,26 @@ fun AppearanceContent(
                 themePalette = themePalette,
                 seedColor = seedColor
             )
+        }
+
+        item {
+            ScrollSectionCard(title = "字体与字号", icon = Icons.Rounded.FormatSize) {
+                FontSizeLevelSlider(
+                    level = fontSizeLevel,
+                    onLevelChange = { MobilePrefs.fontSizeLevel = it }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                CustomFontFileRow(
+                    hasCustomFont = customFontPath.isNotBlank(),
+                    fontName = customFontName,
+                    fontInstallError = fontInstallError,
+                    onPick = { fontPicker.launch(arrayOf("*/*")) },
+                    onReset = {
+                        resetCustomFont(context)
+                        fontInstallError = null
+                    }
+                )
+            }
         }
 
         item {
@@ -281,6 +334,154 @@ fun AppearanceContent(
                 showCustomColorDialog = false
             }
         )
+    }
+}
+
+@Composable
+private fun FontSizeLevelSlider(
+    level: Int,
+    onLevelChange: (Int) -> Unit
+) {
+    val sanitizedLevel = MobilePrefs.sanitizeFontSizeLevel(level)
+    var sliderValue by remember { mutableStateOf(sanitizedLevel.toFloat()) }
+    LaunchedEffect(sanitizedLevel) {
+        sliderValue = sanitizedLevel.toFloat()
+    }
+    val displayedLevel = MobilePrefs.sanitizeFontSizeLevel(sliderValue.roundToInt())
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    text = "字体大小",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = fontSizeLevelSummary(displayedLevel),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = CircleShape
+            ) {
+                Text(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    text = "${displayedLevel + 1}/9",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+        Slider(
+            value = sliderValue,
+            onValueChange = { sliderValue = it },
+            onValueChangeFinished = {
+                val finalLevel = MobilePrefs.sanitizeFontSizeLevel(sliderValue.roundToInt())
+                sliderValue = finalLevel.toFloat()
+                if (finalLevel != sanitizedLevel) {
+                    onLevelChange(finalLevel)
+                }
+            },
+            valueRange = MobilePrefs.MIN_FONT_SIZE_LEVEL.toFloat()..MobilePrefs.MAX_FONT_SIZE_LEVEL.toFloat(),
+            steps = MobilePrefs.MAX_FONT_SIZE_LEVEL - MobilePrefs.MIN_FONT_SIZE_LEVEL - 1
+        )
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val intervalCount = MobilePrefs.MAX_FONT_SIZE_LEVEL - MobilePrefs.MIN_FONT_SIZE_LEVEL
+            val standardOffset = maxWidth / intervalCount.toFloat() *
+                    (MobilePrefs.STANDARD_FONT_SIZE_LEVEL - MobilePrefs.MIN_FONT_SIZE_LEVEL).toFloat()
+            Text(
+                modifier = Modifier.align(Alignment.CenterStart),
+                text = "小",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                modifier = Modifier
+                    .offset(x = standardOffset)
+                    .align(Alignment.CenterStart),
+                text = "标准",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                modifier = Modifier.align(Alignment.CenterEnd),
+                text = "大",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun CustomFontFileRow(
+    hasCustomFont: Boolean,
+    fontName: String,
+    fontInstallError: String?,
+    onPick: () -> Unit,
+    onReset: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "自定义字体",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = if (hasCustomFont) {
+                    "当前：${fontName.ifBlank { "已选择字体文件" }}"
+                } else {
+                    "使用系统默认字体，可选择 ttf、otf、ttc 等字体文件"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            fontInstallError?.let {
+                Text(
+                    modifier = Modifier.padding(top = 4.dp),
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            Row(
+                modifier = Modifier.padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                TextButton(onClick = onPick) {
+                    Text(text = "选择文件")
+                }
+                TextButton(
+                    enabled = hasCustomFont,
+                    onClick = onReset
+                ) {
+                    Icon(
+                        modifier = Modifier.size(18.dp),
+                        imageVector = Icons.Rounded.RestartAlt,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "恢复默认")
+                }
+            }
+        }
     }
 }
 
@@ -991,6 +1192,22 @@ private fun visibleThemePalettes(): List<MobileThemePalette> = listOf(
     MobileThemePalette.MaterialDynamic
 )
 
+private data class CustomFontInstallResult(
+    val path: String,
+    val displayName: String
+)
+
+private fun fontSizeLevelSummary(level: Int): String {
+    val sanitizedLevel = MobilePrefs.sanitizeFontSizeLevel(level)
+    val scalePercent = (MobilePrefs.fontScaleForLevel(sanitizedLevel) * 100).roundToInt()
+    val name = when {
+        sanitizedLevel < MobilePrefs.STANDARD_FONT_SIZE_LEVEL -> "小"
+        sanitizedLevel == MobilePrefs.STANDARD_FONT_SIZE_LEVEL -> "标准"
+        else -> "大"
+    }
+    return "$name · ${sanitizedLevel + 1}/9 · $scalePercent%"
+}
+
 private fun persistBackgroundUri(
     context: Context,
     uri: Uri,
@@ -1003,6 +1220,89 @@ private fun persistBackgroundUri(
         )
     }
     onPersisted(uri.toString())
+}
+
+private fun installCustomFont(context: Context, uri: Uri): CustomFontInstallResult? {
+    runCatching {
+        context.contentResolver.takePersistableUriPermission(
+            uri,
+            Intent.FLAG_GRANT_READ_URI_PERMISSION
+        )
+    }
+
+    val displayName = resolveDisplayName(context, uri)
+    val targetDir = File(context.filesDir, "custom_fonts").apply { mkdirs() }
+    val extension = displayName.toFontFileExtension()
+    val pendingFile = File(targetDir, "mobile_custom_font_pending.$extension")
+
+    val copiedFile = runCatching {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            pendingFile.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        } ?: return null
+        pendingFile
+    }.getOrNull() ?: return null
+
+    val validFont = runCatching { Typeface.createFromFile(copiedFile) }.isSuccess
+    if (!validFont) {
+        copiedFile.delete()
+        return null
+    }
+
+    targetDir.listFiles()
+        ?.filter { it.name.startsWith("mobile_custom_font.") }
+        ?.forEach { it.delete() }
+
+    val targetFile = File(targetDir, "mobile_custom_font.$extension")
+    val installedFile = if (copiedFile.renameTo(targetFile)) {
+        targetFile
+    } else {
+        copiedFile.copyTo(targetFile, overwrite = true)
+        copiedFile.delete()
+        targetFile
+    }
+
+    return CustomFontInstallResult(
+        path = installedFile.absolutePath,
+        displayName = displayName
+    )
+}
+
+private fun resetCustomFont(context: Context) {
+    MobilePrefs.customFontPath.takeIf { it.isNotBlank() }?.let { path ->
+        runCatching { File(path).delete() }
+    }
+    MobilePrefs.customFontPath = ""
+    MobilePrefs.customFontName = ""
+}
+
+private fun resolveDisplayName(context: Context, uri: Uri): String {
+    context.contentResolver.query(
+        uri,
+        arrayOf(OpenableColumns.DISPLAY_NAME),
+        null,
+        null,
+        null
+    )?.use { cursor ->
+        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (nameIndex >= 0 && cursor.moveToFirst()) {
+            cursor.getString(nameIndex)?.takeIf { it.isNotBlank() }?.let { return it }
+        }
+    }
+
+    return uri.lastPathSegment
+        ?.substringAfterLast('/')
+        ?.takeIf { it.isNotBlank() }
+        ?: "自定义字体"
+}
+
+private fun String.toFontFileExtension(): String {
+    val extension = substringAfterLast('.', missingDelimiterValue = "")
+        .lowercase()
+        .takeIf { it.matches(Regex("[a-z0-9]{1,8}")) }
+
+    return extension ?: "font"
 }
 
 private fun Int.toHexColor(): String = "#%06X".format(this and 0x00FFFFFF)

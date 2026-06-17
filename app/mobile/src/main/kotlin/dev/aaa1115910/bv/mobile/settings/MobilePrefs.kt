@@ -41,10 +41,17 @@ object MobilePrefs {
     private val dsm get() = BVApp.dataStoreManager
 
     const val DEFAULT_SEED_COLOR = 0xFF2F8F8F.toInt()
+    const val MIN_FONT_SIZE_LEVEL = 0
+    const val STANDARD_FONT_SIZE_LEVEL = 1
+    const val MAX_FONT_SIZE_LEVEL = 8
 
     private fun sanitizeDanmakuFilterLevel(value: Int) = value.coerceIn(1, 10)
 
     private fun sanitizeLiveDanmakuFilterLevel(value: Int) = value.coerceIn(0, 60)
+
+    fun sanitizeFontSizeLevel(value: Int) = value.coerceIn(MIN_FONT_SIZE_LEVEL, MAX_FONT_SIZE_LEVEL)
+
+    fun fontScaleForLevel(value: Int): Float = 0.95f + sanitizeFontSizeLevel(value) * 0.05f
 
     private fun resolveMobileThemePalette(value: Int): MobileThemePalette {
         val palette = MobileThemePalette.entries.getOrElse(value) { MobileThemePalette.Default }
@@ -113,6 +120,28 @@ object MobilePrefs {
 
     val darkThemeBackgroundEnabledFlow: Flow<Boolean>
         get() = dsm.getPreferenceFlow(MobilePrefKeys.darkThemeBackgroundEnabledRequest)
+
+    var fontSizeLevel: Int
+        get() = sanitizeFontSizeLevel(read(MobilePrefKeys.fontSizeLevelRequest))
+        set(value) = write(MobilePrefKeys.fontSizeLevelKey, sanitizeFontSizeLevel(value))
+
+    val fontSizeLevelFlow: Flow<Int>
+        get() = dsm.getPreferenceFlow(MobilePrefKeys.fontSizeLevelRequest)
+            .transform { emit(sanitizeFontSizeLevel(it)) }
+
+    var customFontPath: String
+        get() = read(MobilePrefKeys.customFontPathRequest)
+        set(value) = write(MobilePrefKeys.customFontPathKey, value.trim())
+
+    val customFontPathFlow: Flow<String>
+        get() = dsm.getPreferenceFlow(MobilePrefKeys.customFontPathRequest)
+
+    var customFontName: String
+        get() = read(MobilePrefKeys.customFontNameRequest)
+        set(value) = write(MobilePrefKeys.customFontNameKey, value.trim())
+
+    val customFontNameFlow: Flow<String>
+        get() = dsm.getPreferenceFlow(MobilePrefKeys.customFontNameRequest)
 
     var playerType: PlayerType
         get() = resolveMobilePlayerType(read(MobilePrefKeys.playerTypeRequest))
@@ -434,6 +463,9 @@ object MobilePrefKeys {
     val lightThemeBackgroundEnabledKey = booleanPreferencesKey("mobile_theme_light_background_enabled")
     val darkThemeBackgroundUriKey = stringPreferencesKey("mobile_theme_dark_background_uri")
     val darkThemeBackgroundEnabledKey = booleanPreferencesKey("mobile_theme_dark_background_enabled")
+    val fontSizeLevelKey = intPreferencesKey("mobile_font_size_level")
+    val customFontPathKey = stringPreferencesKey("mobile_custom_font_path")
+    val customFontNameKey = stringPreferencesKey("mobile_custom_font_name")
     val playerTypeKey = intPreferencesKey("mobile_player_type")
     val apiTypeKey = intPreferencesKey("mobile_api_type")
     val defaultQualityKey = intPreferencesKey("mobile_default_quality")
@@ -512,6 +544,9 @@ object MobilePrefKeys {
     val lightThemeBackgroundEnabledRequest = PreferenceRequest(lightThemeBackgroundEnabledKey, true)
     val darkThemeBackgroundUriRequest = PreferenceRequest(darkThemeBackgroundUriKey, "")
     val darkThemeBackgroundEnabledRequest = PreferenceRequest(darkThemeBackgroundEnabledKey, true)
+    val fontSizeLevelRequest = PreferenceRequest(fontSizeLevelKey, MobilePrefs.STANDARD_FONT_SIZE_LEVEL)
+    val customFontPathRequest = PreferenceRequest(customFontPathKey, "")
+    val customFontNameRequest = PreferenceRequest(customFontNameKey, "")
     val playerTypeRequest = PreferenceRequest(playerTypeKey, PlayerType.Media3.ordinal)
     val apiTypeRequest = PreferenceRequest(apiTypeKey, ApiType.App.ordinal)
     val defaultQualityRequest = PreferenceRequest(defaultQualityKey, Resolution.R1080P.code)
