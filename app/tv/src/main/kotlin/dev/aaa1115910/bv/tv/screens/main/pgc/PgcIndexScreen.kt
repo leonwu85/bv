@@ -85,7 +85,7 @@ fun PgcIndexScreen(
         label = "title font size"
     )
 
-    val pgcItems = pgcIndexViewModel.indexResultItems
+    val pgcItems by remember { derivedStateOf { pgcIndexViewModel.indexResultItems.toList() } }
     val noMore = pgcIndexViewModel.noMore
     var showFilter by remember { mutableStateOf(false) }
     val filterReady by remember { derivedStateOf { pgcIndexViewModel.isFilterReady } }

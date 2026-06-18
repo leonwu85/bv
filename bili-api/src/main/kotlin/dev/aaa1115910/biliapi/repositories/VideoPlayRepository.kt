@@ -1,6 +1,7 @@
 package dev.aaa1115910.biliapi.repositories
 
 import bilibili.app.playerunite.v1.PlayerGrpcKt
+import bilibili.app.playerunite.v1.PlayViewUniteReq
 import bilibili.app.playerunite.v1.playViewUniteReq
 import bilibili.community.service.dm.v1.DMGrpcKt
 import bilibili.community.service.dm.v1.dmSegMobileReq
@@ -146,20 +147,21 @@ class VideoPlayRepository(
                         CodeType.Code265,
                         CodeType.CodeAv1
                     )
-                    val replies = codecTypes.map { codecType ->
+                    val requests = codecTypes.map { codecType ->
+                        codecType to buildPlayViewUniteRequest(
+                            aid = aid,
+                            cid = cid,
+                            bvid = bvid,
+                            codecType = codecType
+                        )
+                    }
+                    warmUpPlayViewUniteReqSerialization(requests.map { it.second })
+
+                    val replies = requests.map { (codecType, request) ->
                         async {
                             val playUniteReply = runCatching {
-                                playerStub?.playViewUnite(playViewUniteReq {
-                                    vod = videoVod {
-                                        this.aid = aid
-                                        this.cid = cid
-                                        fnval = 4048
-                                        qn = 127
-                                        fnver = 0
-                                        fourk = true
-                                        preferCodecType = codecType.toPlayerSharedCodeType()
-                                    }
-                                }) ?: throw IllegalStateException("Player stub is not initialized")
+                                playerStub?.playViewUnite(request)
+                                    ?: throw IllegalStateException("Player stub is not initialized")
                             }.onFailure {
                                 // dont throw
                                 runCatching { handleGrpcException(it) }
@@ -256,6 +258,33 @@ class VideoPlayRepository(
 
     private fun downloadQnCandidates(qn: Int): List<Int> {
         return playUrlQnCandidates(qn)
+    }
+
+    private fun buildPlayViewUniteRequest(
+        aid: Long,
+        cid: Long,
+        bvid: String,
+        codecType: CodeType
+    ): PlayViewUniteReq = playViewUniteReq {
+        vod = videoVod {
+            this.aid = aid
+            this.cid = cid
+            fnval = 4048
+            qn = 127
+            fnver = 0
+            fourk = true
+            preferCodecType = codecType.toPlayerSharedCodeType()
+        }
+        if (bvid.isNotBlank()) this.bvid = bvid
+    }
+
+    private fun warmUpPlayViewUniteReqSerialization(requests: List<PlayViewUniteReq>) {
+        runCatching {
+            PlayViewUniteReq.getDefaultInstance().serializedSize
+            requests.forEach { it.serializedSize }
+        }.getOrElse {
+            throw IllegalStateException("Initialize PlayViewUnite request serialization failed", it)
+        }
     }
 
     suspend fun getPgcPlayData(

@@ -101,7 +101,7 @@
 -keep class is.xyz.mpv.MPVLib { *; }
 
 # gRPC
--keep class bilibili.rpc.** { *; }
+-keep class bilibili.** { *; }
 -keep class com.google.protobuf.** { *; }
 -keep class com.google.re2j.** { *; }
 -dontwarn com.google.protobuf.GeneratedMessageV3$Builder

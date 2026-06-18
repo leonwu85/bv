@@ -101,9 +101,13 @@ class PgcIndexViewModel(
     }
 
     private suspend fun loadData() {
-        updating = true
+        withContext(Dispatchers.Main) {
+            updating = true
+        }
         if (!nextPage.hasNext) {
-            updating = false
+            withContext(Dispatchers.Main) {
+                updating = false
+            }
             return
         }
         runCatching {
@@ -132,13 +136,17 @@ class PgcIndexViewModel(
                 "加载 $pgcType 索引失败: ${it.localizedMessage}".toast(BVApp.context)
             }
         }
-        updating = false
+        withContext(Dispatchers.Main) {
+            updating = false
+        }
     }
 
-    fun clearData() {
-        indexResultItems.clear()
-        nextPage = PgcIndexData.PgcIndexPage()
-        updating = false
+    suspend fun clearData() {
+        withContext(Dispatchers.Main) {
+            indexResultItems.clear()
+            nextPage = PgcIndexData.PgcIndexPage()
+            updating = false
+        }
     }
 }
 

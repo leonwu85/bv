@@ -82,7 +82,7 @@ fun PgcIndexScreen(
     val logger = KotlinLogging.logger("PgcIndexScreen")
     val gridState = rememberLazyGridState()
 
-    val pgcItems = pgcIndexViewModel.indexResultItems
+    val pgcItems by remember { derivedStateOf { pgcIndexViewModel.indexResultItems.toList() } }
     val filterReady by remember { derivedStateOf { pgcIndexViewModel.isFilterReady } }
     val activeFilterTags by remember { derivedStateOf { pgcIndexViewModel.activeFilterTags } }
     val filterSignature by remember { derivedStateOf { pgcIndexViewModel.filterSignature } }
