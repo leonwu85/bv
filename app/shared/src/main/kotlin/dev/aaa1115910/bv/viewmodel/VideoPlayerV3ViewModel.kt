@@ -1710,23 +1710,37 @@ class VideoPlayerV3ViewModel(
         }
 
         val supportedCodec = playData!!.codec
-        val codecList = supportedCodec[currentQuality.code]
-            ?.mapNotNull { VideoCodec.fromCodecString(it) }
-            ?.distinct()
-            ?: emptyList()
+        val codecList = (
+            supportedCodec[currentQuality.code].orEmpty() +
+                playData!!.dashVideos
+                    .filter { it.quality == currentQuality.code }
+                    .mapNotNull { it.codecs }
+            )
+            .mapNotNull { VideoCodec.fromCodecString(it) }
+            .distinct()
 
         availableVideoCodec.swapListWithMainContext(codecList)
         logger.fInfo { "Video available codec: ${availableVideoCodec.toList()}" }
 
         val requestedCodec = preferredCodec ?: currentVideoCodec
         logger.fInfo { "Default codec: $requestedCodec, second codec: ${settings.secondVideoCodec}" }
-        val currentVideoCodec = PlaybackPreferenceSelector.selectVideoCodec(
-            requestedCodec = preferredCodec,
-            currentCodec = currentVideoCodec,
-            defaultCodec = settings.defaultVideoCodec,
-            secondCodec = settings.secondVideoCodec,
-            availableCodecs = codecList
-        )
+        val currentVideoCodec = if (settings.useTvVideoCodecPriority) {
+            PlaybackPreferenceSelector.selectTvVideoCodec(
+                requestedCodec = preferredCodec,
+                currentCodec = currentVideoCodec,
+                defaultCodec = settings.defaultVideoCodec,
+                selectedQuality = currentQuality,
+                availableCodecs = codecList
+            )
+        } else {
+            PlaybackPreferenceSelector.selectVideoCodec(
+                requestedCodec = preferredCodec,
+                currentCodec = currentVideoCodec,
+                defaultCodec = settings.defaultVideoCodec,
+                secondCodec = settings.secondVideoCodec,
+                availableCodecs = codecList
+            )
+        }
         withContext(Dispatchers.Main) {
             this@VideoPlayerV3ViewModel.currentVideoCodec = currentVideoCodec
         }

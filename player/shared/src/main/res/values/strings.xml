@@ -41,9 +41,9 @@
     <string name="video_aspect_ratio_sixteen_to_nine">16:9</string>
     <string name="video_codec_av1" tools:ignore="Typos">AV1</string>
     <string name="video_codec_avc">H.264</string>
-    <string name="video_codec_dvh1" tools:ignore="Typos">H.265</string>
+    <string name="video_codec_dvh1" tools:ignore="Typos">H.265 (DVH1)</string>
     <string name="video_codec_hevc">H.265</string>
-    <string name="video_codec_hvc1" tools:ignore="Typos">H.265</string>
+    <string name="video_codec_hvc1" tools:ignore="Typos">H.265 (HVC1)</string>
 
     <!-- 直播编码格式选项 -->
     <string name="live_codec_hls">HLS（自动）</string>

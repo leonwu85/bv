@@ -25,6 +25,8 @@ interface PlayerSettingsSource {
     val defaultCellularQuality: Resolution
     val defaultVideoCodec: VideoCodec
     val secondVideoCodec: VideoCodec
+    val useTvVideoCodecPriority: Boolean
+        get() = false
     val currentPlaySpeed: Float
     val autoPlay: Boolean
     val enableTunneling: Boolean
@@ -108,6 +110,7 @@ object DefaultPlayerSettingsSource : PlayerSettingsSource {
     override val defaultCellularQuality get() = Prefs.defaultQuality
     override val defaultVideoCodec get() = Prefs.defaultVideoCodec
     override val secondVideoCodec get() = VideoCodec.AVC
+    override val useTvVideoCodecPriority get() = true
     override val currentPlaySpeed get() = Prefs.currentPlaySpeed
     override val autoPlay get() = true
     override val enableTunneling get() = Prefs.enableTunneling
