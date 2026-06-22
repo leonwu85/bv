@@ -2,6 +2,7 @@ package dev.aaa1115910.biliapi.http.entity.dynamic
 
 import dev.aaa1115910.biliapi.http.entity.user.Pendant
 import dev.aaa1115910.biliapi.http.entity.user.Vip
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -12,6 +13,7 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
@@ -636,6 +638,7 @@ data class DynamicItem(
         ) {
             @Serializable
             data class StatItem(
+                @Serializable(with = FlexibleIntSerializer::class)
                 val count: Int = 0,
                 val forbidden: Boolean = false,
                 val status: Boolean = false
@@ -675,6 +678,36 @@ object FlexibleIntSerializer : KSerializer<Int> {
     }
 }
 
+@OptIn(ExperimentalSerializationApi::class)
+object FlexibleNullableIntSerializer : KSerializer<Int?> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleNullableInt", PrimitiveKind.INT)
+
+    override fun deserialize(decoder: Decoder): Int? {
+        val jsonDecoder = decoder as? JsonDecoder
+        if (jsonDecoder == null) {
+            if (!decoder.decodeNotNullMark()) {
+                decoder.decodeNull()
+                return null
+            }
+            return decoder.decodeInt()
+        }
+
+        val element = jsonDecoder.decodeJsonElement()
+        if (element is JsonNull) return null
+        val primitive = element as? JsonPrimitive ?: return null
+        return primitive.intOrNull ?: primitive.contentOrNull?.toIntOrNull()
+    }
+
+    override fun serialize(encoder: Encoder, value: Int?) {
+        if (value == null) {
+            encoder.encodeNull()
+        } else {
+            encoder.encodeInt(value)
+        }
+    }
+}
+
 object FlexibleBooleanSerializer : KSerializer<Boolean> {
     override val descriptor: SerialDescriptor =
         PrimitiveSerialDescriptor("FlexibleBoolean", PrimitiveKind.BOOLEAN)
@@ -709,5 +742,35 @@ object FlexibleLongSerializer : KSerializer<Long> {
 
     override fun serialize(encoder: Encoder, value: Long) {
         encoder.encodeLong(value)
+    }
+}
+
+@OptIn(ExperimentalSerializationApi::class)
+object FlexibleNullableLongSerializer : KSerializer<Long?> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleNullableLong", PrimitiveKind.LONG)
+
+    override fun deserialize(decoder: Decoder): Long? {
+        val jsonDecoder = decoder as? JsonDecoder
+        if (jsonDecoder == null) {
+            if (!decoder.decodeNotNullMark()) {
+                decoder.decodeNull()
+                return null
+            }
+            return decoder.decodeLong()
+        }
+
+        val element = jsonDecoder.decodeJsonElement()
+        if (element is JsonNull) return null
+        val primitive = element as? JsonPrimitive ?: return null
+        return primitive.longOrNull ?: primitive.contentOrNull?.toLongOrNull()
+    }
+
+    override fun serialize(encoder: Encoder, value: Long?) {
+        if (value == null) {
+            encoder.encodeNull()
+        } else {
+            encoder.encodeLong(value)
+        }
     }
 }

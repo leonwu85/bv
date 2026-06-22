@@ -1172,9 +1172,9 @@ private fun DynamicFooter(footer: DynamicItem.DynamicFooterModule?) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        DynamicFooterText(text = footer.like.formatCount())
-        DynamicFooterText(text = "评论 ${footer.comment.formatCount()}")
-        DynamicFooterText(text = "转发 ${footer.share.formatCount()}")
+        DynamicFooterText(text = footer.like.formatDynamicStat("点赞"))
+        DynamicFooterText(text = footer.comment.formatDynamicStat("评论", "评论 "))
+        DynamicFooterText(text = footer.share.formatDynamicStat("转发", "转发 "))
     }
 }
 
@@ -1279,6 +1279,9 @@ private fun Int.formatCount(): String = when {
     this >= 10_000 -> String.format("%.1f万", this / 10_000.0)
     else -> toString()
 }
+
+private fun Int.formatDynamicStat(fallback: String, prefix: String = ""): String =
+    takeIf { it > 0 }?.let { "$prefix${it.formatCount()}" } ?: fallback
 
 //https://i2.hdslb.com/bfs/face/ea9b2fd60b04b123d0b48477838f60532b6271cd.jpg
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES)

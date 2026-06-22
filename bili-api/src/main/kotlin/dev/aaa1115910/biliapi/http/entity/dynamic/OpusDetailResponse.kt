@@ -39,6 +39,7 @@ data class OpusBasic(
     @SerialName("comment_id_str")
     val commentIdStr: String? = null,
     @SerialName("comment_type")
+    @Serializable(with = FlexibleNullableIntSerializer::class)
     val commentType: Int? = null
 )
 
@@ -69,6 +70,7 @@ data class OpusAuthorModule(
     @SerialName("pub_time")
     val pubTime: String? = null,
     @SerialName("pub_ts")
+    @Serializable(with = FlexibleNullableLongSerializer::class)
     val pubTs: Long? = null
 )
 
@@ -81,6 +83,7 @@ data class OpusStatModule(
 ) {
     @Serializable
     data class OpusStat(
+        @Serializable(with = FlexibleNullableIntSerializer::class)
         val count: Int? = null,
         val status: Boolean? = null
     )

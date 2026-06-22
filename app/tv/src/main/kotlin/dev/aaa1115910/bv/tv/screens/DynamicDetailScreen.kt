@@ -937,13 +937,16 @@ private fun DynamicFooterInfo(footer: DynamicItem.DynamicFooterModule) {
         horizontalArrangement = Arrangement.spacedBy(24.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("👍 ${footer.like}", fontSize = 14.sp)
+            Text("👍 ${footer.like.formatDynamicStat("点赞")}", fontSize = 14.sp)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("💬 ${footer.comment}", fontSize = 14.sp)
+            Text("💬 ${footer.comment.formatDynamicStat("评论")}", fontSize = 14.sp)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("↗️ ${footer.share}", fontSize = 14.sp)
+            Text("↗️ ${footer.share.formatDynamicStat("转发")}", fontSize = 14.sp)
         }
     }
 }
+
+private fun Int.formatDynamicStat(fallback: String): String =
+    takeIf { it > 0 }?.toString() ?: fallback

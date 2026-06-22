@@ -523,15 +523,15 @@ fun DynamicFooter(
     ) {
         DynamicFooterButton(
             icon = Icons.Default.Share,
-            number = footer.share
+            text = footer.share.formatDynamicStat("转发")
         ) { onShare?.invoke() }
         DynamicFooterButton(
             icon = Icons.AutoMirrored.Filled.Comment,
-            number = footer.comment
+            text = footer.comment.formatDynamicStat("评论")
         ) { onShowComment?.invoke() }
         DynamicFooterButton(
             icon = if (isLike) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-            number = footer.like
+            text = footer.like.formatDynamicStat("点赞")
         ) { onLike?.invoke() }
     }
 }
@@ -540,7 +540,7 @@ fun DynamicFooter(
 fun DynamicFooterButton(
     modifier: Modifier = Modifier,
     icon: ImageVector,
-    number: Int,
+    text: String,
     onClick: () -> Unit
 ) {
     TextButton(
@@ -553,11 +553,14 @@ fun DynamicFooterButton(
             contentDescription = null
         )
         Text(
-            text = number.toString(),
+            text = text,
             modifier = Modifier.padding(start = 4.dp)
         )
     }
 }
+
+private fun Int.formatDynamicStat(fallback: String): String =
+    takeIf { it > 0 }?.toString() ?: fallback
 
 @Composable
 fun DynamicVoteCard(
