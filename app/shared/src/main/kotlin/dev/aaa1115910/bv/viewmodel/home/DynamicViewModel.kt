@@ -19,7 +19,6 @@ import dev.aaa1115910.biliapi.entity.user.DynamicVideo
 import dev.aaa1115910.biliapi.http.entity.AuthFailureException
 import dev.aaa1115910.biliapi.repositories.UserRepository
 import dev.aaa1115910.bv.BVApp
-import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.DynamicTabType
 import dev.aaa1115910.bv.util.Prefs
@@ -193,7 +192,6 @@ class DynamicViewModel(
                             .toast(BVApp.context)
                     }
                     logger.fInfo { "User auth failure" }
-                    if (!BuildConfig.DEBUG) bvUserRepository.logout()
                 }
 
                 else -> {

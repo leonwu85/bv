@@ -63,7 +63,6 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import dev.aaa1115910.biliapi.http.entity.AuthFailureException
 import dev.aaa1115910.biliapi.repositories.UserRepository
-import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.tv.activities.message.InboxActivity
 import dev.aaa1115910.bv.tv.activities.user.FollowActivity
@@ -124,7 +123,6 @@ fun UserInfoScreen(
                             context.getString(R.string.exception_auth_failure).toast(context)
                         }
                         logger.fInfo { "User auth failure" }
-                        if (!BuildConfig.DEBUG) userViewModel.logout()
                     }
 
                     else -> {}

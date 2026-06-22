@@ -13,9 +13,12 @@ import dev.aaa1115910.bv.entity.AuthData
 import dev.aaa1115910.bv.entity.db.UserDB
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
+import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.koin.core.annotation.Single
 import java.util.Date
 
@@ -119,6 +122,9 @@ class UserRepository(
         authFailureLogoutMutex.withLock {
             if (!isLogin && !Prefs.isLogin) return
             logger.info { "Auth failure detected, auto logout: $reason" }
+            withContext(Dispatchers.Main) {
+                "账号验证异常，需要重新登录".toast(BVApp.context)
+            }
             logout()
         }
     }

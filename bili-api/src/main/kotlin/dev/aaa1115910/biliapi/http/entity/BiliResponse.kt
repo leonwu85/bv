@@ -21,13 +21,20 @@ data class BiliResponse<T>(
     init {
         when (code) {
             0 -> {}
-            -101 -> {
-                logger.error { "请求失败，账号未登录: $message (code: $code)" }
-                BiliAuthFailureHandler.notify(message)
-            }
+            -101 -> logger.error { "请求失败，账号未登录: $message (code: $code)" }
             -352 -> logger.error { "请求失败，风控异常: $message (code: $code)" }
             86038, 86039, 86090 -> logger.debug { "二维码登录轮询: $message (code: $code)" }
             else -> logger.error { "请求失败: $message (code: $code)" }
+        }
+    }
+
+    fun notifyAuthFailureIfNeeded(
+        source: String? = null,
+        enabled: Boolean = true
+    ): BiliResponse<T> = apply {
+        if (enabled && code == -101) {
+            val reason = source?.let { "$it: $message" } ?: message
+            BiliAuthFailureHandler.notify(reason)
         }
     }
 
@@ -59,12 +66,19 @@ data class BiliResponseWithoutData(
     init {
         when (code) {
             0 -> {}
-            -101 -> {
-                logger.error { "请求失败，账号未登录: $message (code: $code)" }
-                BiliAuthFailureHandler.notify(message)
-            }
+            -101 -> logger.error { "请求失败，账号未登录: $message (code: $code)" }
             -352 -> logger.error { "请求失败，风控异常: $message (code: $code)" }
             else -> logger.error { "请求失败: $message (code: $code)" }
+        }
+    }
+
+    fun notifyAuthFailureIfNeeded(
+        source: String? = null,
+        enabled: Boolean = true
+    ): BiliResponseWithoutData = apply {
+        if (enabled && code == -101) {
+            val reason = source?.let { "$it: $message" } ?: message
+            BiliAuthFailureHandler.notify(reason)
         }
     }
 

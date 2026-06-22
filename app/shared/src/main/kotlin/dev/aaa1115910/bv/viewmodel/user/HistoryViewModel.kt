@@ -12,7 +12,6 @@ import dev.aaa1115910.biliapi.entity.user.HistoryItemType
 import dev.aaa1115910.biliapi.http.entity.AuthFailureException
 import dev.aaa1115910.biliapi.repositories.HistoryRepository
 import dev.aaa1115910.bv.BVApp
-import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.repository.UserRepository
@@ -117,7 +116,6 @@ class HistoryViewModel(
                             .toast(BVApp.context)
                     }
                     logger.fInfo { "User auth failure" }
-                    if (!BuildConfig.DEBUG) userRepository.logout()
                 }
 
                 else -> {}

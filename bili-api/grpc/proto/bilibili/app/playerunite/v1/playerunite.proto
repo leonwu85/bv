@@ -16,14 +16,15 @@ service Player {
 
 // 
 message PlayViewUniteReq {
+  // extra_content is unused here and its generated map holder can crash during Android serialization.
+  reserved 4;
+  reserved "extra_content";
   // 请求资源VOD信息
   bilibili.playershared.VideoVod vod = 1;
   //
   string spmid = 2;
   //
   string from_spmid = 3;
-  // 补充信息, 如ep_id等
-  map<string, string> extra_content = 4;
   //
   string bvid = 5;
 }

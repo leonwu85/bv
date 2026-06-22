@@ -9,7 +9,6 @@ import dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_APP
 import dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_WEB
 import dev.aaa1115910.biliapi.http.entity.BiliResponse
 import dev.aaa1115910.biliapi.http.entity.BiliResponseWithoutData
-import dev.aaa1115910.biliapi.http.entity.BiliAuthFailureHandler
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuPostData
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuResponse
@@ -478,7 +477,8 @@ object BiliHttpApi {
             biliJct = biliJct,
             sid = sid
         )
-    }.body()
+    }.body<BiliResponse<PlayUrlData>>()
+        .notifyAuthFailureIfNeeded("获取播放链接", enabled = !sessData.isNullOrBlank())
 
     suspend fun getVideoWbiPlayUrl(
         av: Long? = null,
@@ -528,7 +528,8 @@ object BiliHttpApi {
                 biliJct = biliJct,
                 sid = sid
             )
-        }.body()
+        }.body<BiliResponse<PlayUrlData>>()
+            .notifyAuthFailureIfNeeded("获取播放链接", enabled = !sessData.isNullOrBlank())
     }
 
     @OptIn(ExperimentalEncodingApi::class)
@@ -632,7 +633,8 @@ object BiliHttpApi {
         if (cookieParts.isNotEmpty()) header("Cookie", cookieParts.joinToString(";"))
         //必须得加上 referer 才能通过账号身份验证
         header("referer", "https://www.bilibili.com")
-    }.body()
+    }.body<BiliResponse<PlayUrlData>>()
+        .notifyAuthFailureIfNeeded("获取播放链接", enabled = !sessData.isNullOrBlank())
 
     /**
      * 获取剧集视频流 v2
@@ -679,7 +681,8 @@ object BiliHttpApi {
         }
         //必须得加上 referer 才能通过账号身份验证
         header("referer", "https://www.bilibili.com")
-    }.body()
+    }.body<BiliResponse<PlayUrlV2Data>>()
+        .notifyAuthFailureIfNeeded("获取播放链接", enabled = !sessData.isNullOrBlank())
 
     /**
      * 通过[cid]获取视频弹幕 (旧接口，已废弃)
@@ -2733,9 +2736,6 @@ object BiliHttpApi {
                 header("Cookie", "SESSDATA=$sessData;")
             }
         }.body<BiliResponse<NavResponseData>>()
-        if (sessData.isNotEmpty() && response.code == 0 && response.data?.isLogin == false) {
-            BiliAuthFailureHandler.notify("账号未登录")
-        }
         return response
     }
 

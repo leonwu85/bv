@@ -10,7 +10,6 @@ import dev.aaa1115910.biliapi.http.entity.AuthFailureException
 import dev.aaa1115910.biliapi.http.entity.user.MyInfoData
 import dev.aaa1115910.biliapi.http.entity.user.UserNavStatData
 import dev.aaa1115910.bv.BVApp
-import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.repository.UserRepository
 import dev.aaa1115910.bv.util.Prefs
@@ -73,7 +72,6 @@ class UserViewModel(
                                 .toast(BVApp.context)
                         }
                         logger.fInfo { "User auth failure" }
-                        if (!BuildConfig.DEBUG) userRepository.logout()
                     }
 
                     else -> {
