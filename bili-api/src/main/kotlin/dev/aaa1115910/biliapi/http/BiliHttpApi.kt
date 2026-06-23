@@ -477,8 +477,7 @@ object BiliHttpApi {
             biliJct = biliJct,
             sid = sid
         )
-    }.body<BiliResponse<PlayUrlData>>()
-        .notifyAuthFailureIfNeeded("获取播放链接", enabled = !sessData.isNullOrBlank())
+    }.body()
 
     suspend fun getVideoWbiPlayUrl(
         av: Long? = null,
@@ -528,8 +527,7 @@ object BiliHttpApi {
                 biliJct = biliJct,
                 sid = sid
             )
-        }.body<BiliResponse<PlayUrlData>>()
-            .notifyAuthFailureIfNeeded("获取播放链接", enabled = !sessData.isNullOrBlank())
+        }.body()
     }
 
     @OptIn(ExperimentalEncodingApi::class)
@@ -633,8 +631,7 @@ object BiliHttpApi {
         if (cookieParts.isNotEmpty()) header("Cookie", cookieParts.joinToString(";"))
         //必须得加上 referer 才能通过账号身份验证
         header("referer", "https://www.bilibili.com")
-    }.body<BiliResponse<PlayUrlData>>()
-        .notifyAuthFailureIfNeeded("获取播放链接", enabled = !sessData.isNullOrBlank())
+    }.body()
 
     /**
      * 获取剧集视频流 v2
@@ -681,8 +678,7 @@ object BiliHttpApi {
         }
         //必须得加上 referer 才能通过账号身份验证
         header("referer", "https://www.bilibili.com")
-    }.body<BiliResponse<PlayUrlV2Data>>()
-        .notifyAuthFailureIfNeeded("获取播放链接", enabled = !sessData.isNullOrBlank())
+    }.body()
 
     /**
      * 通过[cid]获取视频弹幕 (旧接口，已废弃)

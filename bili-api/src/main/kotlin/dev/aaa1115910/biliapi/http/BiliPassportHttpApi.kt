@@ -93,8 +93,14 @@ object BiliPassportHttpApi {
     /**
      * 申请二维码（Web）
      */
-    suspend fun getWebQRUrl(): BiliResponse<RequestWebQRData> =
-        client.get("/x/passport-login/web/qrcode/generate").body()
+    suspend fun getWebQRUrl(
+        source: String? = null,
+        goUrl: String? = null
+    ): BiliResponse<RequestWebQRData> =
+        client.get("/x/passport-login/web/qrcode/generate") {
+            source?.let { parameter("source", it) }
+            goUrl?.let { parameter("go_url", it) }
+        }.body()
 
     /**
      * 使用[qrcodeKey]进行二维码登录

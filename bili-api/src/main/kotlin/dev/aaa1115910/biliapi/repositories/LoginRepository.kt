@@ -23,8 +23,14 @@ class LoginRepository {
     /**
      * 请求扫码登录的二维码，仅支持 Http 接口使用
      */
-    suspend fun requestWebQrLogin(): QrLoginData {
-        val response = BiliPassportHttpApi.getWebQRUrl().getResponseData()
+    suspend fun requestWebQrLogin(
+        source: String? = null,
+        goUrl: String? = null
+    ): QrLoginData {
+        val response = BiliPassportHttpApi.getWebQRUrl(
+            source = source,
+            goUrl = goUrl
+        ).getResponseData()
         return QrLoginData(
             url = response.url,
             key = response.qrcodeKey

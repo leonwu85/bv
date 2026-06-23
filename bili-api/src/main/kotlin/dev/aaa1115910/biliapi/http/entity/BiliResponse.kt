@@ -28,16 +28,6 @@ data class BiliResponse<T>(
         }
     }
 
-    fun notifyAuthFailureIfNeeded(
-        source: String? = null,
-        enabled: Boolean = true
-    ): BiliResponse<T> = apply {
-        if (enabled && code == -101) {
-            val reason = source?.let { "$it: $message" } ?: message
-            BiliAuthFailureHandler.notify(reason)
-        }
-    }
-
     @Throws()
     fun getResponseData(): T {
         when (code) {
@@ -69,16 +59,6 @@ data class BiliResponseWithoutData(
             -101 -> logger.error { "请求失败，账号未登录: $message (code: $code)" }
             -352 -> logger.error { "请求失败，风控异常: $message (code: $code)" }
             else -> logger.error { "请求失败: $message (code: $code)" }
-        }
-    }
-
-    fun notifyAuthFailureIfNeeded(
-        source: String? = null,
-        enabled: Boolean = true
-    ): BiliResponseWithoutData = apply {
-        if (enabled && code == -101) {
-            val reason = source?.let { "$it: $message" } ?: message
-            BiliAuthFailureHandler.notify(reason)
         }
     }
 

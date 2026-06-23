@@ -20,6 +20,8 @@ import dev.aaa1115910.biliapi.entity.video.VideoShot
 import dev.aaa1115910.biliapi.grpc.utils.handleGrpcException
 import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.http.BiliHttpProxyApi
+import dev.aaa1115910.biliapi.http.entity.AuthFailureException
+import dev.aaa1115910.biliapi.http.entity.BiliAuthFailureHandler
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
 import dev.aaa1115910.biliapi.http.entity.video.VideoPlayerInfo
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +56,12 @@ class VideoPlayRepository(
         get() = runCatching {
             PgcPlayURLGrpcKt.PlayURLCoroutineStub(channelRepository.proxyChannel!!)
         }.getOrNull()
+
+    private fun notifyPlayUrlAuthFailureIfNeeded(error: Throwable) {
+        if (error is AuthFailureException && !authRepository.sessionData.isNullOrBlank()) {
+            BiliAuthFailureHandler.notify("获取播放链接: ${error.message ?: "账号未登录"}")
+        }
+    }
 
     suspend fun getAppDanmakuSegment(
         aid: Long,
@@ -134,6 +142,7 @@ class VideoPlayRepository(
                     }
 
                     result.onSuccess { return it }
+                    result.onFailure(::notifyPlayUrlAuthFailureIfNeeded)
                     lastFailure = result.exceptionOrNull()
                 }
 
@@ -231,6 +240,7 @@ class VideoPlayRepository(
             }
 
             result.onSuccess { return it }
+            result.onFailure(::notifyPlayUrlAuthFailureIfNeeded)
             lastFailure = result.exceptionOrNull()
         }
 
@@ -301,33 +311,36 @@ class VideoPlayRepository(
         return when (preferApiType) {
             ApiType.Web -> {
                 val tryLook = shouldTryLook1080P(tryLook1080P, authRepository.sessionData)
-                val playUrlData = if (enableProxy) {
-                    BiliHttpProxyApi.getPgcVideoPlayUrlV2(
-                        av = aid,
-                        cid = cid,
-                        epid = epid,
-                        fnval = 4048,
-                        qn = 127,
-                        fnver = 0,
-                        fourk = 1,
-                        sessData = authRepository.sessionData,
-                        tryLook = tryLook
-//                        buvid3 = authRepository.buvid3
-                    )
-                } else {
-                    BiliHttpApi.getPgcVideoPlayUrlV2(
-                        av = aid,
-                        cid = cid,
-                        epid = epid,
-                        fnval = 4048,
-                        qn = 127,
-                        fnver = 0,
-                        fourk = 1,
-                        sessData = authRepository.sessionData,
-                        tryLook = tryLook
-//                        buvid3 = authRepository.buvid3
-                    )
-                }.getResponseData()
+                val playUrlData = runCatching {
+                    if (enableProxy) {
+                        BiliHttpProxyApi.getPgcVideoPlayUrlV2(
+                            av = aid,
+                            cid = cid,
+                            epid = epid,
+                            fnval = 4048,
+                            qn = 127,
+                            fnver = 0,
+                            fourk = 1,
+                            sessData = authRepository.sessionData,
+                            tryLook = tryLook
+//                            buvid3 = authRepository.buvid3
+                        )
+                    } else {
+                        BiliHttpApi.getPgcVideoPlayUrlV2(
+                            av = aid,
+                            cid = cid,
+                            epid = epid,
+                            fnval = 4048,
+                            qn = 127,
+                            fnver = 0,
+                            fourk = 1,
+                            sessData = authRepository.sessionData,
+                            tryLook = tryLook
+//                            buvid3 = authRepository.buvid3
+                        )
+                    }.getResponseData()
+                }.onFailure(::notifyPlayUrlAuthFailureIfNeeded)
+                    .getOrThrow()
 
                 PlayData.fromPlayUrlV2Data(playUrlData)
             }

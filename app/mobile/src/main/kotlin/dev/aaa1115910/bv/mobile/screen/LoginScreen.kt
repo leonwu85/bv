@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.geetest.sdk.GT3ConfigBean
@@ -69,10 +70,14 @@ import dev.aaa1115910.bv.viewmodel.login.GeetestResult
 import dev.aaa1115910.bv.viewmodel.login.SmsLoginViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import org.json.JSONObject
 import org.koin.androidx.compose.koinViewModel
+
+private const val MobileQrRefreshCountdownSeconds = 180
 
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
@@ -282,7 +287,8 @@ fun LoginContent(
                 qrLoginUrl = qrLoginUrl,
                 onClearCaptchaData = onClearCaptchaData,
                 onSendSms = onSendSms,
-                onLogin = onLogin
+                onLogin = onLogin,
+                onRequestQRCode = onRequestQRCode
             )
         }
     }
@@ -316,11 +322,11 @@ fun LoginContentCompact(
                 onLogin = onLogin
             )
             AnimatedVisibility(showQrCode) {
-                QrImage(
+                QrLogin(
                     modifier = Modifier
-                        .padding(top = 36.dp)
-                        .size(240.dp),
-                    content = qrLoginUrl
+                        .padding(top = 36.dp),
+                    qrLoginUrl = qrLoginUrl,
+                    onRequestQRCode = onRequestQRCode
                 )
             }
         }
@@ -344,7 +350,8 @@ fun LoginContentExpanded(
     qrLoginUrl: String,
     onClearCaptchaData: () -> Unit,
     onSendSms: (Long) -> Unit,
-    onLogin: (phoneNumber: Long, code: Int) -> Unit
+    onLogin: (phoneNumber: Long, code: Int) -> Unit,
+    onRequestQRCode: () -> Unit
 ) {
     Row(
         modifier = modifier
@@ -376,7 +383,8 @@ fun LoginContentExpanded(
         ) {
             QrLogin(
                 modifier = Modifier,
-                qrLoginUrl = qrLoginUrl
+                qrLoginUrl = qrLoginUrl,
+                onRequestQRCode = onRequestQRCode
             )
 
         }
@@ -485,15 +493,53 @@ fun SmsLoginInputs(
 @Composable
 fun QrLogin(
     modifier: Modifier = Modifier,
-    qrLoginUrl: String
+    qrLoginUrl: String,
+    onRequestQRCode: () -> Unit = {}
 ) {
-    Box(
-        modifier = modifier
+    var refreshCountdown by remember { mutableIntStateOf(MobileQrRefreshCountdownSeconds) }
+
+    LaunchedEffect(qrLoginUrl) {
+        if (qrLoginUrl.isBlank()) return@LaunchedEffect
+
+        var remainingSeconds = MobileQrRefreshCountdownSeconds
+        refreshCountdown = remainingSeconds
+        while (remainingSeconds > 0 && isActive) {
+            delay(1000)
+            remainingSeconds -= 1
+            refreshCountdown = remainingSeconds
+        }
+
+        if (isActive) {
+            onRequestQRCode()
+        }
+    }
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        if (qrLoginUrl.isNotBlank()) {
+            Text(
+                text = "$refreshCountdown 秒后自动刷新二维码",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
         QrImage(
             modifier = Modifier.size(240.dp),
             content = qrLoginUrl
         )
+        if (qrLoginUrl.isNotBlank()) {
+            Text(
+                modifier = Modifier.widthIn(max = 320.dp),
+                text = qrLoginUrl,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 

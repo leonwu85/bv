@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.login.QrLoginState
 import dev.aaa1115910.biliapi.repositories.LoginRepository
 import dev.aaa1115910.bv.BVApp
@@ -33,21 +34,38 @@ class AppQrLoginViewModel(
     private val logger = KotlinLogging.logger { }
     var loginUrl by mutableStateOf("")
     private var key = ""
+    private var qrLoginApiType = ApiType.App
 
     private var timer = Timer()
 
-    fun requestQRCode() {
+    fun requestQRCode(
+        preferApiType: ApiType = ApiType.App,
+        webQrSource: String? = null,
+        webQrGoUrl: String? = null
+    ) {
         state = QrLoginState.Ready
-        logger.fInfo { "Request login qr code" }
+        loginUrl = ""
+        key = ""
+        qrLoginApiType = preferApiType
+        logger.fInfo { "Request login qr code with apiType=$preferApiType" }
+        runCatching { timer.cancel() }
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 withContext(Dispatchers.Main) { state = QrLoginState.RequestingQRCode }
-                val qrLoginData = loginRepository.requestAppQrLogin()
-                loginUrl = qrLoginData.url
-                key = qrLoginData.key
-                logger.fInfo { "Get login request code url" }
+                val qrLoginData = when (preferApiType) {
+                    ApiType.Web -> loginRepository.requestWebQrLogin(
+                        source = webQrSource,
+                        goUrl = webQrGoUrl
+                    )
+                    ApiType.App -> loginRepository.requestAppQrLogin()
+                }
+                withContext(Dispatchers.Main) {
+                    loginUrl = qrLoginData.url
+                    key = qrLoginData.key
+                    qrLoginApiType = preferApiType
+                }
+                logger.fInfo { "Get login request code url with apiType=$preferApiType" }
                 logger.info { qrLoginData.url }
-                runCatching { timer.cancel() }
                 timer = timeTask(1000, 1000, "check qr login result") {
                     viewModelScope.launch {
                         checkLoginResult()
@@ -69,9 +87,13 @@ class AppQrLoginViewModel(
     }
 
     private suspend fun checkLoginResult() {
-        logger.fInfo { "Check for login result" }
+        val currentQrLoginApiType = qrLoginApiType
+        logger.fInfo { "Check for login result with apiType=$currentQrLoginApiType" }
         runCatching {
-            val qrLoginResult = loginRepository.checkAppQrLoginState(key)
+            val qrLoginResult = when (currentQrLoginApiType) {
+                ApiType.Web -> loginRepository.checkWebQrLoginState(key)
+                ApiType.App -> loginRepository.checkAppQrLoginState(key)
+            }
             when (qrLoginResult.state) {
                 QrLoginState.WaitingForScan -> {
                     withContext(Dispatchers.Main) { state = qrLoginResult.state }
@@ -105,8 +127,8 @@ class AppQrLoginViewModel(
                         biliJct = qrLoginResult.cookies!!.biliJct,
                         sessData = qrLoginResult.cookies!!.sessData,
                         tokenExpiredData = qrLoginResult.cookies!!.expiredDate.time,
-                        accessToken = qrLoginResult.accessToken!!,
-                        refreshToken = qrLoginResult.refreshToken!!
+                        accessToken = qrLoginResult.accessToken.orEmpty(),
+                        refreshToken = qrLoginResult.refreshToken.orEmpty()
                     )
 
                     BlacklistUtil.checkUid(authData.uid)

@@ -105,9 +105,7 @@ object BiliHttpProxyApi {
         if (cookieParts.isNotEmpty()) header("Cookie", cookieParts.joinToString(";"))
         //必须得加上 referer 才能通过账号身份验证
         header("referer", "https://www.bilibili.com")
-    }?.body<BiliResponse<PlayUrlData>>()
-        ?.notifyAuthFailureIfNeeded("获取播放链接", enabled = !sessData.isNullOrBlank())
-        ?: throw IllegalStateException("no proxy server")
+    }?.body() ?: throw IllegalStateException("no proxy server")
 
     suspend fun getPgcVideoPlayUrlV2(
         av: Long? = null,
@@ -147,9 +145,7 @@ object BiliHttpProxyApi {
         if (cookieParts.isNotEmpty()) header("Cookie", cookieParts.joinToString(";"))
         //必须得加上 referer 才能通过账号身份验证
         header("referer", "https://www.bilibili.com")
-    }?.body<BiliResponse<PlayUrlV2Data>>()
-        ?.notifyAuthFailureIfNeeded("获取播放链接", enabled = !sessData.isNullOrBlank())
-        ?: throw IllegalStateException("no proxy server")
+    }?.body() ?: throw IllegalStateException("no proxy server")
 
     /**
      * 分类搜索与[keyword]相关的[type]类型的相关结果
