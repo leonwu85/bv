@@ -69,7 +69,6 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val logger = KotlinLogging.logger("MainScreen")
-    val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
     val drawerMenuItems by drawerNavItemsFlow.collectAsState(
         initial = remember { parseDrawerItemsOrder(Prefs.drawerItemsOrder) }
     )
@@ -269,14 +268,15 @@ fun MainScreen(
                 )
             }
 
-            // Right side - keep-alive 内容，避免抽屉切换整页销毁重建
+            // Right side - keep-alive 内容，避免抽屉切换整页销毁重建。
+            // 不做整页滑动动画：此处包着各 Content（含 TopNav），过渡动画曾导致 TopNav 无法获焦。
             KeepAlivePages(
                 current = selectedDrawerItem,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(start = 72.dp),
                 maxKeep = 3,
-                enableAnimation = enableMainUiAnimation
+                enableAnimation = false
             ) { screen, _ ->
                 when (screen) {
                     DrawerItem.User -> UserContent(
