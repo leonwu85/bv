@@ -1822,18 +1822,32 @@ class VideoPlayerV3ViewModel(
             .mapNotNull { VideoCodec.fromCodecString(it) }
             .distinct()
 
-        availableVideoCodec.swapListWithMainContext(codecList)
+        val orderedCodecList = if (settings.useTvVideoCodecPriority) {
+            PlaybackPreferenceSelector.orderAvailableVideoCodecs(
+                availableCodecs = codecList,
+                defaultCodec = settings.defaultVideoCodec,
+                selectedQuality = currentQuality,
+                h265CodecPriority = settings.h265CodecPriority,
+            )
+        } else {
+            codecList
+        }
+        availableVideoCodec.swapListWithMainContext(orderedCodecList)
         logger.fInfo { "Video available codec: ${availableVideoCodec.toList()}" }
 
         val requestedCodec = preferredCodec ?: currentVideoCodec
-        logger.fInfo { "Default codec: $requestedCodec, second codec: ${settings.secondVideoCodec}" }
+        logger.fInfo {
+            "Default codec: $requestedCodec, second codec: ${settings.secondVideoCodec}, " +
+                "h265 priority: ${settings.h265CodecPriority.joinToString(">") { it.name }}"
+        }
         val currentVideoCodec = if (settings.useTvVideoCodecPriority) {
             PlaybackPreferenceSelector.selectTvVideoCodec(
                 requestedCodec = preferredCodec,
                 currentCodec = currentVideoCodec,
                 defaultCodec = settings.defaultVideoCodec,
                 selectedQuality = currentQuality,
-                availableCodecs = codecList
+                availableCodecs = orderedCodecList,
+                h265CodecPriority = settings.h265CodecPriority,
             )
         } else {
             PlaybackPreferenceSelector.selectVideoCodec(

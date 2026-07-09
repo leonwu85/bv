@@ -222,6 +222,8 @@
     <string name="settings_item_api">接口偏好</string>
     <string name="settings_item_audio">默认音频编码</string>
     <string name="settings_item_codec">默认视频编码</string>
+    <string name="settings_item_h265_codec_priority">H.265 编码优先级</string>
+    <string name="settings_item_h265_codec_priority_text">仅在默认编码为 H.265 时生效，可调整 hvc1 / hev1 优先顺序；dvh1 仅在杜比视界画质下启用并最优选</string>
     <string name="settings_item_info">设备信息</string>
     <string name="settings_item_live">直播</string>
     <string name="settings_item_danmaku_filter">弹幕过滤</string>

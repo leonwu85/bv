@@ -25,6 +25,9 @@ interface PlayerSettingsSource {
     val defaultCellularQuality: Resolution
     val defaultVideoCodec: VideoCodec
     val secondVideoCodec: VideoCodec
+    /** H.265 变体优先级，仅当 defaultVideoCodec 为 H.265 时生效。 */
+    val h265CodecPriority: List<VideoCodec>
+        get() = emptyList()
     val useTvVideoCodecPriority: Boolean
         get() = false
     val currentPlaySpeed: Float
@@ -110,6 +113,7 @@ object DefaultPlayerSettingsSource : PlayerSettingsSource {
     override val defaultCellularQuality get() = Prefs.defaultQuality
     override val defaultVideoCodec get() = Prefs.defaultVideoCodec
     override val secondVideoCodec get() = VideoCodec.AVC
+    override val h265CodecPriority get() = Prefs.h265CodecPriority
     override val useTvVideoCodecPriority get() = true
     override val currentPlaySpeed get() = Prefs.currentPlaySpeed
     override val autoPlay get() = true

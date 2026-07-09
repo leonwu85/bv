@@ -350,6 +350,22 @@ object Prefs {
             dsm.editPreference(PrefKeys.prefDefaultVideoCodecKey, value.ordinal)
         }
 
+    /**
+     * H.265 变体优先级（HVC1 / HEVC / DVH1）。
+     * 仅当 [defaultVideoCodec] 为 H.265 时在 TV 端自动选码生效。
+     */
+    var h265CodecPriority: List<VideoCodec>
+        get() = runBlocking {
+            val raw = dsm.getPreferenceFlow(PrefKeys.prefH265CodecPriorityRequest).first()
+            PlaybackPreferenceSelector.parseH265CodecPriority(raw)
+        }
+        set(value) = runBlocking {
+            dsm.editPreference(
+                PrefKeys.prefH265CodecPriorityKey,
+                PlaybackPreferenceSelector.encodeH265CodecPriority(value)
+            )
+        }
+
     var enableFirebaseCollection: Boolean
         get() = runBlocking {
             dsm.getPreferenceFlow(PrefKeys.prefEnabledFirebaseCollectionRequest).first()
@@ -1045,6 +1061,8 @@ object PrefKeys {
     val prefDefaultDanmakuSpeedModeKey = intPreferencesKey("default_danmaku_speed_mode")
     val prefDefaultDanmakuPresentationSpeedKey = floatPreferencesKey("default_danmaku_presentation_speed")
     val prefDefaultVideoCodecKey = intPreferencesKey("dvc")
+    // 复用旧 key，内容仅解析 H.265 相关编码
+    val prefH265CodecPriorityKey = stringPreferencesKey("video_codec_priority")
     val prefEnabledFirebaseCollectionKey = booleanPreferencesKey("efc_v2")
     val prefIncognitoModeKey = booleanPreferencesKey("im")
     val prefDefaultSubtitleFontSizeKey = intPreferencesKey("dsfs")
@@ -1174,6 +1192,8 @@ object PrefKeys {
         PreferenceRequest(prefDefaultDanmakuPresentationSpeedKey, 1f)
     val prefDefaultVideoCodecRequest =
         PreferenceRequest(prefDefaultVideoCodecKey, VideoCodec.HEVC.ordinal)
+    val prefH265CodecPriorityRequest =
+        PreferenceRequest(prefH265CodecPriorityKey, "")
     val prefEnabledFirebaseCollectionRequest =
         PreferenceRequest(prefEnabledFirebaseCollectionKey, true)
     val prefIncognitoModeRequest = PreferenceRequest(prefIncognitoModeKey, false)

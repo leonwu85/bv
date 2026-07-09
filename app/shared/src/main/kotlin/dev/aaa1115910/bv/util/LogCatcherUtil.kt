@@ -102,6 +102,9 @@ object LogCatcherUtil {
         appendLine("Api Type: ${Prefs.apiType.name}")
         appendLine("Default Resolution: ${Prefs.defaultQuality}")
         appendLine("Default Codec: ${Prefs.defaultVideoCodec.name}")
+        appendLine(
+            "H.265 Codec Priority: ${Prefs.h265CodecPriority.joinToString(" > ") { it.name }}"
+        )
         appendLine("Default Audio: ${Prefs.defaultAudio.name}")
         appendLine("Enabled Proxy: ${Prefs.enableProxy}")
     }

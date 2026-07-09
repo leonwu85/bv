@@ -33,6 +33,7 @@ import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.tv.component.settings.SettingListItemWithDialog
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
 import dev.aaa1115910.bv.tv.component.settings.SettingNumberListItem
+import dev.aaa1115910.bv.tv.component.settings.SettingH265CodecPriorityListItem
 import dev.aaa1115910.bv.tv.component.LibMPVDownloaderDialog
 import dev.aaa1115910.bv.tv.component.LibVLCDownloaderDialog
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
@@ -53,6 +54,7 @@ fun PlayerSetting(
 
     var selectedResolution by remember { mutableStateOf(Prefs.defaultQuality) }
     var selectedVideoCodec by remember { mutableStateOf(Prefs.defaultVideoCodec) }
+    var selectedH265CodecPriority by remember { mutableStateOf(Prefs.h265CodecPriority) }
     var selectedAudio by remember { mutableStateOf(Prefs.defaultAudio) }
     var enableFfmpegAudioRenderer by remember { mutableStateOf(Prefs.enableFfmpegAudioRenderer) }
     var showUGCVideoInfo by remember { mutableStateOf(Prefs.showUGCVideoInfo) }
@@ -129,6 +131,19 @@ fun PlayerSetting(
                         selectedVideoCodec = it
                     }
                 )
+            }
+            if (selectedVideoCodec == VideoCodec.HEVC) {
+                item {
+                    SettingH265CodecPriorityListItem(
+                        title = stringResource(R.string.settings_item_h265_codec_priority),
+                        supportText = stringResource(R.string.settings_item_h265_codec_priority_text),
+                        value = selectedH265CodecPriority,
+                        onValueChange = { priority ->
+                            Prefs.h265CodecPriority = priority
+                            selectedH265CodecPriority = Prefs.h265CodecPriority
+                        }
+                    )
+                }
             }
             item {
                 SettingListItemWithDialog(
