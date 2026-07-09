@@ -111,3 +111,11 @@ class RiskControlException : RuntimeException {
     constructor(message: String?, cause: Throwable?) : super(message, cause)
     constructor(cause: Throwable?) : super(cause)
 }
+
+/**
+ * 风控 v_voucher 异常。
+ *
+ * 当 API 返回 code=0/-352 且 data 中包含 v_voucher 时抛出，
+ * 需要通过 Geetest 验证后使用返回的 grisk_id 作为 gaia_vtoken 重试请求。
+ */
+class VVoucherException(val vVoucher: String) : RuntimeException("risk control v_voucher: $vVoucher")

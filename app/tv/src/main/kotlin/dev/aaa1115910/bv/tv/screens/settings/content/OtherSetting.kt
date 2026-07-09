@@ -26,6 +26,8 @@ import androidx.tv.material3.Text
 import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.repository.UserRepository
+import dev.aaa1115910.bv.tv.component.GeetestTvVerifyDialog
+import dev.aaa1115910.bv.tv.component.GeetestVerifyMode
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.component.settings.SettingListItem
 import dev.aaa1115910.bv.tv.component.settings.PlayerShortcutKeyBindingsDialog
@@ -53,6 +55,7 @@ fun OtherSetting(
     var playerShortcutKeyBindings by remember { mutableStateOf(Prefs.playerShortcutKeyBindings) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var logoutInProgress by remember { mutableStateOf(false) }
+    var mockGeetestMode by remember { mutableStateOf<GeetestVerifyMode?>(null) }
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -125,6 +128,24 @@ fun OtherSetting(
             if (BuildConfig.DEBUG) {
                 item {
                     SettingListItem(
+                        title = stringResource(R.string.settings_mock_geetest_tv_title),
+                        supportText = stringResource(R.string.settings_mock_geetest_tv_text),
+                        onClick = {
+                            mockGeetestMode = GeetestVerifyMode.TvRemote
+                        }
+                    )
+                }
+                item {
+                    SettingListItem(
+                        title = stringResource(R.string.settings_mock_geetest_phone_title),
+                        supportText = stringResource(R.string.settings_mock_geetest_phone_text),
+                        onClick = {
+                            mockGeetestMode = GeetestVerifyMode.PhoneCompanion
+                        }
+                    )
+                }
+                item {
+                    SettingListItem(
                         title = stringResource(R.string.settings_crash_test_title),
                         supportText = stringResource(R.string.settings_crash_test_text),
                         onClick = {
@@ -134,6 +155,27 @@ fun OtherSetting(
                 }
             }
         }
+    }
+
+    val currentMockMode = mockGeetestMode
+    if (BuildConfig.DEBUG && currentMockMode != null) {
+        GeetestTvVerifyDialog(
+            gt = "mock_gt",
+            challenge = "mock_challenge",
+            mockMode = true,
+            initialMode = currentMockMode,
+            onResult = { result ->
+                mockGeetestMode = null
+                context.getString(
+                    R.string.settings_mock_geetest_success,
+                    result.challenge
+                ).toast(context)
+            },
+            onDismiss = {
+                mockGeetestMode = null
+                context.getString(R.string.settings_mock_geetest_cancelled).toast(context)
+            },
+        )
     }
 
     PlayerShortcutKeyBindingsDialog(

@@ -123,7 +123,8 @@ class VideoPlayRepository(
                             dedeUserIDCkMd5 = authRepository.dedeUserIDCkMd5,
                             biliJct = authRepository.biliJct,
                             sid = authRepository.sid,
-                            tryLook = tryLook
+                            tryLook = tryLook,
+                            gaiaVtoken = authRepository.gaiaVtoken
                         ).getResponseData()
                         val playData = PlayData.fromPlayUrlData(playUrlData)
                         if (!playData.needPay && !playData.hasPlayableVodStreams()) {
@@ -322,7 +323,8 @@ class VideoPlayRepository(
                             fnver = 0,
                             fourk = 1,
                             sessData = authRepository.sessionData,
-                            tryLook = tryLook
+                            tryLook = tryLook,
+                            gaiaVtoken = authRepository.gaiaVtoken
 //                            buvid3 = authRepository.buvid3
                         )
                     } else {
@@ -335,7 +337,8 @@ class VideoPlayRepository(
                             fnver = 0,
                             fourk = 1,
                             sessData = authRepository.sessionData,
-                            tryLook = tryLook
+                            tryLook = tryLook,
+                            gaiaVtoken = authRepository.gaiaVtoken
 //                            buvid3 = authRepository.buvid3
                         )
                     }.getResponseData()

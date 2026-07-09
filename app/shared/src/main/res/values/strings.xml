@@ -195,6 +195,12 @@
 
     <string name="settings_crash_test_text">点一下崩一下，崩溃不花一份钱</string>
     <string name="settings_crash_test_title">崩溃测试</string>
+    <string name="settings_mock_geetest_tv_title">Mock 遥控器验证</string>
+    <string name="settings_mock_geetest_tv_text">打开十字光标 + mock 点选页，不请求真实极验</string>
+    <string name="settings_mock_geetest_phone_title">Mock 手机验证</string>
+    <string name="settings_mock_geetest_phone_text">打开扫码页 + mock H5，测局域网回传链路</string>
+    <string name="settings_mock_geetest_success">Mock 验证成功：challenge=%1$s</string>
+    <string name="settings_mock_geetest_cancelled">已取消 Mock 验证</string>
     <string name="settings_create_logs_text">查看最近的崩溃日志，也可以手动保存日志</string>
     <string name="settings_create_logs_title">查看日志</string>
     <string name="settings_logout_cancel">取消</string>

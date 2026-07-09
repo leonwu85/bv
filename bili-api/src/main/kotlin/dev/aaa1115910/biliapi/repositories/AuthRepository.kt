@@ -12,4 +12,6 @@ class AuthRepository {
     var mid: Long? = null
     var buvid3: String? = null
     var buvid: String? = null
+    /** 风控验证通过后的 gaia_vtoken（来自 grisk_id） */
+    var gaiaVtoken: String? = null
 }

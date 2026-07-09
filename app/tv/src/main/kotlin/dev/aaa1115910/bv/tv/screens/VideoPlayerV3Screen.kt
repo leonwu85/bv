@@ -85,6 +85,7 @@ import dev.aaa1115910.bv.player.tv.controller.OnlineViewerCountTip
 import dev.aaa1115910.bv.player.tv.controller.SkipTip
 import dev.aaa1115910.bv.player.tv.controller.TripleLikeTip
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
+import dev.aaa1115910.bv.tv.component.GeetestTvVerifyDialog
 import dev.aaa1115910.bv.tv.component.InteractiveOptionDialog
 import dev.aaa1115910.bv.tv.component.buttons.CoinButton
 import dev.aaa1115910.bv.tv.component.CommentPanel
@@ -1258,5 +1259,23 @@ fun VideoPlayerV3Screen(
             onHideDialog = { showDescriptionDialog = false },
             description = videoDescription
         )
+
+        // 风控 Geetest：本机十字光标 / 手机扫码代验证
+        if (playerViewModel.showGeetestDialog) {
+            GeetestTvVerifyDialog(
+                gt = playerViewModel.geetestGt,
+                challenge = playerViewModel.geetestChallenge,
+                onResult = { result ->
+                    playerViewModel.onGeetestResult(
+                        challenge = result.challenge,
+                        validate = result.validate,
+                        seccode = result.seccode,
+                    )
+                },
+                onDismiss = {
+                    playerViewModel.onGeetestCancelled()
+                },
+            )
+        }
     }
 }

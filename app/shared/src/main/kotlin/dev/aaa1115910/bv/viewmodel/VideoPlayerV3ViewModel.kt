@@ -37,6 +37,7 @@ import dev.aaa1115910.biliapi.entity.video.VideoPage
 import dev.aaa1115910.biliapi.entity.video.VideoShot
 import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.http.BiliLiveHttpApi
+import dev.aaa1115910.biliapi.http.entity.VVoucherException
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
 import dev.aaa1115910.biliapi.http.entity.live.DanmakuEvent
 import dev.aaa1115910.biliapi.http.entity.live.LiveEvent
@@ -45,6 +46,7 @@ import dev.aaa1115910.biliapi.http.entity.live.OnlineRankCountEvent
 import dev.aaa1115910.biliapi.http.entity.live.PopularityChangeEvent
 import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment
 import dev.aaa1115910.biliapi.http.SponsorBlockHttpApi
+import dev.aaa1115910.biliapi.repositories.AuthRepository
 import dev.aaa1115910.biliapi.repositories.LiveRepository
 import dev.aaa1115910.biliapi.repositories.VideoDetailRepository
 import dev.aaa1115910.biliapi.repositories.VideoPlayRepository
@@ -234,6 +236,7 @@ class VideoPlayerV3ViewModel(
     private val videoDetailRepository: VideoDetailRepository,
     private val liveRepository: LiveRepository,
     private val offlineVideoCacheService: OfflineVideoCacheService,
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
     private val logger = KotlinLogging.logger { }
     private val settings get() = PlayerSettingsProvider.current
@@ -342,6 +345,12 @@ class VideoPlayerV3ViewModel(
 
     var loadState by mutableStateOf(RequestState.Ready)
     var errorMessage by mutableStateOf("")
+
+    // 风控 Geetest 验证状态
+    var showGeetestDialog by mutableStateOf(false)
+    var geetestGt by mutableStateOf("")
+    var geetestChallenge by mutableStateOf("")
+    private var pendingGaiaToken: String? = null
 
     private var playData: PlayData? by mutableStateOf(null)
     val danmakuData: MutableList<DanmakuItemData> = ArrayList()
@@ -1432,6 +1441,11 @@ class VideoPlayerV3ViewModel(
         } catch (e: kotlinx.coroutines.CancellationException) {
             logger.fDebug { "Skip stale vod play url load: ${e.message}" }
             false
+        } catch (e: VVoucherException) {
+            logger.fWarn { "Risk control v_voucher detected: ${e.vVoucher}" }
+            addLogs("触发风控，正在申请验证…")
+            handleVVoucher(e.vVoucher)
+            false
         } catch (e: Exception) {
             addLogs("加载视频地址失败：${e.localizedMessage}")
             withContext(Dispatchers.Main) {
@@ -1442,6 +1456,93 @@ class VideoPlayerV3ViewModel(
             }
             logger.fException(e) { "Load video failed" }
             false
+        }
+    }
+
+    private suspend fun handleVVoucher(vVoucher: String) {
+        runCatching {
+            val registerResponse = BiliHttpApi.gaiaVgateRegister(
+                vVoucher = vVoucher,
+                sessData = authRepository.sessionData,
+                csrf = authRepository.biliJct
+            ).getResponseData()
+            val token = registerResponse.token
+            val gt = registerResponse.geetest.gt
+            val challenge = registerResponse.geetest.challenge
+            if (token.isBlank() || gt.isBlank() || challenge.isBlank()) {
+                error("gaia_vgate_register 返回数据不完整（可能无法通过 captcha 解除）")
+            }
+            withContext(Dispatchers.Main) {
+                pendingGaiaToken = token
+                geetestGt = gt
+                geetestChallenge = challenge
+                showGeetestDialog = true
+            }
+            addLogs("请完成人机验证")
+        }.onFailure {
+            addLogs("风控验证申请失败：${it.localizedMessage}")
+            withContext(Dispatchers.Main) {
+                errorMessage = "风控验证申请失败：${it.localizedMessage}"
+                loadState = RequestState.Failed
+            }
+            logger.fException(it) { "gaiaVgateRegister failed" }
+        }
+    }
+
+    fun onGeetestResult(challenge: String, validate: String, seccode: String) {
+        val token = pendingGaiaToken ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val validateResponse = BiliHttpApi.gaiaVgateValidate(
+                    token = token,
+                    geetestChallenge = challenge,
+                    validate = validate,
+                    seccode = seccode,
+                    sessData = authRepository.sessionData,
+                    csrf = authRepository.biliJct
+                ).getResponseData()
+                if (validateResponse.isValid != 1) {
+                    error("验证未通过")
+                }
+                val griskId = validateResponse.griskId
+                if (griskId.isBlank()) {
+                    error("grisk_id 为空")
+                }
+                authRepository.gaiaVtoken = griskId
+                withContext(Dispatchers.Main) {
+                    showGeetestDialog = false
+                    pendingGaiaToken = null
+                }
+                addLogs("风控验证通过")
+                logger.fInfo { "Gaia vgate validate success, retrying play url" }
+                withContext(Dispatchers.Main) {
+                    loadPlayUrl(
+                        avid = currentAid,
+                        cid = currentCid,
+                        epid = currentEpid.takeIf { it > 0 },
+                        forceStartPlayback = true
+                    )
+                }
+            }.onFailure {
+                addLogs("风控验证失败：${it.localizedMessage}")
+                withContext(Dispatchers.Main) {
+                    errorMessage = "风控验证失败：${it.localizedMessage}"
+                    loadState = RequestState.Failed
+                    showGeetestDialog = false
+                    pendingGaiaToken = null
+                }
+                logger.fException(it) { "gaiaVgateValidate failed" }
+            }
+        }
+    }
+
+    fun onGeetestCancelled() {
+        showGeetestDialog = false
+        pendingGaiaToken = null
+        errorMessage = "验证已取消"
+        loadState = RequestState.Failed
+        viewModelScope.launch {
+            addLogs("用户取消了风控验证")
         }
     }
 
@@ -1466,6 +1567,8 @@ class VideoPlayerV3ViewModel(
             if (it.needPay || it.hasPlayableVodStreams()) return it
         }
         val primaryFailure = primaryResult.exceptionOrNull()
+        // 风控 v_voucher 需要 Geetest，不走 Web→App 降级掩盖
+        if (primaryFailure is VVoucherException) throw primaryFailure
 
         if (preferApi == ApiType.Web) {
             if (primaryFailure != null) {

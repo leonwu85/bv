@@ -9,6 +9,7 @@ import dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_APP
 import dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_WEB
 import dev.aaa1115910.biliapi.http.entity.BiliResponse
 import dev.aaa1115910.biliapi.http.entity.BiliResponseWithoutData
+import dev.aaa1115910.biliapi.http.entity.VVoucherException
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuPostData
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuResponse
@@ -80,6 +81,8 @@ import dev.aaa1115910.biliapi.http.entity.video.AddCoin
 import dev.aaa1115910.biliapi.http.entity.video.ArchiveRelation
 import dev.aaa1115910.biliapi.http.entity.video.CheckSentCoin
 import dev.aaa1115910.biliapi.http.entity.video.CheckVideoFavoured
+import dev.aaa1115910.biliapi.http.entity.video.GaiaVgateRegisterData
+import dev.aaa1115910.biliapi.http.entity.video.GaiaVgateValidateData
 import dev.aaa1115910.biliapi.http.entity.video.InteractiveEdgeInfo
 import dev.aaa1115910.biliapi.http.entity.video.PlayUrlData
 import dev.aaa1115910.biliapi.http.entity.video.PlayUrlV2Data
@@ -226,7 +229,8 @@ object BiliHttpApi {
         buvid3: String? = null,
         dedeUserIDCkMd5: String? = null,
         biliJct: String? = null,
-        sid: String? = null
+        sid: String? = null,
+        gaiaVtoken: String? = null
     ) {
         val cookieParts = mutableListOf<String>()
         sessData?.takeIf { it.isNotBlank() }?.let { cookieParts.add("SESSDATA=$it") }
@@ -235,8 +239,29 @@ object BiliHttpApi {
         biliJct?.takeIf { it.isNotBlank() }?.let { cookieParts.add("bili_jct=$it") }
         sid?.takeIf { it.isNotBlank() }?.let { cookieParts.add("sid=$it") }
         buvid3?.takeIf { it.isNotBlank() }?.let { cookieParts.add("buvid3=$it") }
+        gaiaVtoken?.takeIf { it.isNotBlank() }?.let { cookieParts.add("x-bili-gaia-vtoken=$it") }
         if (cookieParts.isNotEmpty()) {
             header("Cookie", cookieParts.joinToString(";") + ";")
+        }
+    }
+
+    /**
+     * 检查响应体是否包含风控 v_voucher。
+     *
+     * 当 API 返回 `{"code":0| -352,"data":{"v_voucher":"voucher_xxx"}}` 时，
+     * 表示触发了风控，需要通过 Geetest 验证，此方法会抛出 [VVoucherException]。
+     */
+    private fun checkForVVoucher(bodyText: String) {
+        runCatching {
+            val root = json.parseToJsonElement(bodyText).jsonObject
+            val data = root["data"]?.jsonObject ?: root["result"]?.jsonObject ?: return
+            val vVoucher = data["v_voucher"]?.jsonPrimitive?.contentOrNull
+            if (!vVoucher.isNullOrBlank()) {
+                throw VVoucherException(vVoucher)
+            }
+        }.onFailure {
+            if (it is VVoucherException) throw it
+            // JSON 解析失败不影响正常流程
         }
     }
 
@@ -454,30 +479,38 @@ object BiliHttpApi {
         dedeUserIDCkMd5: String? = null,
         biliJct: String? = null,
         sid: String? = null,
-        tryLook: Boolean = false
-    ): BiliResponse<PlayUrlData> = client.get("/x/player/playurl") {
-        require(av != null || bv != null) { "av and bv cannot be null at the same time" }
-        parameter("avid", av)
-        parameter("bvid", bv)
-        parameter("cid", cid)
-        parameter("qn", qn)
-        parameter("fnval", fnval)
-        parameter("fnver", fnver)
-        parameter("fourk", fourk)
-        parameter("session", session)
-        parameter("otype", otype)
-        parameter("type", type)
-        parameter("platform", platform)
-        if (tryLook) parameter("try_look", 1)
-        appendWebCookie(
-            sessData = sessData,
-            dedeUserID = dedeUserID,
-            buvid3 = buvid3,
-            dedeUserIDCkMd5 = dedeUserIDCkMd5,
-            biliJct = biliJct,
-            sid = sid
-        )
-    }.body()
+        tryLook: Boolean = false,
+        gaiaVtoken: String? = null
+    ): BiliResponse<PlayUrlData> {
+        val response = client.get("/x/player/playurl") {
+            require(av != null || bv != null) { "av and bv cannot be null at the same time" }
+            parameter("avid", av)
+            parameter("bvid", bv)
+            parameter("cid", cid)
+            parameter("qn", qn)
+            parameter("fnval", fnval)
+            parameter("fnver", fnver)
+            parameter("fourk", fourk)
+            parameter("session", session)
+            parameter("otype", otype)
+            parameter("type", type)
+            parameter("platform", platform)
+            if (tryLook) parameter("try_look", 1)
+            gaiaVtoken?.takeIf { it.isNotBlank() }?.let { parameter("gaia_vtoken", it) }
+            appendWebCookie(
+                sessData = sessData,
+                dedeUserID = dedeUserID,
+                buvid3 = buvid3,
+                dedeUserIDCkMd5 = dedeUserIDCkMd5,
+                biliJct = biliJct,
+                sid = sid,
+                gaiaVtoken = gaiaVtoken
+            )
+        }
+        val bodyText = response.bodyAsText()
+        checkForVVoucher(bodyText)
+        return json.decodeFromString(bodyText)
+    }
 
     suspend fun getVideoWbiPlayUrl(
         av: Long? = null,
@@ -493,7 +526,8 @@ object BiliHttpApi {
         dedeUserIDCkMd5: String? = null,
         biliJct: String? = null,
         sid: String? = null,
-        tryLook: Boolean = false
+        tryLook: Boolean = false,
+        gaiaVtoken: String? = null
     ): BiliResponse<PlayUrlData> {
         require(av != null || bv != null) { "av and bv cannot be null at the same time" }
         val params = Parameters.build {
@@ -509,13 +543,14 @@ object BiliHttpApi {
             append("isGaiaAvoided", "true")
             append("web_location", "1315873")
             if (tryLook) append("try_look", "1")
+            gaiaVtoken?.takeIf { it.isNotBlank() }?.let { append("gaia_vtoken", it) }
             append("dm_img_list", "[]")
             append("dm_img_str", randomWbiDmString(minLength = 16, maxLength = 64))
             append("dm_cover_img_str", randomWbiDmString(minLength = 32, maxLength = 128))
             append("dm_img_inter", """{"ds":[],"wh":[0,0,0],"of":[0,0,0]}""")
         }
 
-        return client.get("/x/player/wbi/playurl") {
+        val response = client.get("/x/player/wbi/playurl") {
             params.entries().forEach { (key, values) ->
                 values.forEach { value -> parameter(key, value) }
             }
@@ -525,9 +560,13 @@ object BiliHttpApi {
                 buvid3 = buvid3,
                 dedeUserIDCkMd5 = dedeUserIDCkMd5,
                 biliJct = biliJct,
-                sid = sid
+                sid = sid,
+                gaiaVtoken = gaiaVtoken
             )
-        }.body()
+        }
+        val bodyText = response.bodyAsText()
+        checkForVVoucher(bodyText)
+        return json.decodeFromString(bodyText)
     }
 
     @OptIn(ExperimentalEncodingApi::class)
@@ -608,30 +647,38 @@ object BiliHttpApi {
         fromClient: String? = null,
         sessData: String? = null,
         dedeUserID: Long? = null,
-        buvid3: String? = null
-    ): BiliResponse<PlayUrlData> = client.get("/pgc/player/web/playurl") {
-        require(av != null || bv != null) { "av and bv cannot be null at the same time" }
-        require(epid != null || cid != null) { "epid and cid cannot be null at the same time" }
-        av?.let { parameter("avid", it) }
-        bv?.let { parameter("bvid", it) }
-        epid?.let { parameter("ep_id", it) }
-        cid?.let { parameter("cid", it) }
-        qn?.let { parameter("qn", it) }
-        fnval?.let { parameter("fnval", it) }
-        fnver?.let { parameter("fnver", it) }
-        fourk?.let { parameter("fourk", it) }
-        session?.let { parameter("session", it) }
-        supportMultiAudio?.let { parameter("support_multi_audio", it) }
-        drmTechType?.let { parameter("drm_tech_type", it) }
-        fromClient?.let { parameter("from_client", it) }
-        val cookieParts = mutableListOf<String>()
-        sessData?.let { cookieParts.add("SESSDATA=$it") }
-        dedeUserID?.let { cookieParts.add("DedeUserID=$it") }
-        buvid3?.let { cookieParts.add("buvid3=$it") }
-        if (cookieParts.isNotEmpty()) header("Cookie", cookieParts.joinToString(";"))
-        //必须得加上 referer 才能通过账号身份验证
-        header("referer", "https://www.bilibili.com")
-    }.body()
+        buvid3: String? = null,
+        gaiaVtoken: String? = null
+    ): BiliResponse<PlayUrlData> {
+        val response = client.get("/pgc/player/web/playurl") {
+            require(av != null || bv != null) { "av and bv cannot be null at the same time" }
+            require(epid != null || cid != null) { "epid and cid cannot be null at the same time" }
+            av?.let { parameter("avid", it) }
+            bv?.let { parameter("bvid", it) }
+            epid?.let { parameter("ep_id", it) }
+            cid?.let { parameter("cid", it) }
+            qn?.let { parameter("qn", it) }
+            fnval?.let { parameter("fnval", it) }
+            fnver?.let { parameter("fnver", it) }
+            fourk?.let { parameter("fourk", it) }
+            session?.let { parameter("session", it) }
+            supportMultiAudio?.let { parameter("support_multi_audio", it) }
+            drmTechType?.let { parameter("drm_tech_type", it) }
+            fromClient?.let { parameter("from_client", it) }
+            gaiaVtoken?.takeIf { it.isNotBlank() }?.let { parameter("gaia_vtoken", it) }
+            val cookieParts = mutableListOf<String>()
+            sessData?.let { cookieParts.add("SESSDATA=$it") }
+            dedeUserID?.let { cookieParts.add("DedeUserID=$it") }
+            buvid3?.let { cookieParts.add("buvid3=$it") }
+            gaiaVtoken?.takeIf { it.isNotBlank() }?.let { cookieParts.add("x-bili-gaia-vtoken=$it") }
+            if (cookieParts.isNotEmpty()) header("Cookie", cookieParts.joinToString(";"))
+            //必须得加上 referer 才能通过账号身份验证
+            header("referer", "https://www.bilibili.com")
+        }
+        val bodyText = response.bodyAsText()
+        checkForVVoucher(bodyText)
+        return json.decodeFromString(bodyText)
+    }
 
     /**
      * 获取剧集视频流 v2
@@ -651,34 +698,90 @@ object BiliHttpApi {
         fromClient: String? = null,
         sessData: String? = null,
         buvid3: String? = null,
-        tryLook: Boolean = false
-    ): BiliResponse<PlayUrlV2Data> = client.get("/pgc/player/web/v2/playurl") {
-        av?.let { parameter("avid", it) }
-        bv?.let { parameter("bvid", it) }
-        epid?.let { parameter("ep_id", it) }
-        cid?.let { parameter("cid", it) }
-        qn?.let { parameter("qn", it) }
-        fnval?.let { parameter("fnval", it) }
-        fnver?.let { parameter("fnver", it) }
-        fourk?.let { parameter("fourk", it) }
-        session?.let { parameter("session", it) }
-        supportMultiAudio?.let { parameter("support_multi_audio", it) }
-        drmTechType?.let { parameter("drm_tech_type", it) }
-        fromClient?.let { parameter("from_client", it) }
-        if (tryLook) parameter("try_look", 1)
-        val cookieParts = mutableListOf<String>()
-        sessData?.let { cookieParts.add("SESSDATA=$it") }
-        buvid3?.let { cookieParts.add("buvid3=$it") }
-        if (cookieParts.isNotEmpty()) {
-            val cookieString = cookieParts.joinToString(";")
-            println("PGC v2 Cookie: $cookieString")
-            header("Cookie", cookieString)
-        } else {
-            println("PGC v2 Cookie is empty! sessData=$sessData, buvid3=$buvid3")
+        tryLook: Boolean = false,
+        gaiaVtoken: String? = null
+    ): BiliResponse<PlayUrlV2Data> {
+        val response = client.get("/pgc/player/web/v2/playurl") {
+            av?.let { parameter("avid", it) }
+            bv?.let { parameter("bvid", it) }
+            epid?.let { parameter("ep_id", it) }
+            cid?.let { parameter("cid", it) }
+            qn?.let { parameter("qn", it) }
+            fnval?.let { parameter("fnval", it) }
+            fnver?.let { parameter("fnver", it) }
+            fourk?.let { parameter("fourk", it) }
+            session?.let { parameter("session", it) }
+            supportMultiAudio?.let { parameter("support_multi_audio", it) }
+            drmTechType?.let { parameter("drm_tech_type", it) }
+            fromClient?.let { parameter("from_client", it) }
+            if (tryLook) parameter("try_look", 1)
+            gaiaVtoken?.takeIf { it.isNotBlank() }?.let { parameter("gaia_vtoken", it) }
+            val cookieParts = mutableListOf<String>()
+            sessData?.let { cookieParts.add("SESSDATA=$it") }
+            buvid3?.let { cookieParts.add("buvid3=$it") }
+            gaiaVtoken?.takeIf { it.isNotBlank() }?.let { cookieParts.add("x-bili-gaia-vtoken=$it") }
+            if (cookieParts.isNotEmpty()) {
+                header("Cookie", cookieParts.joinToString(";"))
+            }
+            //必须得加上 referer 才能通过账号身份验证
+            header("referer", "https://www.bilibili.com")
         }
-        //必须得加上 referer 才能通过账号身份验证
-        header("referer", "https://www.bilibili.com")
-    }.body()
+        val bodyText = response.bodyAsText()
+        checkForVVoucher(bodyText)
+        return json.decodeFromString(bodyText)
+    }
+
+    /**
+     * 风控验证注册：使用 v_voucher 申请 Geetest 参数。
+     */
+    suspend fun gaiaVgateRegister(
+        vVoucher: String,
+        sessData: String? = null,
+        csrf: String? = null
+    ): BiliResponse<GaiaVgateRegisterData> {
+        val response = client.post("/x/gaia-vgate/v1/register") {
+            csrf?.let { parameter("csrf", it) }
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        append("v_voucher", vVoucher)
+                    }
+                )
+            )
+            sessData?.let { header("Cookie", "SESSDATA=$it;") }
+            header("referer", "https://www.bilibili.com")
+        }
+        return response.body()
+    }
+
+    /**
+     * 风控验证校验：提交 Geetest 结果，获取 grisk_id 作为 gaia_vtoken。
+     */
+    suspend fun gaiaVgateValidate(
+        token: String,
+        geetestChallenge: String,
+        validate: String,
+        seccode: String,
+        sessData: String? = null,
+        csrf: String? = null
+    ): BiliResponse<GaiaVgateValidateData> {
+        val response = client.post("/x/gaia-vgate/v1/validate") {
+            csrf?.let { parameter("csrf", it) }
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        append("token", token)
+                        append("challenge", geetestChallenge)
+                        append("validate", validate)
+                        append("seccode", seccode)
+                    }
+                )
+            )
+            sessData?.let { header("Cookie", "SESSDATA=$it;") }
+            header("referer", "https://www.bilibili.com")
+        }
+        return response.body()
+    }
 
     /**
      * 通过[cid]获取视频弹幕 (旧接口，已废弃)
