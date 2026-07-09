@@ -92,10 +92,12 @@ abstract class UgcViewModel(
     /**
      * 延迟加载数据，如果在延迟期间被取消则不加载
      */
-    fun loadDataWithDelay(delayMs: Long = 300L) {
+    fun loadDataWithDelay(delayMs: Long = 0L) {
         loadJob?.cancel()
         loadJob = viewModelScope.launch(Dispatchers.IO) {
-            delay(delayMs)
+            if (delayMs > 0L) {
+                delay(delayMs)
+            }
             if (ugcItems.isEmpty()) {
                 initUgcRegionData()
             }

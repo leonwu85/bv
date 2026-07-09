@@ -77,7 +77,6 @@ import dev.aaa1115910.bv.util.fWarn
 import dev.aaa1115910.bv.util.isDpadLeft
 import dev.aaa1115910.bv.util.isDpadRight
 import dev.aaa1115910.bv.util.isKeyDown
-import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.viewmodel.UserViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
@@ -118,10 +117,8 @@ fun UserInfoScreen(
             }.onFailure {
                 logger.fWarn { "Load followed users count failed: ${it.stackTraceToString()}" }
                 when (it) {
+                    // -101 已由 BiliAuthFailureHandler 统一自动登出并提示
                     is AuthFailureException -> {
-                        withContext(Dispatchers.Main) {
-                            context.getString(R.string.exception_auth_failure).toast(context)
-                        }
                         logger.fInfo { "User auth failure" }
                     }
 

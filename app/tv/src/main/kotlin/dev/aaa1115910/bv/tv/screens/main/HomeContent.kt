@@ -1,15 +1,6 @@
 package dev.aaa1115910.bv.tv.screens.main
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
-import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -18,6 +9,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -32,6 +24,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
+import dev.aaa1115910.bv.entity.DynamicPageStyle
+import dev.aaa1115910.bv.entity.DynamicTabType
 import dev.aaa1115910.bv.tv.component.HomeTopNavItem
 import dev.aaa1115910.bv.tv.component.TopNav
 import dev.aaa1115910.bv.tv.screens.main.home.DynamicsScreen
@@ -42,6 +36,9 @@ import dev.aaa1115910.bv.tv.screens.user.FavoriteScreen
 import dev.aaa1115910.bv.tv.screens.user.FollowingSeasonScreen
 import dev.aaa1115910.bv.tv.screens.user.HistoryScreen
 import dev.aaa1115910.bv.tv.screens.user.ToViewScreen
+import dev.aaa1115910.bv.tv.util.KeepAlivePages
+import dev.aaa1115910.bv.tv.util.TOP_NAV_PRELOAD_STEP
+import dev.aaa1115910.bv.tv.util.adjacentNavItems
 import dev.aaa1115910.bv.tv.util.homeNavItemsFlow
 import dev.aaa1115910.bv.tv.util.parseHomeNavItemsOrder
 import dev.aaa1115910.bv.util.Prefs
@@ -49,7 +46,6 @@ import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.requestFocus
 import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.viewmodel.UserViewModel
-import dev.aaa1115910.bv.entity.DynamicPageStyle
 import dev.aaa1115910.bv.viewmodel.home.DynamicViewModel
 import dev.aaa1115910.bv.viewmodel.home.PopularViewModel
 import dev.aaa1115910.bv.viewmodel.home.RecommendViewModel
@@ -88,7 +84,7 @@ fun HomeContent(
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger("HomeContent")
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
-    val navigationFocusDelay = if (enableMainUiAnimation) 100L else 0L
+    val navigationFocusDelay = if (enableMainUiAnimation) 80L else 0L
 
     val recommendState = rememberLazyGridState()
     val popularState = rememberLazyGridState()
@@ -104,8 +100,8 @@ fun HomeContent(
 
     // 记住动态页子 Tab 的选中索引，默认值从设置中读取
     var dynamicSubTabIndex by remember { mutableIntStateOf(Prefs.dynamicDefaultTab.ordinal) }
-    
-    // 用于管理延迟加载的Job
+
+    // 用于管理延迟加载的 Job（仅在快速连切时取消上一次）
     var loadJob by remember { mutableStateOf<Job?>(null) }
 
     // 根据设置获取过滤和排序后的导航项列表
@@ -145,49 +141,80 @@ fun HomeContent(
         }
     }
 
-    fun initData () {
-        scope.launch {
-            when (selectedTab) {
-                HomeTopNavItem.Recommend -> {
-                    if (recommendViewModel.recommendVideoList.isEmpty()) {
-                        recommendViewModel.loadMore()
+    suspend fun initDataFor(tab: HomeTopNavItem) {
+        when (tab) {
+            HomeTopNavItem.Recommend -> {
+                if (recommendViewModel.recommendVideoList.isEmpty()) {
+                    recommendViewModel.loadMore()
+                }
+            }
+
+            HomeTopNavItem.Popular -> {
+                if (popularViewModel.popularVideoList.isEmpty()) {
+                    popularViewModel.loadMore()
+                }
+            }
+
+            HomeTopNavItem.Dynamics -> {
+                if (!userViewModel.isLogin) return
+                if (Prefs.dynamicPageStyle == DynamicPageStyle.New) {
+                    // 与 NewDynamicsScreen 四个子 Tab 一致（不含 Up）
+                    val subTabs = listOf(
+                        DynamicTabType.All,
+                        DynamicTabType.Video,
+                        DynamicTabType.Pgc,
+                        DynamicTabType.Article,
+                    )
+                    val defaultType = Prefs.dynamicDefaultTab.takeIf { it in subTabs }
+                        ?: DynamicTabType.All
+                    val targets = adjacentNavItems(
+                        items = subTabs,
+                        current = defaultType,
+                        step = TOP_NAV_PRELOAD_STEP,
+                    )
+                    // 默认子 Tab 优先，再预取邻居；ensureFirstPage 内部互斥+空列表判断，避免与 NewDynamics 双拉跳页
+                    val ordered = listOf(defaultType) + targets.filter { it != defaultType }
+                    for (type in ordered) {
+                        dynamicViewModel.ensureFirstPage(type)
                     }
+                } else {
+                    dynamicViewModel.ensureFirstPage(DynamicTabType.Video)
                 }
+            }
 
-                HomeTopNavItem.Popular -> {
-                    if (popularViewModel.popularVideoList.isEmpty()) {
-                        popularViewModel.loadMore()
-                    }
+            HomeTopNavItem.Favorite -> {
+                if (userViewModel.isLogin &&
+                    favouriteViewModel.favoriteFolderMetadataList.isEmpty() &&
+                    !favouriteViewModel.updatingFolders
+                ) {
+                    favouriteViewModel.updateFoldersInfo()
                 }
+            }
 
-                HomeTopNavItem.Dynamics -> {
-                    if (dynamicViewModel.dynamicVideoList.isEmpty()) {
-                        dynamicViewModel.loadMoreVideo()
-                    }
+            HomeTopNavItem.FollowingSeason -> {
+                if (userViewModel.isLogin &&
+                    followingSeasonViewModel.followingSeasons.isEmpty() &&
+                    !followingSeasonViewModel.updating
+                ) {
+                    followingSeasonViewModel.loadMore()
                 }
+            }
 
-                HomeTopNavItem.Favorite -> {
-//                    if (favouriteViewModel.favorites.isEmpty() && userViewModel.isLogin) {
-//                        favouriteViewModel.updateFoldersInfo()
-//                    }
+            HomeTopNavItem.History -> {
+                if (userViewModel.isLogin &&
+                    historyViewModel.histories.isEmpty() &&
+                    !historyViewModel.updating
+                ) {
+                    historyViewModel.update()
                 }
+            }
 
-                HomeTopNavItem.FollowingSeason -> {
-//                    if (followingSeasonViewModel.followingSeasons.isEmpty() && userViewModel.isLogin) {
-//                        followingSeasonViewModel.loadMore()
-//                    }
-                }
-
-                HomeTopNavItem.History -> {
-//                    if (historyViewModel.histories.isEmpty() && userViewModel.isLogin) {
-//                        historyViewModel.update()
-//                    }
-                }
-
-                HomeTopNavItem.ToView -> {
-//                    if (toViewViewModel.histories.isEmpty() && userViewModel.isLogin) {
-//                        toViewViewModel.update()
-//                    }
+            HomeTopNavItem.ToView -> {
+                if (userViewModel.isLogin &&
+                    toViewViewModel.histories.isEmpty() &&
+                    !toViewViewModel.updating
+                ) {
+                    toViewViewModel.update()
                 }
             }
         }
@@ -197,14 +224,22 @@ fun HomeContent(
         if (selectedTab.ordinal != selectedTabOrdinal) {
             onSelectedTabChanged(selectedTab.ordinal)
         }
+    }
 
-        // 取消之前的延迟加载
+    // 当前页 + 左右各 TOP_NAV_PRELOAD_STEP 页预加载，避免首次切入空白等待
+    LaunchedEffect(selectedTab, effectiveNavItems, userViewModel.isLogin) {
         loadJob?.cancel()
-
-        // 开始新的延迟加载
+        val targets = adjacentNavItems(
+            items = effectiveNavItems,
+            current = selectedTab,
+            step = TOP_NAV_PRELOAD_STEP,
+        )
         loadJob = scope.launch(Dispatchers.IO) {
-            delay(300L)
-            initData()
+            // 当前页优先
+            initDataFor(selectedTab)
+            targets.filter { it != selectedTab }.forEach { tab ->
+                launch { initDataFor(tab) }
+            }
         }
     }
 
@@ -220,10 +255,6 @@ fun HomeContent(
                 firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0
             }
         }
-    }
-
-    LaunchedEffect(Unit) {
-        initData()
     }
 
     LaunchedEffect(selectedTab, focusedTopNavItem, focusLayer, userViewModel.isLogin, pendingDynamicSubTabFocus) {
@@ -294,7 +325,7 @@ fun HomeContent(
                     loadJob?.cancel()
                     val homeNav = nav as HomeTopNavItem
                     scrollToTabTop(homeNav)
-                    
+
                     when (homeNav) {
                         HomeTopNavItem.Recommend -> {
                             logger.fInfo { "clear recommend data" }
@@ -365,24 +396,13 @@ fun HomeContent(
                     }
                 }
         ) {
-            AnimatedContent(
-                targetState = selectedTab,
-                label = "home animated content",
-                transitionSpec = {
-                    if (!enableMainUiAnimation) {
-                        EnterTransition.None togetherWith ExitTransition.None
-                    } else {
-                        val coefficient = 10
-                        if (targetState.ordinal < initialState.ordinal) {
-                            fadeIn() + slideInHorizontally { -it / coefficient } togetherWith
-                                    fadeOut() + slideOutHorizontally { it / coefficient }
-                        } else {
-                            fadeIn() + slideInHorizontally { it / coefficient } togetherWith
-                                    fadeOut() + slideOutHorizontally { -it / coefficient }
-                        }
-                    }
-                }
-            ) { screen ->
+            KeepAlivePages(
+                current = selectedTab,
+                maxKeep = 3,
+                enableAnimation = enableMainUiAnimation,
+                orderedItems = effectiveNavItems,
+                preloadStep = TOP_NAV_PRELOAD_STEP,
+            ) { screen, _ ->
                 when (screen) {
                     HomeTopNavItem.Recommend -> RecommendScreen(lazyGridState = recommendState)
                     HomeTopNavItem.Popular -> PopularScreen(lazyGridState = popularState)
@@ -398,7 +418,6 @@ fun HomeContent(
                                         navFocusRequester.requestFocus(scope)
                                     },
                                     onLeftKeyEvent = {
-                                        // 在子 Tab 最左侧按左键时，跳转到父级上一个 Tab
                                         val currentIndex = effectiveNavItems.indexOf(selectedTab)
                                         if (currentIndex > 0) {
                                             val targetTab = effectiveNavItems[currentIndex - 1]
@@ -411,13 +430,11 @@ fun HomeContent(
                                         }
                                     },
                                     onRightKeyEvent = {
-                                        // 在子 Tab 最右侧按右键时，跳转到父级下一个 Tab
                                         val currentIndex = effectiveNavItems.indexOf(selectedTab)
                                         if (currentIndex < effectiveNavItems.lastIndex) {
                                             val targetTab = effectiveNavItems[currentIndex + 1]
                                             pendingDynamicSubTabFocus = false
                                             onSelectedTabChanged(targetTab.ordinal)
-                                            // 延迟请求焦点，确保在 AnimatedContent 切换后焦点正确设置
                                             scope.launch {
                                                 delay(navigationFocusDelay)
                                                 topNavFocusSelectedToken++

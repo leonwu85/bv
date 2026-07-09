@@ -100,9 +100,9 @@ fun FollowingSeasonScreen(
     }
 
     LaunchedEffect(Unit) {
-        if (followingSeasons.isEmpty()) {
-            logger.fInfo { "Start update search result because filter updated" }
-            followingSeasonViewModel.clearData()
+        // 预加载可能已写入数据：仅空且未加载时请求，禁止 clearData 造成重复分页
+        if (followingSeasons.isEmpty() && !followingSeasonViewModel.updating) {
+            logger.fInfo { "Start load following seasons" }
             followingSeasonViewModel.loadMore()
         }
     }
@@ -191,7 +191,10 @@ fun FollowingSeasonScreen(
                 verticalArrangement = Arrangement.spacedBy(24.dp),
                 horizontalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                itemsIndexed(items = followingSeasons) { index, followingSeason ->
+                itemsIndexed(
+                    items = followingSeasons,
+                    key = { index, item -> "${item.seasonId}#$index" }
+                ) { index, followingSeason ->
                     SeasonCard(
                         data = SeasonCardData(
                             seasonId = followingSeason.seasonId,
@@ -201,8 +204,10 @@ fun FollowingSeasonScreen(
                         ),
                         onFocus = {
                             currentIndex = index
-                            if (index + 12 > followingSeasons.size) {
-                                println("load more by focus")
+                            if (index + 12 > followingSeasons.size &&
+                                !followingSeasonViewModel.noMore &&
+                                !followingSeasonViewModel.updating
+                            ) {
                                 followingSeasonViewModel.loadMore()
                             }
                         },

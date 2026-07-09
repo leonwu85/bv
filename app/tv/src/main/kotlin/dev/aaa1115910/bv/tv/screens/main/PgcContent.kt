@@ -1,14 +1,6 @@
 package dev.aaa1115910.bv.tv.screens.main
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -36,6 +28,8 @@ import dev.aaa1115910.bv.tv.screens.main.pgc.GuoChuangContent
 import dev.aaa1115910.bv.tv.screens.main.pgc.MovieContent
 import dev.aaa1115910.bv.tv.screens.main.pgc.TvContent
 import dev.aaa1115910.bv.tv.screens.main.pgc.VarietyContent
+import dev.aaa1115910.bv.tv.util.KeepAlivePages
+import dev.aaa1115910.bv.tv.util.TOP_NAV_PRELOAD_STEP
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.requestFocus
@@ -116,13 +110,7 @@ fun PgcContent(
         }
     }
 
-    //启动时加载当前选中tab的数据
-    LaunchedEffect(selectedTab, currentViewModel) {
-        if (currentViewModel.feedItems.isEmpty()) {
-            logger.fInfo { "加载 $selectedTab 数据" }
-            currentViewModel.init()
-        }
-    }
+    // 当前页加载由 KeepAlive 内容区统一处理（含邻居预加载）
 
     BackHandler(focusLayer != null) {
         logger.fInfo { "onFocusBackToNav" }
@@ -131,17 +119,6 @@ fun PgcContent(
             return@BackHandler
         }
         navFocusRequester.requestFocus(scope)
-        // // scroll to top
-        // scope.launch(Dispatchers.Main) {
-        //     when (selectedTab) {
-        //         PgcTopNavItem.Anime -> animeState.animateScrollToItem(0)
-        //         PgcTopNavItem.GuoChuang -> guoChuangState.animateScrollToItem(0)
-        //         PgcTopNavItem.Movie -> movieState.animateScrollToItem(0)
-        //         PgcTopNavItem.Documentary -> documentaryState.animateScrollToItem(0)
-        //         PgcTopNavItem.Tv -> tvState.animateScrollToItem(0)
-        //         PgcTopNavItem.Variety -> varietyState.animateScrollToItem(0)
-        //     }
-        // }
     }
 
     Scaffold(
@@ -170,7 +147,6 @@ fun PgcContent(
                     }
                 },
                 onLeftKeyEvent = {
-                    // 顶部栏最左侧按左键时，跳转到左侧导航栏
                     onRequestDrawerFocus()
                 },
                 onDownKeyEvent = {
@@ -192,24 +168,20 @@ fun PgcContent(
                     }
                 }
         ) {
-            AnimatedContent(
-                targetState = selectedTab,
-                label = "pgc animated content",
-                transitionSpec = {
-                    if (!enableMainUiAnimation) {
-                        EnterTransition.None togetherWith ExitTransition.None
-                    } else {
-                        val coefficient = 10
-                        if (targetState.ordinal < initialState.ordinal) {
-                            fadeIn() + slideInHorizontally { -it / coefficient } togetherWith
-                                    fadeOut() + slideOutHorizontally { it / coefficient }
-                        } else {
-                            fadeIn() + slideInHorizontally { it / coefficient } togetherWith
-                                    fadeOut() + slideOutHorizontally { -it / coefficient }
-                        }
+            KeepAlivePages(
+                current = selectedTab,
+                maxKeep = 3,
+                enableAnimation = enableMainUiAnimation,
+                orderedItems = PgcTopNavItem.entries,
+                preloadStep = TOP_NAV_PRELOAD_STEP,
+            ) { screen, _ ->
+                val screenViewModel = rememberPgcViewModel(screen)
+                LaunchedEffect(screen, screenViewModel) {
+                    if (screenViewModel.feedItems.isEmpty()) {
+                        logger.fInfo { "预加载/加载 $screen 数据" }
+                        screenViewModel.init()
                     }
                 }
-            ) { screen ->
                 when (screen) {
                     PgcTopNavItem.Anime -> AnimeContent(
                         lazyListState = animeState,

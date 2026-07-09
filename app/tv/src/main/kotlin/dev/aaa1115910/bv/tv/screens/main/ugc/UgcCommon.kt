@@ -23,13 +23,13 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -55,6 +55,8 @@ import dev.aaa1115910.bv.viewmodel.ugc.UgcViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -66,31 +68,36 @@ fun UgcRegionScaffold(
     childRegionButtons: (@Composable () -> Unit)? = null
 ) {
     val context = LocalContext.current
-    var currentFocusedIndex by remember { mutableIntStateOf(0) }
-    val shouldLoadMore by remember {
-        derivedStateOf { !ugcViewModel.ugcItems.isEmpty() && currentFocusedIndex + 12 > ugcViewModel.ugcItems.size }
-    }
+    val focusedIndexState = remember { mutableIntStateOf(0) }
 
-    val onLongClickVideo: (UgcItem) -> Unit = { ugcItem ->
-        UpInfoActivity.actionStart(
-            context,
-            mid = ugcItem.authorId,
-            name = ugcItem.author,
-            face = ugcItem.authorFace
-        )
-    }
-
-    LaunchedEffect(shouldLoadMore) {
-        if (shouldLoadMore) {
-            withContext(Dispatchers.IO) {
-                ugcViewModel.loadMore()
-            }
+    val onLongClickVideo: (UgcItem) -> Unit = remember(context) {
+        { ugcItem ->
+            UpInfoActivity.actionStart(
+                context,
+                mid = ugcItem.authorId,
+                name = ugcItem.author,
+                face = ugcItem.authorFace
+            )
         }
+    }
+
+    val ugcItems = ugcViewModel.ugcItems
+    LaunchedEffect(ugcItems.size) {
+        snapshotFlow { focusedIndexState.intValue }
+            .map { index -> ugcItems.isNotEmpty() && index + 12 > ugcItems.size }
+            .distinctUntilChanged()
+            .collect { shouldLoadMore ->
+                if (shouldLoadMore) {
+                    withContext(Dispatchers.IO) {
+                        ugcViewModel.loadMore()
+                    }
+                }
+            }
     }
 
     val padding = dimensionResource(R.dimen.grid_padding) / 2
     val spacedBy = dimensionResource(R.dimen.grid_spacedBy) / 2
-    val gridColumns = Prefs.gridColumns
+    val gridColumns = remember { Prefs.gridColumns }
     ProvideListBringIntoViewSpec {
         LazyVerticalGrid(
             modifier = modifier.fillMaxSize(),
@@ -102,10 +109,13 @@ fun UgcRegionScaffold(
         ) {
             // 轮播图组件
             if (ugcViewModel.showCarousel && ugcViewModel.carouselItems.isNotEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
+                item(
+                    key = "carousel",
+                    span = { GridItemSpan(maxLineSpan) },
+                    contentType = "carousel"
+                ) {
                     UgcCarousel(
-                        modifier = Modifier
-                            .fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(),
                         data = ugcViewModel.carouselItems,
                         onClick = { item ->
                             VideoInfoActivity.actionStart(
@@ -117,14 +127,11 @@ fun UgcRegionScaffold(
                 }
             }
 
-            // 子区域按钮
-            // if (childRegionButtons != null) {
-            //     item(span = { GridItemSpan(maxLineSpan) }) {
-            //         childRegionButtons()
-            //     }
-            // }
-
-            itemsIndexed(ugcViewModel.ugcItems) { index, item ->
+            itemsIndexed(
+                items = ugcItems,
+                key = { index, item -> "${item.aid}#$index" },
+                contentType = { _, _ -> "video_card" }
+            ) { index, item ->
                 SmallVideoCard(
                     data = remember(item.aid, item.isChargingArc, item.chargingArcBadge) {
                         VideoCardData(
@@ -142,13 +149,17 @@ fun UgcRegionScaffold(
                         )
                     },
                     onClick = { VideoInfoActivity.actionStart(context, item.aid) },
-                    onLongClick = {onLongClickVideo(item) },
-                    onFocus = { currentFocusedIndex = index }
+                    onLongClick = { onLongClickVideo(item) },
+                    onFocus = { focusedIndexState.intValue = index }
                 )
             }
 
             if (ugcViewModel.updating) {
-                item(span = { GridItemSpan(maxLineSpan) }) {    // 网格里占整行
+                item(
+                    key = "loading",
+                    span = { GridItemSpan(maxLineSpan) },
+                    contentType = "loading"
+                ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()

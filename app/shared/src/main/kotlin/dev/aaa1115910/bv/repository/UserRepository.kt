@@ -8,6 +8,7 @@ import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.http.BiliPassportHttpApi
 import dev.aaa1115910.biliapi.repositories.AuthRepository
 import dev.aaa1115910.bv.BVApp
+import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.dao.AppDatabase
 import dev.aaa1115910.bv.entity.AuthData
 import dev.aaa1115910.bv.entity.db.UserDB
@@ -120,10 +121,12 @@ class UserRepository(
 
     suspend fun logoutOnAuthFailure(reason: String) {
         authFailureLogoutMutex.withLock {
+            // 未登录状态或已完成登出时忽略，避免并发 -101 重复弹窗/清数据
             if (!isLogin && !Prefs.isLogin) return
             logger.info { "Auth failure detected, auto logout: $reason" }
             withContext(Dispatchers.Main) {
-                "账号验证异常，需要重新登录".toast(BVApp.context)
+                BVApp.context.getString(R.string.exception_auth_failure)
+                    .toast(BVApp.context)
             }
             logout()
         }

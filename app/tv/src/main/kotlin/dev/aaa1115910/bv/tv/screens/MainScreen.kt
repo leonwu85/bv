@@ -3,14 +3,6 @@ package dev.aaa1115910.bv.tv.screens
 import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,6 +43,7 @@ import dev.aaa1115910.bv.tv.screens.main.UgcContent
 import dev.aaa1115910.bv.tv.screens.main.UserContent
 import dev.aaa1115910.bv.tv.component.update.TvAutoUpdateTip
 import dev.aaa1115910.bv.tv.screens.search.SearchInputScreen
+import dev.aaa1115910.bv.tv.util.KeepAlivePages
 import dev.aaa1115910.bv.tv.util.drawerNavItemsFlow
 import dev.aaa1115910.bv.tv.util.parseDrawerItemsOrder
 import dev.aaa1115910.bv.update.AutoUpdateChecker
@@ -151,18 +144,19 @@ fun MainScreen(
     }
 
     val handleBack = {
-        val currentTime = System.currentTimeMillis()
-        if (currentTime - lastPressBack < 1500) {
+        val now = System.currentTimeMillis()
+        if (now - lastPressBack < 1500) {
             logger.fInfo { "Exiting Bv Video" }
             (context as Activity).finish()
         } else {
-            lastPressBack = currentTime
+            lastPressBack = now
             R.string.home_press_back_again_to_exit.toast(context)
         }
     }
 
     suspend fun requestContentFocusWithRetry(item: DrawerItem): Boolean {
-        repeat(4) {
+        // keep-alive 后内容常已在 composition 中，1~2 帧即可获焦
+        repeat(2) {
             if (requestContentFocus(item)) return true
             withFrameNanos { }
         }
@@ -275,28 +269,15 @@ fun MainScreen(
                 )
             }
 
-            // Right side - NavHost content
-            AnimatedContent(
+            // Right side - keep-alive 内容，避免抽屉切换整页销毁重建
+            KeepAlivePages(
+                current = selectedDrawerItem,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(start = 72.dp),
-                targetState = selectedDrawerItem,
-                label = "main animated content",
-                transitionSpec = {
-                    if (!enableMainUiAnimation) {
-                        EnterTransition.None togetherWith ExitTransition.None
-                    } else {
-                        val coefficient = 20
-                        if (targetState.ordinal < initialState.ordinal) {
-                            slideInVertically { -it / coefficient } togetherWith
-                                    fadeOut(animationSpec = tween(200)) + slideOutVertically { it / coefficient }
-                        } else {
-                            slideInVertically { it / coefficient } togetherWith
-                                    fadeOut(animationSpec = tween(200)) + slideOutVertically { -it / coefficient }
-                        }
-                    }
-                }
-            ) { screen ->
+                maxKeep = 3,
+                enableAnimation = enableMainUiAnimation
+            ) { screen, _ ->
                 when (screen) {
                     DrawerItem.User -> UserContent(
                         navFocusRequester = userFocusRequester,

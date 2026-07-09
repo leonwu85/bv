@@ -2,11 +2,9 @@ package dev.aaa1115910.bv.tv.component.videocard
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -29,10 +27,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -44,12 +47,12 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.tv.component.UpIcon
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.ImageSize
-import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.resizedImageUrl
 
 private val InteractiveBadgeColor = Color(0xFFFFD54F)
@@ -67,7 +70,15 @@ fun SmallVideoCard(
     initialFocus: Boolean = false
 ) {
     var hasFocus by remember { mutableStateOf(initialFocus) }
-
+    val shape = MaterialTheme.shapes.medium
+    val focusBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+    val focusFillColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f)
+    val density = LocalDensity.current
+    val borderWidthPx = with(density) { 2.dp.toPx() }
+    val cornerRadiusPx = with(density) {
+        // medium shape 通常为圆角；取近似值绘制焦点框，避免焦点切换时改 Modifier 触发 relayout
+        12.dp.toPx()
+    }
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -76,33 +87,35 @@ fun SmallVideoCard(
                 onFocusStateChanged(hasFocus)
                 if (hasFocus) onFocus()
             }
-            .ifElse(
-                hasFocus,
-                Modifier.border(
-                    width = 2.dp,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                    shape = MaterialTheme.shapes.medium
-                )
-            ),
+            // 用 draw 画焦点框，避免 border Modifier 增删导致 measure/layout
+            .drawWithContent {
+                drawContent()
+                if (hasFocus) {
+                    drawRoundRect(
+                        color = focusBorderColor,
+                        cornerRadius = CornerRadius(cornerRadiusPx),
+                        style = Stroke(width = borderWidthPx)
+                    )
+                }
+            },
         onClick = onClick,
         onLongClick = onLongClick,
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
-            focusedContainerColor = if (hasFocus) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f) else Color.Transparent,
-            pressedContainerColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f)
+            focusedContainerColor = if (hasFocus) focusFillColor else Color.Transparent,
+            pressedContainerColor = focusFillColor
         ),
-        shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.medium),
+        shape = ClickableSurfaceDefaults.shape(shape = shape),
         scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1f)
     ) {
         Box {
             Column(
-                modifier = modifier
+                modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 3.dp, start = 3.dp, end = 3.dp),
             ) {
                 CardCover(
-                    modifier = Modifier
-                        .clip(MaterialTheme.shapes.medium),
+                    modifier = Modifier.clip(shape),
                     cover = data.cover,
                     play = data.playString,
                     danmaku = data.danmakuString,
@@ -177,17 +190,27 @@ fun CardCover(
     time: String,
     badges: List<String> = emptyList()
 ) {
-    BoxWithConstraints(
+    val context = LocalContext.current
+    // TV 网格列宽通常 >160dp，去掉 BoxWithConstraints 避免每张卡多一轮 measure
+    val showInfo = play.isNotBlank() || danmaku.isNotBlank()
+    val imageModel = remember(cover, context) {
+        ImageRequest.Builder(context)
+            .data(cover.resizedImageUrl(ImageSize.SmallVideoCardCover))
+            // 与远端 640x400 裁剪尺寸对齐，降低解码/绑图成本
+            .size(640, 400)
+            .crossfade(false)
+            .build()
+    }
+
+    Box(
         modifier = modifier,
         contentAlignment = Alignment.BottomCenter
     ) {
-        val showInfo = maxWidth > 160.dp
-
         AsyncImage(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f),
-            model = cover.resizedImageUrl(ImageSize.SmallVideoCardCover),
+            model = imageModel,
             contentDescription = null,
             contentScale = ContentScale.Crop
         )
@@ -254,7 +277,6 @@ fun CardCover(
                 )
             }
         }
-        // 只有需要显示时才创建阴影和信息组件
         if (showInfo) {
             Box(
                 modifier = Modifier

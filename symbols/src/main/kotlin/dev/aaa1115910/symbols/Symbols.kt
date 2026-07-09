@@ -1,24 +1,22 @@
 package dev.aaa1115910.symbols
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import me.ks.chan.material.symbols.annotation.MaterialSymbol
-import me.ks.chan.material.symbols.annotation.MaterialSymbolStyle
-import me.ks.chan.material.symbols.annotation.Style
 
-@MaterialSymbol
+/**
+ * 字幕相关 Material Symbol 图标接口。
+ *
+ * 历史实现依赖 material-symbols-compose KSP 在编译期联网生成；
+ * 现改为源码入库，避免网络不可用时出现：
+ * `NoSuchElementException: No element of the sequence was transformed to a non-null value.`
+ */
 interface Subtitles {
-    @Style(MaterialSymbolStyle.Rounded)
     val Rounded: ImageVector
 }
 
-@MaterialSymbol
 interface SubtitlesOff {
-    @Style(MaterialSymbolStyle.Rounded)
     val Rounded: ImageVector
 }
 
-@MaterialSymbol
 interface SubtitlesGear {
-    @Style(MaterialSymbolStyle.Rounded)
     val Rounded: ImageVector
 }

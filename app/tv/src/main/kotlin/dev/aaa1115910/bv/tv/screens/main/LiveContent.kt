@@ -115,7 +115,7 @@ fun LiveContent(
     val logger = KotlinLogging.logger("LiveContent")
     val context = LocalContext.current
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
-    val navSelectionCommitDelay = if (enableMainUiAnimation) 250L else 150L
+    val navSelectionCommitDelay = if (enableMainUiAnimation) 80L else 60L
 
     val gridState = rememberLazyGridState()
     val subNavFocusRequester = remember { FocusRequester() }

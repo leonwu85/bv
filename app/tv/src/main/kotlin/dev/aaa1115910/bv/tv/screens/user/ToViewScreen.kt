@@ -110,8 +110,8 @@ fun ToViewScreen(
     }
 
     LaunchedEffect(Unit) {
-        if (ToViewViewModel.histories.isEmpty()) {
-            ToViewViewModel.clearData()
+        // 与预加载共存：已有数据或加载中则不再 clear + 重拉，避免重复 key
+        if (ToViewViewModel.histories.isEmpty() && !ToViewViewModel.updating) {
             ToViewViewModel.update()
         }
     }

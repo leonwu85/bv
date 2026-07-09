@@ -61,8 +61,9 @@ fun TopNav(
 
     val focusRequester = remember { FocusRequester() }
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
-    val selectionDispatchDelay = if (enableMainUiAnimation) 200L else 0L
-    val focusUnlockDelay = if (enableMainUiAnimation) 400L else 0L
+    // 仅做轻微防抖；焦点解锁与内容就绪绑定为短延迟，避免原先 200+400ms 叠卡顿
+    val selectionDispatchDelay = if (enableMainUiAnimation) 80L else 0L
+    val focusUnlockDelay = if (enableMainUiAnimation) 100L else 0L
 
     var highlightedNav by remember(initialSelectedItem, items) {
         mutableStateOf(initialSelectedItem ?: items.first())

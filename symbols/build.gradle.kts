@@ -1,5 +1,4 @@
 plugins {
-    alias(gradleLibs.plugins.google.ksp)
     alias(gradleLibs.plugins.kotlin.jvm)
 }
 
@@ -10,7 +9,6 @@ java {
 }
 
 dependencies {
-    ksp(libs.material.symbols.compose.ksp)
-    implementation(libs.material.symbols.compose.annotation)
+    // 图标路径已入库，不再依赖 material-symbols-compose KSP（其编译期需联网拉取 SVG）
     compileOnly(androidx.compose.ui)
 }

@@ -104,6 +104,8 @@ import dev.aaa1115910.bv.tv.component.TvDynamicImageUseCase
 import dev.aaa1115910.bv.tv.component.TvSafeDynamicImage
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
+import dev.aaa1115910.bv.tv.util.TOP_NAV_PRELOAD_STEP
+import dev.aaa1115910.bv.tv.util.adjacentNavItems
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.scrollToItemIfAvailable
@@ -269,7 +271,7 @@ fun NewDynamicsScreen(
         currentList.size
     }
 
-    // 加载更多
+    // 加载更多（仅当前子 Tab）
     LaunchedEffect(currentListSize, currentFocusedIndex, selectedTabType) {
         val needLoadMore = currentListSize > 0 && currentFocusedIndex + 12 > currentListSize
         if (needLoadMore && hasMore && !isLoading) {
@@ -279,16 +281,21 @@ fun NewDynamicsScreen(
         }
     }
 
-    // 当 Tab 切换时加载数据
-    LaunchedEffect(selectedTabType) {
-        val isEmpty = if (selectedTabType == DynamicTabType.Video) {
-            dynamicViewModel.dynamicVideoList.isEmpty()
-        } else {
-            currentList.isEmpty()
-        }
-        if (isEmpty && hasMore) {
-            scope.launch(Dispatchers.IO) {
-                dynamicViewModel.loadMoreByType(selectedTabType)
+    // 子 Tab 预加载：当前 + 左右各 TOP_NAV_PRELOAD_STEP
+    // 使用 ensureFirstPage（互斥 + 空列表二次判断），与 HomeContent 预加载并存时不会双拉跳页
+    LaunchedEffect(selectedTabType, dynamicViewModel.isLogin) {
+        if (!dynamicViewModel.isLogin) return@LaunchedEffect
+        val targets = adjacentNavItems(
+            items = dynamicTabs,
+            current = selectedTabType,
+            step = TOP_NAV_PRELOAD_STEP,
+        )
+        scope.launch(Dispatchers.IO) {
+            val ordered = listOf(selectedTabType) + targets.filter { it != selectedTabType }
+            ordered.forEach { type ->
+                launch {
+                    dynamicViewModel.ensureFirstPage(type)
+                }
             }
         }
     }
@@ -542,7 +549,10 @@ private fun VideoDynamicContent(
             verticalArrangement = Arrangement.spacedBy(spacedBy),
             horizontalArrangement = Arrangement.spacedBy(spacedBy)
         ) {
-            itemsIndexed(videoList) { index, video ->
+            itemsIndexed(
+                items = videoList,
+                key = { index, video -> "${video.aid}#$index" }
+            ) { index, video ->
                 SmallVideoCard(
                     data = remember(video.aid) {
                         VideoCardData(
@@ -638,7 +648,10 @@ private fun AllDynamicContent(
             verticalItemSpacing = 16.dp,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            itemsIndexed(filteredList) { index, item ->
+            itemsIndexed(
+                items = filteredList,
+                key = { index, item -> item.id ?: "dyn-all-$index-${item.commentId}" }
+            ) { index, item ->
                 AllDynamicCard(
                     dynamicItem = item,
                     onClick = { onClickDynamicItem(item) },
@@ -713,7 +726,10 @@ private fun PgcDynamicContent(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            itemsIndexed(filteredList) { index, item ->
+            itemsIndexed(
+                items = filteredList,
+                key = { index, item -> item.id ?: "dyn-pgc-$index-${item.commentId}" }
+            ) { index, item ->
                 PgcDynamicCard(
                     dynamicItem = item,
                     onClick = { onClickDynamicItem(item) },
@@ -776,7 +792,10 @@ private fun ArticleDynamicContent(
             verticalItemSpacing = 16.dp,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            itemsIndexed(filteredList) { index, item ->
+            itemsIndexed(
+                items = filteredList,
+                key = { index, item -> item.id ?: "dyn-article-$index-${item.commentId}" }
+            ) { index, item ->
                 ArticleListCard(
                     dynamicItem = item,
                     onClick = { onClickDynamicItem(item) },

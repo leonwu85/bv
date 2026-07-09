@@ -95,9 +95,10 @@ fun HistoryScreen(
     val menuFocusRequester = remember { FocusRequester() }
     val emptyFocusRequester = remember { FocusRequester() }
     val focusRequesters = remember { mutableMapOf<String, FocusRequester>() }
-    val historyItemKey: (VideoCardData) -> String = remember {
-        { item ->
-            "${item.historyBusiness}_${item.historyKid ?: item.avid}_${item.historyViewAt ?: 0L}_${item.avid}"
+    // LazyGrid / FocusRequester 共用同一套 key（含 index，与 itemsIndexed 一致）
+    val historyItemKey: (VideoCardData, Int) -> String = remember {
+        { item, index ->
+            "${item.historyBusiness}_${item.historyKid ?: item.avid}_${item.historyViewAt ?: 0L}_${item.avid}#$index"
         }
     }
     var pendingRestoreFocusIndex by remember { mutableIntStateOf(-1) }
@@ -115,8 +116,8 @@ fun HistoryScreen(
     }
 
     LaunchedEffect(Unit) {
-        if (historyViewModel.histories.isEmpty()) {
-            historyViewModel.clearData()
+        // 预加载可能已在拉数：空列表且未在加载时才请求，禁止 clearData 打断进行中的请求（会导致重复 item key）
+        if (historyViewModel.histories.isEmpty() && !historyViewModel.updating) {
             historyViewModel.update()
         }
     }
@@ -169,7 +170,8 @@ fun HistoryScreen(
         lazyGridState.scrollToItemIfAvailable(targetIndex)
         withFrameNanos { }
         withFrameNanos { }
-        focusRequesters[historyItemKey(targetHistory)]?.requestFocus(scope)
+        // 必须与 itemsIndexed / DisposableEffect 注册的 key 完全一致
+        focusRequesters[historyItemKey(targetHistory, targetIndex)]?.requestFocus(scope)
         shouldFocusEmptyState = false
         pendingRestoreFocusIndex = -1
     }
@@ -307,9 +309,10 @@ fun HistoryScreen(
                     ) {
                         itemsIndexed(
                             items = historyViewModel.histories,
-                            key = { _, item -> historyItemKey(item) }
+                            // 附带 index，避免接口/竞态下业务 key 重复导致 LazyGrid 崩溃
+                            key = { index, item -> historyItemKey(item, index) }
                         ) { index, history ->
-                            val itemKey = historyItemKey(history)
+                            val itemKey = historyItemKey(history, index)
                             val itemFocusRequester = remember(itemKey) { FocusRequester() }
                             DisposableEffect(itemKey, itemFocusRequester) {
                                 focusRequesters[itemKey] = itemFocusRequester

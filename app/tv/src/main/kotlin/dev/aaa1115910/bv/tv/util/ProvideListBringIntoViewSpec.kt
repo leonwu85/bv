@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -31,17 +32,19 @@ fun ProvideListBringIntoViewSpec(
     content: @Composable () -> Unit,
 ) {
     val paddingPx = LocalDensity.current.run { padding.toPx() }
-    val bringIntoViewSpec = object : BringIntoViewSpec {
-        override fun calculateScrollDistance(
-            offset: Float,
-            size: Float,
-            containerSize: Float
-        ): Float = calculateScrollDistanceMod(
-            offset = offset,
-            size = size,
-            containerSize = containerSize,
-            padding = paddingPx
-        )
+    val bringIntoViewSpec = remember(paddingPx) {
+        object : BringIntoViewSpec {
+            override fun calculateScrollDistance(
+                offset: Float,
+                size: Float,
+                containerSize: Float
+            ): Float = calculateScrollDistanceMod(
+                offset = offset,
+                size = size,
+                containerSize = containerSize,
+                padding = paddingPx
+            )
+        }
     }
     CompositionLocalProvider(
         LocalBringIntoViewSpec provides bringIntoViewSpec,
@@ -53,19 +56,13 @@ private fun calculateScrollDistanceMod(
     offset: Float,
     size: Float,
     containerSize: Float,
-    padding: Float = 90f // 容器上下左右预留的内边距。
+    padding: Float = 90f
 ): Float {
     val trailingEdge = offset + size + padding
     @Suppress("UnnecessaryVariable") val leadingEdge = offset - padding
     return when {
-
-        // 如果组件已经完整显示，不滚动
         leadingEdge >= 0 && trailingEdge <= containerSize -> 0f
-
-        // 如果组件可见但比容器大，不滚动
         leadingEdge < 0 && trailingEdge > containerSize -> 0f
-
-        // 找出使其中一条边与容器的边重合所需的最小滚动量
         abs(leadingEdge) < abs(trailingEdge - containerSize) -> leadingEdge
         else -> trailingEdge - containerSize
     }

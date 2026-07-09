@@ -21,7 +21,11 @@ data class BiliResponse<T>(
     init {
         when (code) {
             0 -> {}
-            -101 -> logger.error { "请求失败，账号未登录: $message (code: $code)" }
+            -101 -> {
+                logger.error { "请求失败，账号未登录: $message (code: $code)" }
+                // 会话失效时统一回调，由 App 层执行自动登出
+                BiliAuthFailureHandler.notify(message)
+            }
             -352 -> logger.error { "请求失败，风控异常: $message (code: $code)" }
             86038, 86039, 86090 -> logger.debug { "二维码登录轮询: $message (code: $code)" }
             else -> logger.error { "请求失败: $message (code: $code)" }
@@ -56,7 +60,11 @@ data class BiliResponseWithoutData(
     init {
         when (code) {
             0 -> {}
-            -101 -> logger.error { "请求失败，账号未登录: $message (code: $code)" }
+            -101 -> {
+                logger.error { "请求失败，账号未登录: $message (code: $code)" }
+                // 会话失效时统一回调，由 App 层执行自动登出
+                BiliAuthFailureHandler.notify(message)
+            }
             -352 -> logger.error { "请求失败，风控异常: $message (code: $code)" }
             else -> logger.error { "请求失败: $message (code: $code)" }
         }
@@ -79,7 +87,7 @@ object BiliAuthFailureHandler {
     @Volatile
     var onAuthFailure: ((String) -> Unit)? = null
 
-    internal fun notify(message: String) {
+    fun notify(message: String) {
         runCatching {
             onAuthFailure?.invoke(message)
         }.onFailure {

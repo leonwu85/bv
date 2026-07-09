@@ -12,32 +12,30 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import dev.aaa1115910.biliapi.entity.ugc.UgcItem
 import dev.aaa1115910.bv.R as AppR
-import dev.aaa1115910.bv.tv.component.ContentStatusCard
-import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.tv.R
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
+import dev.aaa1115910.bv.tv.component.ContentStatusCard
+import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.viewmodel.home.RecommendViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
@@ -49,38 +47,42 @@ fun RecommendScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var currentFocusedIndex by remember { mutableIntStateOf(0) }
-    val shouldLoadMore by remember {
-        derivedStateOf { recommendViewModel.recommendVideoList.isNotEmpty() && currentFocusedIndex + 12 > recommendViewModel.recommendVideoList.size }
-    }
+    // 不在 composition 中读取，避免每次 D-pad 移动整表重组
+    val focusedIndexState = remember { mutableIntStateOf(0) }
 
-    val onClickVideo: (UgcItem) -> Unit = { ugcItem ->
-        VideoInfoActivity.actionStart(context, ugcItem.aid)
+    val onClickVideo: (UgcItem) -> Unit = remember(context) {
+        { ugcItem -> VideoInfoActivity.actionStart(context, ugcItem.aid) }
     }
-
-    val onLongClickVideo: (UgcItem) -> Unit = { ugcItem ->
-        UpInfoActivity.actionStart(
-            context,
-            mid = ugcItem.authorId,
-            name = ugcItem.author,
-            face = ugcItem.authorFace
-        )
-    }
-
-    //不能直接使用 LaunchedEffect(currentFocusedIndex)，会导致整个页面重组
-    LaunchedEffect(shouldLoadMore) {
-        if (shouldLoadMore) {
-            scope.launch(Dispatchers.IO) {
-                recommendViewModel.loadMore()
-            }
+    val onLongClickVideo: (UgcItem) -> Unit = remember(context) {
+        { ugcItem ->
+            UpInfoActivity.actionStart(
+                context,
+                mid = ugcItem.authorId,
+                name = ugcItem.author,
+                face = ugcItem.authorFace
+            )
         }
+    }
+
+    val videoList = recommendViewModel.recommendVideoList
+    LaunchedEffect(videoList.size) {
+        snapshotFlow { focusedIndexState.intValue }
+            .map { index -> videoList.isNotEmpty() && index + 12 > videoList.size }
+            .distinctUntilChanged()
+            .collect { shouldLoadMore ->
+                if (shouldLoadMore) {
+                    scope.launch(Dispatchers.IO) {
+                        recommendViewModel.loadMore()
+                    }
+                }
+            }
     }
 
     val padding = dimensionResource(R.dimen.grid_padding) / 2
     val spacedBy = dimensionResource(R.dimen.grid_spacedBy) / 2
-    val gridColumns = Prefs.gridColumns
+    val gridColumns = remember { Prefs.gridColumns }
     ProvideListBringIntoViewSpec {
-        if (recommendViewModel.recommendVideoList.isEmpty()) {
+        if (videoList.isEmpty()) {
             Box(
                 modifier = modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -100,7 +102,11 @@ fun RecommendScreen(
                 verticalArrangement = Arrangement.spacedBy(spacedBy),
                 horizontalArrangement = Arrangement.spacedBy(spacedBy)
             ) {
-                itemsIndexed(recommendViewModel.recommendVideoList) { index, item ->
+                itemsIndexed(
+                    items = videoList,
+                    key = { index, item -> "${item.aid}#$index" },
+                    contentType = { _, _ -> "video_card" }
+                ) { index, item ->
                     SmallVideoCard(
                         data = remember(item.aid, item.isChargingArc, item.chargingArcBadge) {
                             VideoCardData(
@@ -118,13 +124,17 @@ fun RecommendScreen(
                             )
                         },
                         onClick = { onClickVideo(item) },
-                        onLongClick = {onLongClickVideo(item) },
-                        onFocus = { currentFocusedIndex = index }
+                        onLongClick = { onLongClickVideo(item) },
+                        onFocus = { focusedIndexState.intValue = index }
                     )
                 }
 
                 if (recommendViewModel.loading) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
+                    item(
+                        key = "loading",
+                        span = { GridItemSpan(maxLineSpan) },
+                        contentType = "loading"
+                    ) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center

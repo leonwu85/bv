@@ -10,7 +10,6 @@ import dev.aaa1115910.biliapi.http.entity.AuthFailureException
 import dev.aaa1115910.biliapi.http.entity.user.MyInfoData
 import dev.aaa1115910.biliapi.http.entity.user.UserNavStatData
 import dev.aaa1115910.bv.BVApp
-import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.repository.UserRepository
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
@@ -66,11 +65,8 @@ class UserViewModel(
                 }
             }.onFailure {
                 when (it) {
+                    // -101 已由 BiliAuthFailureHandler 统一自动登出并提示
                     is AuthFailureException -> {
-                        withContext(Dispatchers.Main) {
-                            BVApp.context.getString(R.string.exception_auth_failure)
-                                .toast(BVApp.context)
-                        }
                         logger.fInfo { "User auth failure" }
                     }
 

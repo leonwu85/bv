@@ -19,7 +19,6 @@ import dev.aaa1115910.biliapi.entity.user.DynamicVideo
 import dev.aaa1115910.biliapi.http.entity.AuthFailureException
 import dev.aaa1115910.biliapi.repositories.UserRepository
 import dev.aaa1115910.bv.BVApp
-import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.DynamicTabType
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.addAllWithMainContext
@@ -28,6 +27,8 @@ import dev.aaa1115910.bv.util.fWarn
 import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.koin.core.annotation.KoinViewModel
 import dev.aaa1115910.bv.repository.UserRepository as BvUserRepository
@@ -90,6 +91,18 @@ class DynamicViewModel(
     var followUpHasMore by mutableStateOf(true)
     private var followUpOffset: String? = null
 
+    // 各子 Tab 加载互斥：预加载 + 页面 LaunchedEffect 可能并发进入
+    private val videoLoadMutex = Mutex()
+    private val allLoadMutex = Mutex()
+    private val pgcLoadMutex = Mutex()
+    private val articleLoadMutex = Mutex()
+    private val upLoadMutex = Mutex()
+
+    private var videoLoadGeneration = 0
+    private var allLoadGeneration = 0
+    private var pgcLoadGeneration = 0
+    private var articleLoadGeneration = 0
+
     val isLogin get() = bvUserRepository.isLogin
     var creatingDynamic by mutableStateOf(false)
         private set
@@ -106,11 +119,11 @@ class DynamicViewModel(
     }
 
     suspend fun loadMoreVideo() {
-        if (!loadingVideo) loadVideoData()
+        videoLoadMutex.withLock { loadVideoDataLocked() }
     }
 
     suspend fun loadMoreAll() {
-        if (!loadingAll) loadAllData()
+        allLoadMutex.withLock { loadAllDataLocked() }
     }
 
     fun tempBlockAuthor(mid: Long) {
@@ -124,15 +137,15 @@ class DynamicViewModel(
     }
 
     suspend fun loadMorePgc() {
-        if (!loadingPgc) loadPgcData()
+        pgcLoadMutex.withLock { loadPgcDataLocked() }
     }
 
     suspend fun loadMoreArticle() {
-        if (!loadingArticle) loadArticleData()
+        articleLoadMutex.withLock { loadArticleDataLocked() }
     }
 
     suspend fun loadMoreUp() {
-        if (!loadingUp) loadUpData()
+        upLoadMutex.withLock { loadUpDataLocked() }
     }
 
     fun selectUp(up: DynamicUpUser) {
@@ -159,123 +172,145 @@ class DynamicViewModel(
         }
     }
 
-    private suspend fun loadVideoData() {
-        if (!videoHasMore || !bvUserRepository.isLogin) return
+    /**
+     * 仅在列表为空时加载首页。用于预加载：HomeContent 与 NewDynamicsScreen 可同时调用，
+     * 互斥内再次判断空列表，避免并发双拉导致页码乱序/跳页。
+     */
+    suspend fun ensureFirstPage(type: DynamicTabType) {
+        when (type) {
+            DynamicTabType.All -> allLoadMutex.withLock {
+                if (dynamicAllList.isNotEmpty()) return@withLock
+                loadAllDataLocked()
+            }
+            DynamicTabType.Video -> videoLoadMutex.withLock {
+                if (dynamicVideoList.isNotEmpty()) return@withLock
+                loadVideoDataLocked()
+            }
+            DynamicTabType.Pgc -> pgcLoadMutex.withLock {
+                if (dynamicPgcList.isNotEmpty()) return@withLock
+                loadPgcDataLocked()
+            }
+            DynamicTabType.Article -> articleLoadMutex.withLock {
+                if (dynamicArticleList.isNotEmpty()) return@withLock
+                loadArticleDataLocked()
+            }
+            DynamicTabType.Up -> upLoadMutex.withLock {
+                if (dynamicUpList.isNotEmpty()) return@withLock
+                loadUpDataLocked()
+            }
+        }
+    }
+
+    private suspend fun loadVideoDataLocked() {
+        if (loadingVideo || !videoHasMore || !bvUserRepository.isLogin) return
+        val generation = videoLoadGeneration
         loadingVideo = true
-        logger.fInfo { "Load more dynamic videos [apiType=${Prefs.apiType}, offset=$videoHistoryOffset, page=${currentVideoPage + 1}]" }
-        runCatching {
+        val nextPage = currentVideoPage + 1
+        logger.fInfo { "Load more dynamic videos [apiType=${Prefs.apiType}, offset=$videoHistoryOffset, page=$nextPage]" }
+        try {
             val dynamicVideoData = userRepository.getDynamicVideos(
-                page = ++currentVideoPage,
+                page = nextPage,
                 offset = videoHistoryOffset ?: "",
                 updateBaseline = videoUpdateBaseline ?: "",
                 preferApiType = Prefs.apiType
             )
+            if (generation != videoLoadGeneration) return
+            currentVideoPage = nextPage
             dynamicVideoList.addAllWithMainContext(
                 dynamicVideoData.videos.filter { it.authorId !in tempBlockedMids }
             )
             videoHistoryOffset = dynamicVideoData.historyOffset
             videoUpdateBaseline = dynamicVideoData.updateBaseline
             videoHasMore = dynamicVideoData.hasMore
-
-            logger.fInfo { "Load dynamic video list page: ${currentVideoPage},size: ${dynamicVideoData.videos.size}" }
-            val avList = dynamicVideoData.videos.map {
-                it.aid
-            }
-            logger.fInfo { "Load dynamic video size: ${avList.size}" }
-            logger.info { "Load dynamic video list ${avList}}" }
-        }.onFailure {
+            logger.fInfo { "Load dynamic video list page: $currentVideoPage,size: ${dynamicVideoData.videos.size}" }
+        } catch (it: Throwable) {
             logger.fWarn { "Load dynamic video list failed: ${it.stackTraceToString()}" }
             when (it) {
-                is AuthFailureException -> {
-                    withContext(Dispatchers.Main) {
-                        BVApp.context.getString(R.string.exception_auth_failure)
-                            .toast(BVApp.context)
-                    }
-                    logger.fInfo { "User auth failure" }
-                }
-
-                else -> {
-                    withContext(Dispatchers.Main) {
-                        "加载动态失败: ${it.localizedMessage}".toast(BVApp.context)
-                    }
+                is AuthFailureException -> logger.fInfo { "User auth failure" }
+                else -> withContext(Dispatchers.Main) {
+                    "加载动态失败: ${it.localizedMessage}".toast(BVApp.context)
                 }
             }
-        }
-        withContext(Dispatchers.Main) {
-            loadingVideo = false
+        } finally {
+            if (generation == videoLoadGeneration) {
+                withContext(Dispatchers.Main) { loadingVideo = false }
+            }
         }
     }
 
-    private suspend fun loadAllData() {
-        if (!allHasMore || !bvUserRepository.isLogin) return
+    private suspend fun loadAllDataLocked() {
+        if (loadingAll || !allHasMore || !bvUserRepository.isLogin) return
+        val generation = allLoadGeneration
         loadingAll = true
-        logger.fInfo { "Load more dynamic all [apiType=${Prefs.apiType}, offset=$allHistoryOffset, page=${currentAllPage + 1}]" }
-        runCatching {
+        val nextPage = currentAllPage + 1
+        logger.fInfo { "Load more dynamic all [apiType=${Prefs.apiType}, offset=$allHistoryOffset, page=$nextPage]" }
+        try {
             val dynamicData = userRepository.getDynamics(
-                page = ++currentAllPage,
+                page = nextPage,
                 offset = allHistoryOffset ?: "",
                 updateBaseline = allUpdateBaseline ?: "",
                 preferApiType = Prefs.apiType
             )
+            if (generation != allLoadGeneration) return
+            currentAllPage = nextPage
             dynamicAllList.addAll(dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids })
             allHistoryOffset = dynamicData.historyOffset
             allUpdateBaseline = dynamicData.updateBaseline
             allHasMore = dynamicData.hasMore
-
-            logger.fInfo { "Load dynamic all list page: ${currentAllPage},size: ${dynamicData.dynamics.size}" }
-        }.onFailure {
+            logger.fInfo { "Load dynamic all list page: $currentAllPage,size: ${dynamicData.dynamics.size}" }
+        } catch (it: Throwable) {
             logger.fWarn { "Load dynamic all list failed: ${it.stackTraceToString()}" }
             when (it) {
-                is AuthFailureException -> {
-                    withContext(Dispatchers.Main) {
-                        BVApp.context.getString(R.string.exception_auth_failure)
-                            .toast(BVApp.context)
-                    }
-                    logger.fInfo { "User auth failure" }
-                }
-
-                else -> {
-                    withContext(Dispatchers.Main) {
-                        "加载动态失败: ${it.localizedMessage}".toast(BVApp.context)
-                    }
+                is AuthFailureException -> logger.fInfo { "User auth failure" }
+                else -> withContext(Dispatchers.Main) {
+                    "加载动态失败: ${it.localizedMessage}".toast(BVApp.context)
                 }
             }
-        }
-        withContext(Dispatchers.Main) {
-            loadingAll = false
+        } finally {
+            if (generation == allLoadGeneration) {
+                withContext(Dispatchers.Main) { loadingAll = false }
+            }
         }
     }
 
     fun clearVideoData() {
+        videoLoadGeneration++
         dynamicVideoList.clear()
         currentVideoPage = 0
         loadingVideo = false
         videoHasMore = true
         videoHistoryOffset = null
+        videoUpdateBaseline = null
     }
 
     fun clearAllData() {
+        allLoadGeneration++
         dynamicAllList.clear()
         currentAllPage = 0
         loadingAll = false
         allHasMore = true
         allHistoryOffset = null
+        allUpdateBaseline = null
     }
 
     fun clearPgcData() {
+        pgcLoadGeneration++
         dynamicPgcList.clear()
         currentPgcPage = 0
         loadingPgc = false
         pgcHasMore = true
         pgcHistoryOffset = null
+        pgcUpdateBaseline = null
     }
 
     fun clearArticleData() {
+        articleLoadGeneration++
         dynamicArticleList.clear()
         currentArticlePage = 0
         loadingArticle = false
         articleHasMore = true
         articleHistoryOffset = null
+        articleUpdateBaseline = null
     }
 
     fun clearUpData() {
@@ -386,59 +421,54 @@ class DynamicViewModel(
             userRepository.updateLiveReserve(reserve)
         }
 
-    private suspend fun loadPgcData() {
-        if (!pgcHasMore || !bvUserRepository.isLogin) return
+    private suspend fun loadPgcDataLocked() {
+        if (loadingPgc || !pgcHasMore || !bvUserRepository.isLogin) return
+        val generation = pgcLoadGeneration
         loadingPgc = true
-        logger.fInfo { "Load more dynamic pgc [apiType=${Prefs.apiType}, offset=$pgcHistoryOffset, page=${currentPgcPage + 1}]" }
-        runCatching {
+        val nextPage = currentPgcPage + 1
+        logger.fInfo { "Load more dynamic pgc [apiType=${Prefs.apiType}, offset=$pgcHistoryOffset, page=$nextPage]" }
+        try {
             val dynamicData = userRepository.getDynamicsByType(
                 type = "pgc",
-                page = ++currentPgcPage,
+                page = nextPage,
                 offset = pgcHistoryOffset ?: "",
                 updateBaseline = pgcUpdateBaseline ?: "",
                 preferApiType = Prefs.apiType
             )
+            if (generation != pgcLoadGeneration) return
+            currentPgcPage = nextPage
             dynamicPgcList.addAll(dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids })
             pgcHistoryOffset = dynamicData.historyOffset
             pgcUpdateBaseline = dynamicData.updateBaseline
             pgcHasMore = dynamicData.hasMore
-
-            logger.fInfo { "Load dynamic pgc list page: ${currentPgcPage},size: ${dynamicData.dynamics.size}" }
-        }.onFailure {
-            // 错误码 4101132 表示没有数据，视为正常情况
+            logger.fInfo { "Load dynamic pgc list page: $currentPgcPage,size: ${dynamicData.dynamics.size}" }
+        } catch (it: Throwable) {
             if (it.message?.contains("4101132") == true || it.message == "请求数据发生错误，请刷新或稍后重试") {
-                pgcHasMore = false
+                if (generation == pgcLoadGeneration) pgcHasMore = false
                 logger.fInfo { "No more pgc data available" }
             } else {
                 logger.fWarn { "Load dynamic pgc list failed: ${it.stackTraceToString()}" }
                 when (it) {
-                    is AuthFailureException -> {
-                        withContext(Dispatchers.Main) {
-                            BVApp.context.getString(R.string.exception_auth_failure)
-                                .toast(BVApp.context)
-                        }
-                        logger.fInfo { "User auth failure" }
-                    }
-
-                    else -> {
-                        withContext(Dispatchers.Main) {
-                            "加载动态失败: ${it.localizedMessage}".toast(BVApp.context)
-                        }
+                    is AuthFailureException -> logger.fInfo { "User auth failure" }
+                    else -> withContext(Dispatchers.Main) {
+                        "加载动态失败: ${it.localizedMessage}".toast(BVApp.context)
                     }
                 }
             }
-        }
-        withContext(Dispatchers.Main) {
-            loadingPgc = false
+        } finally {
+            if (generation == pgcLoadGeneration) {
+                withContext(Dispatchers.Main) { loadingPgc = false }
+            }
         }
     }
 
-    private suspend fun loadArticleData() {
-        if (!articleHasMore || !bvUserRepository.isLogin) return
+    private suspend fun loadArticleDataLocked() {
+        if (loadingArticle || !articleHasMore || !bvUserRepository.isLogin) return
+        val generation = articleLoadGeneration
         loadingArticle = true
         val nextPage = currentArticlePage + 1
         logger.fInfo { "Load more dynamic article [apiType=${Prefs.apiType}, offset=$articleHistoryOffset, page=$nextPage]" }
-        runCatching {
+        try {
             val dynamicData = userRepository.getDynamicsByType(
                 type = "article",
                 page = nextPage,
@@ -446,43 +476,34 @@ class DynamicViewModel(
                 updateBaseline = articleUpdateBaseline ?: "",
                 preferApiType = Prefs.apiType
             )
+            if (generation != articleLoadGeneration) return
             val articleItems = dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids }
             dynamicArticleList.addAll(articleItems)
             currentArticlePage = nextPage
             articleHistoryOffset = dynamicData.historyOffset
             articleUpdateBaseline = dynamicData.updateBaseline
             articleHasMore = dynamicData.hasMore && dynamicData.dynamics.isNotEmpty()
-
-            logger.fInfo { "Load dynamic article list page: ${currentArticlePage},size: ${dynamicData.dynamics.size}" }
+            logger.fInfo { "Load dynamic article list page: $currentArticlePage,size: ${dynamicData.dynamics.size}" }
             if (dynamicData.dynamics.isEmpty()) {
                 logger.fInfo { "No article data returned, stop auto loading" }
             }
-        }.onFailure {
-            articleHasMore = false
-            // 错误码 4101132 表示没有数据，视为正常情况
+        } catch (it: Throwable) {
+            if (generation == articleLoadGeneration) articleHasMore = false
             if (it.message?.contains("4101132") == true || it.message == "请求数据发生错误，请刷新或稍后重试") {
                 logger.fInfo { "No more article data available" }
             } else {
                 logger.fWarn { "Load dynamic article list failed: ${it.stackTraceToString()}" }
                 when (it) {
-                    is AuthFailureException -> {
-                        withContext(Dispatchers.Main) {
-                            BVApp.context.getString(R.string.exception_auth_failure)
-                                .toast(BVApp.context)
-                        }
-                        logger.fInfo { "User auth failure" }
-                    }
-
-                    else -> {
-                        withContext(Dispatchers.Main) {
-                            "加载动态失败: ${it.localizedMessage}".toast(BVApp.context)
-                        }
+                    is AuthFailureException -> logger.fInfo { "User auth failure" }
+                    else -> withContext(Dispatchers.Main) {
+                        "加载动态失败: ${it.localizedMessage}".toast(BVApp.context)
                     }
                 }
             }
-        }
-        withContext(Dispatchers.Main) {
-            loadingArticle = false
+        } finally {
+            if (generation == articleLoadGeneration) {
+                withContext(Dispatchers.Main) { loadingArticle = false }
+            }
         }
     }
 
@@ -526,25 +547,27 @@ class DynamicViewModel(
         }
     }
 
-    private suspend fun loadUpData() {
+    private suspend fun loadUpDataLocked() {
         val up = selectedUp ?: return
-        if (!upHasMore || !bvUserRepository.isLogin) return
+        if (loadingUp || !upHasMore || !bvUserRepository.isLogin) return
         val loadGeneration = upLoadGeneration
         loadingUp = true
+        val nextPage = currentUpPage + 1
         Log.i(
             "DynamicViewModel",
-            "load up dynamics start: mid=${up.mid}, page=${currentUpPage + 1}, generation=$loadGeneration"
+            "load up dynamics start: mid=${up.mid}, page=$nextPage, generation=$loadGeneration"
         )
-        logger.fInfo { "Load more dynamic by up [mid=${up.mid}, offset=$upHistoryOffset, page=${currentUpPage + 1}]" }
-        runCatching {
+        logger.fInfo { "Load more dynamic by up [mid=${up.mid}, offset=$upHistoryOffset, page=$nextPage]" }
+        try {
             val dynamicData = userRepository.getDynamicsByUp(
                 mid = up.mid,
-                page = ++currentUpPage,
+                page = nextPage,
                 offset = upHistoryOffset ?: "",
                 updateBaseline = upUpdateBaseline ?: "",
                 preferApiType = Prefs.apiType
             )
             if (selectedUp?.mid == up.mid && upLoadGeneration == loadGeneration) {
+                currentUpPage = nextPage
                 dynamicUpList.addAll(dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids })
                 upHistoryOffset = dynamicData.historyOffset
                 upUpdateBaseline = dynamicData.updateBaseline
@@ -554,7 +577,7 @@ class DynamicViewModel(
                     "load up dynamics success: mid=${up.mid}, size=${dynamicData.dynamics.size}, hasMore=${dynamicData.hasMore}"
                 )
             }
-        }.onFailure {
+        } catch (it: Throwable) {
             if (it.message?.contains("4101132") == true || it.message == "请求数据发生错误，请刷新或稍后重试") {
                 if (selectedUp?.mid == up.mid && upLoadGeneration == loadGeneration) {
                     upHasMore = false
@@ -565,25 +588,17 @@ class DynamicViewModel(
                 Log.w("DynamicViewModel", "load up dynamics failed: mid=${up.mid}", it)
                 logger.fWarn { "Load dynamic by up failed: ${it.stackTraceToString()}" }
                 when (it) {
-                    is AuthFailureException -> {
-                        withContext(Dispatchers.Main) {
-                            BVApp.context.getString(R.string.exception_auth_failure)
-                                .toast(BVApp.context)
-                        }
-                        logger.fInfo { "User auth failure" }
-                    }
-
-                    else -> {
-                        withContext(Dispatchers.Main) {
-                            "加载动态失败: ${it.localizedMessage}".toast(BVApp.context)
-                        }
+                    is AuthFailureException -> logger.fInfo { "User auth failure" }
+                    else -> withContext(Dispatchers.Main) {
+                        "加载动态失败: ${it.localizedMessage}".toast(BVApp.context)
                     }
                 }
             }
-        }
-        withContext(Dispatchers.Main) {
-            if (selectedUp?.mid == up.mid && upLoadGeneration == loadGeneration) {
-                loadingUp = false
+        } finally {
+            withContext(Dispatchers.Main) {
+                if (selectedUp?.mid == up.mid && upLoadGeneration == loadGeneration) {
+                    loadingUp = false
+                }
             }
         }
     }

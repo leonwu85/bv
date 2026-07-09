@@ -89,7 +89,8 @@ fun DrawerContent(
 ) {
     val scope = rememberCoroutineScope()
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
-    val drawerSelectionDelay = if (enableMainUiAnimation) 300L else 150L
+    // 防抖即可，过长会在「焦点已动、内容未切」阶段体感卡顿
+    val drawerSelectionDelay = if (enableMainUiAnimation) 100L else 80L
     val hasUserAvatar = isLogin && avatar.isNotBlank()
     val userDisplayName = if (isLogin) username.ifBlank { "用户" } else DrawerItem.User.displayName
 

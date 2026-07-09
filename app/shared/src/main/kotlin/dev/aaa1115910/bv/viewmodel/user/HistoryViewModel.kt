@@ -24,6 +24,8 @@ import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.koin.core.annotation.KoinViewModel
 
@@ -41,6 +43,11 @@ class HistoryViewModel(
 
     private var cursor = 0L
     var updating by mutableStateOf(false)
+        private set
+
+    private val loadMutex = Mutex()
+    /** clearData 时递增，丢弃进行中的旧请求结果 */
+    private var loadGeneration = 0
 
     fun update() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -49,80 +56,82 @@ class HistoryViewModel(
     }
 
     private suspend fun updateHistories(context: Context = BVApp.context) {
-        if (updating || noMore) return
-        logger.fInfo { "Updating histories with params [cursor=$cursor, apiType=${Prefs.apiType}]" }
-        withContext(Dispatchers.Main) {
-            updating = true
-        }
-        runCatching {
-            val existingKeys = withContext(Dispatchers.Main) {
-                histories.mapTo(mutableSetOf()) { historyCardKey(it) }
+        val generation = loadGeneration
+        loadMutex.withLock {
+            if (generation != loadGeneration || noMore) return@withLock
+            logger.fInfo { "Updating histories with params [cursor=$cursor, apiType=${Prefs.apiType}]" }
+            withContext(Dispatchers.Main) {
+                if (generation == loadGeneration) updating = true
             }
-            val data = historyRepository.getHistories(
-                cursor = cursor,
-                preferApiType = Prefs.apiType
-            )
-
-            data.data.forEach { historyItem ->
-                val isPgc = historyItem.type == HistoryItemType.Pgc
-                val itemKey = historyItemKey(historyItem)
-                if (!existingKeys.add(itemKey)) {
-                    logger.fInfo { "Skip duplicated history item: $itemKey" }
-                    return@forEach
+            try {
+                if (generation != loadGeneration) return@withLock
+                val existingKeys = withContext(Dispatchers.Main) {
+                    histories.mapTo(mutableSetOf()) { historyCardKey(it) }
                 }
-                histories.addWithMainContext(
-                    VideoCardData(
-                        avid = historyItem.oid,
-                        bvid = historyItem.bvid,
-                        title = historyItem.title,
-                        cover = historyItem.cover,
-                        upName = historyItem.author,
-                        upId = historyItem.authorId,
-                        upFace = historyItem.authorFace,
-                        timeString = if (historyItem.progress == -1) context.getString(R.string.play_time_finish)
-                        else context.getString(
-                            R.string.play_time_history,
-                            (historyItem.progress * 1000L).formatHourMinSec(),
-                            (historyItem.duration * 1000L).formatHourMinSec()
-                        ),
-                        jumpToSeason = isPgc,
-                        epId = historyItem.epid,
-                        seasonId = historyItem.seasonId ?: if (isPgc) historyItem.kid.toInt() else null,
-                        pubTime = historyItem.viewAt.toSmartDate() + context.getString(R.string.view_at),
-                        historyViewAt = historyItem.viewAt,
-                        historyBusiness = when (historyItem.type) {
-                            HistoryItemType.Archive -> "archive"
-                            HistoryItemType.Pgc -> "pgc"
-                            HistoryItemType.Unknown -> null
-                        },
-                        historyKid = historyItem.kid
-                    )
+                val data = historyRepository.getHistories(
+                    cursor = cursor,
+                    preferApiType = Prefs.apiType
                 )
-            }
-            //update cursor
-            cursor = data.cursor
-            logger.fInfo { "Update history cursor: [cursor=$cursor]" }
-            logger.fInfo { "Update histories success" }
-            if (cursor == 0L) {
-                withContext(Dispatchers.Main) { noMore = true }
-                logger.fInfo { "No more history" }
-            }
-        }.onFailure {
-            logger.fWarn { "Update histories failed: ${it.stackTraceToString()}" }
-            when (it) {
-                is AuthFailureException -> {
-                    withContext(Dispatchers.Main) {
-                        BVApp.context.getString(R.string.exception_auth_failure)
-                            .toast(BVApp.context)
-                    }
-                    logger.fInfo { "User auth failure" }
-                }
+                if (generation != loadGeneration) return@withLock
 
-                else -> {}
+                data.data.forEach { historyItem ->
+                    if (generation != loadGeneration) return@forEach
+                    val isPgc = historyItem.type == HistoryItemType.Pgc
+                    val itemKey = historyItemKey(historyItem)
+                    if (!existingKeys.add(itemKey)) {
+                        logger.fInfo { "Skip duplicated history item: $itemKey" }
+                        return@forEach
+                    }
+                    histories.addWithMainContext(
+                        VideoCardData(
+                            avid = historyItem.oid,
+                            bvid = historyItem.bvid,
+                            title = historyItem.title,
+                            cover = historyItem.cover,
+                            upName = historyItem.author,
+                            upId = historyItem.authorId,
+                            upFace = historyItem.authorFace,
+                            timeString = if (historyItem.progress == -1) context.getString(R.string.play_time_finish)
+                            else context.getString(
+                                R.string.play_time_history,
+                                (historyItem.progress * 1000L).formatHourMinSec(),
+                                (historyItem.duration * 1000L).formatHourMinSec()
+                            ),
+                            jumpToSeason = isPgc,
+                            epId = historyItem.epid,
+                            seasonId = historyItem.seasonId ?: if (isPgc) historyItem.kid.toInt() else null,
+                            pubTime = historyItem.viewAt.toSmartDate() + context.getString(R.string.view_at),
+                            historyViewAt = historyItem.viewAt,
+                            historyBusiness = when (historyItem.type) {
+                                HistoryItemType.Archive -> "archive"
+                                HistoryItemType.Pgc -> "pgc"
+                                HistoryItemType.Unknown -> null
+                            },
+                            historyKid = historyItem.kid
+                        )
+                    )
+                }
+                if (generation != loadGeneration) return@withLock
+                cursor = data.cursor
+                logger.fInfo { "Update history cursor: [cursor=$cursor]" }
+                logger.fInfo { "Update histories success" }
+                if (cursor == 0L) {
+                    withContext(Dispatchers.Main) {
+                        if (generation == loadGeneration) noMore = true
+                    }
+                    logger.fInfo { "No more history" }
+                }
+            } catch (it: Throwable) {
+                logger.fWarn { "Update histories failed: ${it.stackTraceToString()}" }
+                when (it) {
+                    is AuthFailureException -> logger.fInfo { "User auth failure" }
+                    else -> {}
+                }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    if (generation == loadGeneration) updating = false
+                }
             }
-        }
-        withContext(Dispatchers.Main) {
-            updating = false
         }
     }
 
@@ -214,9 +223,11 @@ class HistoryViewModel(
     }
 
     fun clearData() {
+        loadGeneration++
         histories.clear()
         cursor = 0L
         noMore = false
+        updating = false
         logger.fInfo { "History data cleared" }
     }
 }

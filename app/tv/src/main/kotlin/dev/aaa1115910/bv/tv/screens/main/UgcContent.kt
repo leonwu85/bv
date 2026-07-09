@@ -1,23 +1,16 @@
 package dev.aaa1115910.bv.tv.screens.main
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -29,6 +22,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import dev.aaa1115910.bv.tv.component.TopNav
 import dev.aaa1115910.bv.tv.component.UgcTopNavItem
 import dev.aaa1115910.bv.tv.screens.main.ugc.CreateUgcContent
+import dev.aaa1115910.bv.tv.util.KeepAlivePages
+import dev.aaa1115910.bv.tv.util.TOP_NAV_PRELOAD_STEP
+import dev.aaa1115910.bv.tv.util.adjacentNavItems
 import dev.aaa1115910.bv.tv.util.parseUgcNavItemsOrder
 import dev.aaa1115910.bv.tv.util.ugcNavItemsFlow
 import dev.aaa1115910.bv.util.Prefs
@@ -89,8 +85,8 @@ fun UgcContent(
         initial = remember { parseUgcNavItemsOrder(Prefs.ugcNavItemsOrder) }
     )
 
-    // 为当前选中的tab创建LazyGridState
-    val currentLazyGridState = rememberLazyGridState()
+    // 每个 Tab 独立滚动状态，配合 keep-alive 保留位置
+    val gridStates = remember { mutableStateMapOf<UgcTopNavItem, LazyGridState>() }
     val instantiatedViewModels = remember { mutableMapOf<UgcTopNavItem, UgcViewModel>() }
     var focusLayer by remember { mutableStateOf<UgcFocusLayer?>(null) }
 
@@ -100,6 +96,15 @@ fun UgcContent(
         ?: ugcNavItems.first()
     val currentViewModel = rememberUgcViewModel(selectedTab)
 
+    fun gridStateFor(tab: UgcTopNavItem): LazyGridState {
+        return gridStates.getOrPut(tab) { LazyGridState() }
+    }
+
+    // 预加载窗口：当前 ± TOP_NAV_PRELOAD_STEP（用于数据预取）
+    val preloadTabs = remember(selectedTab, ugcNavItems) {
+        adjacentNavItems(ugcNavItems, selectedTab, TOP_NAV_PRELOAD_STEP)
+    }
+
     LaunchedEffect(selectedTab, currentViewModel) {
         if (selectedTab.ordinal != selectedTabOrdinal) {
             onSelectedTabChanged(selectedTab.ordinal)
@@ -107,13 +112,15 @@ fun UgcContent(
 
         instantiatedViewModels[selectedTab] = currentViewModel
 
+        // 取消不在预加载窗口内的延迟任务，避免乱切时浪费
         instantiatedViewModels.forEach { (navItem, viewModel) ->
-            if (navItem != selectedTab) {
+            if (navItem !in preloadTabs) {
                 viewModel.cancelDelayedLoad()
             }
         }
 
-        currentViewModel.loadDataWithDelay(300L)
+        // 当前页立即加载
+        currentViewModel.loadDataWithDelay(0L)
     }
 
     BackHandler(focusLayer != null) {
@@ -123,10 +130,6 @@ fun UgcContent(
             return@BackHandler
         }
         navFocusRequester.requestFocus(scope)
-        // 滚动到顶部（如果需要的话）
-        // scope.launch(Dispatchers.Main) {
-        //     currentLazyGridState.animateScrollToItem(0)
-        // }
     }
 
     Scaffold(
@@ -154,7 +157,6 @@ fun UgcContent(
                     }
                 },
                 onLeftKeyEvent = {
-                    // 顶部栏最左侧按左键时，跳转到左侧导航栏
                     onRequestDrawerFocus()
                 }
             )
@@ -172,32 +174,25 @@ fun UgcContent(
                     }
                 }
         ) {
-            AnimatedContent(
-                targetState = selectedTab,
-                label = "ugc animated content",
-                transitionSpec = {
-                    if (!enableMainUiAnimation) {
-                        EnterTransition.None togetherWith ExitTransition.None
-                    } else {
-                        val coefficient = 10
-                        if (targetState.ordinal < initialState.ordinal) {
-                            fadeIn() + slideInHorizontally { -it / coefficient } togetherWith
-                                    fadeOut() + slideOutHorizontally { it / coefficient }
-                        } else {
-                            fadeIn() + slideInHorizontally { it / coefficient } togetherWith
-                                    fadeOut() + slideOutHorizontally { -it / coefficient }
-                        }
-                    }
-                }
-            ) { screen ->
+            KeepAlivePages(
+                current = selectedTab,
+                maxKeep = 3,
+                enableAnimation = enableMainUiAnimation,
+                orderedItems = ugcNavItems,
+                preloadStep = TOP_NAV_PRELOAD_STEP,
+            ) { screen, active ->
                 val screenViewModel = rememberUgcViewModel(screen)
-                LaunchedEffect(screen, screenViewModel) {
+                LaunchedEffect(screen, screenViewModel, active) {
                     instantiatedViewModels[screen] = screenViewModel
+                    // 预加载窗口内的页（含邻居）在空数据时拉取，避免首次切入等待
+                    if (screen in preloadTabs || active) {
+                        screenViewModel.loadDataWithDelay(0L)
+                    }
                 }
 
                 CreateUgcContent(
                     navItem = screen,
-                    lazyGridState = currentLazyGridState,
+                    lazyGridState = gridStateFor(screen),
                     ugcViewModel = screenViewModel
                 )
             }

@@ -23,6 +23,8 @@ import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.koin.core.annotation.KoinViewModel
 
@@ -42,6 +44,9 @@ class ToViewViewModel(
     var updating by mutableStateOf(false)
         private set
 
+    private val loadMutex = Mutex()
+    private var loadGeneration = 0
+
     fun update() {
         viewModelScope.launch(Dispatchers.IO) {
             updateToView()
@@ -49,74 +54,80 @@ class ToViewViewModel(
     }
 
     private suspend fun updateToView(context: Context = BVApp.context) {
-        if (updating || noMore) return
-        logger.fInfo { "Updating histories with params [cursor=$cursor, apiType=${Prefs.apiType}]" }
-        withContext(Dispatchers.Main) {
-            updating = true
-        }
-        runCatching {
-            val data = ToViewRepository.getToView(
-                cursor = cursor,
-                preferApiType = Prefs.apiType
-            )
+        val generation = loadGeneration
+        loadMutex.withLock {
+            if (generation != loadGeneration || noMore) return@withLock
+            logger.fInfo { "Updating toview with params [cursor=$cursor, apiType=${Prefs.apiType}]" }
+            withContext(Dispatchers.Main) {
+                if (generation == loadGeneration) updating = true
+            }
+            try {
+                if (generation != loadGeneration) return@withLock
+                val existingAids = withContext(Dispatchers.Main) {
+                    histories.mapTo(mutableSetOf()) { it.avid }
+                }
+                val data = ToViewRepository.getToView(
+                    cursor = cursor,
+                    preferApiType = Prefs.apiType
+                )
+                if (generation != loadGeneration) return@withLock
 
-            data.data.forEach { ToViewItem ->
-                histories.addWithMainContext(
-                    VideoCardData(
-                        avid = ToViewItem.oid,
-                        bvid = ToViewItem.bvid,
-                        title = ToViewItem.title,
-                        cover = ToViewItem.cover,
-                        play = ToViewItem.play,
-                        // danmaku = ToViewItem.danmaku, // 视频时长>1小时时 显示不全，所以不显示弹幕数
-                        pubTime = ToViewItem.pubdate.toSmartDate(),
-                        upName = ToViewItem.author,
-                        upId = ToViewItem.authorId,
-                        upFace = ToViewItem.authorFace,
-                        timeString = if (ToViewItem.progress == -1) context.getString(R.string.play_time_finish)
-                        else context.getString(
-                            R.string.play_time_history,
-                            (ToViewItem.progress * 1000L).formatHourMinSec(),
-                            (ToViewItem.duration * 1000L).formatHourMinSec()
+                data.data.forEach { toViewItem ->
+                    if (generation != loadGeneration) return@forEach
+                    if (!existingAids.add(toViewItem.oid)) {
+                        logger.fInfo { "Skip duplicated toview item: aid=${toViewItem.oid}" }
+                        return@forEach
+                    }
+                    histories.addWithMainContext(
+                        VideoCardData(
+                            avid = toViewItem.oid,
+                            bvid = toViewItem.bvid,
+                            title = toViewItem.title,
+                            cover = toViewItem.cover,
+                            play = toViewItem.play,
+                            pubTime = toViewItem.pubdate.toSmartDate(),
+                            upName = toViewItem.author,
+                            upId = toViewItem.authorId,
+                            upFace = toViewItem.authorFace,
+                            timeString = if (toViewItem.progress == -1) context.getString(R.string.play_time_finish)
+                            else context.getString(
+                                R.string.play_time_history,
+                                (toViewItem.progress * 1000L).formatHourMinSec(),
+                                (toViewItem.duration * 1000L).formatHourMinSec()
+                            )
                         )
                     )
-                )
-            }
-            //update cursor
-            cursor = data.cursor
-            logger.fInfo { "Update toview cursor: [cursor=$cursor]" }
-            logger.fInfo { "Update histories success" }
-            if (cursor == 0L) {
-                withContext(Dispatchers.Main) { noMore = true }
-                logger.fInfo { "No more toview" }
-            }
-        }.onFailure {
-            logger.fWarn { "Update histories failed: ${it.stackTraceToString()}" }
-            when (it) {
-                is AuthFailureException -> {
-                    withContext(Dispatchers.Main) {
-                        BVApp.context.getString(R.string.exception_auth_failure)
-                            .toast(BVApp.context)
-                    }
-                    logger.fInfo { "User auth failure" }
                 }
-
-                else -> {}
+                if (generation != loadGeneration) return@withLock
+                cursor = data.cursor
+                logger.fInfo { "Update toview cursor: [cursor=$cursor]" }
+                logger.fInfo { "Update toview success" }
+                if (cursor == 0L) {
+                    withContext(Dispatchers.Main) {
+                        if (generation == loadGeneration) noMore = true
+                    }
+                    logger.fInfo { "No more toview" }
+                }
+            } catch (it: Throwable) {
+                logger.fWarn { "Update toview failed: ${it.stackTraceToString()}" }
+                when (it) {
+                    is AuthFailureException -> logger.fInfo { "User auth failure" }
+                    else -> {}
+                }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    if (generation == loadGeneration) updating = false
+                }
             }
-        }
-        withContext(Dispatchers.Main) {
-            updating = false
         }
     }
 
     var deleting by mutableStateOf(false)
         private set
 
-    // 删除阶段状态
     var deletePhase by mutableStateOf(0)
         private set
 
-    // 删除后恢复焦点
     var pendingFocusIndex by mutableStateOf(-1)
         private set
 
@@ -131,7 +142,6 @@ class ToViewViewModel(
                         deletePhase = 1
                     }
 
-                    // 删除数据
                     withContext(Dispatchers.Main) {
                         histories.removeAll { it.avid == avid }
                     }
@@ -170,9 +180,11 @@ class ToViewViewModel(
     }
 
     fun clearData() {
+        loadGeneration++
         histories.clear()
         cursor = 0L
         noMore = false
+        updating = false
         logger.fInfo { "ToView data cleared" }
     }
 }
