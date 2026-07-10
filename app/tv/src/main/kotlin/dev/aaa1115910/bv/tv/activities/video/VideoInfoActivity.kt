@@ -3,7 +3,7 @@ package dev.aaa1115910.bv.tv.activities.video
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import dev.aaa1115910.bv.tv.activities.TvComponentActivity
 import androidx.activity.compose.setContent
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.tv.screens.VideoInfoScreen
@@ -13,7 +13,7 @@ import dev.aaa1115910.bv.util.Prefs
 import java.lang.ref.WeakReference
 import java.util.LinkedList
 
-class VideoInfoActivity : ComponentActivity() {
+class VideoInfoActivity : TvComponentActivity() {
     companion object {
         private const val MAX_VIDEO_INFO_SCREENS = 2
         // 使用WeakReference防止内存泄漏，避免持有已销毁Activity的强引用

@@ -3,12 +3,12 @@ package dev.aaa1115910.bv.tv.activities.dynamic
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import dev.aaa1115910.bv.tv.activities.TvComponentActivity
 import androidx.activity.compose.setContent
 import dev.aaa1115910.bv.tv.screens.DynamicDetailScreen
 import dev.aaa1115910.bv.ui.theme.BVTheme
 
-class DynamicDetailActivity : ComponentActivity() {
+class DynamicDetailActivity : TvComponentActivity() {
     companion object {
         fun actionStart(context: Context, dynamicId: String) {
             context.startActivity(

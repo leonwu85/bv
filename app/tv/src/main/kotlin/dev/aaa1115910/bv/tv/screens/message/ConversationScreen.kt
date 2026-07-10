@@ -38,7 +38,7 @@ import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material3.AlertDialog
+import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
@@ -349,7 +349,7 @@ private fun EmotePickerDialog(
     onDismiss: () -> Unit,
     onSelect: (DynamicEmoteDraft) -> Unit
 ) {
-    AlertDialog(
+    TvAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(text = "选择表情") },
         text = {
@@ -438,7 +438,7 @@ private fun MessageBubble(
     val showAutoReplyMark = message.status != 1 && message.source in 8..11
 
     if (showWithdrawDialog) {
-        AlertDialog(
+        TvAlertDialog(
             onDismissRequest = { showWithdrawDialog = false },
             title = { Text(text = "消息操作") },
             text = { Text(text = "撤回这条消息？") },
@@ -765,7 +765,7 @@ private fun DirectMessageReportDialog(
     var selectedReason by remember { mutableStateOf<DirectMessageReportReason?>(null) }
     var reasonDesc by remember { mutableStateOf("") }
 
-    AlertDialog(
+    TvAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(text = "举报") },
         text = {

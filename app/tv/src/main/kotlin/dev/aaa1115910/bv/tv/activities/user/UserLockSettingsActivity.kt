@@ -3,12 +3,12 @@ package dev.aaa1115910.bv.tv.activities.user
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import dev.aaa1115910.bv.tv.activities.TvComponentActivity
 import androidx.activity.compose.setContent
 import dev.aaa1115910.bv.tv.screens.user.lock.UserLockSettingsScreen
 import dev.aaa1115910.bv.ui.theme.BVTheme
 
-class UserLockSettingsActivity : ComponentActivity() {
+class UserLockSettingsActivity : TvComponentActivity() {
 
     companion object {
         fun actionStart(

@@ -1749,7 +1749,12 @@ fun BvPlayer(
                 playerListener = videoPlayerListener,
                 rotationDegrees = currentVideoRotation.degrees,
                 danmakuPlayer = danmakuPlayer,
-                forceUseTextureView = useTextureViewFixPortraitVideo
+                forceUseTextureView = useTextureViewFixPortraitVideo,
+                // HDR/杜比视界不经 TextureView，避免视频转为 SDR。
+                preferSurfaceViewForHdr = videoPlayerConfigData.currentResolution in setOf(
+                    Resolution.RHdr,
+                    Resolution.RDolby,
+                ),
             )
 
             DanmakuLayer(

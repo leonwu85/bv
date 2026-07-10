@@ -3,13 +3,13 @@ package dev.aaa1115910.bv.tv.activities.pgc
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import dev.aaa1115910.bv.tv.activities.TvComponentActivity
 import androidx.activity.compose.setContent
 import dev.aaa1115910.biliapi.entity.pgc.PgcType
 import dev.aaa1115910.bv.tv.screens.main.pgc.PgcIndexScreen
 import dev.aaa1115910.bv.ui.theme.BVTheme
 
-class PgcIndexActivity : ComponentActivity() {
+class PgcIndexActivity : TvComponentActivity() {
     companion object {
         fun actionStart(
             context: Context,

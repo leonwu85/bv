@@ -3,12 +3,12 @@ package dev.aaa1115910.bv.tv.activities.message
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import dev.aaa1115910.bv.tv.activities.TvComponentActivity
 import androidx.activity.compose.setContent
 import dev.aaa1115910.bv.tv.screens.message.ConversationScreen
 import dev.aaa1115910.bv.ui.theme.BVTheme
 
-class ConversationActivity : ComponentActivity() {
+class ConversationActivity : TvComponentActivity() {
     companion object {
         private const val EXTRA_TALKER_ID = "talker_id"
         private const val EXTRA_NAME = "name"

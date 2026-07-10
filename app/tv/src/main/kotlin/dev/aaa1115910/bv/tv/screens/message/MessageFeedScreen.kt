@@ -24,7 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.rounded.MarkChatUnread
-import androidx.compose.material3.AlertDialog
+import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -94,7 +94,7 @@ fun MessageFeedScreen(
     }
 
     pendingDelete?.let { item ->
-        AlertDialog(
+        TvAlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text(text = "确定删除该通知?") },
             confirmButton = {

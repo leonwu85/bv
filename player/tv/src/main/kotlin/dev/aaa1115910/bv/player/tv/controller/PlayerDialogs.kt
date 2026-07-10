@@ -1,7 +1,12 @@
 package dev.aaa1115910.bv.player.tv.controller
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -18,6 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
@@ -41,6 +47,7 @@ import dev.aaa1115910.bv.player.entity.LiveStreamLine
 import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.player.shared.R
 import dev.aaa1115910.bv.player.tv.theme.PlayerColors
+import dev.aaa1115910.bv.player.tv.LocalTvUiSurfaceEmbedded
 import dev.aaa1115910.bv.util.requestFocus
 import kotlinx.coroutines.delay
 
@@ -72,7 +79,7 @@ internal fun SpeedDialog(
         if (base == lastInteractionTime) onHideDialog()
     }
 
-    Dialog(onDismissRequest = { onHideDialog() }) {
+    PlayerOverlayDialog(onDismissRequest = onHideDialog) {
         Surface(
             modifier = modifier.width(240.dp),
             color = PlayerColors.dialogBackground,
@@ -156,7 +163,7 @@ internal fun LiveLineDialog(
         if (base == lastInteractionTime) onHideDialog()
     }
 
-    Dialog(onDismissRequest = { onHideDialog() }) {
+    PlayerOverlayDialog(onDismissRequest = onHideDialog) {
         Surface(
             modifier = modifier.width(360.dp),
             color = PlayerColors.dialogBackground,
@@ -235,7 +242,7 @@ internal fun RotationDialog(
         if (base == lastInteractionTime) onHideDialog()
     }
 
-    Dialog(onDismissRequest = { onHideDialog() }) {
+    PlayerOverlayDialog(onDismissRequest = onHideDialog) {
         Surface(
             modifier = modifier.width(240.dp),
             color = PlayerColors.dialogBackground,
@@ -310,7 +317,7 @@ internal fun SubtitleDialog(
         if (base == lastInteractionTime) onHideDialog()
     }
 
-    Dialog(onDismissRequest = { onHideDialog() }) {
+    PlayerOverlayDialog(onDismissRequest = onHideDialog) {
         Surface(
             modifier = modifier.width(240.dp),
             color = PlayerColors.dialogBackground,
@@ -354,6 +361,30 @@ internal fun SubtitleDialog(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PlayerOverlayDialog(
+    onDismissRequest: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    if (!LocalTvUiSurfaceEmbedded.current) {
+        Dialog(onDismissRequest = onDismissRequest, content = content)
+        return
+    }
+
+    BackHandler(onBack = onDismissRequest)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.35f))
+            .clickable(onClick = onDismissRequest),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(modifier = Modifier.clickable(onClick = {})) {
+            content()
         }
     }
 }

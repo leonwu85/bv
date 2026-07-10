@@ -34,6 +34,7 @@ fun BvVideoPlayer(
     rotationDegrees: Float = 0f, // 新增参数，视频旋转角度
     danmakuPlayer: DanmakuPlayer? = null,
     forceUseTextureView: Boolean = false,
+    preferSurfaceViewForHdr: Boolean = false,
 ) {
     val logger = logger("BvVideoPlayer")
     val context = LocalContext.current
@@ -65,7 +66,7 @@ fun BvVideoPlayer(
                 }
             }
 
-            if (forceUseTextureView || rotationDegrees != 0f) {
+            if (!preferSurfaceViewForHdr && (forceUseTextureView || rotationDegrees != 0f)) {
                 fun applyTextureTransform(tv: TextureView?, degreesRaw: Float) {
                     tv ?: return
                     if (rotationDegrees != lastRotationDegrees) {

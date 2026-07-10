@@ -142,6 +142,7 @@ import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.tv.component.RelatedVideosPanel
 import dev.aaa1115910.bv.tv.component.screenBackgroundGradient
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
+import dev.aaa1115910.bv.tv.component.TvOverlayDialog
 import dev.aaa1115910.bv.tv.component.UpIcon
 import dev.aaa1115910.bv.tv.component.buttons.VideoInfoButtons
 import dev.aaa1115910.bv.tv.manager.VideoUserActionManager
@@ -1721,7 +1722,7 @@ fun VideoDescriptionDialog(
     }
 
     if (show) {
-        androidx.compose.ui.window.Dialog(
+        TvOverlayDialog(
             onDismissRequest = { onHideDialog() },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {

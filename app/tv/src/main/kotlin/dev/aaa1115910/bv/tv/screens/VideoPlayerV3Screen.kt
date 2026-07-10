@@ -520,7 +520,14 @@ fun VideoPlayerV3Screen(
                         showBottomProgressBar = Prefs.playerShowBottomProgressBar,
                         bottomProgressBarColor = Prefs.playerBottomProgressBarColor.toComposeColor(),
                         bottomControlPanelConfig = Prefs.playerBottomControlPanelConfig,
-                        useTextureViewFixPortraitVideo = Prefs.portraitVideoFixMode == PortraitVideoFixMode.UseTextureView && playerViewModel.isVerticalVideo && playerViewModel.currentQuality >= Resolution.R4K,
+                        useTextureViewFixPortraitVideo =
+                            Prefs.portraitVideoFixMode == PortraitVideoFixMode.UseTextureView &&
+                                playerViewModel.isVerticalVideo &&
+                                playerViewModel.currentQuality >= Resolution.R4K &&
+                                playerViewModel.currentQuality !in setOf(
+                                    Resolution.RHdr,
+                                    Resolution.RDolby,
+                                ),
                         showRelatedButton = !playerViewModel.fromSeason &&
                             playerViewModel.seasonId == 0 &&
                             playerViewModel.epid == 0,

@@ -3,14 +3,14 @@ package dev.aaa1115910.bv.tv.activities.video
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import dev.aaa1115910.bv.tv.activities.TvComponentActivity
 import androidx.activity.compose.setContent
 import dev.aaa1115910.bv.tv.screens.user.UpSpaceScreen
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import java.lang.ref.WeakReference
 import java.util.LinkedHashMap
 
-class UpInfoActivity : ComponentActivity() {
+class UpInfoActivity : TvComponentActivity() {
     companion object {
         // 允许最多 N 个不同 mid 的页面共存
         private const val MAX_SCREENS = 2

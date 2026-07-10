@@ -114,6 +114,7 @@ import dev.aaa1115910.bv.tv.component.CommentPanel
 import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.tv.component.screenBackgroundGradient
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
+import dev.aaa1115910.bv.tv.component.TvOverlayDialog
 import dev.aaa1115910.bv.tv.component.buttons.SeasonInfoButtons
 import dev.aaa1115910.bv.tv.util.launchPlayerActivity
 import dev.aaa1115910.bv.ui.theme.BVTheme
@@ -743,7 +744,7 @@ fun SeasonInfoScreen(
 
     // 简介弹窗
     if (showDescriptionDialog) {
-        androidx.compose.ui.window.Dialog(
+        TvOverlayDialog(
             onDismissRequest = { showDescriptionDialog = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {

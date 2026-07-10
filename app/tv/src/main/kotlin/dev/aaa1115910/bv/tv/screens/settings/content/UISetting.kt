@@ -67,6 +67,8 @@ import dev.aaa1115910.bv.tv.util.NavItemConfig
 import dev.aaa1115910.bv.tv.util.parseDrawerItemsOrderToConfig
 import dev.aaa1115910.bv.tv.util.parseNavItemsOrderToConfig
 import dev.aaa1115910.bv.tv.util.parseUgcNavItemsOrderToConfig
+import dev.aaa1115910.bv.tv.render.TvUiRenderMode
+import dev.aaa1115910.bv.tv.render.TvUiRenderSettings
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.requestFocus
@@ -89,6 +91,7 @@ fun UISetting(
     var showOnlineViewerCountDialog by remember { mutableStateOf(false) }
     var showDynamicPageStyleDialog by remember { mutableStateOf(false) }
     var showDynamicDefaultTabDialog by remember { mutableStateOf(false) }
+    var showTvUiRenderModeDialog by remember { mutableStateOf(false) }
     val density by Prefs.densityFlow.collectAsState(context.resources.displayMetrics.widthPixels / 960f)
     val themeType by Prefs.themeTypeFlow.collectAsState(Prefs.themeType)
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
@@ -102,6 +105,7 @@ fun UISetting(
     var gridColumns by remember { mutableStateOf(Prefs.gridColumns) }
     var dynamicPageStyle by remember { mutableStateOf(Prefs.dynamicPageStyle) }
     var dynamicDefaultTab by remember { mutableStateOf(Prefs.dynamicDefaultTab) }
+    var tvUiRenderMode by remember { mutableStateOf(TvUiRenderSettings.getMode(context)) }
 
     Box(modifier = modifier) {
         Column(
@@ -125,6 +129,14 @@ fun UISetting(
                         supportText = stringResource(R.string.settings_ui_density_text),
                         valueText = density.toString(),
                         onClick = { showDensityDialog = true }
+                    )
+                }
+                item {
+                    SettingListItem(
+                        title = "4K 界面渲染",
+                        supportText = "仅 TV 端生效；保持 4K 视频输出，界面可以 1080p 渲染后放大",
+                        valueText = tvUiRenderMode.displayName,
+                        onClick = { showTvUiRenderModeDialog = true },
                     )
                 }
                 item {
@@ -315,6 +327,50 @@ fun UISetting(
             dynamicDefaultTab = it
             Prefs.dynamicDefaultTab = it
         }
+    )
+
+    TvUiRenderModeDialog(
+        show = showTvUiRenderModeDialog,
+        currentMode = tvUiRenderMode,
+        onHideDialog = { showTvUiRenderModeDialog = false },
+        onModeSelected = { mode ->
+            tvUiRenderMode = mode
+            TvUiRenderSettings.setMode(context, mode)
+            showTvUiRenderModeDialog = false
+        },
+    )
+}
+
+@Composable
+private fun TvUiRenderModeDialog(
+    show: Boolean,
+    currentMode: TvUiRenderMode,
+    onHideDialog: () -> Unit,
+    onModeSelected: (TvUiRenderMode) -> Unit,
+) {
+    if (!show) return
+    TvAlertDialog(
+        onDismissRequest = onHideDialog,
+        title = { Text("4K 界面渲染") },
+        text = {
+            Column {
+                Text("设置修改后，重新进入界面或重启 APP 生效。")
+                TvUiRenderMode.entries.forEach { mode ->
+                    ListItem(
+                        selected = mode == currentMode,
+                        onClick = { onModeSelected(mode) },
+                        headlineContent = { Text(mode.displayName) },
+                        trailingContent = {
+                            RadioButton(
+                                selected = mode == currentMode,
+                                onClick = null,
+                            )
+                        },
+                    )
+                }
+            }
+        },
+        confirmButton = {},
     )
 }
 

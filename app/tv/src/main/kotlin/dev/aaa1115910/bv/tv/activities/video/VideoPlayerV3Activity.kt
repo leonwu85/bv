@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
+import dev.aaa1115910.bv.tv.activities.TvComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import java.lang.ref.WeakReference
@@ -34,7 +34,7 @@ import dev.aaa1115910.bv.viewmodel.video.VideoDetailViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
-class VideoPlayerV3Activity : ComponentActivity() {
+class VideoPlayerV3Activity : TvComponentActivity() {
     companion object {
         private const val EXTRA_DIRECT_OPEN = "direct_open"
         private val logger = KotlinLogging.logger { }

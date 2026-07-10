@@ -28,7 +28,7 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.MarkChatUnread
 import androidx.compose.material.icons.rounded.NotificationsNone
 import androidx.compose.material.icons.rounded.PushPin
-import androidx.compose.material3.AlertDialog
+import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.HorizontalDivider
@@ -84,7 +84,7 @@ fun InboxScreen(
     }
 
     if (showClearDialog) {
-        AlertDialog(
+        TvAlertDialog(
             onDismissRequest = { showClearDialog = false },
             title = { Text(text = "一键已读") },
             text = { Text(text = "是否清除全部新消息提醒？") },
@@ -107,7 +107,7 @@ fun InboxScreen(
     }
 
     if (showDeleteListDialog) {
-        AlertDialog(
+        TvAlertDialog(
             onDismissRequest = { showDeleteListDialog = false },
             title = { Text(text = "清空列表") },
             text = { Text(text = "清空后所有消息将被删除，无法恢复") },
@@ -346,7 +346,7 @@ private fun InboxSessionRow(
     var showRemoveDialog by remember(session.talkerId) { mutableStateOf(false) }
 
     if (showRemoveDialog) {
-        AlertDialog(
+        TvAlertDialog(
             onDismissRequest = { showRemoveDialog = false },
             title = { Text(text = "删除会话") },
             text = { Text(text = "确定删除与 ${session.name} 的会话吗？") },

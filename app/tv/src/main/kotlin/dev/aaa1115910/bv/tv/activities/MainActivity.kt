@@ -1,7 +1,6 @@
 package dev.aaa1115910.bv.tv.activities
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -22,7 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
-class MainActivity : ComponentActivity() {
+class MainActivity : TvComponentActivity() {
 
     private val userRepository: UserRepository by inject()
     private val logger = KotlinLogging.logger {}
@@ -68,4 +67,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-

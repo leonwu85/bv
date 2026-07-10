@@ -1,12 +1,12 @@
 package dev.aaa1115910.bv.tv.activities.user
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import dev.aaa1115910.bv.tv.activities.TvComponentActivity
 import androidx.activity.compose.setContent
 import dev.aaa1115910.bv.tv.screens.user.FollowingSeasonScreen
 import dev.aaa1115910.bv.ui.theme.BVTheme
 
-class FollowingSeasonActivity : ComponentActivity() {
+class FollowingSeasonActivity : TvComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
