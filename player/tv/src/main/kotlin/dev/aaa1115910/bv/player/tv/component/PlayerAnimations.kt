@@ -23,16 +23,16 @@ object PlayerAnimations {
     // ── 控制层 显示/隐藏 ──
 
     val controllerEnter: EnterTransition =
-        fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 4 }
+        fadeIn(tween(180)) + slideInVertically(tween(180)) { it / 8 }
 
     val controllerExit: ExitTransition =
-        fadeOut(tween(200)) + slideOutVertically(tween(200)) { it / 4 }
+        fadeOut(tween(120)) + slideOutVertically(tween(120)) { it / 8 }
 
     val controllerTopEnter: EnterTransition =
-        fadeIn(tween(300)) + slideInVertically(tween(300)) { -it / 4 }
+        fadeIn(tween(180)) + slideInVertically(tween(180)) { -it / 8 }
 
     val controllerTopExit: ExitTransition =
-        fadeOut(tween(200)) + slideOutVertically(tween(200)) { -it / 4 }
+        fadeOut(tween(120)) + slideOutVertically(tween(120)) { -it / 8 }
 
     // ── 右侧菜单 ──
 

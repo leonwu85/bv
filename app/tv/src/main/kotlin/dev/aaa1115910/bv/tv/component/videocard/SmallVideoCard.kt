@@ -58,6 +58,12 @@ import dev.aaa1115910.bv.util.resizedImageUrl
 
 private val InteractiveBadgeColor = Color(0xFFFFD54F)
 private val ChargingBadgeColor = Color(0xFF00FFFF)
+private val CoverInfoGradient = Brush.verticalGradient(
+    colors = listOf(
+        Color.Transparent,
+        Color.Black.copy(alpha = 0.8f)
+    )
+)
 
 @Composable
 fun SmallVideoCard(
@@ -103,7 +109,7 @@ fun SmallVideoCard(
         onLongClick = onLongClick,
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
-            focusedContainerColor = if (hasFocus) focusFillColor else Color.Transparent,
+            focusedContainerColor = focusFillColor,
             pressedContainerColor = focusFillColor
         ),
         shape = ClickableSurfaceDefaults.shape(shape = shape),
@@ -199,8 +205,7 @@ fun CardCover(
         if (imageLoadingAllowed) {
             ImageRequest.Builder(context)
                 .data(cover.resizedImageUrl(ImageSize.SmallVideoCardCover))
-                // 与远端 640x400 裁剪尺寸对齐，降低解码/绑图成本
-                .size(640, 400)
+                // AsyncImage uses the measured card bounds as the decode size.
                 .crossfade(false)
                 .build()
         } else {
@@ -289,12 +294,7 @@ fun CardCover(
                     .fillMaxWidth()
                     .height(48.dp)
                     .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.8f)
-                            )
-                        )
+                        CoverInfoGradient
                     )
             )
 
@@ -317,7 +317,8 @@ private fun CardInfo(
         Text(
             modifier = Modifier,
             text = title,
-            style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
+            style = MaterialTheme.typography.titleMedium,
+            fontSize = 15.sp,
             maxLines = 2,
             minLines = 2,
             overflow = TextOverflow.Ellipsis,

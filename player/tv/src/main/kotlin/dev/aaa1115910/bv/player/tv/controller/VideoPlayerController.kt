@@ -216,6 +216,41 @@ fun VideoPlayerController(
         showInfo = false
     }
 
+    fun clearDownDoublePressState() {
+        lastPressDown = 0L
+        doublePressDownJob?.cancel()
+        doublePressDownJob = null
+    }
+
+    fun scheduleDownDoublePressReset() {
+        val firstPressTime = System.currentTimeMillis()
+        lastPressDown = firstPressTime
+        doublePressDownJob?.cancel()
+        doublePressDownJob = scope.launch {
+            delay(DOUBLE_PRESS_DOWN_INTERVAL_MS)
+            if (lastPressDown == firstPressTime) {
+                lastPressDown = 0L
+            }
+        }
+    }
+
+    fun openRelatedVideosFromDoubleDown() {
+        clearDownDoublePressState()
+        if (!showRelatedVideos) {
+            hideInfoController()
+            onToggleRelatedVideos(true)
+        }
+    }
+
+    fun hideAllControllers() {
+        clearDownDoublePressState()
+        hideInfoController()
+        showMenuController = false
+        showListController = false
+        showSeekController = false
+        onToggleRelatedVideos(false)
+    }
+
     val handleShowComment = {
         val shouldHideController = hideControllerOnCommentPanelOpen && !commentPanelVisible
         onShowComment()
@@ -390,16 +425,22 @@ fun VideoPlayerController(
                 }
 
                 if (showClickableControllers || showRelatedVideos) {
+                    if (showInfo && it.key == Key.DirectionDown) {
+                        val firstPressTime = lastPressDown
+                        if (
+                            firstPressTime != 0L &&
+                            System.currentTimeMillis() - firstPressTime <
+                                    DOUBLE_PRESS_DOWN_INTERVAL_MS
+                        ) {
+                            if (it.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
+                            openRelatedVideosFromDoubleDown()
+                            return@onPreviewKeyEvent true
+                        }
+                    }
                     if (listOf(Key.Back, Key.Menu).contains(it.key)) {
                         if (it.type == KeyEventType.KeyUp) {
                             logger.fInfo { "[${it.key}] hide all controllers" }
-                            scope.launch(Dispatchers.Main) {
-                                showInfo = false
-                                showMenuController = false
-                                showListController = false
-                                showSeekController = false
-                                onToggleRelatedVideos(false)
-                            }
+                            hideAllControllers()
                         }
                         onRequestFocus()
                         return@onPreviewKeyEvent true
@@ -488,9 +529,7 @@ fun VideoPlayerController(
                         logger.fInfo { "[${it.key}] short press" }
                         if (videoPlayerConfigData.isLive) {
                             // 直播模式：短按显示/隐藏控制面板，不暂停
-                            scope.launch(Dispatchers.Main) {
-                                showInfo = !showInfo
-                            }
+                            showInfo = !showInfo
                             return@onPreviewKeyEvent true
                         }
                         if (videoPlayer.isPlaying)
@@ -536,13 +575,12 @@ fun VideoPlayerController(
                         if (it.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
                         if (videoPlayerConfigData.isLive) {
                             // 直播模式：下键弹出底部控制面板
-                            scope.launch(Dispatchers.Main) {
-                                showInfo = true
-                            }
+                            showInfo = true
                             return@onPreviewKeyEvent true
                         }
                         logger.info { "[${it.key} press]" }
 
+                        showInfo = true
                         // 检查是否为连按两次（间隔小于300ms且上次按键时间不为0）
                         val currentTime = System.currentTimeMillis()
                         val isDoublePress = lastPressDown != 0L &&
@@ -583,14 +621,7 @@ fun VideoPlayerController(
                         // 有任何控制器显示中，先隐藏控制器
                         if (showSeekController || showListController || showMenuController || showInfo || showRelatedVideos) {
                             logger.fInfo { "隐藏控制器" }
-                            scope.launch(Dispatchers.Main) {
-                                showSeekController = false
-                                showListController = false
-                                showMenuController = false
-                                showInfo = false
-                                onToggleRelatedVideos(false)
-                                hideVideoInfoJob?.cancel()
-                            }
+                            hideAllControllers()
                             return@onPreviewKeyEvent true
                         }
 

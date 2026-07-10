@@ -84,7 +84,13 @@ fun TopNav(
         canMoveFocusDown = true
     }
 
-    LaunchedEffect(highlightedNav, initialSelectedItem, items, hasNavFocus) {
+    LaunchedEffect(
+        highlightedNav,
+        initialSelectedItem,
+        items,
+        hasNavFocus,
+        enablePageAnimation,
+    ) {
         if (highlightedNav !in items) return@LaunchedEffect
         if (!hasNavFocus) {
             canMoveFocusDown = true
@@ -94,6 +100,11 @@ fun TopNav(
             canMoveFocusDown = true
             return@LaunchedEffect
         }
+        if (!enablePageAnimation) {
+            canMoveFocusDown = true
+            return@LaunchedEffect
+        }
+
         delay(selectionDispatchDelay)
         if (highlightedNav != initialSelectedItem) {
             onSelectedChanged(highlightedNav)
@@ -157,7 +168,12 @@ fun TopNav(
                         highlightedNav = tab
                         onFocusedChanged(tab)
                         if (!isSameTab) {
-                            canMoveFocusDown = false
+                            if (enablePageAnimation) {
+                                canMoveFocusDown = false
+                            } else {
+                                onSelectedChanged(tab)
+                                canMoveFocusDown = true
+                            }
                         }
                     },
                     onClick = { onClick(tab) }

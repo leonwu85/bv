@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.size.Precision
+import dev.aaa1115910.bv.tv.util.LocalTvImageLoadingAllowed
 import dev.aaa1115910.bv.tv.util.tvImageMemoryPolicy
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.resizedImageUrl
@@ -52,6 +53,7 @@ fun TvSafeDynamicImage(
     emptyText: String? = null
 ) {
     val context = LocalContext.current
+    val imageLoadingAllowed = LocalTvImageLoadingAllowed.current
     val imageMemoryPolicy = remember(context) { context.tvImageMemoryPolicy() }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
     val isLongImage = sourceWidth > 0 && sourceHeight > sourceWidth * 3
@@ -65,7 +67,9 @@ fun TvSafeDynamicImage(
         modifier = modifier
             .clip(shape)
             .background(backgroundColor)
-            .onSizeChanged { containerSize = it },
+            .onSizeChanged {
+                if (containerSize != it) containerSize = it
+            },
         contentAlignment = Alignment.Center
     ) {
         if (url.isBlank()) {
@@ -76,9 +80,9 @@ fun TvSafeDynamicImage(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.48f)
                 )
             }
-        } else {
-            val requestWidth = containerSize.width.takeIf { it > 0 } ?: useCase.fallbackWidth
-            val requestHeight = containerSize.height.takeIf { it > 0 } ?: useCase.fallbackHeight
+        } else if (imageLoadingAllowed && containerSize != IntSize.Zero) {
+            val requestWidth = containerSize.width
+            val requestHeight = containerSize.height
             val imageRequest = remember(
                 context,
                 imageMemoryPolicy,
@@ -94,8 +98,9 @@ fun TvSafeDynamicImage(
                 ImageRequest.Builder(context)
                     .data(url.resizedImageUrl(targetImageSize))
                     .size(targetWidth, targetHeight)
+                    .crossfade(false)
                     .precision(Precision.INEXACT)
-                    .allowHardware(false)
+                    .allowHardware(useCase == TvDynamicImageUseCase.ListPreview)
                     .build()
             }
 

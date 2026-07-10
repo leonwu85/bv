@@ -22,6 +22,11 @@ object CoilConfig {
     private const val DISK_CACHE_SIZE = 512L * 1024 * 1024 // 512MB 磁盘缓存
     private const val DISK_CACHE_DIRECTORY = "image_cache"
 
+    private val imageLoadingDispatcher by lazy {
+        val parallelism = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(2, 4)
+        Dispatchers.IO.limitedParallelism(parallelism)
+    }
+
     /**
      * 创建优化后的 ImageLoader
      *
@@ -35,7 +40,7 @@ object CoilConfig {
     fun createImageLoader(context: Context): ImageLoader {
         return ImageLoader.Builder(context)
             // 使用 IO 调度器进行多线程并发加载
-            .dispatcher(Dispatchers.IO)
+            .dispatcher(imageLoadingDispatcher)
             // 配置内存缓存
             .memoryCache {
                 MemoryCache.Builder(context)

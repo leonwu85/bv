@@ -42,12 +42,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +67,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
@@ -82,6 +85,7 @@ import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.entity.user.DynamicType
@@ -104,6 +108,7 @@ import dev.aaa1115910.bv.tv.component.TvDynamicImageUseCase
 import dev.aaa1115910.bv.tv.component.TvSafeDynamicImage
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
+import dev.aaa1115910.bv.tv.util.LocalTvImageLoadingAllowed
 import dev.aaa1115910.bv.tv.util.TOP_NAV_PRELOAD_STEP
 import dev.aaa1115910.bv.tv.util.LocalTvPreloadCoordinator
 import dev.aaa1115910.bv.tv.util.LocalTvUiPerformanceProfile
@@ -113,7 +118,11 @@ import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.viewmodel.home.DynamicViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 
 private enum class DynamicFocusLayer {
@@ -124,6 +133,23 @@ private enum class DynamicFocusLayer {
 private val DynamicAccent = Color(0xFFFB7299)
 private val DynamicCardShape = RoundedCornerShape(8.dp)
 private const val DynamicChargingUrlPrefix = "https://www.bilibili.com/h5/upower/index?mid="
+private const val DYNAMIC_ADJACENT_PRELOAD_IDLE_MS = 500L
+
+@Composable
+private fun rememberDynamicListImageModel(url: String): ImageRequest? {
+    val context = LocalContext.current
+    val imageLoadingAllowed = LocalTvImageLoadingAllowed.current
+    return remember(context, url, imageLoadingAllowed) {
+        if (!imageLoadingAllowed || url.isBlank()) {
+            null
+        } else {
+            ImageRequest.Builder(context)
+                .data(url)
+                .crossfade(false)
+                .build()
+        }
+    }
+}
 
 @Composable
 fun NewDynamicsScreen(
@@ -132,6 +158,8 @@ fun NewDynamicsScreen(
     tabRowFocusRequester: FocusRequester,
     initialSelectedTabIndex: Int = 0,
     onSelectedTabChanged: (Int) -> Unit = {},
+    onSubTabRowReady: (Int) -> Unit = {},
+    onSubTabRowUnavailable: () -> Unit = {},
     onBackToParentTabRow: () -> Unit = {},
     onLeftKeyEvent: () -> Unit = {},
     onRightKeyEvent: () -> Unit = {},
@@ -153,7 +181,8 @@ fun NewDynamicsScreen(
     var selectedTabIndex by remember {
         mutableIntStateOf(initialSelectedTabIndex.coerceIn(0, dynamicTabs.lastIndex))
     }
-    var currentFocusedIndex by remember { mutableIntStateOf(-1) }
+    val focusedIndexState = remember { mutableIntStateOf(-1) }
+    var showTip by remember { mutableStateOf(false) }
     var focusLayer by remember { mutableStateOf<DynamicFocusLayer?>(null) }
     var chargingQrContent by remember { mutableStateOf("") }
     val allStaggeredGridState = rememberLazyStaggeredGridState()
@@ -178,6 +207,36 @@ fun NewDynamicsScreen(
         }
     }
 
+    fun updateFocusedIndex(index: Int) {
+        focusedIndexState.intValue = index
+        showTip = index >= 0
+    }
+
+    LaunchedEffect(initialSelectedTabIndex) {
+        val targetIndex = initialSelectedTabIndex.coerceIn(0, dynamicTabs.lastIndex)
+        if (selectedTabIndex != targetIndex) {
+            selectedTabIndex = targetIndex
+            updateFocusedIndex(-1)
+        }
+    }
+
+    fun isListScrolling(tabType: DynamicTabType): Boolean = when (tabType) {
+        DynamicTabType.Video -> lazyGridState.isScrollInProgress
+        DynamicTabType.All, DynamicTabType.Up -> allStaggeredGridState.isScrollInProgress
+        DynamicTabType.Pgc -> pgcGridState.isScrollInProgress
+        DynamicTabType.Article -> articleStaggeredGridState.isScrollInProgress
+    }
+
+    suspend fun awaitListIdle(tabType: DynamicTabType) {
+        while (true) {
+            snapshotFlow { isListScrolling(tabType) }.first { !it }
+            delay(DYNAMIC_ADJACENT_PRELOAD_IDLE_MS)
+            if (!isListScrolling(tabType)) {
+                return
+            }
+        }
+    }
+
     // 根据选中的 Tab 获取对应的数据列表
     val currentList: List<DynamicItem> = when (selectedTabType) {
         DynamicTabType.All -> dynamicViewModel.dynamicAllList
@@ -196,7 +255,6 @@ fun NewDynamicsScreen(
         DynamicTabType.Up -> dynamicViewModel.loadingUp to dynamicViewModel.upHasMore
     }
 
-    val showTip = (selectedTabType == DynamicTabType.Video && dynamicViewModel.dynamicVideoList.isNotEmpty() || currentList.isNotEmpty()) && currentFocusedIndex >= 0
 
     // 视频点击处理器
     val onClickVideo: (DynamicVideo) -> Unit = { video ->
@@ -268,25 +326,29 @@ fun NewDynamicsScreen(
         )
     }
 
-    // 获取当前列表大小（用于加载更多判断）
-    val currentListSize = if (selectedTabType == DynamicTabType.Video) {
-        dynamicViewModel.dynamicVideoList.size
-    } else {
-        currentList.size
-    }
-
-    // 加载更多（仅当前子 Tab）
-    LaunchedEffect(currentListSize, currentFocusedIndex, selectedTabType) {
-        val needLoadMore = currentListSize > 0 && currentFocusedIndex + 12 > currentListSize
-        if (needLoadMore && hasMore && !isLoading) {
-            scope.launch(Dispatchers.IO) {
-                dynamicViewModel.loadMoreByType(selectedTabType)
-            }
+    // Observe focus without making the whole screen read the focused index.
+    LaunchedEffect(selectedTabType) {
+        snapshotFlow {
+            val index = focusedIndexState.intValue
+            val itemCount = dynamicViewModel.itemCount(selectedTabType)
+            index >= 0 &&
+                    itemCount > 0 &&
+                    index + 12 > itemCount &&
+                    dynamicViewModel.hasMore(selectedTabType) &&
+                    !dynamicViewModel.isLoading(selectedTabType)
         }
+            .distinctUntilChanged()
+            .collect { shouldLoadMore ->
+                if (shouldLoadMore) {
+                    withContext(Dispatchers.IO) {
+                        dynamicViewModel.loadMoreByType(selectedTabType)
+                    }
+                }
+            }
     }
 
     // 子 Tab 预加载：当前页优先，再按设备预算串行预取相邻页。
-    // 使用 ensureFirstPage（互斥 + 空列表二次判断），与 HomeContent 预加载并存时不会双拉跳页
+    // 任务直接挂在 LaunchedEffect 下，切换 Tab 时可以取消旧的预加载队列。
     LaunchedEffect(selectedTabType, dynamicViewModel.isLogin) {
         if (!dynamicViewModel.isLogin) return@LaunchedEffect
         val targets = boundedAdjacentNavItems(
@@ -295,11 +357,13 @@ fun NewDynamicsScreen(
             step = TOP_NAV_PRELOAD_STEP,
             maxItems = performanceProfile.maxKeepPages,
         )
-        scope.launch(Dispatchers.IO) {
-            val ordered = listOf(selectedTabType) + targets.filter { it != selectedTabType }
+        withContext(Dispatchers.IO) {
             dynamicViewModel.ensureFirstPage(selectedTabType)
+        }
+        awaitListIdle(selectedTabType)
+        withContext(Dispatchers.IO) {
             preloadCoordinator.runExclusive {
-                ordered.filter { it != selectedTabType }.forEach { type ->
+                targets.filter { it != selectedTabType }.forEach { type ->
                     dynamicViewModel.ensureFirstPage(type)
                 }
             }
@@ -316,6 +380,12 @@ fun NewDynamicsScreen(
     }
 
     if (dynamicViewModel.isLogin) {
+        DisposableEffect(Unit) {
+            onDispose {
+                onSubTabRowUnavailable()
+            }
+        }
+
         Column(modifier = modifier.fillMaxSize()) {
             // Tab Row
             DynamicTabRow(
@@ -324,12 +394,12 @@ fun NewDynamicsScreen(
                 selectedTabIndex = selectedTabIndex,
                 onTabSelected = { index ->
                     selectedTabIndex = index
-                    currentFocusedIndex = -1
+                    updateFocusedIndex(-1)
                 },
                 onTabClick = { index ->
                     if (index == selectedTabIndex) {
                         // 再次点击当前 Tab，触发刷新
-                        currentFocusedIndex = -1
+                        updateFocusedIndex(-1)
                         scrollToTabTop(selectedTabType)
                         scope.launch(Dispatchers.IO) {
                             dynamicViewModel.refreshByType(selectedTabType)
@@ -338,7 +408,7 @@ fun NewDynamicsScreen(
                     } else {
                         // 切换 Tab
                         selectedTabIndex = index
-                        currentFocusedIndex = -1
+                        updateFocusedIndex(-1)
                     }
                 },
                 onFocusChanged = {
@@ -348,6 +418,7 @@ fun NewDynamicsScreen(
                         focusLayer = null
                     }
                 },
+                onSelectedTabReady = onSubTabRowReady,
                 onLeftKeyEvent = onLeftKeyEvent,
                 onRightKeyEvent = onRightKeyEvent
             )
@@ -386,7 +457,7 @@ fun NewDynamicsScreen(
                             lazyGridState = lazyGridState,
                             onClickVideo = onClickVideo,
                             onLongClickVideo = onLongClickVideo,
-                            onFocus = { currentFocusedIndex = it },
+                            onFocus = ::updateFocusedIndex,
                             isLoading = isLoading,
                             hasMore = hasMore
                         )
@@ -398,7 +469,7 @@ fun NewDynamicsScreen(
                             gridState = pgcGridState,
                             onClickDynamicItem = onClickDynamicItem,
                             onLongClickDynamicItem = onLongClickDynamicItem,
-                            onFocus = { currentFocusedIndex = it },
+                            onFocus = ::updateFocusedIndex,
                             isLoading = isLoading,
                             hasMore = hasMore
                         )
@@ -410,7 +481,7 @@ fun NewDynamicsScreen(
                             staggeredGridState = articleStaggeredGridState,
                             onClickDynamicItem = onClickDynamicItem,
                             onLongClickDynamicItem = onLongClickDynamicItem,
-                            onFocus = { currentFocusedIndex = it },
+                            onFocus = ::updateFocusedIndex,
                             isLoading = isLoading,
                             hasMore = hasMore
                         )
@@ -423,7 +494,7 @@ fun NewDynamicsScreen(
                             staggeredGridState = allStaggeredGridState,
                             onClickDynamicItem = onClickDynamicItem,
                             onLongClickDynamicItem = onLongClickDynamicItem,
-                            onFocus = { currentFocusedIndex = it },
+                            onFocus = ::updateFocusedIndex,
                             isLoading = isLoading,
                             hasMore = hasMore
                         )
@@ -457,10 +528,12 @@ private fun DynamicTabRow(
     onTabSelected: (Int) -> Unit,
     onTabClick: (Int) -> Unit,
     onFocusChanged: (Boolean) -> Unit = {},
+    onSelectedTabReady: (Int) -> Unit = {},
     onLeftKeyEvent: () -> Unit = {},
     onRightKeyEvent: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val lastReportedReadyIndex = remember { intArrayOf(-1) }
 
     TabRow(
         modifier = modifier
@@ -487,7 +560,18 @@ private fun DynamicTabRow(
     ) {
         tabs.forEachIndexed { index, tab ->
             Tab(
-                modifier = if (index == selectedTabIndex) Modifier.focusRequester(tabRowFocusRequester) else Modifier,
+                modifier = if (index == selectedTabIndex) {
+                    Modifier
+                        .focusRequester(tabRowFocusRequester)
+                        .onGloballyPositioned {
+                            if (lastReportedReadyIndex[0] != index) {
+                                lastReportedReadyIndex[0] = index
+                                onSelectedTabReady(index)
+                            }
+                        }
+                } else {
+                    Modifier
+                },
                 selected = index == selectedTabIndex,
                 onFocus = { onTabSelected(index) },
                 onClick = { onTabClick(index) }
@@ -538,7 +622,7 @@ private fun VideoDynamicContent(
             modifier = Modifier
                 .fillMaxSize()
                 .onFocusChanged {
-                    if (!it.isFocused) {
+                    if (!it.hasFocus) {
                         onFocus(-1)
                     }
                 }
@@ -557,7 +641,8 @@ private fun VideoDynamicContent(
         ) {
             itemsIndexed(
                 items = videoList,
-                key = { index, video -> "${video.aid}#$index" }
+                key = { index, video -> "${video.aid}#$index" },
+                contentType = { _, _ -> "dynamic_video_card" }
             ) { index, video ->
                 SmallVideoCard(
                     data = remember(video.aid) {
@@ -637,7 +722,7 @@ private fun AllDynamicContent(
             modifier = Modifier
                 .fillMaxSize()
                 .onFocusChanged {
-                    if (!it.isFocused) {
+                    if (!it.hasFocus) {
                         onFocus(-1)
                     }
                 }
@@ -656,7 +741,8 @@ private fun AllDynamicContent(
         ) {
             itemsIndexed(
                 items = filteredList,
-                key = { index, item -> item.id ?: "dyn-all-$index-${item.commentId}" }
+                key = { index, item -> item.id ?: "dyn-all-$index-${item.commentId}" },
+                contentType = { _, _ -> "dynamic_all_card" }
             ) { index, item ->
                 AllDynamicCard(
                     dynamicItem = item,
@@ -715,7 +801,7 @@ private fun PgcDynamicContent(
             modifier = Modifier
                 .fillMaxSize()
                 .onFocusChanged {
-                    if (!it.isFocused) {
+                    if (!it.hasFocus) {
                         onFocus(-1)
                     }
                 }
@@ -734,7 +820,8 @@ private fun PgcDynamicContent(
         ) {
             itemsIndexed(
                 items = filteredList,
-                key = { index, item -> item.id ?: "dyn-pgc-$index-${item.commentId}" }
+                key = { index, item -> item.id ?: "dyn-pgc-$index-${item.commentId}" },
+                contentType = { _, _ -> "dynamic_pgc_card" }
             ) { index, item ->
                 PgcDynamicCard(
                     dynamicItem = item,
@@ -781,7 +868,7 @@ private fun ArticleDynamicContent(
             modifier = Modifier
                 .fillMaxSize()
                 .onFocusChanged {
-                    if (!it.isFocused) {
+                    if (!it.hasFocus) {
                         onFocus(-1)
                     }
                 }
@@ -800,7 +887,8 @@ private fun ArticleDynamicContent(
         ) {
             itemsIndexed(
                 items = filteredList,
-                key = { index, item -> item.id ?: "dyn-article-$index-${item.commentId}" }
+                key = { index, item -> item.id ?: "dyn-article-$index-${item.commentId}" },
+                contentType = { _, _ -> "dynamic_article_card" }
             ) { index, item ->
                 ArticleListCard(
                     dynamicItem = item,
@@ -833,25 +921,16 @@ private fun AllDynamicCard(
     onLongClick: () -> Unit,
     onFocus: () -> Unit
 ) {
-    var isFocused by remember { mutableStateOf(false) }
-
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .onFocusChanged {
-                if (it.isFocused) {
-                    isFocused = true
-                    onFocus()
-                } else {
-                    isFocused = false
-                }
-            },
+            .onFocusChanged { if (it.isFocused) onFocus() },
         onClick = onClick,
         onLongClick = onLongClick,
         shape = CardDefaults.shape(DynamicCardShape),
         colors = CardDefaults.colors(
-            containerColor = if (isFocused) MaterialTheme.colorScheme.surfaceVariant
-            else MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
         scale = CardDefaults.scale(focusedScale = 1f)
     ) {
@@ -909,26 +988,17 @@ private fun PgcDynamicCard(
         return
     }
 
-    var isFocused by remember { mutableStateOf(false) }
-
     Card(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 156.dp)
-            .onFocusChanged {
-                if (it.isFocused) {
-                    isFocused = true
-                    onFocus()
-                } else {
-                    isFocused = false
-                }
-            },
+            .onFocusChanged { if (it.isFocused) onFocus() },
         onClick = onClick,
         onLongClick = onLongClick,
         shape = CardDefaults.shape(DynamicCardShape),
         colors = CardDefaults.colors(
-            containerColor = if (isFocused) MaterialTheme.colorScheme.surfaceVariant
-            else MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
         scale = CardDefaults.scale(focusedScale = 1f)
     ) {
@@ -996,27 +1066,19 @@ private fun ArticleListCard(
     onLongClick: () -> Unit,
     onFocus: () -> Unit
 ) {
-    var isFocused by remember { mutableStateOf(false) }
     val article = dynamicItem.article
     val isChargingBlocked = dynamicItem.isChargingBlocked()
 
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .onFocusChanged {
-                if (it.isFocused) {
-                    isFocused = true
-                    onFocus()
-                } else {
-                    isFocused = false
-                }
-            },
+            .onFocusChanged { if (it.isFocused) onFocus() },
         onClick = onClick,
         onLongClick = onLongClick,
         shape = CardDefaults.shape(DynamicCardShape),
         colors = CardDefaults.colors(
-            containerColor = if (isFocused) MaterialTheme.colorScheme.surfaceVariant
-            else MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
         scale = CardDefaults.scale(focusedScale = 1f)
     ) {
@@ -1169,7 +1231,7 @@ private fun DynamicVideoCover(
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
     ) {
         AsyncImage(
-            model = video.cover,
+            model = rememberDynamicListImageModel(video.cover),
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
@@ -1481,7 +1543,7 @@ private fun DynamicForwardContent(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             AsyncImage(
-                                model = orig.author.avatar,
+                                model = rememberDynamicListImageModel(orig.author.avatar),
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(20.dp)
@@ -1617,7 +1679,7 @@ private fun AvatarImage(
             .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
     ) {
         AsyncImage(
-            model = url,
+            model = rememberDynamicListImageModel(url),
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop

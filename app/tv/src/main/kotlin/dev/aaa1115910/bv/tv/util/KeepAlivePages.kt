@@ -362,7 +362,7 @@ fun <T : Any> KeepAlivePages(
                                             markLaidOut(page)
                                         }
                                     }
-                                    .graphicsLayer {
+                                    .then(if (active && !enableAnimation) Modifier else Modifier.graphicsLayer {
                                         if (active) {
                                             if (enableAnimation && isEnterAnimating) {
                                                 val p = slideProgress.value
@@ -379,7 +379,7 @@ fun <T : Any> KeepAlivePages(
                                             translationX = 0f
                                             alpha = 0f
                                         }
-                                    }
+                                    })
                             } else {
                                 Modifier
                                     .size(0.dp)

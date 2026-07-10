@@ -16,7 +16,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -59,6 +61,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
@@ -66,6 +69,13 @@ private enum class HomeFocusLayer {
     TopNav,
     Content,
 }
+
+private data class DynamicAutoDrillRequest(
+    val generation: Int,
+    val targetSubTabIndex: Int,
+)
+
+private const val HOME_ADJACENT_PRELOAD_IDLE_MS = 500L
 
 @Composable
 fun HomeContent(
@@ -90,7 +100,6 @@ fun HomeContent(
     val preloadCoordinator = LocalTvPreloadCoordinator.current
     val enableFullPageAnimation =
         enableMainUiAnimation && performanceProfile.allowFullPageAnimation
-    val navigationFocusDelay = if (enableFullPageAnimation) 80L else 0L
 
     val recommendState = rememberLazyGridState()
     val popularState = rememberLazyGridState()
@@ -104,8 +113,22 @@ fun HomeContent(
     val dynamicTabRowFocusRequester = remember { FocusRequester() }
     var topNavFocusSelectedToken by remember { mutableIntStateOf(0) }
 
+    val dynamicSubTabs = remember {
+        listOf(
+            DynamicTabType.All,
+            DynamicTabType.Video,
+            DynamicTabType.Pgc,
+            DynamicTabType.Article,
+        )
+    }
+
     // 记住动态页子 Tab 的选中索引，默认值从设置中读取
     var dynamicSubTabIndex by remember { mutableIntStateOf(Prefs.dynamicDefaultTab.ordinal) }
+
+    fun selectedDynamicTabType(): DynamicTabType = dynamicSubTabs.getOrElse(dynamicSubTabIndex) {
+        Prefs.dynamicDefaultTab.takeIf { it in dynamicSubTabs }
+            ?: DynamicTabType.All
+    }
 
     // 用于管理延迟加载的 Job（仅在快速连切时取消上一次）
     var loadJob by remember { mutableStateOf<Job?>(null) }
@@ -129,7 +152,20 @@ fun HomeContent(
         .takeIf { it in effectiveNavItems }
         ?: effectiveNavItems.first()
     var focusedTopNavItem by remember { mutableStateOf(selectedTab) }
-    var pendingDynamicSubTabFocus by remember { mutableStateOf(false) }
+    var dynamicAutoDrillGeneration by remember { mutableIntStateOf(0) }
+    var pendingDynamicAutoDrill by remember { mutableStateOf<DynamicAutoDrillRequest?>(null) }
+    var dynamicSubTabReadyIndex by remember { mutableIntStateOf(-1) }
+    var suppressNextDynamicAutoDrill by remember { mutableStateOf(false) }
+
+    fun requestDynamicSubTabFocus(targetIndex: Int) {
+        val safeTargetIndex = targetIndex.coerceIn(0, dynamicSubTabs.lastIndex)
+        dynamicSubTabIndex = safeTargetIndex
+        dynamicAutoDrillGeneration++
+        pendingDynamicAutoDrill = DynamicAutoDrillRequest(
+            generation = dynamicAutoDrillGeneration,
+            targetSubTabIndex = safeTargetIndex,
+        )
+    }
 
     fun lazyGridStateFor(tab: HomeTopNavItem): LazyGridState = when (tab) {
         HomeTopNavItem.Recommend -> recommendState
@@ -144,6 +180,17 @@ fun HomeContent(
     fun scrollToTabTop(tab: HomeTopNavItem) {
         scope.launch {
             lazyGridStateFor(tab).scrollToItemIfAvailable(0)
+        }
+    }
+
+    suspend fun awaitListIdle(tab: HomeTopNavItem) {
+        val state = lazyGridStateFor(tab)
+        while (true) {
+            snapshotFlow { state.isScrollInProgress }.first { !it }
+            delay(HOME_ADJACENT_PRELOAD_IDLE_MS)
+            if (!state.isScrollInProgress) {
+                return
+            }
         }
     }
 
@@ -164,26 +211,9 @@ fun HomeContent(
             HomeTopNavItem.Dynamics -> {
                 if (!userViewModel.isLogin) return
                 if (Prefs.dynamicPageStyle == DynamicPageStyle.New) {
-                    // 与 NewDynamicsScreen 四个子 Tab 一致（不含 Up）
-                    val subTabs = listOf(
-                        DynamicTabType.All,
-                        DynamicTabType.Video,
-                        DynamicTabType.Pgc,
-                        DynamicTabType.Article,
-                    )
-                    val defaultType = Prefs.dynamicDefaultTab.takeIf { it in subTabs }
-                        ?: DynamicTabType.All
-                    val targets = boundedAdjacentNavItems(
-                        items = subTabs,
-                        current = defaultType,
-                        step = TOP_NAV_PRELOAD_STEP,
-                        maxItems = performanceProfile.maxKeepPages,
-                    )
-                    // 默认子 Tab 优先，再预取邻居；ensureFirstPage 内部互斥+空列表判断，避免与 NewDynamics 双拉跳页
-                    val ordered = listOf(defaultType) + targets.filter { it != defaultType }
-                    for (type in ordered) {
-                        dynamicViewModel.ensureFirstPage(type)
-                    }
+                    val selectedType = selectedDynamicTabType()
+                    // Home 只保证当前子页；相邻子页由 NewDynamicsScreen 在列表空闲后预加载。
+                    dynamicViewModel.ensureFirstPage(selectedType)
                 } else {
                     dynamicViewModel.ensureFirstPage(DynamicTabType.Video)
                 }
@@ -245,6 +275,7 @@ fun HomeContent(
         loadJob = scope.launch(Dispatchers.IO) {
             // 当前页优先
             initDataFor(selectedTab)
+            awaitListIdle(selectedTab)
             preloadCoordinator.runExclusive {
                 targets.filter { it != selectedTab }.forEach { tab ->
                     initDataFor(tab)
@@ -267,25 +298,34 @@ fun HomeContent(
         }
     }
 
-    LaunchedEffect(selectedTab, focusedTopNavItem, focusLayer, userViewModel.isLogin, pendingDynamicSubTabFocus) {
+    LaunchedEffect(
+        selectedTab,
+        focusedTopNavItem,
+        focusLayer,
+        userViewModel.isLogin,
+        pendingDynamicAutoDrill,
+        dynamicSubTabReadyIndex,
+    ) {
+        val request = pendingDynamicAutoDrill ?: return@LaunchedEffect
         val shouldFocusDynamicSubTab =
             userViewModel.isLogin &&
                     Prefs.dynamicPageStyle == DynamicPageStyle.New &&
                     selectedTab == HomeTopNavItem.Dynamics &&
                     focusedTopNavItem == HomeTopNavItem.Dynamics &&
                     focusLayer == HomeFocusLayer.TopNav &&
-                    pendingDynamicSubTabFocus
+                    dynamicSubTabReadyIndex == request.targetSubTabIndex
 
         if (!shouldFocusDynamicSubTab) return@LaunchedEffect
 
-        delay(navigationFocusDelay)
+        withFrameNanos { }
         if (
+            pendingDynamicAutoDrill?.generation == request.generation &&
             selectedTab == HomeTopNavItem.Dynamics &&
             focusedTopNavItem == HomeTopNavItem.Dynamics &&
             focusLayer == HomeFocusLayer.TopNav &&
-            pendingDynamicSubTabFocus
+            dynamicSubTabReadyIndex == request.targetSubTabIndex
         ) {
-            pendingDynamicSubTabFocus = false
+            pendingDynamicAutoDrill = null
             dynamicTabRowFocusRequester.requestFocus()
         }
     }
@@ -318,17 +358,41 @@ fun HomeContent(
                 focusSelectedToken = topNavFocusSelectedToken,
                 onFocusedChanged = { nav ->
                     val homeNav = nav as HomeTopNavItem
+                    val previousTopNavItem = focusedTopNavItem
                     focusedTopNavItem = homeNav
-                    pendingDynamicSubTabFocus =
-                        homeNav == HomeTopNavItem.Dynamics &&
-                                selectedTab != HomeTopNavItem.Dynamics
+
+                    if (homeNav != HomeTopNavItem.Dynamics) {
+                        pendingDynamicAutoDrill = null
+                        suppressNextDynamicAutoDrill = false
+                    } else if (suppressNextDynamicAutoDrill) {
+                        pendingDynamicAutoDrill = null
+                        suppressNextDynamicAutoDrill = false
+                    } else {
+                        val previousIndex = effectiveNavItems.indexOf(previousTopNavItem)
+                        val dynamicsIndex = effectiveNavItems.indexOf(HomeTopNavItem.Dynamics)
+                        val enteredFromAdjacentTopNav =
+                            previousTopNavItem != HomeTopNavItem.Dynamics &&
+                                    previousIndex >= 0 &&
+                                    dynamicsIndex >= 0 &&
+                                    (previousIndex == dynamicsIndex - 1 ||
+                                            previousIndex == dynamicsIndex + 1)
+
+                        if (enteredFromAdjacentTopNav) {
+                            val targetSubTabIndex = if (previousIndex < dynamicsIndex) {
+                                0
+                            } else {
+                                dynamicSubTabs.lastIndex
+                            }
+                            requestDynamicSubTabFocus(targetSubTabIndex)
+                        }
+                    }
                 },
                 onSelectedChanged = { nav ->
                     loadJob?.cancel()
                     val nextTab = nav as HomeTopNavItem
                     onSelectedTabChanged(nextTab.ordinal)
                     if (nextTab != HomeTopNavItem.Dynamics) {
-                        pendingDynamicSubTabFocus = false
+                        pendingDynamicAutoDrill = null
                     }
                 },
                 onClick = { nav ->
@@ -352,10 +416,16 @@ fun HomeContent(
                         }
 
                         HomeTopNavItem.Dynamics -> {
-                            logger.fInfo { "clear dynamic data" }
-                            dynamicViewModel.clearVideoData()
-                            logger.fInfo { "reload dynamic data" }
-                            scope.launch(Dispatchers.IO) { dynamicViewModel.loadMoreVideo() }
+                            val selectedType =
+                                if (Prefs.dynamicPageStyle == DynamicPageStyle.New) {
+                                    selectedDynamicTabType()
+                                } else {
+                                    DynamicTabType.Video
+                                }
+                            logger.fInfo { "clear dynamic data [$selectedType]" }
+                            dynamicViewModel.refreshByType(selectedType)
+                            logger.fInfo { "reload dynamic data [$selectedType]" }
+                            scope.launch(Dispatchers.IO) { dynamicViewModel.loadMoreByType(selectedType) }
                         }
 
                         HomeTopNavItem.Favorite -> {
@@ -390,6 +460,28 @@ fun HomeContent(
                 onLeftKeyEvent = {
                     // 顶部栏最左侧按左键时，跳转到左侧导航栏
                     onRequestDrawerFocus()
+                },
+                onPendingDownKeyEvent = {
+                    val canEnterDynamicSubTabs =
+                        userViewModel.isLogin &&
+                                Prefs.dynamicPageStyle == DynamicPageStyle.New &&
+                                focusedTopNavItem == HomeTopNavItem.Dynamics
+                    if (canEnterDynamicSubTabs) {
+                        suppressNextDynamicAutoDrill = false
+                        requestDynamicSubTabFocus(dynamicSubTabIndex)
+                    }
+                    canEnterDynamicSubTabs
+                },
+                onDownKeyEvent = {
+                    val canEnterDynamicSubTabs =
+                        userViewModel.isLogin &&
+                                Prefs.dynamicPageStyle == DynamicPageStyle.New &&
+                                selectedTab == HomeTopNavItem.Dynamics
+                    if (canEnterDynamicSubTabs) {
+                        suppressNextDynamicAutoDrill = false
+                        requestDynamicSubTabFocus(dynamicSubTabIndex)
+                    }
+                    canEnterDynamicSubTabs
                 }
             )
         }
@@ -424,17 +516,25 @@ fun HomeContent(
                                     lazyGridState = dynamicState,
                                     initialSelectedTabIndex = dynamicSubTabIndex,
                                     onSelectedTabChanged = { dynamicSubTabIndex = it },
+                                    onSubTabRowReady = { index ->
+                                        dynamicSubTabReadyIndex = index
+                                    },
+                                    onSubTabRowUnavailable = {
+                                        dynamicSubTabReadyIndex = -1
+                                    },
                                     onBackToParentTabRow = {
+                                        pendingDynamicAutoDrill = null
+                                        suppressNextDynamicAutoDrill = true
                                         navFocusRequester.requestFocus(scope)
                                     },
                                     onLeftKeyEvent = {
                                         val currentIndex = effectiveNavItems.indexOf(selectedTab)
                                         if (currentIndex > 0) {
                                             val targetTab = effectiveNavItems[currentIndex - 1]
-                                            pendingDynamicSubTabFocus = false
+                                            pendingDynamicAutoDrill = null
                                             onSelectedTabChanged(targetTab.ordinal)
                                             scope.launch {
-                                                delay(navigationFocusDelay)
+                                                withFrameNanos { }
                                                 topNavFocusSelectedToken++
                                             }
                                         }
@@ -443,10 +543,10 @@ fun HomeContent(
                                         val currentIndex = effectiveNavItems.indexOf(selectedTab)
                                         if (currentIndex < effectiveNavItems.lastIndex) {
                                             val targetTab = effectiveNavItems[currentIndex + 1]
-                                            pendingDynamicSubTabFocus = false
+                                            pendingDynamicAutoDrill = null
                                             onSelectedTabChanged(targetTab.ordinal)
                                             scope.launch {
-                                                delay(navigationFocusDelay)
+                                                withFrameNanos { }
                                                 topNavFocusSelectedToken++
                                             }
                                         }
