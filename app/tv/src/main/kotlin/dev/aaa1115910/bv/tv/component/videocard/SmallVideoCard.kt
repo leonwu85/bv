@@ -51,6 +51,7 @@ import coil.request.ImageRequest
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.tv.component.UpIcon
+import dev.aaa1115910.bv.tv.util.LocalTvImageLoadingAllowed
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.resizedImageUrl
@@ -191,15 +192,20 @@ fun CardCover(
     badges: List<String> = emptyList()
 ) {
     val context = LocalContext.current
+    val imageLoadingAllowed = LocalTvImageLoadingAllowed.current
     // TV 网格列宽通常 >160dp，去掉 BoxWithConstraints 避免每张卡多一轮 measure
     val showInfo = play.isNotBlank() || danmaku.isNotBlank()
-    val imageModel = remember(cover, context) {
-        ImageRequest.Builder(context)
-            .data(cover.resizedImageUrl(ImageSize.SmallVideoCardCover))
-            // 与远端 640x400 裁剪尺寸对齐，降低解码/绑图成本
-            .size(640, 400)
-            .crossfade(false)
-            .build()
+    val imageModel = remember(cover, context, imageLoadingAllowed) {
+        if (imageLoadingAllowed) {
+            ImageRequest.Builder(context)
+                .data(cover.resizedImageUrl(ImageSize.SmallVideoCardCover))
+                // 与远端 640x400 裁剪尺寸对齐，降低解码/绑图成本
+                .size(640, 400)
+                .crossfade(false)
+                .build()
+        } else {
+            null
+        }
     }
 
     Box(

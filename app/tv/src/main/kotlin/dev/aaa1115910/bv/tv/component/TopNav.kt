@@ -37,6 +37,7 @@ import dev.aaa1115910.biliapi.entity.pgc.PgcType
 import dev.aaa1115910.biliapi.entity.ugc.UgcTypeV2
 import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.bv.tv.util.LocalTvUiPerformanceProfile
 import dev.aaa1115910.bv.util.getDisplayName
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.isKeyDown
@@ -61,9 +62,12 @@ fun TopNav(
 
     val focusRequester = remember { FocusRequester() }
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
+    val performanceProfile = LocalTvUiPerformanceProfile.current
+    val enablePageAnimation =
+        enableMainUiAnimation && performanceProfile.allowFullPageAnimation
     // 仅做轻微防抖；焦点解锁与内容就绪绑定为短延迟，避免原先 200+400ms 叠卡顿
-    val selectionDispatchDelay = if (enableMainUiAnimation) 80L else 0L
-    val focusUnlockDelay = if (enableMainUiAnimation) 100L else 0L
+    val selectionDispatchDelay = if (enablePageAnimation) 80L else 0L
+    val focusUnlockDelay = if (enablePageAnimation) 100L else 0L
 
     var highlightedNav by remember(initialSelectedItem, items) {
         mutableStateOf(initialSelectedItem ?: items.first())

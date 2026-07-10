@@ -45,6 +45,7 @@ import coil.compose.AsyncImage
 import dev.aaa1115910.biliapi.http.entity.web.Hover
 import dev.aaa1115910.bv.entity.carddata.SeasonCardData
 import dev.aaa1115910.bv.ui.theme.BVTheme
+import dev.aaa1115910.bv.tv.util.deferredTvImageModel
 
 @Composable
 fun SeasonCard(
@@ -126,7 +127,7 @@ fun SeasonCard(
                         .onGloballyPositioned { coordinates ->
                             coverRealWidth = with(localDensity) { coordinates.size.width.toDp() }
                         },
-                    model = data.cover,
+                    model = deferredTvImageModel(data.cover),
                     contentDescription = null,
                     contentScale = ContentScale.FillBounds
                 )

@@ -66,6 +66,7 @@ import dev.aaa1115910.bv.entity.carddata.SeasonCardData
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
+import dev.aaa1115910.bv.tv.util.deferredTvImageModel
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.resizedImageUrl
@@ -250,7 +251,7 @@ fun PgcFeedRankRow(
                             blendMode = BlendMode.DstIn
                         )
                     },
-                model = data.cover,
+                model = deferredTvImageModel(data.cover),
                 contentDescription = null,
                 contentScale = ContentScale.FillHeight,
                 alpha = 1f

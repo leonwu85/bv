@@ -37,8 +37,10 @@ import dev.aaa1115910.bv.tv.screens.user.FollowingSeasonScreen
 import dev.aaa1115910.bv.tv.screens.user.HistoryScreen
 import dev.aaa1115910.bv.tv.screens.user.ToViewScreen
 import dev.aaa1115910.bv.tv.util.KeepAlivePages
+import dev.aaa1115910.bv.tv.util.LocalTvUiPerformanceProfile
+import dev.aaa1115910.bv.tv.util.LocalTvPreloadCoordinator
 import dev.aaa1115910.bv.tv.util.TOP_NAV_PRELOAD_STEP
-import dev.aaa1115910.bv.tv.util.adjacentNavItems
+import dev.aaa1115910.bv.tv.util.boundedAdjacentNavItems
 import dev.aaa1115910.bv.tv.util.homeNavItemsFlow
 import dev.aaa1115910.bv.tv.util.parseHomeNavItemsOrder
 import dev.aaa1115910.bv.util.Prefs
@@ -84,7 +86,11 @@ fun HomeContent(
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger("HomeContent")
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
-    val navigationFocusDelay = if (enableMainUiAnimation) 80L else 0L
+    val performanceProfile = LocalTvUiPerformanceProfile.current
+    val preloadCoordinator = LocalTvPreloadCoordinator.current
+    val enableFullPageAnimation =
+        enableMainUiAnimation && performanceProfile.allowFullPageAnimation
+    val navigationFocusDelay = if (enableFullPageAnimation) 80L else 0L
 
     val recommendState = rememberLazyGridState()
     val popularState = rememberLazyGridState()
@@ -167,10 +173,11 @@ fun HomeContent(
                     )
                     val defaultType = Prefs.dynamicDefaultTab.takeIf { it in subTabs }
                         ?: DynamicTabType.All
-                    val targets = adjacentNavItems(
+                    val targets = boundedAdjacentNavItems(
                         items = subTabs,
                         current = defaultType,
                         step = TOP_NAV_PRELOAD_STEP,
+                        maxItems = performanceProfile.maxKeepPages,
                     )
                     // 默认子 Tab 优先，再预取邻居；ensureFirstPage 内部互斥+空列表判断，避免与 NewDynamics 双拉跳页
                     val ordered = listOf(defaultType) + targets.filter { it != defaultType }
@@ -226,19 +233,22 @@ fun HomeContent(
         }
     }
 
-    // 当前页 + 左右各 TOP_NAV_PRELOAD_STEP 页预加载，避免首次切入空白等待
+    // 当前页优先，再按设备预算预取最多一个相邻页。
     LaunchedEffect(selectedTab, effectiveNavItems, userViewModel.isLogin) {
         loadJob?.cancel()
-        val targets = adjacentNavItems(
+        val targets = boundedAdjacentNavItems(
             items = effectiveNavItems,
             current = selectedTab,
             step = TOP_NAV_PRELOAD_STEP,
+            maxItems = performanceProfile.maxKeepPages,
         )
         loadJob = scope.launch(Dispatchers.IO) {
             // 当前页优先
             initDataFor(selectedTab)
-            targets.filter { it != selectedTab }.forEach { tab ->
-                launch { initDataFor(tab) }
+            preloadCoordinator.runExclusive {
+                targets.filter { it != selectedTab }.forEach { tab ->
+                    initDataFor(tab)
+                }
             }
         }
     }
@@ -398,8 +408,8 @@ fun HomeContent(
         ) {
             KeepAlivePages(
                 current = selectedTab,
-                maxKeep = 3,
-                enableAnimation = enableMainUiAnimation,
+                maxKeep = performanceProfile.maxKeepPages,
+                enableAnimation = enableFullPageAnimation,
                 orderedItems = effectiveNavItems,
                 preloadStep = TOP_NAV_PRELOAD_STEP,
             ) { screen, _ ->

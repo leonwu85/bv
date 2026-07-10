@@ -23,8 +23,9 @@ import dev.aaa1115910.bv.tv.component.TopNav
 import dev.aaa1115910.bv.tv.component.UgcTopNavItem
 import dev.aaa1115910.bv.tv.screens.main.ugc.CreateUgcContent
 import dev.aaa1115910.bv.tv.util.KeepAlivePages
+import dev.aaa1115910.bv.tv.util.LocalTvUiPerformanceProfile
 import dev.aaa1115910.bv.tv.util.TOP_NAV_PRELOAD_STEP
-import dev.aaa1115910.bv.tv.util.adjacentNavItems
+import dev.aaa1115910.bv.tv.util.boundedAdjacentNavItems
 import dev.aaa1115910.bv.tv.util.parseUgcNavItemsOrder
 import dev.aaa1115910.bv.tv.util.ugcNavItemsFlow
 import dev.aaa1115910.bv.util.Prefs
@@ -81,6 +82,9 @@ fun UgcContent(
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger("UgcContent")
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
+    val performanceProfile = LocalTvUiPerformanceProfile.current
+    val enableFullPageAnimation =
+        enableMainUiAnimation && performanceProfile.allowFullPageAnimation
     val ugcNavItems by ugcNavItemsFlow.collectAsState(
         initial = remember { parseUgcNavItemsOrder(Prefs.ugcNavItemsOrder) }
     )
@@ -100,9 +104,14 @@ fun UgcContent(
         return gridStates.getOrPut(tab) { LazyGridState() }
     }
 
-    // 预加载窗口：当前 ± TOP_NAV_PRELOAD_STEP（用于数据预取）
+    // 预加载窗口：当前页 + 设备预算内的相邻页（用于数据预取）。
     val preloadTabs = remember(selectedTab, ugcNavItems) {
-        adjacentNavItems(ugcNavItems, selectedTab, TOP_NAV_PRELOAD_STEP)
+        boundedAdjacentNavItems(
+            items = ugcNavItems,
+            current = selectedTab,
+            step = TOP_NAV_PRELOAD_STEP,
+            maxItems = performanceProfile.maxKeepPages,
+        )
     }
 
     LaunchedEffect(selectedTab, currentViewModel) {
@@ -176,8 +185,8 @@ fun UgcContent(
         ) {
             KeepAlivePages(
                 current = selectedTab,
-                maxKeep = 3,
-                enableAnimation = enableMainUiAnimation,
+                maxKeep = performanceProfile.maxKeepPages,
+                enableAnimation = enableFullPageAnimation,
                 orderedItems = ugcNavItems,
                 preloadStep = TOP_NAV_PRELOAD_STEP,
             ) { screen, active ->

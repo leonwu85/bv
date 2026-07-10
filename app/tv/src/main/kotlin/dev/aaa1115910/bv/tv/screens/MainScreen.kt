@@ -13,6 +13,7 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -44,8 +45,12 @@ import dev.aaa1115910.bv.tv.screens.main.UserContent
 import dev.aaa1115910.bv.tv.component.update.TvAutoUpdateTip
 import dev.aaa1115910.bv.tv.screens.search.SearchInputScreen
 import dev.aaa1115910.bv.tv.util.KeepAlivePages
+import dev.aaa1115910.bv.tv.util.LocalTvPreloadCoordinator
+import dev.aaa1115910.bv.tv.util.LocalTvUiPerformanceProfile
+import dev.aaa1115910.bv.tv.util.TvPreloadCoordinator
 import dev.aaa1115910.bv.tv.util.drawerNavItemsFlow
 import dev.aaa1115910.bv.tv.util.parseDrawerItemsOrder
+import dev.aaa1115910.bv.tv.util.rememberTvUiPerformanceProfile
 import dev.aaa1115910.bv.update.AutoUpdateChecker
 import dev.aaa1115910.bv.update.AutoUpdateInfo
 import dev.aaa1115910.bv.util.Prefs
@@ -69,22 +74,32 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val logger = KotlinLogging.logger("MainScreen")
+    val performanceProfile = rememberTvUiPerformanceProfile()
+    val preloadCoordinator = remember { TvPreloadCoordinator() }
     val drawerMenuItems by drawerNavItemsFlow.collectAsState(
         initial = remember { parseDrawerItemsOrder(Prefs.drawerItemsOrder) }
     )
+    val drawerPageOrder = remember(drawerMenuItems) {
+        buildList {
+            add(DrawerItem.User)
+            addAll(drawerMenuItems)
+            add(DrawerItem.Settings)
+        }
+    }
     val preferredDefaultDrawerItem = remember(drawerMenuItems) {
         DrawerItem.entries
             .getOrNull(Prefs.defaultDrawerTab)
             ?.takeIf { it.isConfigurable && it in drawerMenuItems }
     }
     var lastPressBack: Long by remember { mutableLongStateOf(0L) }
-    var selectedDrawerItem by remember {
+    var requestedDrawerItem by remember {
         mutableStateOf(
             preferredDefaultDrawerItem
                 ?: drawerMenuItems.firstOrNull()
                 ?: DrawerItem.defaultConfigurableItem
         )
     }
+    var displayedDrawerItem by remember { mutableStateOf(requestedDrawerItem) }
     val drawerFocusRequesters = remember {
         DrawerItem.entries.associateWith { FocusRequester() }
     }
@@ -163,8 +178,8 @@ fun MainScreen(
     }
 
     val onFocusToContent: (DrawerItem) -> Unit = { drawerItem ->
-        if (selectedDrawerItem != drawerItem) {
-            selectedDrawerItem = drawerItem
+        if (requestedDrawerItem != drawerItem) {
+            requestedDrawerItem = drawerItem
         }
         pendingContentFocusItem = drawerItem
     }
@@ -173,8 +188,8 @@ fun MainScreen(
         val fallbackItem = preferredDefaultDrawerItem
             ?: drawerMenuItems.firstOrNull()
             ?: DrawerItem.defaultConfigurableItem
-        if (selectedDrawerItem.isConfigurable && selectedDrawerItem !in drawerMenuItems) {
-            selectedDrawerItem = fallbackItem
+        if (requestedDrawerItem.isConfigurable && requestedDrawerItem !in drawerMenuItems) {
+            requestedDrawerItem = fallbackItem
         }
     }
 
@@ -201,17 +216,19 @@ fun MainScreen(
     LaunchedEffect(Unit) {
         runCatching {
             withFrameNanos { }
-            if (!requestContentFocusWithRetry(selectedDrawerItem)) {
-                requestDrawerFocus(selectedDrawerItem)
+            if (!requestContentFocusWithRetry(displayedDrawerItem)) {
+                requestDrawerFocus(displayedDrawerItem)
             }
         }.onFailure {
             logger.fException(it) { "request default focus requester failed" }
         }
     }
 
-    LaunchedEffect(pendingContentFocusItem, selectedDrawerItem) {
+    LaunchedEffect(pendingContentFocusItem, requestedDrawerItem, displayedDrawerItem) {
         val targetItem = pendingContentFocusItem ?: return@LaunchedEffect
-        if (selectedDrawerItem != targetItem) return@LaunchedEffect
+        if (requestedDrawerItem != targetItem || displayedDrawerItem != targetItem) {
+            return@LaunchedEffect
+        }
 
         withFrameNanos { }
         val focusSucceeded = requestContentFocusWithRetry(targetItem)
@@ -227,8 +244,12 @@ fun MainScreen(
         handleBack()
     }
 
-    Scaffold(modifier = modifier) { contentPadding ->
-        Box(
+    CompositionLocalProvider(
+        LocalTvUiPerformanceProfile provides performanceProfile,
+        LocalTvPreloadCoordinator provides preloadCoordinator,
+    ) {
+        Scaffold(modifier = modifier) { contentPadding ->
+            Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(contentPadding)
@@ -256,11 +277,12 @@ fun MainScreen(
                 DrawerContent(
                     modifier = Modifier.fillMaxWidth(),
                     focusRequesters = drawerFocusRequesters,
-                    currentDrawerItem = selectedDrawerItem,
+                    currentDrawerItem = displayedDrawerItem,
                     isLogin = userViewModel.isLogin,
                     avatar = userViewModel.face,
                     username = userViewModel.username,
-                    onDrawerItemChanged = { selectedDrawerItem = it },
+                    performanceProfile = performanceProfile,
+                    onDrawerItemChanged = { requestedDrawerItem = it },
                     onOpenSettings = {
                         context.startActivity(Intent(context, SettingsActivity::class.java))
                     },
@@ -271,12 +293,17 @@ fun MainScreen(
             // Right side - keep-alive 内容，避免抽屉切换整页销毁重建。
             // 不做整页滑动动画：此处包着各 Content（含 TopNav），过渡动画曾导致 TopNav 无法获焦。
             KeepAlivePages(
-                current = selectedDrawerItem,
+                current = requestedDrawerItem,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(start = 72.dp),
-                maxKeep = 3,
-                enableAnimation = false
+                maxKeep = performanceProfile.maxKeepPages,
+                enableAnimation = false,
+                orderedItems = drawerPageOrder,
+                preloadStep = 1,
+                prepareBeforeDisplay = true,
+                imageLoadDelayMillis = performanceProfile.imageLoadDelayMillis,
+                onDisplayedPageChanged = { displayedDrawerItem = it },
             ) { screen, _ ->
                 when (screen) {
                     DrawerItem.User -> UserContent(
@@ -337,5 +364,6 @@ fun MainScreen(
                 onHidden = { autoUpdateInfo = null }
             )
         }
+    }
     }
 }

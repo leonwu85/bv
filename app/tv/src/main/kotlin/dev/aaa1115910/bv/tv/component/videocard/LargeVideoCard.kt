@@ -41,6 +41,7 @@ import coil.compose.AsyncImage
 import dev.aaa1115910.bv.tv.component.UpIcon
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.ui.theme.BVTheme
+import dev.aaa1115910.bv.tv.util.deferredTvImageModel
 import dev.aaa1115910.bv.util.focusedBorder
 
 @Composable
@@ -85,7 +86,7 @@ fun LargeVideoCard(
                             .fillMaxHeight()
                             .aspectRatio(1.6f)
                             .clip(MaterialTheme.shapes.medium),
-                        model = data.cover,
+                        model = deferredTvImageModel(data.cover),
                         contentDescription = null,
                         contentScale = ContentScale.FillBounds
                     )

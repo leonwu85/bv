@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.tv.screens.main
 
+import android.os.SystemClock
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
@@ -57,13 +58,16 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.tv.util.drawerNavItemsFlow
+import dev.aaa1115910.bv.tv.util.LocalTvUiPerformanceProfile
 import dev.aaa1115910.bv.tv.util.parseDrawerItemsOrder
+import dev.aaa1115910.bv.tv.util.TvUiPerformanceProfile
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.isDpadDown
 import dev.aaa1115910.bv.util.isDpadRight
 import dev.aaa1115910.bv.util.isDpadUp
 import dev.aaa1115910.bv.util.isKeyDown
+import dev.aaa1115910.bv.util.isKeyUp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -71,6 +75,9 @@ import kotlinx.coroutines.launch
 private class DrawerNavigationState(initialItem: DrawerItem) {
     var focusedItem: DrawerItem = initialItem
     var hasFocus: Boolean = false
+    var isDirectionKeyHeld: Boolean = false
+    var isRepeatingDirection: Boolean = false
+    var lastFocusChangedAtMillis: Long = 0L
     var commitJob: Job? = null
 }
 
@@ -83,14 +90,13 @@ fun DrawerContent(
     isLogin: Boolean = false,
     avatar: String = "",
     username: String = "",
+    performanceProfile: TvUiPerformanceProfile = LocalTvUiPerformanceProfile.current,
     onDrawerItemChanged: (DrawerItem) -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onFocusToContent: (DrawerItem) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
-    val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
-    // 防抖即可，过长会在「焦点已动、内容未切」阶段体感卡顿
-    val drawerSelectionDelay = if (enableMainUiAnimation) 100L else 80L
+    val drawerAnimationMillis = performanceProfile.drawerAnimationMillis
     val hasUserAvatar = isLogin && avatar.isNotBlank()
     val userDisplayName = if (isLogin) username.ifBlank { "用户" } else DrawerItem.User.displayName
 
@@ -112,30 +118,54 @@ fun DrawerContent(
         onDrawerItemChanged(item)
     }
 
-    fun scheduleDrawerCommit(item: DrawerItem) {
+    fun remainingDrawerAnimationMillis(): Long {
+        val elapsed = SystemClock.uptimeMillis() - navigationState.lastFocusChangedAtMillis
+        return (drawerAnimationMillis - elapsed).coerceAtLeast(0L)
+    }
+
+    fun scheduleDrawerCommit(
+        item: DrawerItem,
+        afterCommit: (() -> Unit)? = null,
+    ) {
         cancelPendingDrawerCommit()
-        if (!item.hasContentPanel || item == currentDrawerItem) return
+        if (!item.hasContentPanel) return
+
+        val commitDelay = if (navigationState.isRepeatingDirection) {
+            performanceProfile.drawerRepeatSettleMillis
+        } else {
+            remainingDrawerAnimationMillis()
+        }
 
         navigationState.commitJob = scope.launch {
-            delay(drawerSelectionDelay)
+            delay(commitDelay)
             if (!navigationState.hasFocus || navigationState.focusedItem != item) return@launch
             commitDrawerItem(item)
+            afterCommit?.invoke()
             navigationState.commitJob = null
         }
     }
 
     fun onDrawerItemFocused(item: DrawerItem) {
         navigationState.focusedItem = item
+        navigationState.lastFocusChangedAtMillis = SystemClock.uptimeMillis()
         if (navigationState.hasFocus) {
-            scheduleDrawerCommit(item)
+            when {
+                // 首次 KeyDown 时无法预知用户会不会长按，因此等待 KeyUp 再提交。
+                navigationState.isDirectionKeyHeld &&
+                        !navigationState.isRepeatingDirection -> cancelPendingDrawerCommit()
+
+                // 长按期间使用尾触发兜底；后续 repeat/focus 会持续取消旧任务。
+                else -> scheduleDrawerCommit(item)
+            }
         }
     }
 
     fun focusToContent() {
         val targetItem = navigationState.focusedItem
-        cancelPendingDrawerCommit()
-        commitDrawerItem(targetItem)
-        onFocusToContent(targetItem)
+        navigationState.isRepeatingDirection = false
+        scheduleDrawerCommit(targetItem) {
+            onFocusToContent(targetItem)
+        }
     }
 
     LaunchedEffect(currentDrawerItem, isNavigationFocused) {
@@ -180,6 +210,22 @@ fun DrawerContent(
             .focusGroup()
             .focusRestorer(currentDrawerFocusRequester)
             .onPreviewKeyEvent { keyEvent ->
+                if (keyEvent.isDpadUp() || keyEvent.isDpadDown()) {
+                    when {
+                        keyEvent.isKeyDown() -> {
+                            navigationState.isDirectionKeyHeld = true
+                            navigationState.isRepeatingDirection =
+                                keyEvent.nativeKeyEvent.repeatCount > 0
+                            cancelPendingDrawerCommit()
+                        }
+
+                        keyEvent.isKeyUp() -> {
+                            navigationState.isDirectionKeyHeld = false
+                            navigationState.isRepeatingDirection = false
+                            scheduleDrawerCommit(navigationState.focusedItem)
+                        }
+                    }
+                }
                 if (keyEvent.isDpadRight()) {
                     if (keyEvent.isKeyDown()) {
                         focusToContent()
@@ -217,6 +263,7 @@ fun DrawerContent(
             userDisplayName = userDisplayName,
             isNavigationFocused = isNavigationFocused,
             selectedWhenContentFocused = currentDrawerItem == DrawerItem.User,
+            animationMillis = drawerAnimationMillis,
             onFocused = { onDrawerItemFocused(DrawerItem.User) },
             onClick = { onDrawerItemFocused(DrawerItem.User) }
         )
@@ -262,6 +309,7 @@ fun DrawerContent(
                     isNavigationFocused = isNavigationFocused,
                     selectedWhenContentFocused = currentDrawerItem == item,
                     indicatorColorWhenContentFocused = MaterialTheme.colorScheme.surfaceVariant,
+                    animationMillis = drawerAnimationMillis,
                     onFocused = { onDrawerItemFocused(item) },
                     onClick = { onDrawerItemFocused(item) }
                 )
@@ -284,6 +332,7 @@ fun DrawerContent(
             isNavigationFocused = isNavigationFocused,
             selectedWhenContentFocused = currentDrawerItem == DrawerItem.Settings,
             indicatorColorWhenContentFocused = MaterialTheme.colorScheme.surfaceVariant,
+            animationMillis = drawerAnimationMillis,
             onFocused = { onDrawerItemFocused(DrawerItem.Settings) },
             onClick = {
                 onOpenSettings()
@@ -301,6 +350,7 @@ private fun DrawerUserNavigationItem(
     userDisplayName: String,
     isNavigationFocused: Boolean,
     selectedWhenContentFocused: Boolean,
+    animationMillis: Int,
     onFocused: () -> Unit,
     onClick: () -> Unit
 ) {
@@ -345,7 +395,7 @@ private fun DrawerUserNavigationItem(
                     } else {
                         MaterialTheme.colorScheme.inverseSurface
                     },
-                    animationSpec = tween(150),
+                    animationSpec = tween(animationMillis),
                     label = "user icon tint"
                 )
                 Icon(
@@ -386,6 +436,7 @@ private fun DrawerNavigationItem(
     isNavigationFocused: Boolean,
     selectedWhenContentFocused: Boolean,
     indicatorColorWhenContentFocused: Color,
+    animationMillis: Int,
     onFocused: () -> Unit,
     onClick: () -> Unit
 ) {
@@ -397,7 +448,7 @@ private fun DrawerNavigationItem(
         } else {
             MaterialTheme.colorScheme.inverseSurface
         },
-        animationSpec = tween(150),
+        animationSpec = tween(animationMillis),
         label = "drawer icon tint"
     )
 

@@ -29,6 +29,7 @@ import dev.aaa1115910.bv.tv.screens.main.pgc.MovieContent
 import dev.aaa1115910.bv.tv.screens.main.pgc.TvContent
 import dev.aaa1115910.bv.tv.screens.main.pgc.VarietyContent
 import dev.aaa1115910.bv.tv.util.KeepAlivePages
+import dev.aaa1115910.bv.tv.util.LocalTvUiPerformanceProfile
 import dev.aaa1115910.bv.tv.util.TOP_NAV_PRELOAD_STEP
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
@@ -59,6 +60,9 @@ fun PgcContent(
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger("PgcContent")
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
+    val performanceProfile = LocalTvUiPerformanceProfile.current
+    val enableFullPageAnimation =
+        enableMainUiAnimation && performanceProfile.allowFullPageAnimation
 
     val animeState = rememberLazyListState()
     val guoChuangState = rememberLazyListState()
@@ -170,8 +174,8 @@ fun PgcContent(
         ) {
             KeepAlivePages(
                 current = selectedTab,
-                maxKeep = 3,
-                enableAnimation = enableMainUiAnimation,
+                maxKeep = performanceProfile.maxKeepPages,
+                enableAnimation = enableFullPageAnimation,
                 orderedItems = PgcTopNavItem.entries,
                 preloadStep = TOP_NAV_PRELOAD_STEP,
             ) { screen, _ ->

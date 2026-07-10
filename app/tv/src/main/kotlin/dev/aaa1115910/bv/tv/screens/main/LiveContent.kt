@@ -42,6 +42,7 @@ import dev.aaa1115910.bv.tv.component.TopNav
 import dev.aaa1115910.bv.tv.component.TopNavItem
 import dev.aaa1115910.bv.tv.component.live.LiveRoomCard
 import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.bv.tv.util.LocalTvUiPerformanceProfile
 import dev.aaa1115910.bv.util.requestFocus
 import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.viewmodel.live.LiveViewModel
@@ -115,7 +116,10 @@ fun LiveContent(
     val logger = KotlinLogging.logger("LiveContent")
     val context = LocalContext.current
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
-    val navSelectionCommitDelay = if (enableMainUiAnimation) 80L else 60L
+    val performanceProfile = LocalTvUiPerformanceProfile.current
+    val enablePageAnimation =
+        enableMainUiAnimation && performanceProfile.allowFullPageAnimation
+    val navSelectionCommitDelay = if (enablePageAnimation) 80L else 0L
 
     val gridState = rememberLazyGridState()
     val subNavFocusRequester = remember { FocusRequester() }

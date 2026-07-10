@@ -44,6 +44,7 @@ import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.resizedImageUrl
+import dev.aaa1115910.bv.tv.util.deferredTvImageModel
 
 @Composable
 fun LiveRoomCard(
@@ -91,7 +92,9 @@ fun LiveRoomCard(
                     .clip(MaterialTheme.shapes.medium)
             ) {
                 AsyncImage(
-                    model = data.cover.resizedImageUrl(ImageSize.LargeCover),
+                    model = deferredTvImageModel(
+                        data.cover.resizedImageUrl(ImageSize.LargeCover)
+                    ),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
@@ -172,7 +175,7 @@ fun LiveRoomCard(
             ) {
                 // 主播头像
                 AsyncImage(
-                    model = data.face.resizedImageUrl(ImageSize.Icon),
+                    model = deferredTvImageModel(data.face.resizedImageUrl(ImageSize.Icon)),
                     contentDescription = null,
                     modifier = Modifier
                         .size(20.dp)

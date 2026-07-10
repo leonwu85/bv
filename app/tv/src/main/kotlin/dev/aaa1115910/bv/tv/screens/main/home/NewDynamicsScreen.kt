@@ -105,7 +105,9 @@ import dev.aaa1115910.bv.tv.component.TvSafeDynamicImage
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.tv.util.TOP_NAV_PRELOAD_STEP
-import dev.aaa1115910.bv.tv.util.adjacentNavItems
+import dev.aaa1115910.bv.tv.util.LocalTvPreloadCoordinator
+import dev.aaa1115910.bv.tv.util.LocalTvUiPerformanceProfile
+import dev.aaa1115910.bv.tv.util.boundedAdjacentNavItems
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.scrollToItemIfAvailable
@@ -137,6 +139,8 @@ fun NewDynamicsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val performanceProfile = LocalTvUiPerformanceProfile.current
+    val preloadCoordinator = LocalTvPreloadCoordinator.current
     val dynamicTabs = remember {
         listOf(
             DynamicTabType.All,
@@ -281,19 +285,21 @@ fun NewDynamicsScreen(
         }
     }
 
-    // 子 Tab 预加载：当前 + 左右各 TOP_NAV_PRELOAD_STEP
+    // 子 Tab 预加载：当前页优先，再按设备预算串行预取相邻页。
     // 使用 ensureFirstPage（互斥 + 空列表二次判断），与 HomeContent 预加载并存时不会双拉跳页
     LaunchedEffect(selectedTabType, dynamicViewModel.isLogin) {
         if (!dynamicViewModel.isLogin) return@LaunchedEffect
-        val targets = adjacentNavItems(
+        val targets = boundedAdjacentNavItems(
             items = dynamicTabs,
             current = selectedTabType,
             step = TOP_NAV_PRELOAD_STEP,
+            maxItems = performanceProfile.maxKeepPages,
         )
         scope.launch(Dispatchers.IO) {
             val ordered = listOf(selectedTabType) + targets.filter { it != selectedTabType }
-            ordered.forEach { type ->
-                launch {
+            dynamicViewModel.ensureFirstPage(selectedTabType)
+            preloadCoordinator.runExclusive {
+                ordered.filter { it != selectedTabType }.forEach { type ->
                     dynamicViewModel.ensureFirstPage(type)
                 }
             }

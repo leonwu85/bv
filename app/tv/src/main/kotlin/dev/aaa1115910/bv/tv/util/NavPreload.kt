@@ -20,3 +20,30 @@ fun <T> adjacentNavItems(
     val to = (index + safeStep).coerceAtMost(items.lastIndex)
     return items.subList(from, to + 1)
 }
+
+/**
+ * 按设备可承受的保留页数限制相邻窗口。优先当前页和右侧下一页，再补左侧页。
+ */
+fun <T> boundedAdjacentNavItems(
+    items: List<T>,
+    current: T,
+    step: Int = TOP_NAV_PRELOAD_STEP,
+    maxItems: Int,
+): List<T> {
+    val currentIndex = items.indexOf(current)
+    if (currentIndex < 0 || maxItems <= 1) return listOf(current)
+
+    val result = mutableListOf(current)
+    for (distance in 1..step.coerceAtLeast(0)) {
+        val nextIndex = currentIndex + distance
+        if (nextIndex <= items.lastIndex && result.size < maxItems) {
+            result += items[nextIndex]
+        }
+        val previousIndex = currentIndex - distance
+        if (previousIndex >= 0 && result.size < maxItems) {
+            result += items[previousIndex]
+        }
+        if (result.size >= maxItems) break
+    }
+    return result
+}

@@ -46,6 +46,7 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import dev.aaa1115910.biliapi.entity.CarouselData
 import dev.aaa1115910.bv.util.focusedBorder
+import dev.aaa1115910.bv.tv.util.deferredTvImageModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -105,7 +106,7 @@ fun CarouselCard(
 ) {
     AsyncImage(
         modifier = modifier.fillMaxWidth(),
-        model = data.cover,
+        model = deferredTvImageModel(data.cover),
         contentDescription = null,
         contentScale = ContentScale.Crop,
         alignment = Alignment.TopCenter
