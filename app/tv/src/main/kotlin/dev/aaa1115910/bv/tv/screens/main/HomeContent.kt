@@ -1,11 +1,13 @@
 package dev.aaa1115910.bv.tv.screens.main
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +44,7 @@ import dev.aaa1115910.bv.tv.util.KeepAlivePages
 import dev.aaa1115910.bv.tv.util.LocalTvUiPerformanceProfile
 import dev.aaa1115910.bv.tv.util.LocalTvPreloadCoordinator
 import dev.aaa1115910.bv.tv.util.TOP_NAV_PRELOAD_STEP
+import dev.aaa1115910.bv.tv.util.TvUiPerformanceTier
 import dev.aaa1115910.bv.tv.util.boundedAdjacentNavItems
 import dev.aaa1115910.bv.tv.util.homeNavItemsFlow
 import dev.aaa1115910.bv.tv.util.parseHomeNavItemsOrder
@@ -78,6 +81,7 @@ private data class DynamicAutoDrillRequest(
 private const val HOME_ADJACENT_PRELOAD_IDLE_MS = 500L
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun HomeContent(
     modifier: Modifier = Modifier,
     navFocusRequester: FocusRequester,
@@ -101,8 +105,19 @@ fun HomeContent(
     val enableFullPageAnimation =
         enableMainUiAnimation && performanceProfile.allowFullPageAnimation
 
-    val recommendState = rememberLazyGridState()
-    val popularState = rememberLazyGridState()
+    val homeVideoGridCacheWindow = remember(performanceProfile.tier) {
+        val (aheadFraction, behindFraction) = when (performanceProfile.tier) {
+            TvUiPerformanceTier.Conservative -> 0.35f to 0.10f
+            TvUiPerformanceTier.Balanced -> 0.50f to 0.15f
+            TvUiPerformanceTier.Standard -> 0.75f to 0.25f
+        }
+        LazyLayoutCacheWindow(
+            aheadFraction = aheadFraction,
+            behindFraction = behindFraction,
+        )
+    }
+    val recommendState = rememberLazyGridState(cacheWindow = homeVideoGridCacheWindow)
+    val popularState = rememberLazyGridState(cacheWindow = homeVideoGridCacheWindow)
     val dynamicState = rememberLazyGridState()
     val favoriteState = rememberLazyGridState()
     val followingSeasonState = rememberLazyGridState()

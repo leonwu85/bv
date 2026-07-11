@@ -34,10 +34,13 @@ import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.viewmodel.home.PopularViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+
+private const val VIDEO_GRID_PAGINATION_IDLE_MS = 120L
 
 @Composable
 fun PopularScreen(
@@ -65,13 +68,19 @@ fun PopularScreen(
 
     val videoList = popularViewModel.popularVideoList
     LaunchedEffect(videoList.size) {
-        snapshotFlow { focusedIndexState.intValue }
-            .map { index -> videoList.isNotEmpty() && index + 12 > videoList.size }
+        snapshotFlow {
+            videoList.isNotEmpty() &&
+                    focusedIndexState.intValue + 12 > videoList.size &&
+                    !lazyGridState.isScrollInProgress
+        }
             .distinctUntilChanged()
-            .collect { shouldLoadMore ->
+            .collectLatest { shouldLoadMore ->
                 if (shouldLoadMore) {
-                    scope.launch(Dispatchers.IO) {
-                        popularViewModel.loadMore()
+                    delay(VIDEO_GRID_PAGINATION_IDLE_MS)
+                    if (!lazyGridState.isScrollInProgress) {
+                        scope.launch(Dispatchers.IO) {
+                            popularViewModel.loadMore()
+                        }
                     }
                 }
             }
@@ -80,7 +89,7 @@ fun PopularScreen(
     val padding = dimensionResource(R.dimen.grid_padding) / 2
     val spacedBy = dimensionResource(R.dimen.grid_spacedBy) / 2
     val gridColumns = remember { Prefs.gridColumns }
-    ProvideListBringIntoViewSpec {
+    ProvideListBringIntoViewSpec(usePlatformDefault = true) {
         if (videoList.isEmpty()) {
             Box(
                 modifier = modifier.fillMaxSize(),

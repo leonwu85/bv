@@ -29,27 +29,32 @@ import kotlin.math.abs
 @Composable
 fun ProvideListBringIntoViewSpec(
     padding: Dp = 24.dp,
+    usePlatformDefault: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val paddingPx = LocalDensity.current.run { padding.toPx() }
-    val bringIntoViewSpec = remember(paddingPx) {
-        object : BringIntoViewSpec {
-            override fun calculateScrollDistance(
-                offset: Float,
-                size: Float,
-                containerSize: Float
-            ): Float = calculateScrollDistanceMod(
-                offset = offset,
-                size = size,
-                containerSize = containerSize,
-                padding = paddingPx
-            )
+    if (usePlatformDefault) {
+        content()
+    } else {
+        val paddingPx = LocalDensity.current.run { padding.toPx() }
+        val bringIntoViewSpec = remember(paddingPx) {
+            object : BringIntoViewSpec {
+                override fun calculateScrollDistance(
+                    offset: Float,
+                    size: Float,
+                    containerSize: Float
+                ): Float = calculateScrollDistanceMod(
+                    offset = offset,
+                    size = size,
+                    containerSize = containerSize,
+                    padding = paddingPx
+                )
+            }
         }
+        CompositionLocalProvider(
+            LocalBringIntoViewSpec provides bringIntoViewSpec,
+            content = content,
+        )
     }
-    CompositionLocalProvider(
-        LocalBringIntoViewSpec provides bringIntoViewSpec,
-        content = content,
-    )
 }
 
 private fun calculateScrollDistanceMod(

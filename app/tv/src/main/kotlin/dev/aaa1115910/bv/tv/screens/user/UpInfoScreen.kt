@@ -8,6 +8,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,9 +40,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Done
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -49,7 +53,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -57,6 +63,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -64,7 +71,6 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -93,11 +99,11 @@ import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity
 import dev.aaa1115910.bv.tv.component.ContentStatusCard
 import dev.aaa1115910.bv.tv.component.LoadingTip
-import dev.aaa1115910.bv.tv.R
 import dev.aaa1115910.bv.tv.component.TvDynamicImageUseCase
 import dev.aaa1115910.bv.tv.component.TvSafeDynamicImage
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.tv.manager.FollowStateManager
+import dev.aaa1115910.bv.tv.util.LocalTvImageLoadingAllowed
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.ImageSize
@@ -110,18 +116,23 @@ import dev.aaa1115910.bv.viewmodel.user.UserSpaceTab
 import dev.aaa1115910.bv.viewmodel.user.UserSpaceViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.getKoin
 
 private enum class TvUpSpaceTab(val title: String) {
+    Home("主页"),
     Dynamic("动态"),
     Video("投稿")
 }
 
 private val UpSpaceCardShape = RoundedCornerShape(8.dp)
 private val UpSpaceAccent = Color(0xFFFB7299)
+private val UpSpaceFocus = Color(0xFFFFB3C7)
+private val UpSpaceHeroSurface = Color(0xFF0F172A)
+private val UpSpaceLive = Color(0xFF35C98B)
 
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -133,18 +144,33 @@ fun UpSpaceScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger { }
-    var selectedTab by remember { mutableStateOf(TvUpSpaceTab.Dynamic) }
+    var selectedTab by remember { mutableStateOf(TvUpSpaceTab.Home) }
     var contentHasFocus by remember { mutableStateOf(false) }
     var isFollowing by remember { mutableStateOf(false) }
     var isLongPress by remember { mutableStateOf(false) }
+    var suppressHomeTabBringIntoView by remember { mutableStateOf(false) }
+    val homeFocusRequester = remember { FocusRequester() }
     val dynamicFocusRequester = remember { FocusRequester() }
     val videoFocusRequester = remember { FocusRequester() }
     val tabFocusRequester = remember { FocusRequester() }
+    val homeGridState = rememberLazyGridState()
     val dynamicGridState = rememberLazyStaggeredGridState()
     val videoGridState = rememberLazyGridState()
+    suspend fun focusHomeTabWithoutScrolling() {
+        suppressHomeTabBringIntoView = true
+        try {
+            withFrameNanos { }
+            runCatching { tabFocusRequester.requestFocus() }
+            delay(80)
+        } finally {
+            suppressHomeTabBringIntoView = false
+        }
+    }
+
     val headerCollapsed by remember {
         derivedStateOf {
             contentHasFocus && when (selectedTab) {
+                TvUpSpaceTab.Home -> homeGridState.isScrolledPastTop()
                 TvUpSpaceTab.Dynamic -> dynamicGridState.isScrolledPastTop()
                 TvUpSpaceTab.Video -> videoGridState.isScrolledPastTop()
             }
@@ -159,8 +185,11 @@ fun UpSpaceScreen(
             val mid = intent.getLongExtra("mid", 0)
             val name = intent.getStringExtra("name").orEmpty()
             val face = intent.getStringExtra("face").orEmpty()
+            selectedTab = TvUpSpaceTab.Home
+            contentHasFocus = false
             userSpaceViewModel.initialize(mid = mid, name = name, face = face)
-            userSpaceViewModel.selectTab(UserSpaceTab.Dynamic)
+            userSpaceViewModel.selectTab(UserSpaceTab.Home)
+            focusHomeTabWithoutScrolling()
         } else {
             context.finish()
         }
@@ -218,6 +247,7 @@ fun UpSpaceScreen(
         if (selectedTab == tab) return
         selectedTab = tab
         when (tab) {
+            TvUpSpaceTab.Home -> userSpaceViewModel.selectTab(UserSpaceTab.Home)
             TvUpSpaceTab.Dynamic -> userSpaceViewModel.selectTab(UserSpaceTab.Dynamic)
             TvUpSpaceTab.Video -> userSpaceViewModel.selectTab(UserSpaceTab.Video)
         }
@@ -227,10 +257,23 @@ fun UpSpaceScreen(
         contentHasFocus = false
         scope.launch {
             when (selectedTab) {
+                TvUpSpaceTab.Home -> homeGridState.scrollToItemIfAvailable(0)
                 TvUpSpaceTab.Dynamic -> dynamicGridState.scrollToItemIfAvailable(0)
                 TvUpSpaceTab.Video -> videoGridState.scrollToItemIfAvailable(0)
             }
             userSpaceViewModel.refreshSelectedTab()
+        }
+    }
+
+    fun refreshSpace() {
+        contentHasFocus = false
+        scope.launch {
+            when (selectedTab) {
+                TvUpSpaceTab.Home -> homeGridState.scrollToItemIfAvailable(0)
+                TvUpSpaceTab.Dynamic -> dynamicGridState.scrollToItemIfAvailable(0)
+                TvUpSpaceTab.Video -> videoGridState.scrollToItemIfAvailable(0)
+            }
+            userSpaceViewModel.refresh()
         }
     }
 
@@ -266,9 +309,10 @@ fun UpSpaceScreen(
                             }
                         }
                     },
+                    onRefreshClick = ::refreshSpace,
                     onLiveClick = {
                         val live = userSpaceViewModel.liveRoom
-                        if (live != null && live.roomStatus == 1) {
+                        if (live != null && live.liveStatus == 1) {
                             VideoPlayerV3Activity.actionStartLive(
                                 context = context,
                                 roomId = live.roomId,
@@ -281,12 +325,12 @@ fun UpSpaceScreen(
                             "暂无直播".toast(context)
                         }
                     },
-                    onMoreClick = { "更多功能暂未实现".toast(context) }
                 )
                 UpSpaceTabRow(
                     selectedTab = selectedTab,
                     headerCollapsed = headerCollapsed,
                     focusRequester = tabFocusRequester,
+                    suppressBringIntoView = suppressHomeTabBringIntoView,
                     onSelectTab = ::selectTab,
                     onTabFocused = {
                         contentHasFocus = false
@@ -298,6 +342,30 @@ fun UpSpaceScreen(
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
             when (selectedTab) {
+                TvUpSpaceTab.Home -> UpSpaceHomeContent(
+                    viewModel = userSpaceViewModel,
+                    gridState = homeGridState,
+                    firstItemFocusRequester = homeFocusRequester,
+                    tabFocusRequester = tabFocusRequester,
+                    onContentFocused = {
+                        contentHasFocus = true
+                    },
+                    onReturnToTab = {
+                        contentHasFocus = false
+                    },
+                    isLongPress = isLongPress,
+                    onOpenVideo = { aid, title ->
+                        VideoInfoActivity.actionStart(
+                            context = context,
+                            aid = aid,
+                            proxyArea = ProxyArea.checkProxyArea(title)
+                        )
+                    },
+                    onClickDynamic = { dynamic ->
+                        openDynamicItem(context, dynamic)
+                    }
+                )
+
                 TvUpSpaceTab.Dynamic -> UpSpaceDynamicContent(
                     viewModel = userSpaceViewModel,
                     gridState = dynamicGridState,
@@ -361,93 +429,178 @@ private fun UpSpaceHeader(
     isFollowing: Boolean,
     onFollowClick: () -> Unit,
     onLiveClick: () -> Unit,
-    onMoreClick: () -> Unit
+    onRefreshClick: () -> Unit
 ) {
+    val headerHeight by animateDpAsState(
+        targetValue = if (collapsed) 76.dp else 224.dp,
+        label = "up space hero height"
+    )
     val avatarSize by animateDpAsState(
-        targetValue = if (collapsed) 38.dp else 58.dp,
-        label = "up header avatar size"
+        targetValue = if (collapsed) 44.dp else 92.dp,
+        label = "up space hero avatar size"
     )
-    val topPadding by animateDpAsState(
-        targetValue = if (collapsed) 6.dp else 12.dp,
-        label = "up header top padding"
+    val titleSize by animateFloatAsState(
+        targetValue = if (collapsed) 20f else 32f,
+        label = "up space hero title size"
     )
-    val bottomPadding by animateDpAsState(
-        targetValue = if (collapsed) 6.dp else 10.dp,
-        label = "up header bottom padding"
-    )
-    val nameFontSize by animateFloatAsState(
-        targetValue = if (collapsed) 22f else 30f,
-        label = "up header name font size"
-    )
+    val archiveCount = viewModel.archiveCount.takeIf { it > 0 } ?: viewModel.tvSpaceVideos.size
 
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(start = 24.dp, top = topPadding, end = 24.dp, bottom = bottomPadding),
-        horizontalArrangement = Arrangement.spacedBy(if (collapsed) 10.dp else 16.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .height(headerHeight)
+            .background(UpSpaceHeroSurface)
     ) {
-        UserAvatar(
-            avatar = viewModel.upFace,
-            modifier = Modifier.size(avatarSize)
-        )
-
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(if (collapsed) 0.dp else 6.dp)
+        if (!collapsed) {
+            UpSpaceHeroBackdrop(
+                imageUrl = viewModel.topPhoto,
+                alignmentY = viewModel.topPhotoAlignmentY
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    horizontal = if (collapsed) 24.dp else 40.dp,
+                    vertical = if (collapsed) 12.dp else 24.dp
+                ),
+            horizontalArrangement = Arrangement.spacedBy(if (collapsed) 12.dp else 18.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+            UserAvatar(
+                avatar = viewModel.upFace,
+                modifier = Modifier.size(avatarSize)
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(if (collapsed) 2.dp else 10.dp)
             ) {
-                Text(
-                    modifier = Modifier.weight(1f, fill = false),
-                    text = viewModel.upName.ifBlank { "UP 主" },
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = nameFontSize.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (!collapsed) {
-                    HeaderBadges(viewModel = viewModel)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        modifier = Modifier.weight(1f, fill = false),
+                        text = viewModel.upName.ifBlank { "UP主" },
+                        color = Color.White,
+                        fontSize = titleSize.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (!collapsed) HeaderBadges(viewModel = viewModel)
+                }
+                if (collapsed) {
+                    Text(
+                        text = "${viewModel.fans.formatCount()} 粉丝 · ${archiveCount.formatCount()} 个作品",
+                        color = Color.White.copy(alpha = 0.72f),
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                } else {
+                    Text(
+                        text = viewModel.sign.ifBlank { "这个 UP 主还没有写简介" },
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 16.sp,
+                        lineHeight = 22.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    HeroStats(
+                        following = viewModel.friend,
+                        fans = viewModel.fans,
+                        likes = viewModel.likeCount,
+                        archives = archiveCount
+                    )
                 }
             }
-
-            if (!collapsed) {
-                Text(
-                    text = buildString {
-                        append("关注 ${viewModel.friend.formatCount()}")
-                        append(" · 粉丝 ${viewModel.fans.formatCount()}")
-                        if (viewModel.sign.isNotBlank()) {
-                            append("   |   ")
-                            append(viewModel.sign.replace("\n", " "))
-                        }
-                    },
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                HeaderStats(viewModel = viewModel)
-            }
-        }
-
-        if (!collapsed) {
             HeaderActions(
                 viewModel = viewModel,
                 isFollowing = isFollowing,
                 onFollowClick = onFollowClick,
                 onLiveClick = onLiveClick,
-                onMoreClick = onMoreClick
+                onRefreshClick = onRefreshClick
             )
         }
     }
 }
 
+@Composable
+private fun UpSpaceHeroBackdrop(imageUrl: String, alignmentY: Float) {
+    val imageLoadingAllowed = LocalTvImageLoadingAllowed.current
+    if (imageLoadingAllowed && imageUrl.isNotBlank()) {
+        AsyncImage(
+            modifier = Modifier.fillMaxSize(),
+            model = imageUrl.resizedImageUrl(ImageSize.DynamicDetailMedium),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            alignment = BiasAlignment(0f, alignmentY.coerceIn(-1f, 1f))
+        )
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        UpSpaceHeroSurface.copy(alpha = 0.98f),
+                        UpSpaceHeroSurface.copy(alpha = 0.78f),
+                        UpSpaceHeroSurface.copy(alpha = 0.28f)
+                    )
+                )
+            )
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color.Transparent, UpSpaceHeroSurface.copy(alpha = 0.96f))
+                )
+            )
+    )
+}
+
+@Composable
+private fun HeroStats(following: Int, fans: Int, likes: Int, archives: Int) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        HeroStat("关注", following)
+        HeroStat("粉丝", fans)
+        HeroStat("获赞", likes)
+        HeroStat("投稿", archives)
+    }
+}
+
+@Composable
+private fun HeroStat(label: String, count: Int) {
+    Column(
+        modifier = Modifier
+            .width(96.dp)
+            .height(64.dp)
+            .clip(MaterialTheme.shapes.small)
+            .background(Color.White.copy(alpha = 0.14f))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = count.formatCount(),
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = label,
+            color = Color.White.copy(alpha = 0.7f),
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
 @Composable
 private fun UserAvatar(
     avatar: String,
@@ -509,45 +662,6 @@ private fun HeaderBadge(
     }
 }
 
-@Composable
-private fun HeaderStats(viewModel: UserSpaceViewModel) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        HeaderStat(label = "关注", count = viewModel.friend)
-        HeaderStat(label = "粉丝", count = viewModel.fans)
-        HeaderStat(label = "获赞", count = viewModel.likeCount)
-        HeaderStat(label = "投稿", count = viewModel.archiveCount.takeIf { it > 0 } ?: viewModel.tvSpaceVideos.size)
-    }
-}
-
-@Composable
-private fun HeaderStat(label: String, count: Int) {
-    Column(
-        modifier = Modifier
-            .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-            .padding(horizontal = 14.dp, vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = count.formatCount(),
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Clip
-        )
-        Text(
-            text = label,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
-            fontSize = 10.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Clip
-        )
-    }
-}
-
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun HeaderActions(
@@ -555,9 +669,10 @@ private fun HeaderActions(
     isFollowing: Boolean,
     onFollowClick: () -> Unit,
     onLiveClick: () -> Unit,
-    onMoreClick: () -> Unit
+    onRefreshClick: () -> Unit
 ) {
     val isSelf = viewModel.upMid == Prefs.uid
+    val isLive = viewModel.liveRoom?.liveStatus == 1
     val followText = when {
         isSelf -> "自己"
         isFollowing -> "已关注"
@@ -571,9 +686,9 @@ private fun HeaderActions(
         HeaderActionButton(
             modifier = Modifier.width(
                 when {
-                    isSelf -> 54.dp
-                    followText == "已关注" -> 78.dp
-                    else -> 66.dp
+                    isSelf -> 76.dp
+                    followText == "已关注" -> 88.dp
+                    else -> 76.dp
                 }
             ),
             text = followText,
@@ -583,24 +698,26 @@ private fun HeaderActions(
                 else -> Icons.Rounded.Add
             },
             enabled = !isSelf,
-            containerColor = if (isFollowing) {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)
+            containerColor = if (isSelf || isFollowing) {
+                Color.White.copy(alpha = 0.16f)
             } else {
                 UpSpaceAccent
             },
             onClick = onFollowClick
         )
         HeaderActionButton(
-            modifier = Modifier.width(72.dp),
-            text = if (viewModel.liveRoom?.liveStatus == 1) "直播中" else "直播间",
-            containerColor = Color(0xFF35C98B),
+            modifier = Modifier.width(86.dp),
+            text = if (isLive) "直播中" else "暂无直播",
+            enabled = isLive,
+            containerColor = if (isLive) UpSpaceLive else Color.White.copy(alpha = 0.16f),
             onClick = onLiveClick
         )
         HeaderActionButton(
-            modifier = Modifier.width(58.dp),
-            text = "更多",
-            containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f),
-            onClick = onMoreClick
+            modifier = Modifier.width(76.dp),
+            text = "刷新",
+            icon = Icons.Rounded.Refresh,
+            containerColor = Color.White.copy(alpha = 0.16f),
+            onClick = onRefreshClick
         )
     }
 }
@@ -615,46 +732,48 @@ private fun HeaderActionButton(
     containerColor: Color,
     onClick: () -> Unit
 ) {
+    val contentColor = if (enabled) Color.White else Color.White.copy(alpha = 0.48f)
     Surface(
-        modifier = modifier.height(34.dp),
+        modifier = modifier.height(48.dp),
         enabled = enabled,
         onClick = onClick,
         colors = ClickableSurfaceDefaults.colors(
             containerColor = containerColor,
             focusedContainerColor = containerColor,
             pressedContainerColor = containerColor.copy(alpha = 0.78f),
-            disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+            disabledContainerColor = containerColor.copy(alpha = 0.12f)
         ),
         shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.small),
         border = ClickableSurfaceDefaults.border(
             focusedBorder = Border(
                 border = BorderStroke(
-                    width = 2.dp,
-                    color = Color.White.copy(alpha = 0.82f)
+                    width = 3.dp,
+                    color = Color.White.copy(alpha = 0.94f)
                 ),
                 shape = MaterialTheme.shapes.small
             )
-        )
+        ),
+        scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1.02f)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+                .padding(horizontal = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (icon != null) {
                 Icon(
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(16.dp),
                     imageVector = icon,
                     contentDescription = null,
-                    tint = Color.White
+                    tint = contentColor
                 )
             }
             Text(
                 text = text,
-                color = Color.White,
-                fontSize = 13.sp,
+                color = contentColor,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -663,12 +782,13 @@ private fun HeaderActionButton(
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
+@OptIn(ExperimentalTvMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun UpSpaceTabRow(
     selectedTab: TvUpSpaceTab,
     headerCollapsed: Boolean,
     focusRequester: FocusRequester,
+    suppressBringIntoView: Boolean,
     onSelectTab: (TvUpSpaceTab) -> Unit,
     onTabFocused: () -> Unit,
     onRefreshSelectedTab: () -> Unit
@@ -682,36 +802,54 @@ private fun UpSpaceTabRow(
         targetValue = if (headerCollapsed) 10.dp else 12.dp,
         label = "up tab bottom padding"
     )
-    TabRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 24.dp, top = topPadding, end = 24.dp, bottom = bottomPadding)
-            .clip(UpSpaceCardShape)
-            .focusRestorer(focusRequester),
-        selectedTabIndex = tabs.indexOf(selectedTab)
+    val defaultBringIntoViewSpec = LocalBringIntoViewSpec.current
+    val noScrollBringIntoViewSpec = remember {
+        object : BringIntoViewSpec {
+            override fun calculateScrollDistance(
+                offset: Float,
+                size: Float,
+                containerSize: Float
+            ): Float = 0f
+        }
+    }
+    CompositionLocalProvider(
+        LocalBringIntoViewSpec provides if (suppressBringIntoView) {
+            noScrollBringIntoViewSpec
+        } else {
+            defaultBringIntoViewSpec
+        }
     ) {
-        tabs.forEach { tab ->
-            Tab(
-                modifier = if (tab == selectedTab) Modifier.focusRequester(focusRequester) else Modifier,
-                selected = tab == selectedTab,
-                onFocus = {
-                    onTabFocused()
-                    onSelectTab(tab)
-                },
-                onClick = {
-                    if (tab == selectedTab) {
-                        onRefreshSelectedTab()
-                    } else {
+        TabRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 40.dp, top = topPadding, end = 40.dp, bottom = bottomPadding)
+                .clip(UpSpaceCardShape)
+                .focusRestorer(focusRequester),
+            selectedTabIndex = tabs.indexOf(selectedTab)
+        ) {
+            tabs.forEach { tab ->
+                Tab(
+                    modifier = if (tab == selectedTab) Modifier.focusRequester(focusRequester) else Modifier,
+                    selected = tab == selectedTab,
+                    onFocus = {
+                        onTabFocused()
                         onSelectTab(tab)
+                    },
+                    onClick = {
+                        if (tab == selectedTab) {
+                            onRefreshSelectedTab()
+                        } else {
+                            onSelectTab(tab)
+                        }
                     }
+                ) {
+                    Text(
+                        modifier = Modifier.padding(horizontal = 32.dp, vertical = 10.dp),
+                        text = tab.title,
+                        fontSize = 18.sp,
+                        fontWeight = if (tab == selectedTab) FontWeight.SemiBold else FontWeight.Normal
+                    )
                 }
-            ) {
-                Text(
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp),
-                    text = tab.title,
-                    fontSize = 16.sp,
-                    fontWeight = if (tab == selectedTab) FontWeight.SemiBold else FontWeight.Normal
-                )
             }
         }
     }
@@ -749,6 +887,155 @@ private fun Modifier.backToTab(
     }
 }
 
+@Composable
+private fun UpSpaceHomeContent(
+    viewModel: UserSpaceViewModel,
+    gridState: LazyGridState,
+    firstItemFocusRequester: FocusRequester,
+    tabFocusRequester: FocusRequester,
+    onContentFocused: () -> Unit,
+    onReturnToTab: () -> Unit,
+    isLongPress: Boolean,
+    onOpenVideo: (aid: Long, title: String) -> Unit,
+    onClickDynamic: (DynamicItem) -> Unit
+) {
+    val videos = viewModel.tvSpaceVideos.take(4)
+    val dynamics = viewModel.dynamicItems.take(4)
+    val archiveCount = viewModel.archiveCount.takeIf { it > 0 } ?: viewModel.tvSpaceVideos.size
+
+    when {
+        videos.isEmpty() && dynamics.isEmpty() &&
+            (viewModel.videoLoading || viewModel.dynamicLoading) -> LoadingBox()
+
+        videos.isEmpty() && dynamics.isEmpty() -> EmptyBox(text = "暂无内容")
+
+        else -> ProvideListBringIntoViewSpec {
+            LazyVerticalGrid(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .backToTab(tabFocusRequester, onReturnToTab),
+                columns = GridCells.Fixed(2),
+                state = gridState,
+                contentPadding = PaddingValues(start = 40.dp, top = 24.dp, end = 40.dp, bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                horizontalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    HomeSectionHeader(
+                        title = "最新投稿",
+                        subtitle = "共 ${archiveCount.formatCount()} 个作品"
+                    )
+                }
+                if (videos.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        HomeSectionHint(if (viewModel.videoLoading) "正在加载投稿" else "暂无投稿")
+                    }
+                } else {
+                    itemsIndexed(
+                        items = videos,
+                        key = { index, video -> "home-video:$index:${video.bvid.ifBlank { video.avid.toString() }}" }
+                    ) { index, video ->
+                        val itemModifier = Modifier
+                            .then(if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier)
+                            .then(
+                                if (index < 2) Modifier.focusUpToTab(tabFocusRequester, onReturnToTab)
+                                else Modifier
+                            )
+                        SmallVideoCard(
+                            modifier = itemModifier,
+                            data = video,
+                            onClick = {
+                                if (!isLongPress) onOpenVideo(video.avid, video.title)
+                            },
+                            onFocus = onContentFocused
+                        )
+                    }
+                }
+
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    HomeSectionHeader(
+                        title = "最近动态",
+                        subtitle = "展示最新动态"
+                    )
+                }
+                if (dynamics.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        HomeSectionHint(if (viewModel.dynamicLoading) "正在加载动态" else "暂无动态")
+                    }
+                } else {
+                    itemsIndexed(
+                        items = dynamics,
+                        key = { index, item -> "home-dynamic:$index:${item.id ?: "dynamic"}" }
+                    ) { index, item ->
+                        val itemModifier = Modifier
+                            .then(
+                                if (videos.isEmpty() && index == 0) {
+                                    Modifier.focusRequester(firstItemFocusRequester)
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .then(
+                                if (videos.isEmpty() && index < 2) {
+                                    Modifier.focusUpToTab(tabFocusRequester, onReturnToTab)
+                                } else {
+                                    Modifier
+                                }
+                            )
+                        UpDynamicCard(
+                            modifier = itemModifier,
+                            dynamicItem = item,
+                            onClick = { onClickDynamic(item) },
+                            onFocus = onContentFocused
+                        )
+                    }
+                }
+                if (viewModel.videoLoading || viewModel.dynamicLoading) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        LoadingLine()
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeSectionHeader(title: String, subtitle: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = subtitle,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+            fontSize = 14.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun HomeSectionHint(text: String) {
+    Text(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        text = text,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
+        fontSize = 15.sp
+    )
+}
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun UpSpaceDynamicContent(
@@ -771,9 +1058,9 @@ private fun UpSpaceDynamicContent(
                     .backToTab(tabFocusRequester, onReturnToTab),
                 columns = StaggeredGridCells.Fixed(2),
                 state = gridState,
-                contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 32.dp, bottom = 28.dp),
-                verticalItemSpacing = 16.dp,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                contentPadding = PaddingValues(start = 40.dp, end = 40.dp, top = 24.dp, bottom = 32.dp),
+                verticalItemSpacing = 18.dp,
+                horizontalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 itemsIndexed(
                     items = viewModel.dynamicItems,
@@ -825,8 +1112,7 @@ private fun UpSpaceVideoContent(
     onOpenVideo: (aid: Long, title: String) -> Unit,
     onLoadMore: () -> Unit
 ) {
-    val padding = dimensionResource(R.dimen.grid_padding) / 2
-    val spacedBy = dimensionResource(R.dimen.grid_spacedBy) / 2
+    val padding = 40.dp
 
     when {
         viewModel.tvSpaceVideos.isEmpty() && viewModel.videoLoading -> LoadingBox()
@@ -840,12 +1126,12 @@ private fun UpSpaceVideoContent(
                 state = gridState,
                 contentPadding = PaddingValues(
                     start = padding,
-                    top = 32.dp,
+                    top = 24.dp,
                     end = padding,
-                    bottom = padding
+                    bottom = 32.dp
                 ),
-                verticalArrangement = Arrangement.spacedBy(spacedBy),
-                horizontalArrangement = Arrangement.spacedBy(spacedBy)
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                horizontalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 itemsIndexed(
                     items = viewModel.tvSpaceVideos,
@@ -914,7 +1200,7 @@ private fun UpDynamicCard(
         ),
         border = CardDefaults.border(
             focusedBorder = Border(
-                border = BorderStroke(3.dp, UpSpaceAccent),
+                border = BorderStroke(3.dp, UpSpaceFocus),
                 shape = UpSpaceCardShape
             )
         ),

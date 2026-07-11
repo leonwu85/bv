@@ -119,6 +119,7 @@ import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.viewmodel.home.DynamicViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -134,6 +135,7 @@ private val DynamicAccent = Color(0xFFFB7299)
 private val DynamicCardShape = RoundedCornerShape(8.dp)
 private const val DynamicChargingUrlPrefix = "https://www.bilibili.com/h5/upower/index?mid="
 private const val DYNAMIC_ADJACENT_PRELOAD_IDLE_MS = 500L
+private const val DYNAMIC_VIDEO_PAGINATION_IDLE_MS = 120L
 
 @Composable
 private fun rememberDynamicListImageModel(url: String): ImageRequest? {
@@ -335,13 +337,22 @@ fun NewDynamicsScreen(
                     itemCount > 0 &&
                     index + 12 > itemCount &&
                     dynamicViewModel.hasMore(selectedTabType) &&
-                    !dynamicViewModel.isLoading(selectedTabType)
+                    !dynamicViewModel.isLoading(selectedTabType) &&
+                    (selectedTabType != DynamicTabType.Video || !lazyGridState.isScrollInProgress)
         }
             .distinctUntilChanged()
-            .collect { shouldLoadMore ->
+            .collectLatest { shouldLoadMore ->
                 if (shouldLoadMore) {
+                    if (selectedTabType == DynamicTabType.Video) {
+                        delay(DYNAMIC_VIDEO_PAGINATION_IDLE_MS)
+                        if (lazyGridState.isScrollInProgress) return@collectLatest
+                    }
                     withContext(Dispatchers.IO) {
-                        dynamicViewModel.loadMoreByType(selectedTabType)
+                        if (dynamicViewModel.hasMore(selectedTabType) &&
+                            !dynamicViewModel.isLoading(selectedTabType)
+                        ) {
+                            dynamicViewModel.loadMoreByType(selectedTabType)
+                        }
                     }
                 }
             }
@@ -617,7 +628,7 @@ private fun VideoDynamicContent(
         return
     }
 
-    ProvideListBringIntoViewSpec {
+    ProvideListBringIntoViewSpec(usePlatformDefault = true) {
         LazyVerticalGrid(
             modifier = Modifier
                 .fillMaxSize()

@@ -26,7 +26,9 @@ import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.fWarn
 import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -223,6 +225,8 @@ class DynamicViewModel(
             videoUpdateBaseline = dynamicVideoData.updateBaseline
             videoHasMore = dynamicVideoData.hasMore
             logger.fInfo { "Load dynamic video list page: $currentVideoPage,size: ${dynamicVideoData.videos.size}" }
+        } catch (exception: CancellationException) {
+            throw exception
         } catch (it: Throwable) {
             logger.fWarn { "Load dynamic video list failed: ${it.stackTraceToString()}" }
             when (it) {
@@ -233,7 +237,7 @@ class DynamicViewModel(
             }
         } finally {
             if (generation == videoLoadGeneration) {
-                withContext(Dispatchers.Main) { loadingVideo = false }
+                withContext(NonCancellable + Dispatchers.Main.immediate) { loadingVideo = false }
             }
         }
     }
@@ -258,6 +262,8 @@ class DynamicViewModel(
             allUpdateBaseline = dynamicData.updateBaseline
             allHasMore = dynamicData.hasMore
             logger.fInfo { "Load dynamic all list page: $currentAllPage,size: ${dynamicData.dynamics.size}" }
+        } catch (exception: CancellationException) {
+            throw exception
         } catch (it: Throwable) {
             logger.fWarn { "Load dynamic all list failed: ${it.stackTraceToString()}" }
             when (it) {
@@ -268,7 +274,7 @@ class DynamicViewModel(
             }
         } finally {
             if (generation == allLoadGeneration) {
-                withContext(Dispatchers.Main) { loadingAll = false }
+                withContext(NonCancellable + Dispatchers.Main.immediate) { loadingAll = false }
             }
         }
     }
@@ -442,6 +448,8 @@ class DynamicViewModel(
             pgcUpdateBaseline = dynamicData.updateBaseline
             pgcHasMore = dynamicData.hasMore
             logger.fInfo { "Load dynamic pgc list page: $currentPgcPage,size: ${dynamicData.dynamics.size}" }
+        } catch (exception: CancellationException) {
+            throw exception
         } catch (it: Throwable) {
             if (it.message?.contains("4101132") == true || it.message == "请求数据发生错误，请刷新或稍后重试") {
                 if (generation == pgcLoadGeneration) pgcHasMore = false
@@ -457,7 +465,7 @@ class DynamicViewModel(
             }
         } finally {
             if (generation == pgcLoadGeneration) {
-                withContext(Dispatchers.Main) { loadingPgc = false }
+                withContext(NonCancellable + Dispatchers.Main.immediate) { loadingPgc = false }
             }
         }
     }
@@ -487,6 +495,8 @@ class DynamicViewModel(
             if (dynamicData.dynamics.isEmpty()) {
                 logger.fInfo { "No article data returned, stop auto loading" }
             }
+        } catch (exception: CancellationException) {
+            throw exception
         } catch (it: Throwable) {
             if (generation == articleLoadGeneration) articleHasMore = false
             if (it.message?.contains("4101132") == true || it.message == "请求数据发生错误，请刷新或稍后重试") {
@@ -502,7 +512,7 @@ class DynamicViewModel(
             }
         } finally {
             if (generation == articleLoadGeneration) {
-                withContext(Dispatchers.Main) { loadingArticle = false }
+                withContext(NonCancellable + Dispatchers.Main.immediate) { loadingArticle = false }
             }
         }
     }

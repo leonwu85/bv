@@ -1,7 +1,7 @@
 import java.io.File
 
 object ProtobufConfiguration {
-    private val usedProtoFiles = setOf(
+    val usedProtoFiles = setOf(
         "bilibili/app/archive/middleware/v1/preload.proto",
         "bilibili/app/archive/v1/archive.proto",
         "bilibili/app/card/v1/ad.proto",
@@ -35,16 +35,13 @@ object ProtobufConfiguration {
         "bilibili/rpc/status.proto",
         "common/ErrorProto.proto",
     )
-    val excludeProtoFiles = getAllProtoFiles() - usedProtoFiles
-
-    private fun getAllProtoFiles(): Set<String> {
-        val rootDir = File("bili-api/grpc/proto")
-        val protoFiles = mutableSetOf<String>()
-        rootDir.walk().forEach {
-            if (it.isFile && it.extension == "proto") {
-                protoFiles.add(it.relativeTo(rootDir).invariantSeparatorsPath)
-            }
+    fun validateProtoFiles(rootDir: File) {
+        require(rootDir.isDirectory) {
+            "Proto source directory does not exist: ${rootDir.absolutePath}"
         }
-        return protoFiles
+        val missingProtoFiles = usedProtoFiles.filterNot { rootDir.resolve(it).isFile }
+        require(missingProtoFiles.isEmpty()) {
+            "Configured proto files do not exist: ${missingProtoFiles.sorted().joinToString()}"
+        }
     }
 }

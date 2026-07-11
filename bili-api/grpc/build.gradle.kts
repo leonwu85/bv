@@ -15,9 +15,14 @@ dependencies {
     implementation(libs.kotlinx.coroutines)
 }
 
+val protoRootDir = layout.projectDirectory.dir("proto").asFile
+ProtobufConfiguration.validateProtoFiles(protoRootDir)
+
 sourceSets["main"].proto {
-    srcDir("./proto")
-    ProtobufConfiguration.excludeProtoFiles.forEach(::exclude)
+    srcDir(protoRootDir)
+    // Generate only the protocol entry points used by the app. Enumerating exclusions
+    // allowed the Windows build to generate every proto and inflate the release APK.
+    setIncludes(ProtobufConfiguration.usedProtoFiles)
 }
 
 protobuf {
