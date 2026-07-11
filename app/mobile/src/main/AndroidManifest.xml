@@ -35,6 +35,11 @@
             android:label="@string/title_mobile_activity_dynamic_detail"
             android:theme="@style/Theme.BV.Mobile" />
         <activity
+            android:name=".activities.TopicDynamicActivity"
+            android:exported="false"
+            android:label="&#x8BDD;&#x9898;&#x52A8;&#x6001;"
+            android:theme="@style/Theme.BV.Mobile" />
+        <activity
             android:name=".activities.FollowingUserActivity"
             android:exported="false"
             android:label="@string/title_mobile_activity_following_user"

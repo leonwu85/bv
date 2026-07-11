@@ -166,6 +166,23 @@ class UserRepository(
         updateAvatar()
     }
 
+    /**
+     * Verifies that the cookie returned by a login flow is usable before it is persisted.
+     * The account id from the authenticated endpoint must match the one from the login result.
+     */
+    suspend fun validateAuthData(authData: AuthData) {
+        require(authData.uid > 0L) { "Invalid account id returned by login" }
+        require(authData.sessData.isNotBlank()) { "Login cookie is empty" }
+
+        val profile = BiliHttpApi.getUserSelfInfo(
+            buvid3 = Prefs.buvid3,
+            sessData = authData.sessData
+        ).getResponseData()
+        check(profile.mid == authData.uid) {
+            "Login cookie does not match the returned account"
+        }
+    }
+
     suspend fun addUser(authData: AuthData) {
         val existUser = db.userDao().findUserByUid(authData.uid)
         existUser?.let {

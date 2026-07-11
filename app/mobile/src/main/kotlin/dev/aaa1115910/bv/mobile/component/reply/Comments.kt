@@ -34,6 +34,7 @@ import com.origeek.imageViewer.previewer.ImagePreviewerState
 import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
+import dev.aaa1115910.biliapi.entity.reply.CommentVote
 
 @OptIn(
     ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class,
@@ -45,6 +46,7 @@ fun Comments(
     previewerState: ImagePreviewerState,
     header: (@Composable () -> Unit)? = null,
     comments: List<Comment>,
+    vote: CommentVote? = null,
     commentSort: CommentSort,
     isLoading: Boolean,
     isRefreshing: Boolean,
@@ -82,6 +84,14 @@ fun Comments(
         ) {
             item {
                 header?.invoke()
+            }
+            vote?.let { commentVote ->
+                item {
+                    CommentVoteCard(
+                        vote = commentVote,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
             }
             stickyHeader {
                 Row(

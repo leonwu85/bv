@@ -7,7 +7,8 @@ import dev.aaa1115910.biliapi.entity.Picture
 data class CommentsData(
     val comments: List<Comment> = emptyList(),
     val nextPage: CommentPage = CommentPage(),
-    val hasNext: Boolean
+    val hasNext: Boolean,
+    val vote: CommentVote? = null
 ) {
     companion object {
         fun fromCommentData(commentData: dev.aaa1115910.biliapi.http.entity.reply.CommentData): CommentsData {
@@ -27,11 +28,28 @@ data class CommentsData(
                 nextPage = CommentPage(
                     nextAppPage = mainListReply.paginationReply.nextOffset
                 ),
-                hasNext = mainListReply.cursor.isEnd.not()
+                hasNext = mainListReply.cursor.isEnd.not(),
+                vote = mainListReply
+                    .takeIf { it.hasVoteCard() }
+                    ?.voteCard
+                    ?.takeIf { it.voteId > 0L }
+                    ?.let { voteCard ->
+                        CommentVote(
+                            id = voteCard.voteId,
+                            title = voteCard.title,
+                            count = voteCard.count
+                        )
+                    }
             )
         }
     }
 }
+
+data class CommentVote(
+    val id: Long,
+    val title: String,
+    val count: Long
+)
 
 data class Comment(
     val rpid: Long,

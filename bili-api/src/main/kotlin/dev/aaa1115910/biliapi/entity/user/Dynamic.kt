@@ -21,7 +21,7 @@ import okhttp3.internal.toLongOrDefault
  * 富文本节点类型
  */
 enum class RichTextNodeType {
-    Text, Emoji, At, Other
+    Text, Emoji, At, Topic, Other
 }
 
 /**
@@ -69,6 +69,13 @@ private fun dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem.Modules.Dynam
                 uri = node.jumpUrl
             )
 
+            "RICH_TEXT_NODE_TYPE_TOPIC" -> RichTextNode(
+                text = node.origText.ifBlank { node.text },
+                type = RichTextNodeType.Topic,
+                rid = node.rid,
+                uri = node.jumpUrl
+            )
+
             "RICH_TEXT_NODE_TYPE_VOTE" -> RichTextNode(
                 text = node.origText.ifBlank { node.text },
                 type = RichTextNodeType.Other,
@@ -109,10 +116,10 @@ private fun List<TextNode>.toRichTextNodes(): List<RichTextNode> =
 
             TextNode.TextNodeType.BIZ_LINK -> RichTextNode(
                 text = node.rawText,
-                type = if (node.link.linkTypeEnum == LinkNodeType.VOTE) {
-                    RichTextNodeType.Other
-                } else {
-                    RichTextNodeType.Text
+                type = when (node.link.linkTypeEnum) {
+                    LinkNodeType.VOTE -> RichTextNodeType.Other
+                    LinkNodeType.HASH_TAG, LinkNodeType.UP_TOPIC -> RichTextNodeType.Topic
+                    else -> RichTextNodeType.Text
                 },
                 rid = node.link.bizId,
                 uri = node.link.link
@@ -143,6 +150,13 @@ private fun List<bilibili.app.dynamic.v2.Description>.toRichTextNodesFromDesc():
             DescType.desc_type_aite -> RichTextNode(
                 text = desc.text,
                 type = RichTextNodeType.At,
+                rid = desc.rid,
+                uri = desc.uri
+            )
+
+            DescType.desc_type_topic -> RichTextNode(
+                text = desc.text,
+                type = RichTextNodeType.Topic,
                 rid = desc.rid,
                 uri = desc.uri
             )

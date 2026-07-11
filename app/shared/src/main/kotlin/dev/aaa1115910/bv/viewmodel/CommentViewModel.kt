@@ -11,6 +11,7 @@ import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentPage
 import dev.aaa1115910.biliapi.entity.reply.CommentReplyPage
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
+import dev.aaa1115910.biliapi.entity.reply.CommentVote
 import dev.aaa1115910.biliapi.entity.user.DynamicImageDraft
 import dev.aaa1115910.biliapi.entity.user.DynamicMentionDraft
 import dev.aaa1115910.biliapi.entity.user.DynamicEmotePackageDraft
@@ -42,6 +43,7 @@ class CommentViewModel(
     val comments = mutableStateListOf<Comment>()
     val replies = mutableStateListOf<Comment>()
     var replyRootComment by mutableStateOf<Comment?>(null)
+    var commentVote by mutableStateOf<CommentVote?>(null)
 
     var rpid by mutableLongStateOf(0L)
     var rpCount by mutableIntStateOf(0)
@@ -72,6 +74,7 @@ class CommentViewModel(
         refreshingComments = false
         updatingComments = false
         comments.clear()
+        commentVote = null
         nextCommentReplyPage = CommentReplyPage()
         hasMoreReplies = true
         refreshingReplies = false
@@ -106,6 +109,7 @@ class CommentViewModel(
             return
         }
         logger.fInfo { "Load more comments: [commentId=$commentId, commentType=$commentType, page=$nextCommentPage]" }
+        val isFirstPage = comments.isEmpty()
         runCatching {
             val commentsData = commentRepository.getComments(
                 id = commentId,
@@ -116,6 +120,9 @@ class CommentViewModel(
             )
             nextCommentPage = commentsData.nextPage
             hasMoreComments = commentsData.hasNext
+            if (isFirstPage) {
+                commentVote = commentsData.vote
+            }
             comments.addAll(commentsData.comments)
         }.onFailure {
             logger.fException(it) { "Load more comments failed" }
@@ -144,6 +151,7 @@ class CommentViewModel(
         nextCommentPage = CommentPage()
         hasMoreComments = true
         comments.clear()
+        commentVote = null
         loadMoreComment()
     }
 

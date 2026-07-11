@@ -71,6 +71,23 @@ fun AudioVideoContent(
                     }
                 )
             },
+            "\u5c4f\u5e55\u65b9\u5411" to {
+                switchPreference(
+                    title = "\u968f\u8bbe\u5907\u503e\u659c\u81ea\u52a8\u5207\u6362",
+                    summary = "\u6a2a\u7f6e\u65f6\u8fdb\u5165\u5168\u5c4f\uff0c\u7ad6\u7f6e\u65f6\u9000\u51fa\u5168\u5c4f",
+                    prefReq = MobilePrefKeys.autoRotateVideoRequest,
+                    onCheckedChange = { true }
+                )
+                radioPreference(
+                    title = "\u6a2a\u5c4f\u89e6\u53d1\u89d2\u5ea6",
+                    prefReq = MobilePrefKeys.autoRotateVideoAngleRequest,
+                    values = mapOf(
+                        30 to "30\u00b0\uff08\u7075\u654f\uff09",
+                        45 to "45\u00b0\uff08\u9ed8\u8ba4\uff09",
+                        60 to "60\u00b0\uff08\u7a33\u5b9a\uff09"
+                    )
+                )
+            },
             "CDN" to {
                 switchPreference(
                     title = "免登录 1080P",

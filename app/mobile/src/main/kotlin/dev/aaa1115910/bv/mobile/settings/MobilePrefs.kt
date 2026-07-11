@@ -49,6 +49,8 @@ object MobilePrefs {
 
     private fun sanitizeLiveDanmakuFilterLevel(value: Int) = value.coerceIn(0, 60)
 
+    private fun sanitizeAutoRotateVideoAngle(value: Int) = value.coerceIn(20, 70)
+
     fun sanitizeFontSizeLevel(value: Int) = value.coerceIn(MIN_FONT_SIZE_LEVEL, MAX_FONT_SIZE_LEVEL)
 
     fun fontScaleForLevel(value: Int): Float = 0.95f + sanitizeFontSizeLevel(value) * 0.05f
@@ -210,6 +212,21 @@ object MobilePrefs {
     var expandBuffer: Boolean
         get() = read(MobilePrefKeys.expandBufferRequest)
         set(value) = write(MobilePrefKeys.expandBufferKey, value)
+
+    var autoRotateVideo: Boolean
+        get() = read(MobilePrefKeys.autoRotateVideoRequest)
+        set(value) = write(MobilePrefKeys.autoRotateVideoKey, value)
+
+    val autoRotateVideoFlow: Flow<Boolean>
+        get() = dsm.getPreferenceFlow(MobilePrefKeys.autoRotateVideoRequest)
+
+    var autoRotateVideoAngle: Int
+        get() = sanitizeAutoRotateVideoAngle(read(MobilePrefKeys.autoRotateVideoAngleRequest))
+        set(value) = write(MobilePrefKeys.autoRotateVideoAngleKey, sanitizeAutoRotateVideoAngle(value))
+
+    val autoRotateVideoAngleFlow: Flow<Int>
+        get() = dsm.getPreferenceFlow(MobilePrefKeys.autoRotateVideoAngleRequest)
+            .transform { emit(sanitizeAutoRotateVideoAngle(it)) }
 
     var defaultAudio: Audio
         get() = Audio.fromCode(read(MobilePrefKeys.defaultAudioRequest)) ?: Audio.A192K
@@ -481,6 +498,8 @@ object MobilePrefKeys {
     val enableAudioPlaybackParamsKey = booleanPreferencesKey("mobile_enable_audio_playback_params")
     val enableHardwareDecodeKey = booleanPreferencesKey("mobile_enable_hardware_decode")
     val expandBufferKey = booleanPreferencesKey("mobile_expand_buffer")
+    val autoRotateVideoKey = booleanPreferencesKey("mobile_auto_rotate_video")
+    val autoRotateVideoAngleKey = intPreferencesKey("mobile_auto_rotate_video_angle")
     val defaultAudioKey = intPreferencesKey("mobile_default_audio")
     val defaultCellularAudioKey = intPreferencesKey("mobile_default_cellular_audio")
     val defaultDanmakuScaleKey = floatPreferencesKey("mobile_default_danmaku_scale")
@@ -562,6 +581,8 @@ object MobilePrefKeys {
     val enableAudioPlaybackParamsRequest = PreferenceRequest(enableAudioPlaybackParamsKey, true)
     val enableHardwareDecodeRequest = PreferenceRequest(enableHardwareDecodeKey, true)
     val expandBufferRequest = PreferenceRequest(expandBufferKey, false)
+    val autoRotateVideoRequest = PreferenceRequest(autoRotateVideoKey, false)
+    val autoRotateVideoAngleRequest = PreferenceRequest(autoRotateVideoAngleKey, 45)
     val defaultAudioRequest = PreferenceRequest(defaultAudioKey, Audio.A192K.code)
     val defaultCellularAudioRequest = PreferenceRequest(defaultCellularAudioKey, Audio.A192K.code)
     val defaultDanmakuScaleRequest = PreferenceRequest(defaultDanmakuScaleKey, 1.25f)

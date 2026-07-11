@@ -7,8 +7,13 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -135,11 +140,13 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -189,6 +196,7 @@ import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
 import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
+import dev.aaa1115910.biliapi.entity.reply.CommentVote
 import dev.aaa1115910.biliapi.entity.video.VideoDetail
 import dev.aaa1115910.biliapi.entity.video.VideoPage
 import dev.aaa1115910.biliapi.http.entity.live.LiveEmotePackage
@@ -203,7 +211,9 @@ import dev.aaa1115910.bv.mobile.component.emote.EmoteTextEditor
 import dev.aaa1115910.bv.mobile.component.emote.emoteDisplayName
 import dev.aaa1115910.bv.mobile.component.player.VideoPlayerPages
 import dev.aaa1115910.bv.mobile.component.reply.CommentItem
+import dev.aaa1115910.bv.mobile.component.reply.CommentVoteCard
 import dev.aaa1115910.bv.mobile.component.reply.ReplySheetScaffold
+import dev.aaa1115910.bv.mobile.settings.MobilePrefs
 import dev.aaa1115910.bv.mobile.component.videocard.RelatedVideoItem
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.mobile.R as MobileR
@@ -291,6 +301,9 @@ private enum class ReplyInputPanel {
 private val DanmakuActionIconFontFamily = FontFamily(Font(MobileR.font.danmaku_action_icon))
 private const val DanmakuOffIcon = "\uE802"
 private const val DanmakuOnIcon = "\uE803"
+private const val AUTO_ROTATE_SETTLE_MILLIS = 350L
+private const val AUTO_ROTATE_HYSTERESIS_DEGREES = 10
+private const val MIN_AUTO_ROTATE_EXIT_ANGLE = 10
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -309,8 +322,91 @@ fun VideoPlayerScreen(
     val useLightSystemBarIcons = playerViewModel.isLive || !useDarkSystemBarIcons
 
     var isVideoFullscreen by rememberSaveable { mutableStateOf(false) }
+    var autoRotateSuppressed by remember { mutableStateOf(false) }
     val forcePortrait =
         windowSizeClass.widthSizeClass == WindowWidthSizeClass.Compact || windowSizeClass.heightSizeClass == WindowHeightSizeClass.Compact
+
+    val initialAutoRotateVideo = remember { MobilePrefs.autoRotateVideo }
+    val initialAutoRotateVideoAngle = remember { MobilePrefs.autoRotateVideoAngle }
+    val autoRotateVideo by MobilePrefs.autoRotateVideoFlow.collectAsState(
+        initial = initialAutoRotateVideo
+    )
+    val autoRotateVideoAngle by MobilePrefs.autoRotateVideoAngleFlow.collectAsState(
+        initial = initialAutoRotateVideoAngle
+    )
+    val currentIsVideoFullscreen by rememberUpdatedState(isVideoFullscreen)
+    val currentAutoRotateSuppressed by rememberUpdatedState(autoRotateSuppressed)
+    val updateVideoFullscreen by rememberUpdatedState<(Boolean) -> Unit> { fullscreen ->
+        isVideoFullscreen = fullscreen
+    }
+    val updateAutoRotateSuppressed by rememberUpdatedState<(Boolean) -> Unit> { suppressed ->
+        autoRotateSuppressed = suppressed
+    }
+
+    DisposableEffect(context, forcePortrait, autoRotateVideo, autoRotateVideoAngle) {
+        if (!forcePortrait || !autoRotateVideo) {
+            return@DisposableEffect onDispose {}
+        }
+
+        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        val accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        if (accelerometer == null) {
+            return@DisposableEffect onDispose {}
+        }
+
+        val enterThreshold = autoRotateVideoAngle.toDouble()
+        val exitThreshold = (autoRotateVideoAngle - AUTO_ROTATE_HYSTERESIS_DEGREES)
+            .coerceAtLeast(MIN_AUTO_ROTATE_EXIT_ANGLE)
+            .toDouble()
+        var candidateFullscreen: Boolean? = null
+        var candidateSince = 0L
+
+        val listener = object : SensorEventListener {
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+
+            override fun onSensorChanged(event: SensorEvent) {
+                if (event.values.size < 2) return
+                val horizontal = kotlin.math.abs(event.values[0].toDouble())
+                val vertical = kotlin.math.abs(event.values[1].toDouble())
+                if (horizontal == 0.0 && vertical == 0.0) return
+
+                val tiltDegrees = Math.toDegrees(kotlin.math.atan2(horizontal, vertical))
+                if (currentAutoRotateSuppressed) {
+                    if (tiltDegrees <= exitThreshold) {
+                        updateAutoRotateSuppressed(false)
+                    }
+                    candidateFullscreen = null
+                    return
+                }
+
+                val targetFullscreen = if (currentIsVideoFullscreen) {
+                    tiltDegrees > exitThreshold
+                } else {
+                    tiltDegrees >= enterThreshold
+                }
+                if (targetFullscreen == currentIsVideoFullscreen) {
+                    candidateFullscreen = null
+                    return
+                }
+
+                val now = SystemClock.elapsedRealtime()
+                if (candidateFullscreen != targetFullscreen) {
+                    candidateFullscreen = targetFullscreen
+                    candidateSince = now
+                    return
+                }
+                if (now - candidateSince >= AUTO_ROTATE_SETTLE_MILLIS) {
+                    updateVideoFullscreen(targetFullscreen)
+                    candidateFullscreen = null
+                }
+            }
+        }
+
+        sensorManager.registerListener(listener, accelerometer, SensorManager.SENSOR_DELAY_UI)
+        onDispose {
+            sensorManager.unregisterListener(listener)
+        }
+    }
 
     // 风控 Geetest（官方 Sensebot SDK）
     var gt3GeetestUtils: GT3GeetestUtils? by remember { mutableStateOf(null) }
@@ -622,6 +718,7 @@ fun VideoPlayerScreen(
     }
 
     BackHandler(isVideoFullscreen) {
+        autoRotateSuppressed = true
         isVideoFullscreen = false
     }
 
@@ -771,9 +868,11 @@ fun VideoPlayerScreen(
                             onReloadDanmakuAfterSeek = playerViewModel::reloadDanmakuAfterSeek,
                             onRequestManualPlayback = playerViewModel::requestManualVodPlayback,
                             onEnterFullScreen = {
+                                autoRotateSuppressed = false
                                 isVideoFullscreen = true
                             },
                             onExitFullScreen = {
+                                autoRotateSuppressed = true
                                 isVideoFullscreen = false
                             },
                             onBack = { (context as Activity).finish() },
@@ -1191,6 +1290,7 @@ fun VideoPlayerScreen(
                                         VideoComments(
                                             previewerState = previewerState,
                                             comments = commentVideModel.comments,
+                                            vote = commentVideModel.commentVote,
                                             commentSort = commentVideModel.commentSort,
                                             refreshingComments = commentVideModel.refreshingComments,
                                             onLoadMoreComments = {
@@ -1465,6 +1565,7 @@ fun VideoPlayerScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 previewerState = previewerState,
                                 comments = commentVideModel.comments,
+                                vote = commentVideModel.commentVote,
                                 commentSort = commentVideModel.commentSort,
                                 refreshingComments = commentVideModel.refreshingComments,
                                 onLoadMoreComments = {
@@ -4508,6 +4609,7 @@ fun VideoComments(
     modifier: Modifier = Modifier,
     previewerState: ImagePreviewerState,
     comments: List<Comment>,
+    vote: CommentVote? = null,
     commentSort: CommentSort,
     refreshingComments: Boolean,
     onLoadMoreComments: () -> Unit,
@@ -4547,6 +4649,14 @@ fun VideoComments(
             LazyColumn(
                 state = listState
             ) {
+                vote?.let { commentVote ->
+                    item {
+                        CommentVoteCard(
+                            vote = commentVote,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
+                }
                 item {
                     Row(
                         modifier = Modifier

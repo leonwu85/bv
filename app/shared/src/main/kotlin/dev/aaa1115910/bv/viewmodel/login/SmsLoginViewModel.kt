@@ -175,7 +175,8 @@ class SmsLoginViewModel(
                     accessToken = loginResult.accessToken,
                     refreshToken = loginResult.refreshToken
                 )
-                BlacklistUtil.checkUid(Prefs.uid)
+                BlacklistUtil.checkUid(authData.uid)
+                userRepository.validateAuthData(authData)
                 userRepository.addUser(authData)
 
                 withContext(Dispatchers.Main) {

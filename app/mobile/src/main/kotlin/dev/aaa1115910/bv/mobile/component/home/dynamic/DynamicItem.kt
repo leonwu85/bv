@@ -79,11 +79,13 @@ import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.user.ArticleParagraph
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.entity.user.DynamicType
+import dev.aaa1115910.biliapi.entity.user.RichTextNode
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicVoteInfo
 import dev.aaa1115910.biliapi.repositories.UserRepository
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.component.DynamicRichText
 import dev.aaa1115910.bv.mobile.component.user.UserAvatar
+import dev.aaa1115910.bv.mobile.activities.TopicDynamicActivity
 import dev.aaa1115910.bv.mobile.component.videocard.shareText
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.util.ImageSize
@@ -167,9 +169,21 @@ fun DynamicContent(
     previewerState: ImagePreviewerState = rememberPreviewerState(pageCount = { 0 }),
     onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit = { _, _ -> },
     articleParagraphs: List<ArticleParagraph> = emptyList(),
-    onClick: (DynamicItem) -> Unit
+    onClick: (DynamicItem) -> Unit,
+    onTopicClick: ((RichTextNode) -> Unit)? = null
 
 ) {
+    val context = LocalContext.current
+    val resolvedOnTopicClick = onTopicClick ?: { node: RichTextNode ->
+        val topicId = node.rid?.toLongOrNull()
+            ?: node.uri
+                ?.let(Uri::parse)
+                ?.getQueryParameter("topic_id")
+                ?.toLongOrNull()
+        if (topicId != null && topicId > 0L) {
+            TopicDynamicActivity.actionStart(context, topicId, node.text.trim().trim('#'))
+        }
+    }
     val contentModifier = modifier.padding(horizontal = horizontalPadding)
     dynamicItem.blocked?.let { blocked ->
         DynamicBlocked(
@@ -188,7 +202,8 @@ fun DynamicContent(
             modifier = contentModifier,
             draw = dynamicItem.draw!!,
             previewerState = previewerState,
-            onShowPreviewer = onShowPreviewer
+            onShowPreviewer = onShowPreviewer,
+            onTopicClick = resolvedOnTopicClick
         )
 
         DynamicType.Forward -> DynamicForward(
@@ -198,7 +213,8 @@ fun DynamicContent(
             previewerState = previewerState,
             onShowPreviewer = onShowPreviewer,
             articleParagraphs = articleParagraphs,
-            onClick = { onClick(dynamicItem.orig!!) }
+            onClick = { onClick(dynamicItem.orig!!) },
+            onTopicClick = resolvedOnTopicClick
         )
 
         DynamicType.LiveRcmd -> DynamicLiveRcmd(
@@ -212,7 +228,8 @@ fun DynamicContent(
 
         DynamicType.Word -> DynamicWord(
             modifier = contentModifier,
-            word = dynamicItem.word!!
+            word = dynamicItem.word!!,
+            onTopicClick = resolvedOnTopicClick
         )
 
         DynamicType.Pgc -> DynamicPgc(
@@ -857,7 +874,8 @@ fun DynamicDraw(
     modifier: Modifier = Modifier,
     draw: DynamicItem.DynamicDrawModule,
     previewerState: ImagePreviewerState,
-    onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit
+    onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit,
+    onTopicClick: (RichTextNode) -> Unit = {}
 ) {
     Column(
         modifier = modifier,
@@ -874,7 +892,8 @@ fun DynamicDraw(
                 richTextNodes = draw.richTextNodes,
                 fallbackText = draw.text,
                 style = MaterialTheme.typography.bodyLarge,
-                fontSize = 16.sp
+                fontSize = 16.sp,
+                onNodeClick = onTopicClick
             )
         }
         DynamicPictures(
@@ -984,14 +1003,16 @@ fun DynamicPictures(
 @Composable
 fun DynamicWord(
     modifier: Modifier = Modifier,
-    word: DynamicItem.DynamicWordModule
+    word: DynamicItem.DynamicWordModule,
+    onTopicClick: (RichTextNode) -> Unit = {}
 ) {
     DynamicRichText(
         modifier = modifier,
         richTextNodes = word.richTextNodes,
         fallbackText = word.text,
         style = MaterialTheme.typography.bodyLarge,
-        fontSize = 16.sp
+        fontSize = 16.sp,
+        onNodeClick = onTopicClick
     )
 }
 
@@ -1004,7 +1025,8 @@ fun DynamicForward(
     horizontalPadding: Dp = 12.dp,
     onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit,
     articleParagraphs: List<ArticleParagraph> = emptyList(),
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onTopicClick: (RichTextNode) -> Unit = {}
 ) {
     Column(
         modifier = modifier,
@@ -1015,7 +1037,8 @@ fun DynamicForward(
                 richTextNodes = word.richTextNodes,
                 fallbackText = word.text,
                 style = MaterialTheme.typography.bodyLarge,
-                fontSize = 16.sp
+                fontSize = 16.sp,
+                onNodeClick = onTopicClick
             )
         }
 
@@ -1042,7 +1065,8 @@ fun DynamicForward(
                         previewerState = previewerState,
                         onShowPreviewer = onShowPreviewer,
                         articleParagraphs = articleParagraphs,
-                        onClick = {}
+                        onClick = {},
+                        onTopicClick = onTopicClick
                     )
                     dynamicItem.vote?.let { vote ->
                         DynamicVoteCard(

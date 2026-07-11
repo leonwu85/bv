@@ -18,6 +18,8 @@ import dev.aaa1115910.biliapi.entity.user.DynamicReplyOption
 import dev.aaa1115910.biliapi.entity.user.DynamicReserveDraft
 import dev.aaa1115910.biliapi.entity.user.DynamicRichContent
 import dev.aaa1115910.biliapi.entity.user.DynamicTopicDraft
+import dev.aaa1115910.biliapi.entity.user.DynamicTopicFeed
+import dev.aaa1115910.biliapi.entity.user.DynamicTopicFeedItem
 import dev.aaa1115910.biliapi.entity.user.DynamicUpData
 import dev.aaa1115910.biliapi.entity.user.DynamicVideoData
 import dev.aaa1115910.biliapi.entity.user.FollowedUser
@@ -35,6 +37,7 @@ import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.http.entity.dynamic.OpusParagraph
 import dev.aaa1115910.biliapi.http.entity.dynamic.OpusTextNode
 import dev.aaa1115910.biliapi.http.entity.dynamic.ArticleViewData
+import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicTopicFeedResponse
 import dev.aaa1115910.biliapi.http.entity.user.FollowAction
 import dev.aaa1115910.biliapi.http.entity.user.FollowActionSource
 import dev.aaa1115910.biliapi.http.entity.user.RelationType
@@ -293,6 +296,56 @@ class UserRepository(
         return response.getResponseData().topicItems
             .filter { it.id > 0L && it.name.isNotBlank() }
             .map { DynamicTopicDraft(id = it.id, name = it.name) }
+    }
+
+    suspend fun getDynamicTopicFeed(
+        topicId: Long,
+        sortBy: Int = 0,
+        offset: String? = null
+    ): DynamicTopicFeed {
+        val response = BiliHttpApi.getDynamicTopicFeed(
+            topicId = topicId,
+            sortBy = sortBy,
+            offset = offset,
+            sessData = authRepository.sessionData,
+            dedeUserID = authRepository.mid,
+            buvid3 = authRepository.buvid3
+        )
+        if (response.code != 0) throw Exception(response.message)
+        return response.getResponseData().toDynamicTopicFeed()
+    }
+
+    suspend fun expandDynamicTopicFold(
+        topicId: Long,
+        sortBy: Int = 0
+    ): DynamicTopicFeed {
+        val response = BiliHttpApi.getDynamicTopicFold(
+            topicId = topicId,
+            sortBy = sortBy,
+            sessData = authRepository.sessionData,
+            dedeUserID = authRepository.mid,
+            buvid3 = authRepository.buvid3
+        )
+        if (response.code != 0) throw Exception(response.message)
+        return response.getResponseData().toDynamicTopicFeed()
+    }
+
+    private fun DynamicTopicFeedResponse.toDynamicTopicFeed(): DynamicTopicFeed {
+        val cards = topicCardList ?: return DynamicTopicFeed()
+        return DynamicTopicFeed(
+            hasMore = cards.hasMore,
+            offset = cards.offset,
+            items = cards.items.mapNotNull { card ->
+                card.dynamicCardItem?.let { dynamic ->
+                    DynamicTopicFeedItem.DynamicCard(DynamicItem.fromDynamicItem(dynamic))
+                } ?: card.foldCardItem?.let { fold ->
+                    DynamicTopicFeedItem.FoldCard(
+                        count = fold.foldCount,
+                        description = fold.foldDesc
+                    )
+                }
+            }
+        )
     }
 
     suspend fun searchDynamicTopic(keyword: String, content: String = ""): List<DynamicTopicDraft> {

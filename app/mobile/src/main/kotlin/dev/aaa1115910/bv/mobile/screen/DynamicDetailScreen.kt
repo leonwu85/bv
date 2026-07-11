@@ -87,6 +87,7 @@ import com.origeek.imageViewer.previewer.rememberPreviewerState
 import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
+import dev.aaa1115910.biliapi.entity.reply.CommentVote
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.bv.mobile.component.ImagePreviewerActions
 import dev.aaa1115910.bv.mobile.component.home.dynamic.DynamicContent
@@ -371,6 +372,7 @@ fun DynamicDetailMobileContent(
                     ),
                     previewerState = dynamicDetailState.imagePreviewerState,
                     comments = dynamicDetailState.comments,
+                    vote = dynamicDetailState.commentVote,
                     commentSort = dynamicDetailState.commentSort,
                     isLoading = dynamicDetailState.isLoadingComments,
                     isRefreshing = dynamicDetailState.isRefreshingComments,
@@ -567,6 +569,7 @@ fun DynamicDetailScreenPadContent(
                         modifier = Modifier.width(screenWidth / 3 - 10.dp),
                         previewerState = dynamicDetailState.imagePreviewerState,
                         comments = dynamicDetailState.comments,
+                        vote = dynamicDetailState.commentVote,
                         commentSort = dynamicDetailState.commentSort,
                         isLoading = dynamicDetailState.isLoadingComments,
                         isRefreshing = dynamicDetailState.isRefreshingComments,
@@ -765,6 +768,7 @@ data class DynamicDetailState(
     val dynamicItem get() = dynamicDetailViewModel.dynamicItem
     val articleParagraphs get() = dynamicDetailViewModel.articleParagraphs
     val comments get() = commentViewModel.comments
+    val commentVote get() = commentViewModel.commentVote
     val replies get() = commentViewModel.replies
     var replyComment by mutableStateOf<Comment?>(null)
 
@@ -1002,6 +1006,7 @@ private fun CommentPart(
     header: (@Composable () -> Unit)? = null,
     previewerState: ImagePreviewerState,
     comments: List<Comment>,
+    vote: CommentVote? = null,
     commentSort: CommentSort,
     isLoading: Boolean,
     isRefreshing: Boolean,
@@ -1017,6 +1022,7 @@ private fun CommentPart(
         header = header,
         previewerState = previewerState,
         comments = comments,
+        vote = vote,
         commentSort = commentSort,
         isLoading = isLoading,
         isRefreshing = isRefreshing,

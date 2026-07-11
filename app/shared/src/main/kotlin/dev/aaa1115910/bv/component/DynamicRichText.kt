@@ -1,20 +1,29 @@
 package dev.aaa1115910.bv.component
 
 import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.input.pointer.pointerInput
 import coil.compose.AsyncImage
 import dev.aaa1115910.biliapi.entity.user.RichTextNode
 import dev.aaa1115910.biliapi.entity.user.RichTextNodeType
+
+private const val TOPIC_NODE_TAG = "topic-node"
 
 /**
  * 支持表情图片的富文本组件
@@ -34,7 +43,8 @@ fun DynamicRichText(
     fallbackText: String,
     modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.bodyLarge,
-    fontSize: TextUnit = 16.sp
+    fontSize: TextUnit = 16.sp,
+    onNodeClick: ((RichTextNode) -> Unit)? = null
 ) {
     // 如果没有富文本节点，回退到纯文本
     if (richTextNodes.isEmpty()) {
@@ -49,8 +59,9 @@ fun DynamicRichText(
 
     // 检查是否有表情节点
     val hasEmoji = richTextNodes.any { it.type == RichTextNodeType.Emoji && it.emoji != null }
+    val canClickTopic = onNodeClick != null && richTextNodes.any { it.type == RichTextNodeType.Topic }
 
-    if (!hasEmoji) {
+    if (!hasEmoji && !canClickTopic) {
         // 没有表情，直接拼接文本显示
         Text(
             text = richTextNodes.joinToString("") { it.text },
@@ -88,7 +99,8 @@ fun DynamicRichText(
 
     // 构建 AnnotatedString
     val annotatedString = buildAnnotatedString {
-        richTextNodes.forEach { node ->
+        richTextNodes.forEachIndexed { index, node ->
+            val start = length
             when (node.type) {
                 RichTextNodeType.Emoji -> {
                     if (node.emoji != null) {
@@ -100,14 +112,44 @@ fun DynamicRichText(
 
                 else -> append(node.text)
             }
+            if (node.type == RichTextNodeType.Topic && onNodeClick != null && length > start) {
+                addStringAnnotation(
+                    tag = TOPIC_NODE_TAG,
+                    annotation = index.toString(),
+                    start = start,
+                    end = length
+                )
+            }
         }
+    }
+
+    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val topicClick = onNodeClick
+    val textModifier = if (canClickTopic && topicClick != null) {
+        modifier.pointerInput(annotatedString, topicClick) {
+            detectTapGestures { position ->
+                val offset = textLayoutResult?.getOffsetForPosition(position)
+                    ?: return@detectTapGestures
+                val nodeIndex = annotatedString
+                    .getStringAnnotations(TOPIC_NODE_TAG, offset, offset)
+                    .firstOrNull()
+                    ?.item
+                    ?.toIntOrNull()
+                nodeIndex?.let { index ->
+                    richTextNodes.getOrNull(index)?.let(topicClick)
+                }
+            }
+        }
+    } else {
+        modifier
     }
 
     Text(
         text = annotatedString,
         inlineContent = inlineContentMap,
-        modifier = modifier,
+        modifier = textModifier,
         style = style,
-        fontSize = fontSize
+        fontSize = fontSize,
+        onTextLayout = { textLayoutResult = it }
     )
 }

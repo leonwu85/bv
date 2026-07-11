@@ -132,6 +132,7 @@ class AppQrLoginViewModel(
                     )
 
                     BlacklistUtil.checkUid(authData.uid)
+                    userRepository.validateAuthData(authData)
                     userRepository.addUser(authData)
                     withContext(Dispatchers.Main) { state = QrLoginState.Success }
                 }

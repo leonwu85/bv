@@ -25,6 +25,7 @@ import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicImageUploadData
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicMentionData
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicReserveInfoData
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicTopicListData
+import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicTopicFeedResponse
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicUpListData
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicVoteInfoData
 import dev.aaa1115910.biliapi.http.entity.dynamic.DynamicVoteResultData
@@ -933,6 +934,35 @@ object BiliHttpApi {
         if (cookieParts.isNotEmpty()) {
             header("Cookie", cookieParts.joinToString(";") + ";")
         }
+    }.body()
+
+    suspend fun getDynamicTopicFeed(
+        topicId: Long,
+        sortBy: Int = 0,
+        offset: String? = null,
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<DynamicTopicFeedResponse> = client.get("/x/polymer/web-dynamic/v1/feed/topic") {
+        parameter("topic_id", topicId)
+        parameter("sort_by", sortBy)
+        parameter("page_size", 20)
+        parameter("source", "Web")
+        parameter("features", "itemOpusStyle,listOnlyfans,onlyfansQaCard")
+        offset?.takeIf { it.isNotBlank() }?.let { parameter("offset", it) }
+        if (!sessData.isNullOrBlank()) appendWebCookie(sessData, dedeUserID, buvid3)
+    }.body()
+
+    suspend fun getDynamicTopicFold(
+        topicId: Long,
+        sortBy: Int = 0,
+        sessData: String? = null,
+        dedeUserID: Long? = null,
+        buvid3: String? = null
+    ): BiliResponse<DynamicTopicFeedResponse> = client.get("/x/topic/web/details/fold") {
+        parameter("topic_id", topicId)
+        parameter("sort_by", sortBy)
+        if (!sessData.isNullOrBlank()) appendWebCookie(sessData, dedeUserID, buvid3)
     }.body()
 
     suspend fun createDynamic(
