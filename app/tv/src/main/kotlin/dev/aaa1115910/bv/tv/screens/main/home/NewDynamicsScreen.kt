@@ -347,7 +347,7 @@ fun NewDynamicsScreen(
                         delay(DYNAMIC_VIDEO_PAGINATION_IDLE_MS)
                         if (lazyGridState.isScrollInProgress) return@collectLatest
                     }
-                    withContext(Dispatchers.IO) {
+                    scope.launch(Dispatchers.IO) {
                         if (dynamicViewModel.hasMore(selectedTabType) &&
                             !dynamicViewModel.isLoading(selectedTabType)
                         ) {
