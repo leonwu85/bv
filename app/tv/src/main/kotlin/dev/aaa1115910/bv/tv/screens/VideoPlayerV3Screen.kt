@@ -156,7 +156,7 @@ fun VideoPlayerV3Screen(
         }
     }
 
-    // 倒计时相关状态
+    // Automatic-exit countdown state
     var autoActionCountdownJob by remember { mutableStateOf<Job?>(null) }
     var autoActionTipVisible by remember { mutableStateOf(false) }
     var autoActionTipText by remember { mutableStateOf("") }
@@ -308,15 +308,14 @@ fun VideoPlayerV3Screen(
         }
     }
 
-    fun buildDirectAutoPlayCandidate(nextVideo: Any?): AutoPlayCandidate? {
-        if (playerViewModel.fromSeason) return null
-
+    fun buildAutoPlayCandidate(nextVideo: Any?): AutoPlayCandidate? {
         return when (nextVideo) {
             is VideoListItemData -> {
-                if (nextVideo.seasonId == null && playerViewModel.currentAid != nextVideo.aid) {
-                    AutoPlayCandidate.CrossVideoPart(nextVideo)
-                } else {
-                    null
+                when {
+                    playerViewModel.fromSeason || playerViewModel.currentAid == nextVideo.aid ->
+                        AutoPlayCandidate.PlaylistItem(nextVideo)
+                    nextVideo.seasonId == null -> AutoPlayCandidate.CrossVideoPart(nextVideo)
+                    else -> null
                 }
             }
 
@@ -372,7 +371,7 @@ fun VideoPlayerV3Screen(
             return@LaunchedEffect
         }
 
-        val directCandidate = buildDirectAutoPlayCandidate(resolveNextAutoPlayVideo(immediate = false))
+        val directCandidate = buildAutoPlayCandidate(resolveNextAutoPlayVideo(immediate = false))
         playerViewModel.prepareAutoPlayTarget(directCandidate)
     }
 
@@ -481,8 +480,8 @@ fun VideoPlayerV3Screen(
                 .fillMaxSize()
                 .onPreviewKeyEvent { keyEvent ->
                     if (keyEvent.type == KeyEventType.KeyUp && autoActionCountdownJob != null) {
-                        // 任何按键都可以取消倒计时
-                        logger.debug { "按下按键: ${keyEvent.key}, 取消播放下一集（或自动退出）" }
+                        // Any key can cancel automatic exit.
+                        logger.debug { "Key ${keyEvent.key}: cancel automatic exit" }
                         autoActionCountdownJob?.cancel()
                         autoActionCountdownJob = null
                         autoActionTipVisible = false
@@ -542,7 +541,7 @@ fun VideoPlayerV3Screen(
                 onEnsureDanmakuCoverage = playerViewModel::ensureDanmakuCoverage,
                 onNearEnd = {
                     if (playerViewModel.showRelatedVideos || playerViewModel.isInteractivePlayback) return@BvPlayer
-                    val directCandidate = buildDirectAutoPlayCandidate(resolveNextAutoPlayVideo(immediate = false))
+                    val directCandidate = buildAutoPlayCandidate(resolveNextAutoPlayVideo(immediate = false))
                     playerViewModel.prefetchPreparedAutoPlayTarget(directCandidate)
                 },
                 onLoadPrevVideo = {
@@ -598,71 +597,62 @@ fun VideoPlayerV3Screen(
                     PlayedAidsCache.markPlayed(playerViewModel.currentAid)
                     val nextVideo = resolveNextAutoPlayVideo(immediate)
                     if (nextVideo != null) {
-                        autoActionCountdownJob = scope.launch {
+                        scope.launch {
                             try {
-                                if (!immediate) {
-                                    autoActionTipText = "播放结束，即将播放下一集"
-                                    autoActionTipVisible = true
-                                    delay(1600)
-                                }
-                                autoActionTipVisible = false
-                                if (autoActionCountdownJob != null) {
-                                    autoActionCountdownJob = null
-                                    when (nextVideo) {
-                                        is VideoListItemData -> {
-                                            PlayedAidsCache.markPlayed(nextVideo.aid)
-                                            val directCandidate = buildDirectAutoPlayCandidate(nextVideo)
-                                            if (directCandidate != null && playerViewModel.consumePreparedAutoPlayTarget(directCandidate)) {
-                                                return@launch
-                                            }
-                                            playerViewModel.title = nextVideo.title
-                                            playerViewModel.partTitle = nextVideo.partTitle
-                                            if (nextVideo.seasonId == null && playerViewModel.currentAid != nextVideo.aid) {
-                                                VideoInfoActivity.actionStart(
-                                                    context = context,
-                                                    aid = nextVideo.aid,
-                                                    cid = nextVideo.cid,
-                                                    fromPlayer = true,
-                                                    audioOnlyMode = playerViewModel.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly
-                                                )
-                                            } else {
-                                                playerViewModel.loadPlayUrl(
-                                                    avid = nextVideo.aid,
-                                                    cid = nextVideo.cid!!,
-                                                    epid = nextVideo.epid,
-                                                    seasonId = nextVideo.seasonId,
-                                                    continuePlayNext = true
-                                                )
-                                            }
+                                when (nextVideo) {
+                                    is VideoListItemData -> {
+                                        PlayedAidsCache.markPlayed(nextVideo.aid)
+                                        val directCandidate = buildAutoPlayCandidate(nextVideo)
+                                        if (directCandidate != null && playerViewModel.consumePreparedAutoPlayTarget(directCandidate)) {
+                                            return@launch
                                         }
+                                        playerViewModel.title = nextVideo.title
+                                        playerViewModel.partTitle = nextVideo.partTitle
+                                        if (nextVideo.seasonId == null && playerViewModel.currentAid != nextVideo.aid) {
+                                            VideoInfoActivity.actionStart(
+                                                context = context,
+                                                aid = nextVideo.aid,
+                                                cid = nextVideo.cid,
+                                                fromPlayer = true,
+                                                audioOnlyMode = playerViewModel.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly
+                                            )
+                                        } else {
+                                            playerViewModel.loadPlayUrl(
+                                                avid = nextVideo.aid,
+                                                cid = nextVideo.cid!!,
+                                                epid = nextVideo.epid,
+                                                seasonId = nextVideo.seasonId,
+                                                continuePlayNext = true,
+                                                forceStartPlayback = true
+                                            )
+                                        }
+                                    }
 
-                                        is VideoCardData -> {
-                                            // 推荐视频卡片：跳转到视频详情（再进入播放器）
-                                            PlayedAidsCache.markPlayed(nextVideo.avid)
-                                            val directCandidate = buildDirectAutoPlayCandidate(nextVideo)
-                                            if (directCandidate != null && playerViewModel.consumePreparedAutoPlayTarget(directCandidate)) {
-                                                return@launch
-                                            }
-                                            if (nextVideo.jumpToSeason) {
-                                                SeasonInfoActivity.actionStart(
-                                                    context = context,
-                                                    epId = nextVideo.epId!!,
-                                                    proxyArea = ProxyArea.checkProxyArea(nextVideo.title)
-                                                )
-                                            } else {
-                                                VideoInfoActivity.actionStart(
-                                                    context = context,
-                                                    aid = nextVideo.avid,
-                                                    fromPlayer = true,
-                                                    audioOnlyMode = playerViewModel.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly
-                                                )
-                                            }
+                                    is VideoCardData -> {
+                                        // 推荐视频卡片：跳转到视频详情（再进入播放器）
+                                        PlayedAidsCache.markPlayed(nextVideo.avid)
+                                        val directCandidate = buildAutoPlayCandidate(nextVideo)
+                                        if (directCandidate != null && playerViewModel.consumePreparedAutoPlayTarget(directCandidate)) {
+                                            return@launch
+                                        }
+                                        if (nextVideo.jumpToSeason) {
+                                            SeasonInfoActivity.actionStart(
+                                                context = context,
+                                                epId = nextVideo.epId!!,
+                                                proxyArea = ProxyArea.checkProxyArea(nextVideo.title)
+                                            )
+                                        } else {
+                                            VideoInfoActivity.actionStart(
+                                                context = context,
+                                                aid = nextVideo.avid,
+                                                fromPlayer = true,
+                                                audioOnlyMode = playerViewModel.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly
+                                            )
                                         }
                                     }
                                 }
-                            } catch (_: Exception) {
-                                autoActionTipVisible = false
-                                autoActionCountdownJob = null
+                            } catch (e: Exception) {
+                                logger.warn(e) { "Start next video failed" }
                             }
                         }
                     } else if (Prefs.playerExitWhenAllIsPlayed) {

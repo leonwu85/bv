@@ -97,7 +97,8 @@ import kotlin.math.roundToInt
 private const val DANMAKU_MASK_BITMAP_CACHE_MAX_BYTES = 64 * 1024 * 1024
 private const val DANMAKU_MASK_DOWNSAMPLE_SHORT_SIDE_DEFAULT = 360
 private const val DANMAKU_MASK_DOWNSAMPLE_SHORT_SIDE_DEBUG = 180
-private const val AUTO_PLAY_PREPARE_WINDOW_MS = 15_000L
+// Leave enough time to fetch the next playback source before the current item ends.
+private const val AUTO_PLAY_PREPARE_WINDOW_MS = 30_000L
 private const val VIDEO_END_SKIP_THRESHOLD_MS = 1_000L
 
 private fun Bitmap.safeCacheSize(): Int = if (isRecycled) 0 else byteCount
@@ -574,18 +575,20 @@ fun BvPlayer(
         }
         handledNaturalVideoEnd = true
 
-        fun alignPlaybackToEndIfNeeded() {
+        fun alignPlaybackToEndIfNeeded(pausePlayer: Boolean = false) {
             if (!alignPlaybackToEnd) return
             val duration = videoPlayer.duration.coerceAtLeast(seekState.duration)
             if (duration > 0L) {
                 scheduleDanmakuSeekSync(duration, false)
                 videoPlayer.seekTo(duration)
             }
-            videoPlayer.pause()
+            if (pausePlayer) {
+                videoPlayer.pause()
+            }
         }
 
         if (videoPlayerConfigData.showRelatedVideos) {
-            alignPlaybackToEndIfNeeded()
+            alignPlaybackToEndIfNeeded(pausePlayer = true)
             logger.info { "$reason: show related videos, skip auto next" }
             scope.launch(Dispatchers.Main) {
                 isPlaying = false

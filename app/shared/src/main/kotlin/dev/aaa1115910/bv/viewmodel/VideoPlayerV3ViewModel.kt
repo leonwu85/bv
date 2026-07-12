@@ -762,13 +762,7 @@ class VideoPlayerV3ViewModel(
             if (!isPreparedAutoPlayCandidateActive(candidate, prepareToken)) return@launch
 
             try {
-                val playData = videoPlayRepository.getPlayData(
-                    aid = transitionContext.aid,
-                    cid = transitionContext.cid,
-                    bvid = AvBvConverter.av2bv(transitionContext.aid),
-                    preferApiType = settings.apiType,
-                    tryLook1080P = settings.tryLook1080P,
-                )
+                val playData = fetchPreparedAutoPlayPlayData(transitionContext)
                 if (!playData.needPay && !playData.hasPlayableVodStreams()) {
                     logger.fWarn {
                         "Prefetched play data has empty streams: [aid=${transitionContext.aid}, cid=${transitionContext.cid}]"
@@ -819,6 +813,7 @@ class VideoPlayerV3ViewModel(
             seasonId = transitionContext.seasonId,
             continuePlayNext = true,
             preparedPlayData = preparedPlayData,
+            forceStartPlayback = true,
         )
         return true
     }
@@ -1552,6 +1547,7 @@ class VideoPlayerV3ViewModel(
         epid: Int,
         preferApi: ApiType,
         proxyArea: ProxyArea,
+        fromSeason: Boolean = this.fromSeason,
     ): PlayData {
         val primaryResult = runCatching {
             fetchVodPlayDataOnce(
@@ -1559,7 +1555,8 @@ class VideoPlayerV3ViewModel(
                 cid = cid,
                 epid = epid,
                 preferApi = preferApi,
-                proxyArea = proxyArea
+                proxyArea = proxyArea,
+                fromSeason = fromSeason,
             )
         }
         val primaryPlayData = primaryResult.getOrNull()
@@ -1583,7 +1580,8 @@ class VideoPlayerV3ViewModel(
                     cid = cid,
                     epid = epid,
                     preferApi = ApiType.App,
-                    proxyArea = proxyArea
+                    proxyArea = proxyArea,
+                    fromSeason = fromSeason,
                 )
             }.onFailure {
                 logger.fWarn { "APP play data fallback failed: ${it.localizedMessage}" }
@@ -1610,6 +1608,7 @@ class VideoPlayerV3ViewModel(
         epid: Int,
         preferApi: ApiType,
         proxyArea: ProxyArea,
+        fromSeason: Boolean = this.fromSeason,
     ): PlayData {
         return if (fromSeason) {
             videoPlayRepository.getPgcPlayData(
@@ -3782,16 +3781,18 @@ class VideoPlayerV3ViewModel(
     }
 
     private fun applyPreparedAutoPlayTransitionContext(transitionContext: PreparedAutoPlayTransitionContext) {
-        videoInfoRepository.replacePlaybackContext(
-            videoList = transitionContext.availableVideoList,
-            relatedVideos = transitionContext.relatedVideos,
-            interactivePlaybackContext = transitionContext.interactivePlaybackContext,
-        )
+        if (transitionContext.replacePlaybackContext) {
+            videoInfoRepository.replacePlaybackContext(
+                videoList = transitionContext.availableVideoList,
+                relatedVideos = transitionContext.relatedVideos,
+                interactivePlaybackContext = transitionContext.interactivePlaybackContext,
+            )
+        }
         title = transitionContext.title
         partTitle = transitionContext.partTitle
         cover = transitionContext.cover
-        fromSeason = false
-        subType = 0
+        fromSeason = transitionContext.fromSeason
+        subType = transitionContext.subType
         epid = transitionContext.epid ?: 0
         seasonId = transitionContext.seasonId ?: 0
         isVerticalVideo = transitionContext.isVerticalVideo
@@ -3812,6 +3813,12 @@ class VideoPlayerV3ViewModel(
     private suspend fun resolvePreparedAutoPlayTransitionContext(
         candidate: AutoPlayCandidate,
     ): PreparedAutoPlayTransitionContext? {
+        if (candidate is AutoPlayCandidate.PlaylistItem) {
+            return withContext(Dispatchers.Main.immediate) {
+                createPreparedPlaylistItemTransitionContext(candidate.item)
+            }
+        }
+
         val detail = when (candidate) {
             is AutoPlayCandidate.CrossVideoPart -> videoDetailRepository.getVideoDetail(
                 aid = candidate.item.aid,
@@ -3824,6 +3831,7 @@ class VideoPlayerV3ViewModel(
                 preferApiType = settings.apiType,
                 withUserActions = false,
             )
+            is AutoPlayCandidate.PlaylistItem -> return null
         }
 
         if (detail.redirectToEp || detail.isInteractive || detail.pages.isEmpty()) return null
@@ -3831,10 +3839,12 @@ class VideoPlayerV3ViewModel(
         val targetCid = when (candidate) {
             is AutoPlayCandidate.CrossVideoPart -> candidate.item.cid ?: return null
             is AutoPlayCandidate.RelatedVideo -> detail.pages.first().cid
+            is AutoPlayCandidate.PlaylistItem -> return null
         }
         val preferredPartTitle = when (candidate) {
             is AutoPlayCandidate.CrossVideoPart -> candidate.item.partTitle.takeIf { it.isNotBlank() }
             is AutoPlayCandidate.RelatedVideo -> null
+            is AutoPlayCandidate.PlaylistItem -> return null
         }
 
         return detail.toPreparedAutoPlayTransitionContext(
@@ -3842,6 +3852,50 @@ class VideoPlayerV3ViewModel(
             preferredPartTitle = preferredPartTitle,
         )
     }
+
+    private fun createPreparedPlaylistItemTransitionContext(
+        item: VideoListItemData,
+    ): PreparedAutoPlayTransitionContext? {
+        val cid = item.cid ?: return null
+        return PreparedAutoPlayTransitionContext(
+            aid = item.aid,
+            cid = cid,
+            epid = item.epid,
+            seasonId = item.seasonId,
+            title = item.title,
+            partTitle = item.partTitle,
+            cover = item.cover ?: cover,
+            isVerticalVideo = isVerticalVideo,
+            playerIconIdle = playerIconIdle,
+            playerIconMoving = playerIconMoving,
+            play = play,
+            danmaku = danmaku,
+            like = like,
+            coin = coin,
+            favorite = favorite,
+            upName = upName,
+            upId = upId,
+            upFace = upFace,
+            pubTime = pubTime,
+            availableVideoList = availableVideoList.toList(),
+            relatedVideos = relatedVideos.toList(),
+            interactivePlaybackContext = videoInfoRepository.interactivePlaybackContext,
+            replacePlaybackContext = false,
+            fromSeason = fromSeason,
+            subType = subType,
+        )
+    }
+
+    private suspend fun fetchPreparedAutoPlayPlayData(
+        transitionContext: PreparedAutoPlayTransitionContext,
+    ): PlayData = fetchPlayableVodPlayData(
+        avid = transitionContext.aid,
+        cid = transitionContext.cid,
+        epid = transitionContext.epid ?: 0,
+        preferApi = settings.apiType,
+        proxyArea = proxyArea,
+        fromSeason = transitionContext.fromSeason,
+    )
 
     private suspend fun awaitPreparedAutoPlayTransitionContext(
         candidate: AutoPlayCandidate,

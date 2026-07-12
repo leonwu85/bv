@@ -9,6 +9,14 @@ import dev.aaa1115910.bv.repository.InteractivePlaybackContext
 sealed interface AutoPlayCandidate {
     val aid: Long
 
+    /** A next item that remains in the current playback context. */
+    data class PlaylistItem(
+        val item: VideoListItemData,
+    ) : AutoPlayCandidate {
+        override val aid: Long
+            get() = item.aid
+    }
+
     data class CrossVideoPart(
         val item: VideoListItemData,
     ) : AutoPlayCandidate {
@@ -47,6 +55,10 @@ internal data class PreparedAutoPlayTransitionContext(
     val availableVideoList: List<VideoListItem>,
     val relatedVideos: List<VideoCardData>,
     val interactivePlaybackContext: InteractivePlaybackContext? = null,
+    /** Set false when the current playlist can be retained. */
+    val replacePlaybackContext: Boolean = true,
+    val fromSeason: Boolean = false,
+    val subType: Int = 0,
 )
 
 internal data class PreparedAutoPlayTarget(
