@@ -32,7 +32,6 @@ import com.origeek.imageViewer.previewer.ImagePreviewerState
 import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
-import dev.aaa1115910.bv.BuildConfig
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -121,20 +120,14 @@ fun Replies(
                 }
             }
 
-            itemsIndexed(items = replies) { index, reply ->
-                Box {
-                    CommentItem(
-                        comment = reply,
-                        previewerState = previewerState,
-                        onShowPreviewer = onShowPreviewer,
-                        showReplies = false,
-                        onReply = { onReplyComment(it, rootComment?.rpid ?: it.rpid) }
-                    )
-
-                    if (BuildConfig.DEBUG) {
-                        Text(text = "$index")
-                    }
-                }
+            itemsIndexed(items = replies) { _, reply ->
+                CommentItem(
+                    comment = reply,
+                    previewerState = previewerState,
+                    onShowPreviewer = onShowPreviewer,
+                    showReplies = false,
+                    onReply = { onReplyComment(it, rootComment?.rpid ?: it.rpid) }
+                )
             }
 
             if (replies.isEmpty() && !(isLoading || isRefreshing)) {

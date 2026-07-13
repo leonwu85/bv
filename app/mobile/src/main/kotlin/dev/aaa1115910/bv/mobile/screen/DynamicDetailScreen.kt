@@ -1060,7 +1060,7 @@ private fun ReplyPart(
         topBar = {
             TopAppBar(
                 modifier = Modifier,
-                title = { Text("Replies") },
+                title = { Text("回复详情") },
                 navigationIcon = {
                     IconButton(onClick = onCloseReplies) {
                         Icon(
@@ -1072,11 +1072,11 @@ private fun ReplyPart(
                 windowInsets = if (enableTopPadding) TopAppBarDefaults.windowInsets
                 else WindowInsets.systemBars.only(WindowInsetsSides.Horizontal),
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             )
         },
-        containerColor = Color.Transparent
+        containerColor = MaterialTheme.colorScheme.surface
     ) { innerPadding ->
         Replies(
             modifier = Modifier.padding(top = innerPadding.calculateTopPadding()),
