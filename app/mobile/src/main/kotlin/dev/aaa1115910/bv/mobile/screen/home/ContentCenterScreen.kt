@@ -480,10 +480,10 @@ private fun FollowingSeasonSection(
                 state = rowState,
                 contentPadding = PaddingValues(horizontal = 0.dp)
             ) {
-                items(
+                itemsIndexed(
                     items = seasons,
-                    key = { it.seasonId }
-                ) { season ->
+                    key = { index, season -> "$index:${season.seasonId}" }
+                ) { _, season ->
                     FollowingSeasonCard(
                         modifier = Modifier
                             .width(HomeContentStyle.PgcRailCardWidth)
@@ -1197,7 +1197,7 @@ private fun LiveFollowingStrip(
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.Top
         ) {
-            itemsIndexed(rooms, key = { _, room -> room.roomId }) { _, room ->
+            itemsIndexed(rooms, key = { index, room -> "$index:${room.roomId}" }) { _, room ->
                 Column(
                     modifier = Modifier
                         .width(65.dp)

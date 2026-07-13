@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -927,7 +928,10 @@ private fun MineFavoritePreview(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(folders.take(12), key = { it.id }) { folder ->
+                    itemsIndexed(
+                        items = folders.take(12),
+                        key = { index, folder -> "$index:${folder.id}" }
+                    ) { _, folder ->
                         FavoriteFolderCard(
                             folder = folder,
                             onClick = onOpenFavorite

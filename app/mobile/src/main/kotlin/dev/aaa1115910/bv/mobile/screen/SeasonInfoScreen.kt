@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AssistChip
@@ -161,7 +161,10 @@ private fun SeasonInfoContent(
                     fontWeight = FontWeight.SemiBold
                 )
             }
-            items(seasonData.episodes, key = { it.id }) { episode ->
+            itemsIndexed(
+                items = seasonData.episodes,
+                key = { index, episode -> "positive:$index:${episode.id}" }
+            ) { _, episode ->
                 EpisodeListItem(
                     episode = episode,
                     onClick = { onClickEpisode(episode) }
@@ -169,7 +172,7 @@ private fun SeasonInfoContent(
             }
         }
 
-        seasonData.sections.forEach { section ->
+        seasonData.sections.forEachIndexed { sectionIndex, section ->
             item {
                 Text(
                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -178,7 +181,12 @@ private fun SeasonInfoContent(
                     fontWeight = FontWeight.SemiBold
                 )
             }
-            items(section.episodes, key = { it.id }) { episode ->
+            itemsIndexed(
+                items = section.episodes,
+                key = { episodeIndex, episode ->
+                    "section:$sectionIndex:${section.id}:$episodeIndex:${episode.id}"
+                }
+            ) { _, episode ->
                 EpisodeListItem(
                     episode = episode,
                     onClick = { onClickEpisode(episode) }

@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
@@ -409,7 +410,10 @@ private fun PgcSearchResult(
                 modifier = modifier,
                 state = listState
             ) {
-                items(pgcList, key = { it.seasonId }) { pgc ->
+                itemsIndexed(
+                    items = pgcList,
+                    key = { index, pgc -> "$index:${pgc.seasonId}" }
+                ) { _, pgc ->
                     PgcListItem(
                         pgc = pgc,
                         onClick = { onClickPgc(pgc.seasonId) }
@@ -477,7 +481,10 @@ private fun BiliUserSearchResult(
         state = listState,
         contentPadding = PaddingValues(vertical = 4.dp)
     ) {
-        items(biliUserList, key = { it.mid }) { user ->
+        itemsIndexed(
+            items = biliUserList,
+            key = { index, user -> "$index:${user.mid}" }
+        ) { _, user ->
             UserSearchListItem(
                 user = user,
                 onClick = { onClickUser(user) }
@@ -514,7 +521,10 @@ private fun LiveRoomSearchResult(
                 modifier = modifier,
                 state = listState
             ) {
-                items(liveRoomList, key = { it.roomId }) { room ->
+                itemsIndexed(
+                    items = liveRoomList,
+                    key = { index, room -> "$index:${room.roomId}" }
+                ) { _, room ->
                     LiveRoomListItem(
                         room = room,
                         onClick = { onClickLiveRoom(room) }

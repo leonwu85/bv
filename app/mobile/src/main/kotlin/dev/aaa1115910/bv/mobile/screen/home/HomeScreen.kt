@@ -113,7 +113,7 @@ fun HomeScreen(
         HomeScreenContent(
             modifier = Modifier.padding(top = innerPadding.calculateTopPadding()),
             pageState = pageState,
-            selectedTabIndex = pageState.currentPage,
+            selectedTabIndex = pageState.settledPage,
             windowSize = windowSize,
             rcmdGridState = rcmdGridState,
             popularGridState = popularGridState,
@@ -235,6 +235,7 @@ fun HomeScreenContent(
 
     Column(
         modifier = modifier
+            .fillMaxSize()
             .background(Color.Transparent),
     ) {
         Box(
@@ -258,24 +259,23 @@ fun HomeScreenContent(
         }
 
         Surface(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
             color = Color.Transparent,
             shape = if (windowSize == WindowWidthSizeClass.Compact) RoundedCornerShape(0.dp) else MaterialTheme.shapes.medium,
         ) {
             HorizontalPager(
-                modifier = Modifier,
+                modifier = Modifier.fillMaxSize(),
                 state = pageState,
             ) { page ->
                 when (MobileHomeTab.entries[page]) {
                     MobileHomeTab.Live -> {
-                        if (selectedTabIndex == page) {
-                            ContentCenterScreen(
-                                windowSize = windowSize,
-                                showTopBar = false,
-                                lockedSection = ContentCenterSection.Live
-                            )
-                        } else {
-                            Box(Modifier.fillMaxSize())
-                        }
+                        ContentCenterScreen(
+                            windowSize = windowSize,
+                            showTopBar = false,
+                            lockedSection = ContentCenterSection.Live
+                        )
                     }
 
                     MobileHomeTab.Recommend -> {
@@ -329,41 +329,29 @@ fun HomeScreenContent(
                     }
 
                     MobileHomeTab.Zone -> {
-                        if (selectedTabIndex == page) {
-                            ContentCenterScreen(
-                                windowSize = windowSize,
-                                showTopBar = false,
-                                lockedSection = ContentCenterSection.Ugc
-                            )
-                        } else {
-                            Box(Modifier.fillMaxSize())
-                        }
+                        ContentCenterScreen(
+                            windowSize = windowSize,
+                            showTopBar = false,
+                            lockedSection = ContentCenterSection.Ugc
+                        )
                     }
 
                     MobileHomeTab.Bangumi -> {
-                        if (selectedTabIndex == page) {
-                            ContentCenterScreen(
-                                windowSize = windowSize,
-                                showTopBar = false,
-                                lockedSection = ContentCenterSection.Pgc,
-                                initialPgcType = PgcType.Anime
-                            )
-                        } else {
-                            Box(Modifier.fillMaxSize())
-                        }
+                        ContentCenterScreen(
+                            windowSize = windowSize,
+                            showTopBar = false,
+                            lockedSection = ContentCenterSection.Pgc,
+                            initialPgcType = PgcType.Anime
+                        )
                     }
 
                     MobileHomeTab.Cinema -> {
-                        if (selectedTabIndex == page) {
-                            ContentCenterScreen(
-                                windowSize = windowSize,
-                                showTopBar = false,
-                                lockedSection = ContentCenterSection.Pgc,
-                                initialPgcType = PgcType.Movie
-                            )
-                        } else {
-                            Box(Modifier.fillMaxSize())
-                        }
+                        ContentCenterScreen(
+                            windowSize = windowSize,
+                            showTopBar = false,
+                            lockedSection = ContentCenterSection.Pgc,
+                            initialPgcType = PgcType.Movie
+                        )
                     }
                 }
             }

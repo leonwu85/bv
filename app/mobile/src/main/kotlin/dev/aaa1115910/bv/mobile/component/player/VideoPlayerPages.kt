@@ -235,7 +235,7 @@ fun VideoPlayerInteractiveNodesRow(
                 ),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(nodes, key = { _, node -> node.cid }) { index, node ->
+                itemsIndexed(nodes, key = { index, node -> "$index:${node.cid}" }) { index, node ->
                     VideoPlayerPageItem(
                         modifier = modifier,
                         text = "分支${index + 1} ${node.title.ifBlank { "未命名分支" }}",
@@ -632,7 +632,7 @@ private fun VideoPlayerPartSheetContent(
             LazyColumn(
                 state = interactiveListState
             ) {
-                itemsIndexed(interactiveNodes, key = { _, node -> node.cid }) { index, node ->
+                itemsIndexed(interactiveNodes, key = { index, node -> "$index:${node.cid}" }) { index, node ->
                     PageListItem(
                         modifier = modifier,
                         text = "分支${index + 1} ${node.title.ifBlank { "未命名分支" }}",

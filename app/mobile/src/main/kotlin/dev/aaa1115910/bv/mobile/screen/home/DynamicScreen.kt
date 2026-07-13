@@ -50,6 +50,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
@@ -2359,7 +2360,10 @@ private fun DynamicUpPanel(
                 onLongClick = { onOpenUp(dynamicViewModel.selfUp) }
             )
         }
-        items(dynamicViewModel.followUpList, key = { it.mid }) { up ->
+        itemsIndexed(
+            items = dynamicViewModel.followUpList,
+            key = { index, up -> "$index:${up.mid}" }
+        ) { _, up ->
             if (up == dynamicViewModel.followUpList.lastOrNull() && dynamicViewModel.followUpHasMore) {
                 LaunchedEffect(up.mid) { onLoadMore() }
             }
