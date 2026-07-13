@@ -869,10 +869,13 @@ class VideoPlayerV3ViewModel(
         forceStartPlayback: Boolean = false,
         preferOfflineCache: Boolean = false,
     ) {
+        val manualPlaybackRequestedBeforeInitialLoad =
+            vodPlaybackSessionToken == 0L && manualVodPlaybackRequested
         val playbackSessionToken = beginVodPlaybackSession()
         val videoChanged = currentAid != avid || currentCid != cid
         pendingVodPlaybackSource = null
-        manualVodPlaybackRequested = settings.autoPlay || forceStartPlayback
+        manualVodPlaybackRequested =
+            settings.autoPlay || forceStartPlayback || manualPlaybackRequestedBeforeInitialLoad
         if (!settings.autoPlay) {
             runCatching {
                 videoPlayer?.stop()

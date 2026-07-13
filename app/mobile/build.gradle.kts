@@ -66,4 +66,5 @@ dependencies {
     implementation(libs.markwon.core)
     implementation(libs.markwon.html)
     implementation(libs.markwon.image.coil)
+    testImplementation(libs.kotlin.test)
 }

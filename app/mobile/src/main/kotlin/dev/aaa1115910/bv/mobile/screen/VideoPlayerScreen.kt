@@ -7,13 +7,10 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.net.Uri
 import android.provider.OpenableColumns
-import android.os.SystemClock
+import android.view.OrientationEventListener
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -261,6 +258,7 @@ import dev.aaa1115910.bv.viewmodel.VideoPlayerV3ViewModel
 import dev.aaa1115910.bv.viewmodel.video.VideoDetailViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -303,7 +301,13 @@ private const val DanmakuOffIcon = "\uE802"
 private const val DanmakuOnIcon = "\uE803"
 private const val AUTO_ROTATE_SETTLE_MILLIS = 350L
 private const val AUTO_ROTATE_HYSTERESIS_DEGREES = 10
-private const val MIN_AUTO_ROTATE_EXIT_ANGLE = 10
+private const val MIN_AUTO_ROTATE_REARM_ANGLE = 10
+
+internal fun landscapeTiltDegrees(orientationDegrees: Int): Int? {
+    if (orientationDegrees !in 0 until 360) return null
+    val halfTurnDegrees = orientationDegrees % 180
+    return minOf(halfTurnDegrees, 180 - halfTurnDegrees)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -334,7 +338,6 @@ fun VideoPlayerScreen(
     val autoRotateVideoAngle by MobilePrefs.autoRotateVideoAngleFlow.collectAsState(
         initial = initialAutoRotateVideoAngle
     )
-    val currentIsVideoFullscreen by rememberUpdatedState(isVideoFullscreen)
     val currentAutoRotateSuppressed by rememberUpdatedState(autoRotateSuppressed)
     val updateVideoFullscreen by rememberUpdatedState<(Boolean) -> Unit> { fullscreen ->
         isVideoFullscreen = fullscreen
@@ -343,68 +346,75 @@ fun VideoPlayerScreen(
         autoRotateSuppressed = suppressed
     }
 
-    DisposableEffect(context, forcePortrait, autoRotateVideo, autoRotateVideoAngle) {
-        if (!forcePortrait || !autoRotateVideo) {
-            return@DisposableEffect onDispose {}
-        }
-
-        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
-        val accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        if (accelerometer == null) {
+    DisposableEffect(
+        context,
+        isVideoFullscreen,
+        autoRotateVideo,
+        autoRotateVideoAngle
+    ) {
+        // 小窗阶段即开始监听，不依赖视频详情或播放地址是否已经加载完成。
+        if (isVideoFullscreen || !autoRotateVideo) {
             return@DisposableEffect onDispose {}
         }
 
         val enterThreshold = autoRotateVideoAngle.toDouble()
-        val exitThreshold = (autoRotateVideoAngle - AUTO_ROTATE_HYSTERESIS_DEGREES)
-            .coerceAtLeast(MIN_AUTO_ROTATE_EXIT_ANGLE)
+        val rearmThreshold = (autoRotateVideoAngle - AUTO_ROTATE_HYSTERESIS_DEGREES)
+            .coerceAtLeast(MIN_AUTO_ROTATE_REARM_ANGLE)
             .toDouble()
-        var candidateFullscreen: Boolean? = null
-        var candidateSince = 0L
+        var pendingEnterFullscreenJob: Job? = null
 
-        val listener = object : SensorEventListener {
-            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        fun cancelPendingEnterFullscreen() {
+            pendingEnterFullscreenJob?.cancel()
+            pendingEnterFullscreenJob = null
+        }
 
-            override fun onSensorChanged(event: SensorEvent) {
-                if (event.values.size < 2) return
-                val horizontal = kotlin.math.abs(event.values[0].toDouble())
-                val vertical = kotlin.math.abs(event.values[1].toDouble())
-                if (horizontal == 0.0 && vertical == 0.0) return
-
-                val tiltDegrees = Math.toDegrees(kotlin.math.atan2(horizontal, vertical))
+        val orientationListener = object : OrientationEventListener(
+            context,
+            SensorManager.SENSOR_DELAY_UI
+        ) {
+            override fun onOrientationChanged(orientation: Int) {
+                val tiltDegrees = landscapeTiltDegrees(orientation)?.toDouble()
+                if (tiltDegrees == null) {
+                    cancelPendingEnterFullscreen()
+                    return
+                }
                 if (currentAutoRotateSuppressed) {
-                    if (tiltDegrees <= exitThreshold) {
+                    if (tiltDegrees <= rearmThreshold) {
                         updateAutoRotateSuppressed(false)
                     }
-                    candidateFullscreen = null
+                    cancelPendingEnterFullscreen()
                     return
                 }
 
-                val targetFullscreen = if (currentIsVideoFullscreen) {
-                    tiltDegrees > exitThreshold
-                } else {
-                    tiltDegrees >= enterThreshold
-                }
-                if (targetFullscreen == currentIsVideoFullscreen) {
-                    candidateFullscreen = null
+                if (tiltDegrees < enterThreshold) {
+                    cancelPendingEnterFullscreen()
                     return
                 }
 
-                val now = SystemClock.elapsedRealtime()
-                if (candidateFullscreen != targetFullscreen) {
-                    candidateFullscreen = targetFullscreen
-                    candidateSince = now
+                if (pendingEnterFullscreenJob?.isActive == true) {
                     return
                 }
-                if (now - candidateSince >= AUTO_ROTATE_SETTLE_MILLIS) {
-                    updateVideoFullscreen(targetFullscreen)
-                    candidateFullscreen = null
+
+                pendingEnterFullscreenJob = scope.launch {
+                    delay(AUTO_ROTATE_SETTLE_MILLIS)
+                    pendingEnterFullscreenJob = null
+                    logger.info {
+                        "Auto enter fullscreen: orientation=$orientation, " +
+                            "tilt=$tiltDegrees, threshold=$enterThreshold"
+                    }
+                    updateVideoFullscreen(true)
                 }
             }
         }
 
-        sensorManager.registerListener(listener, accelerometer, SensorManager.SENSOR_DELAY_UI)
+        if (!orientationListener.canDetectOrientation()) {
+            return@DisposableEffect onDispose {}
+        }
+
+        orientationListener.enable()
         onDispose {
-            sensorManager.unregisterListener(listener)
+            cancelPendingEnterFullscreen()
+            orientationListener.disable()
         }
     }
 

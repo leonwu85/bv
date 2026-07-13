@@ -581,7 +581,7 @@ object MobilePrefKeys {
     val enableAudioPlaybackParamsRequest = PreferenceRequest(enableAudioPlaybackParamsKey, true)
     val enableHardwareDecodeRequest = PreferenceRequest(enableHardwareDecodeKey, true)
     val expandBufferRequest = PreferenceRequest(expandBufferKey, false)
-    val autoRotateVideoRequest = PreferenceRequest(autoRotateVideoKey, false)
+    val autoRotateVideoRequest = PreferenceRequest(autoRotateVideoKey, true)
     val autoRotateVideoAngleRequest = PreferenceRequest(autoRotateVideoAngleKey, 45)
     val defaultAudioRequest = PreferenceRequest(defaultAudioKey, Audio.A192K.code)
     val defaultCellularAudioRequest = PreferenceRequest(defaultCellularAudioKey, Audio.A192K.code)

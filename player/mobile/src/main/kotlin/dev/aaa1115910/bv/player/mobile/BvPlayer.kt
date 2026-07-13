@@ -76,6 +76,9 @@ import kotlin.math.roundToInt
 private const val FULLSCREEN_DANMAKU_TEXT_SIZE_SCALE = 1f
 private const val EMBEDDED_DANMAKU_TEXT_SIZE_SCALE = 0.8f
 
+internal fun shouldResetPlaybackStartedState(previousCid: Long, currentCid: Long): Boolean =
+    previousCid != 0L && currentCid != previousCid
+
 private fun DanmakuConfig.invalidateTextSizeDependentState() {
     updateMeasure()
     updateLayout()
@@ -189,7 +192,8 @@ fun BvPlayer(
     var aspectRatio by remember { mutableFloatStateOf(16f / 9f) }
     var lastPlayed by remember { mutableLongStateOf(0L) }
     var lastHeartbeatPosition by remember { mutableLongStateOf(0L) }
-    var hasStartedPlaybackOnce by remember(videoPlayerConfigData.currentVideoCid) { mutableStateOf(false) }
+    var playbackStateCid by remember { mutableLongStateOf(videoPlayerConfigData.currentVideoCid) }
+    var hasStartedPlaybackOnce by remember { mutableStateOf(false) }
     var pendingDanmakuPlaySyncPosition by remember { mutableLongStateOf(-1L) }
     var showAutoSkipSponsorTip by remember { mutableStateOf(false) }
     var autoSkipSponsorSeconds by remember { mutableIntStateOf(0) }
@@ -205,6 +209,14 @@ fun BvPlayer(
     var currentDanmakuMaskFrame: DanmakuMaskFrame? by remember { mutableStateOf(null) }
     var currentDanmakuMaskBitmap: Bitmap? by remember { mutableStateOf(null) }
     val danmakuMaskBitmapPool = remember { DanmakuMaskBitmapPool() }
+
+    LaunchedEffect(videoPlayerConfigData.currentVideoCid) {
+        val currentVideoCid = videoPlayerConfigData.currentVideoCid
+        if (shouldResetPlaybackStartedState(playbackStateCid, currentVideoCid)) {
+            hasStartedPlaybackOnce = false
+        }
+        playbackStateCid = currentVideoCid
+    }
 
 
     fun updatePlaybackProgress(position: Long, durationMs: Long, buffered: Int) {

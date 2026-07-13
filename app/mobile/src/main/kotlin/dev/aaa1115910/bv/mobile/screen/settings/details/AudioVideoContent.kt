@@ -73,8 +73,8 @@ fun AudioVideoContent(
             },
             "\u5c4f\u5e55\u65b9\u5411" to {
                 switchPreference(
-                    title = "\u968f\u8bbe\u5907\u503e\u659c\u81ea\u52a8\u5207\u6362",
-                    summary = "\u6a2a\u7f6e\u65f6\u8fdb\u5165\u5168\u5c4f\uff0c\u7ad6\u7f6e\u65f6\u9000\u51fa\u5168\u5c4f",
+                    title = "\u968f\u8bbe\u5907\u503e\u659c\u81ea\u52a8\u8fdb\u5165\u5168\u5c4f",
+                    summary = "\u6a2a\u7f6e\u8fbe\u5230\u8bbe\u5b9a\u89d2\u5ea6\u65f6\u8fdb\u5165\u5168\u5c4f\uff0c\u9000\u51fa\u5168\u5c4f\u9700\u624b\u52a8\u64cd\u4f5c",
                     prefReq = MobilePrefKeys.autoRotateVideoRequest,
                     onCheckedChange = { true }
                 )
