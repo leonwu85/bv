@@ -263,14 +263,9 @@ class VideoPlayerV3Activity : TvComponentActivity() {
                 ApiType.App -> dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_APP
             }
         }
-        val playbackReferer = if (isLive) {
-            getString(R.string.video_player_referer)
-        } else {
-            when (Prefs.apiType) {
-                ApiType.Web -> getString(R.string.video_player_referer)
-                ApiType.App -> null
-            }
-        }
+        // WEB is also the fallback for APP playback, so every Bilibili media request
+        // must be ready to use a WEB play URL.
+        val playbackReferer = getString(R.string.video_player_referer)
         val options = VideoPlayerOptions(
             userAgent = playbackUserAgent,
             referer = playbackReferer,

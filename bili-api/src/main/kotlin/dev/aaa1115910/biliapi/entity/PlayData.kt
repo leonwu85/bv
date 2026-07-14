@@ -7,6 +7,8 @@ import bilibili.playershared.dashVideoOrNull
 import bilibili.playershared.dolbyOrNull
 import bilibili.playershared.lossLessItemOrNull
 import dev.aaa1115910.biliapi.http.entity.video.ClipInfo
+import dev.aaa1115910.biliapi.http.entity.video.Durl
+import dev.aaa1115910.biliapi.http.entity.video.SupportFormat
 
 data class PlayData(
     val dashVideos: List<DashVideo>,
@@ -163,6 +165,13 @@ data class PlayData(
                     backUrl = it.backupUrl,
                     codecs = it.codecs
                 )
+            }.ifEmpty {
+                progressiveVideos(
+                    durl = playUrlData.durl,
+                    quality = playUrlData.quality,
+                    videoCodecId = playUrlData.videoCodecId,
+                    supportFormats = playUrlData.supportFormats
+                )
             }
             val dashAudios = audios?.map {
                 DashAudio(
@@ -222,6 +231,13 @@ data class PlayData(
                     frameRate = it.frameRate,
                     backUrl = it.backupUrl,
                     codecs = it.codecs
+                )
+            }.ifEmpty {
+                progressiveVideos(
+                    durl = playUrlData.durl,
+                    quality = playUrlData.quality,
+                    videoCodecId = playUrlData.videoCodecId,
+                    supportFormats = playUrlData.supportFormats
                 )
             }
             val dashAudios = audios?.map {
@@ -283,6 +299,13 @@ data class PlayData(
                     backUrl = it.backupUrl,
                     codecs = it.codecs
                 )
+            }.ifEmpty {
+                progressiveVideos(
+                    durl = playUrlData.durl,
+                    quality = playUrlData.quality,
+                    videoCodecId = playUrlData.videoCodecId,
+                    supportFormats = playUrlData.supportFormats
+                )
             }
             val dashAudios = audios?.map {
                 DashAudio(
@@ -320,7 +343,53 @@ data class PlayData(
                 timeLength = playUrlData.timeLength.toLong()
             )
         }
+
+        private fun progressiveVideos(
+            durl: List<Durl>,
+            quality: Int,
+            videoCodecId: Int,
+            supportFormats: List<SupportFormat>
+        ): List<DashVideo> {
+            val firstSegment = durl.firstOrNull() ?: return emptyList()
+            val urls = (listOf(firstSegment.url) + firstSegment.backupUrl)
+                .filter { it.isNotBlank() }
+                .distinct()
+            val baseUrl = urls.firstOrNull() ?: return emptyList()
+            val resolvedQuality = quality.takeIf { it > 0 }
+                ?: supportFormats.firstOrNull()?.quality
+                ?: 16
+            val codecs = supportFormats
+                .firstOrNull { it.quality == resolvedQuality }
+                ?.codecs
+                ?.firstOrNull { it.isNotBlank() }
+                ?: CodeType.fromCodecId(videoCodecId).str.takeUnless { it == "none" }
+                ?: CodeType.Code264.str
+
+            return listOf(
+                DashVideo(
+                    quality = resolvedQuality,
+                    baseUrl = baseUrl,
+                    bandwidth = 0,
+                    codecId = videoCodecId.takeIf { it > 0 } ?: CodeType.Code264.codecId,
+                    width = 0,
+                    height = 0,
+                    frameRate = "",
+                    backUrl = urls.drop(1),
+                    codecs = codecs,
+                    isMuxed = true
+                )
+            )
+        }
     }
+
+    fun playableAudioCount(): Int =
+        dashAudios.size + listOfNotNull(dolby, flac).size
+
+    fun hasMuxedVideo(): Boolean =
+        dashVideos.any { it.isMuxed }
+
+    fun hasPlayableVodStreams(): Boolean =
+        dashVideos.isNotEmpty() && (hasMuxedVideo() || playableAudioCount() > 0)
 
     operator fun plus(other: PlayData): PlayData {
         return PlayData(
@@ -354,6 +423,7 @@ data class PlayData(
  * @param frameRate 帧率
  * @param backUrl 备用流
  * @param codecs 编码格式 仅 Web 接口有该值
+ * @param isMuxed 该地址是否已内嵌音视频（旧式 durl MP4/FLV）
  */
 data class DashVideo(
     val quality: Int,
@@ -364,7 +434,8 @@ data class DashVideo(
     val height: Int,
     val frameRate: String,
     val backUrl: List<String>,
-    val codecs: String? = null
+    val codecs: String? = null,
+    val isMuxed: Boolean = false
 )
 
 /**
@@ -379,3 +450,8 @@ data class DashAudio(
     val codecId: Int,
     val backUrl: List<String>
 )
+
+class PlayDataUnavailableException : IllegalStateException {
+    constructor(message: String) : super(message)
+    constructor(message: String, cause: Throwable?) : super(message, cause)
+}

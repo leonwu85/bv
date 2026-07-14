@@ -11,6 +11,7 @@ import bilibili.playershared.videoVod
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.CodeType
 import dev.aaa1115910.biliapi.entity.PlayData
+import dev.aaa1115910.biliapi.entity.PlayDataUnavailableException
 import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMask
 import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskSegment
 import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskType
@@ -24,6 +25,7 @@ import dev.aaa1115910.biliapi.http.entity.AuthFailureException
 import dev.aaa1115910.biliapi.http.entity.BiliAuthFailureHandler
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
 import dev.aaa1115910.biliapi.http.entity.video.VideoPlayerInfo
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -104,50 +106,41 @@ class VideoPlayRepository(
         return when (preferApiType) {
             ApiType.Web -> {
                 val tryLook = shouldTryLook1080P(tryLook1080P, authRepository.sessionData)
-                val qnCandidates = playUrlQnCandidates(127)
-                var lastFailure: Throwable? = null
-
-                qnCandidates.forEach { candidateQn ->
-                    val result = runCatching {
-                        val playUrlData = BiliHttpApi.getVideoWbiPlayUrl(
-                            av = aid,
-                            bv = bvid.takeIf { it.isNotBlank() },
-                            cid = cid,
-                            fnval = 4048,
-                            qn = candidateQn,
-                            fnver = 0,
-                            fourk = 1,
-                            sessData = authRepository.sessionData,
-                            dedeUserID = authRepository.mid,
-                            buvid3 = authRepository.buvid3,
-                            dedeUserIDCkMd5 = authRepository.dedeUserIDCkMd5,
-                            biliJct = authRepository.biliJct,
-                            sid = authRepository.sid,
-                            tryLook = tryLook,
-                            gaiaVtoken = authRepository.gaiaVtoken
-                        ).getResponseData()
-                        val playData = PlayData.fromPlayUrlData(playUrlData)
-                        if (!playData.needPay && !playData.hasPlayableVodStreams()) {
-                            val audioCount = playData.playableAudioCount()
-                            throw IllegalStateException(
-                                "WBI qn=$candidateQn 未返回可播放音视频流：" +
-                                    "video=${playData.dashVideos.size}, " +
-                                    "audio=$audioCount, " +
-                                    "acceptQuality=${playUrlData.acceptQuality}, " +
-                                    "responseQuality=${playUrlData.quality}, " +
-                                    "result=${playUrlData.result}, " +
-                                    "message=${playUrlData.message}"
-                            )
-                        }
-                        playData
+                runCatching {
+                    val requestedQn = 127
+                    val playUrlData = BiliHttpApi.getVideoWbiPlayUrl(
+                        av = aid,
+                        bv = bvid.takeIf { it.isNotBlank() },
+                        cid = cid,
+                        fnval = 4048,
+                        qn = requestedQn,
+                        fnver = 0,
+                        fourk = 1,
+                        sessData = authRepository.sessionData,
+                        dedeUserID = authRepository.mid,
+                        buvid3 = authRepository.buvid3,
+                        dedeUserIDCkMd5 = authRepository.dedeUserIDCkMd5,
+                        biliJct = authRepository.biliJct,
+                        sid = authRepository.sid,
+                        tryLook = tryLook,
+                        gaiaVtoken = authRepository.gaiaVtoken
+                    ).getResponseData()
+                    val playData = PlayData.fromPlayUrlData(playUrlData)
+                    if (!playData.needPay && !playData.hasPlayableVodStreams()) {
+                        throw PlayDataUnavailableException(
+                            "WBI qn=$requestedQn 未返回可播放音视频流：" +
+                                "video=${playData.dashVideos.size}, " +
+                                "audio=${playData.playableAudioCount()}, " +
+                                "durl=${playUrlData.durl.size}, " +
+                                "acceptQuality=${playUrlData.acceptQuality}, " +
+                                "responseQuality=${playUrlData.quality}, " +
+                                "result=${playUrlData.result}, " +
+                                "message=${playUrlData.message}"
+                        )
                     }
-
-                    result.onSuccess { return it }
-                    result.onFailure(::notifyPlayUrlAuthFailureIfNeeded)
-                    lastFailure = result.exceptionOrNull()
-                }
-
-                throw lastFailure ?: IllegalStateException("WBI 未返回可播放音视频流")
+                    playData
+                }.onFailure(::notifyPlayUrlAuthFailureIfNeeded)
+                    .getOrThrow()
             }
 
             ApiType.App -> {
@@ -169,26 +162,27 @@ class VideoPlayRepository(
 
                     val replies = requests.map { (codecType, request) ->
                         async {
-                            val playUniteReply = runCatching {
+                            runCatching {
                                 playerStub?.playViewUnite(request)
                                     ?: throw IllegalStateException("Player stub is not initialized")
-                            }.onFailure {
-                                // dont throw
-                                runCatching { handleGrpcException(it) }
-                                    .onFailure {
-                                        println("get play data failed: [aid=$aid, cid=$cid, preferCodec=$codecType, preferApiType=$preferApiType]")
-                                        it.printStackTrace()
-                                    }
-                            }.getOrNull()
-                            playUniteReply
+                            }.fold(
+                                onSuccess = { Result.success(it) },
+                                onFailure = {
+                                    Result.failure(normalizeGrpcFailure(it).also { failure ->
+                                        println("get play data failed: [aid=$aid, cid=$cid, preferCodec=$codecType, preferApiType=$preferApiType, reason=${failure.message}]")
+                                    })
+                                }
+                            )
                         }
                     }.awaitAll()
-                    val result = replies.map {
-                        it?.let { PlayData.fromPlayViewUniteReply(it) }
-                    }.reduce { acc, playData ->
-                        acc?.let { playData?.let { acc + playData } ?: acc } ?: playData
-                    } ?: throw IllegalStateException("All codec types are failed to get play data")
-                    result
+                    replies.mapNotNull { result ->
+                        result.getOrNull()?.let { PlayData.fromPlayViewUniteReply(it) }
+                    }
+                        .reduceOrNull(PlayData::plus)
+                        ?: throw playDataUnavailableException(
+                            message = "APP 接口的所有编码均未获取到播放数据",
+                            failures = replies.mapNotNull { it.exceptionOrNull() }
+                        )
                 }
             }
         }
@@ -252,23 +246,11 @@ class VideoPlayRepository(
         return dashVideos.isNotEmpty() && (dashAudios.isNotEmpty() || dolby != null || flac != null)
     }
 
-    private fun PlayData.hasPlayableVodStreams(): Boolean {
-        return dashVideos.isNotEmpty() && playableAudioCount() > 0
-    }
-
-    private fun PlayData.playableAudioCount(): Int {
-        return dashAudios.size + listOfNotNull(dolby, flac).size
-    }
-
-    private fun playUrlQnCandidates(qn: Int): List<Int> {
+    private fun downloadQnCandidates(qn: Int): List<Int> {
         val knownQualities = listOf(127, 126, 125, 120, 116, 112, 80, 74, 64, 32, 16, 6)
         return (listOf(qn) + knownQualities.filter { it < qn })
             .filter { it > 0 }
             .distinct()
-    }
-
-    private fun downloadQnCandidates(qn: Int): List<Int> {
-        return playUrlQnCandidates(qn)
     }
 
     private fun buildPlayViewUniteRequest(
@@ -296,6 +278,27 @@ class VideoPlayRepository(
         }.getOrElse {
             throw IllegalStateException("Initialize PlayViewUnite request serialization failed", it)
         }
+    }
+
+    private fun normalizeGrpcFailure(error: Throwable): Throwable {
+        if (error is CancellationException) throw error
+        return runCatching { handleGrpcException(error) }.exceptionOrNull() ?: error
+    }
+
+    private fun playDataUnavailableException(
+        message: String,
+        failures: List<Throwable>
+    ): PlayDataUnavailableException {
+        val failureSummary = failures
+            .map { it.localizedMessage ?: it.javaClass.simpleName }
+            .distinct()
+            .joinToString("；")
+        val detailedMessage = failureSummary.takeIf { it.isNotBlank() }
+            ?.let { "$message：$it" }
+            ?: message
+        val exception = PlayDataUnavailableException(detailedMessage, failures.firstOrNull())
+        failures.drop(1).forEach(exception::addSuppressed)
+        return exception
     }
 
     suspend fun getPgcPlayData(
@@ -368,7 +371,7 @@ class VideoPlayRepository(
                             preferCodecType = codecType.toPgcPlayUrlCodeType()
                         }
                         async {
-                            val playReply = runCatching {
+                            runCatching {
                                 if (enableProxy) {
                                     proxyPgcPlayUrlStub?.playView(req)
                                         ?: throw IllegalStateException("Proxy pgc play url stub is not initialized")
@@ -376,23 +379,24 @@ class VideoPlayRepository(
                                     pgcPlayUrlStub?.playView(req)
                                         ?: throw IllegalStateException("Pgc play url stub is not initialized")
                                 }
-                            }.onFailure {
-                                // dont throw
-                                runCatching { handleGrpcException(it) }
-                                    .onFailure {
-                                        println("get pgc play data failed: [aid=$aid, cid=$cid, epid=$epid, preferCodec=$codecType, preferApiType=$preferApiType]")
-                                        it.printStackTrace()
-                                    }
-                            }.getOrNull()
-                            playReply
+                            }.fold(
+                                onSuccess = { Result.success(it) },
+                                onFailure = {
+                                    Result.failure(normalizeGrpcFailure(it).also { failure ->
+                                        println("get pgc play data failed: [aid=$aid, cid=$cid, epid=$epid, preferCodec=$codecType, preferApiType=$preferApiType, reason=${failure.message}]")
+                                    })
+                                }
+                            )
                         }
                     }.awaitAll()
-                    val result = replies.map {
-                        it?.let { PlayData.fromPgcPlayViewReply(it) }
-                    }.reduce { acc, playData ->
-                        acc?.let { playData?.let { acc + playData } ?: acc } ?: playData
-                    } ?: throw IllegalStateException("All codec types are failed to get play data")
-                    result
+                    replies.mapNotNull { result ->
+                        result.getOrNull()?.let { PlayData.fromPgcPlayViewReply(it) }
+                    }
+                        .reduceOrNull(PlayData::plus)
+                        ?: throw playDataUnavailableException(
+                            message = "APP 接口的所有编码均未获取到番剧播放数据",
+                            failures = replies.mapNotNull { it.exceptionOrNull() }
+                        )
                 }
             }
         }

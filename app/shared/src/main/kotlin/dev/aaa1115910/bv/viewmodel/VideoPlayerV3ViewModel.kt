@@ -25,6 +25,7 @@ import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.DashAudio
 import dev.aaa1115910.biliapi.entity.DashVideo
 import dev.aaa1115910.biliapi.entity.PlayData
+import dev.aaa1115910.biliapi.entity.PlayDataUnavailableException
 import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskSegment
 import dev.aaa1115910.biliapi.http.entity.video.ClipInfo
 import dev.aaa1115910.biliapi.entity.video.HeartbeatVideoType
@@ -1333,7 +1334,7 @@ class VideoPlayerV3ViewModel(
             logger.fInfo { "Video available resolution: $resolutionList" }
             availableQuality.swapListWithMainContext(resolutionList)
             if (resolutionList.isEmpty()) {
-                throw IllegalStateException("接口未返回可播放视频流")
+                throw PlayDataUnavailableException("接口未返回可播放视频流")
             }
 
             ensureVodPlaybackSessionActive(playbackSessionToken)
@@ -1358,8 +1359,9 @@ class VideoPlayerV3ViewModel(
 
             logger.fInfo { "Video available audio: $audioList" }
             availableAudio.swapListWithMainContext(audioList)
-            if (audioList.isEmpty()) {
-                throw IllegalStateException("接口未返回可播放音频流")
+            val hasMuxedVideo = playData.hasMuxedVideo()
+            if (audioList.isEmpty() && !hasMuxedVideo) {
+                throw PlayDataUnavailableException("接口未返回可播放音频流")
             }
 
             ensureVodPlaybackSessionActive(playbackSessionToken)
@@ -1400,19 +1402,23 @@ class VideoPlayerV3ViewModel(
                 defaultAudio = settings.defaultAudio,
                 cellularAudio = settings.defaultCellularAudio
             )
-            val selectedAudio = when {
-                audioList.contains(preferredAudio) -> preferredAudio
-                preferredAudio == Audio.ADolbyAtmos && audioList.contains(Audio.AHiRes) -> Audio.AHiRes
-                preferredAudio == Audio.AHiRes && audioList.contains(Audio.ADolbyAtmos) -> Audio.ADolbyAtmos
-                audioList.contains(Audio.A192K) -> Audio.A192K
-                audioList.contains(Audio.A132K) -> Audio.A132K
-                audioList.contains(Audio.A64K) -> Audio.A64K
-                else -> audioList.first()
-            }
-            withContext(Dispatchers.Main) {
-                if (isVodPlaybackSessionActive(playbackSessionToken)) {
-                    currentAudio = selectedAudio
+            if (audioList.isNotEmpty()) {
+                val selectedAudio = when {
+                    audioList.contains(preferredAudio) -> preferredAudio
+                    preferredAudio == Audio.ADolbyAtmos && audioList.contains(Audio.AHiRes) -> Audio.AHiRes
+                    preferredAudio == Audio.AHiRes && audioList.contains(Audio.ADolbyAtmos) -> Audio.ADolbyAtmos
+                    audioList.contains(Audio.A192K) -> Audio.A192K
+                    audioList.contains(Audio.A132K) -> Audio.A132K
+                    audioList.contains(Audio.A64K) -> Audio.A64K
+                    else -> audioList.first()
                 }
+                withContext(Dispatchers.Main) {
+                    if (isVodPlaybackSessionActive(playbackSessionToken)) {
+                        currentAudio = selectedAudio
+                    }
+                }
+            } else {
+                logger.fInfo { "Use audio embedded in progressive video stream" }
             }
 
             //再确认最终所选视频编码
@@ -1443,6 +1449,16 @@ class VideoPlayerV3ViewModel(
             logger.fWarn { "Risk control v_voucher detected: ${e.vVoucher}" }
             addLogs("触发风控，正在申请验证…")
             handleVVoucher(e.vVoucher)
+            false
+        } catch (e: PlayDataUnavailableException) {
+            addLogs("加载视频地址失败：${e.localizedMessage}")
+            withContext(Dispatchers.Main) {
+                if (isVodPlaybackSessionActive(playbackSessionToken)) {
+                    errorMessage = e.localizedMessage ?: "未获取到可播放的视频资源"
+                    loadState = RequestState.Failed
+                }
+            }
+            logger.fWarn { "Video play data unavailable: ${e.localizedMessage}" }
             false
         } catch (e: Exception) {
             addLogs("加载视频地址失败：${e.localizedMessage}")
@@ -1551,59 +1567,38 @@ class VideoPlayerV3ViewModel(
         preferApi: ApiType,
         proxyArea: ProxyArea,
         fromSeason: Boolean = this.fromSeason,
-    ): PlayData {
-        val primaryResult = runCatching {
+    ): PlayData = resolvePlayableVodPlayData(
+        preferredApi = preferApi,
+        fetch = { api ->
             fetchVodPlayDataOnce(
                 avid = avid,
                 cid = cid,
                 epid = epid,
-                preferApi = preferApi,
+                preferApi = api,
                 proxyArea = proxyArea,
                 fromSeason = fromSeason,
             )
-        }
-        val primaryPlayData = primaryResult.getOrNull()
-        primaryPlayData?.let {
-            if (it.needPay || it.hasPlayableVodStreams()) return it
-        }
-        val primaryFailure = primaryResult.exceptionOrNull()
-        // 风控 v_voucher 需要 Geetest，不走 Web→App 降级掩盖
-        if (primaryFailure is VVoucherException) throw primaryFailure
-
-        if (preferApi == ApiType.Web) {
-            if (primaryFailure != null) {
-                logger.fWarn { "WEB play data failed, fallback to APP API: ${primaryFailure.localizedMessage}" }
-            } else {
-                logger.fWarn { "WEB play data has empty streams, fallback to APP API: [av=$avid, cid=$cid]" }
+        },
+        onFailure = { api, failure ->
+            logger.fWarn {
+                "${api.playUrlSourceName()} play data failed: " +
+                    "[av=$avid, cid=$cid, reason=${failure.localizedMessage}]"
             }
-            addLogs("WEB 接口未返回可播放流，尝试 APP 接口")
-            val fallbackPlayData = runCatching {
-                fetchVodPlayDataOnce(
-                    avid = avid,
-                    cid = cid,
-                    epid = epid,
-                    preferApi = ApiType.App,
-                    proxyArea = proxyArea,
-                    fromSeason = fromSeason,
-                )
-            }.onFailure {
-                logger.fWarn { "APP play data fallback failed: ${it.localizedMessage}" }
-            }.getOrNull()
-
-            if (fallbackPlayData != null) {
-                if (fallbackPlayData.needPay || fallbackPlayData.hasPlayableVodStreams()) {
-                    logger.fInfo { "APP play data fallback success: [av=$avid, cid=$cid]" }
-                    return fallbackPlayData
-                }
-                logger.fWarn {
-                    "APP play data fallback has empty streams: [av=$avid, cid=$cid, video=${fallbackPlayData.dashVideos.size}, audio=${fallbackPlayData.playableAudioCount()}]"
-                }
+        },
+        onEmpty = { api, playData ->
+            logger.fWarn {
+                "${api.playUrlSourceName()} play data has empty streams: " +
+                    "[av=$avid, cid=$cid, video=${playData.dashVideos.size}, " +
+                    "audio=${playData.playableAudioCount()}]"
             }
+        },
+        onFallback = { fromApi, fallbackApi ->
+            addLogs("${fromApi.playUrlSourceName()}未返回可播放流，尝试${fallbackApi.playUrlSourceName()}")
+        },
+        onFallbackSuccess = { api ->
+            logger.fInfo { "${api.playUrlSourceName()} fallback success: [av=$avid, cid=$cid]" }
         }
-
-        primaryPlayData?.let { return it.requirePlayableVodStreams(preferApi.playUrlSourceName()) }
-        throw primaryFailure ?: IllegalStateException("${preferApi.playUrlSourceName()} 未返回可播放音视频流")
-    }
+    )
 
     private suspend fun fetchVodPlayDataOnce(
         avid: Long,
@@ -1762,24 +1757,6 @@ class VideoPlayerV3ViewModel(
             ?: flac
     }
 
-    private fun PlayData.hasPlayableVodStreams(): Boolean {
-        return dashVideos.isNotEmpty() && playableAudioCount() > 0
-    }
-
-    private fun PlayData.playableAudioCount(): Int {
-        return dashAudios.size + listOfNotNull(dolby, flac).size
-    }
-
-    private fun PlayData.requirePlayableVodStreams(source: String): PlayData {
-        val audioCount = playableAudioCount()
-        if (dashVideos.isEmpty() || audioCount == 0) {
-            throw IllegalStateException(
-                "$source 未返回可播放音视频流：video=${dashVideos.size}, audio=$audioCount, qualities=${dashVideos.map { it.quality }.distinct()}"
-            )
-        }
-        return this
-    }
-
     private fun PlayData.requireOfflineCacheStreams(source: String): PlayData {
         val audioCount = playableAudioCount()
         if (dashVideos.isEmpty() || audioCount == 0) {
@@ -1788,11 +1765,6 @@ class VideoPlayerV3ViewModel(
             )
         }
         return this
-    }
-
-    private fun ApiType.playUrlSourceName(): String = when (this) {
-        ApiType.Web -> "WEB 接口"
-        ApiType.App -> "APP 接口"
     }
 
     private fun Int.toOfflineQualityText(preferredQuality: Resolution? = null): String {
@@ -1910,7 +1882,9 @@ class VideoPlayerV3ViewModel(
                 }
             }
         }
-        var videoUrl = if (audioOnlyMode) null else videoItem?.baseUrl ?: playData!!.dashVideos.firstOrNull()?.baseUrl
+        val selectedVideoItem = videoItem ?: playData!!.dashVideos.firstOrNull()
+        val muxedVideo = selectedVideoItem?.takeIf { it.isMuxed }
+        var videoUrl = if (audioOnlyMode) null else selectedVideoItem?.baseUrl
         if (!audioOnlyMode && videoUrl == null) {
             logger.fError { "Failed to get video URL" }
             errorMessage = "获取视频地址失败"
@@ -1920,28 +1894,40 @@ class VideoPlayerV3ViewModel(
         val videoUrls = mutableListOf<String?>()
         if (!audioOnlyMode) {
             videoUrls.add(videoUrl)
-            videoUrls.addAll(videoItem?.backUrl ?: emptyList())
+            videoUrls.addAll(selectedVideoItem?.backUrl ?: emptyList())
         }
 
         val audioItem = playData!!.dashAudios.find { it.codecId == audio.code }
             ?: playData!!.dolby.takeIf { it?.codecId == audio.code }
             ?: playData!!.flac.takeIf { it?.codecId == audio.code }
             ?: playData!!.dashAudios.minByOrNull { it.codecId }
-        var audioUrl = audioItem?.baseUrl ?: playData!!.dashAudios.firstOrNull()?.baseUrl
-        if (audioUrl == null) {
+        var audioUrl = audioItem?.baseUrl
+            ?: playData!!.dashAudios.firstOrNull()?.baseUrl
+            ?: muxedVideo?.baseUrl.takeIf { audioOnlyMode }
+        if (audioUrl == null && muxedVideo == null) {
             logger.fError { "Failed to get audio URL" }
             errorMessage = "获取音频地址失败"
             loadState = RequestState.Failed
             return
         }
         val audioUrls = mutableListOf<String?>()
-        audioUrls.add(audioUrl)
-        audioUrls.addAll(audioItem?.backUrl ?: emptyList())
+        if (audioUrl != null) {
+            audioUrls.add(audioUrl)
+            audioUrls.addAll(
+                audioItem?.backUrl
+                    ?: muxedVideo?.backUrl.takeIf { audioOnlyMode }
+                    ?: emptyList()
+            )
+        }
 
         if (videoUrls.isNotEmpty()) {
             logger.fInfo { "all video hosts: ${videoUrls.filterNotNull().map { it.toMediaLocationLog() }}" }
         }
-        logger.fInfo { "all audio hosts: ${audioUrls.filterNotNull().map { it.toMediaLocationLog() }}" }
+        if (audioUrls.isNotEmpty()) {
+            logger.fInfo { "all audio hosts: ${audioUrls.filterNotNull().map { it.toMediaLocationLog() }}" }
+        } else {
+            logger.fInfo { "Use audio embedded in video stream" }
+        }
 
         var videoCdnSelection: VodCdnSelection? = null
         var audioCdnSelection: VodCdnSelection? = null
@@ -1951,26 +1937,28 @@ class VideoPlayerV3ViewModel(
             if (videoUrl != null) {
                 videoUrl = videoUrl.replaceUrlDomainWithAliCdn()
             }
-            audioUrl = audioUrl.replaceUrlDomainWithAliCdn()
+            audioUrl = audioUrl?.replaceUrlDomainWithAliCdn()
         } else {
             // 如果未通过网络代理获得播放地址，才判断是否应该替换为官方 cdn
             if (videoUrls.isNotEmpty()) {
                 videoCdnSelection = VodCdnUrlSelector.select(videoUrls, settings.cdnService)
                 videoUrl = videoCdnSelection.url
             }
-            audioCdnSelection = VodCdnUrlSelector.select(
-                urls = audioUrls,
-                cdnService = settings.cdnService,
-                isAudio = true,
-                disableAudioCdn = settings.disableAudioCdn
-            )
-            audioUrl = audioCdnSelection.url
+            if (audioUrls.isNotEmpty()) {
+                audioCdnSelection = VodCdnUrlSelector.select(
+                    urls = audioUrls,
+                    cdnService = settings.cdnService,
+                    isAudio = true,
+                    disableAudioCdn = settings.disableAudioCdn
+                )
+                audioUrl = audioCdnSelection.url
+            }
         }
 
         addLogs(
             "播放模式：${if (audioOnlyMode) "音频模式" else "正常模式"}，播放清晰度：${availableQuality.firstOrNull { it.code == qn }}, " +
                     "视频编码：${codec.getDisplayName(BVApp.context)}, " +
-                    "音频编码：${(Audio.fromCode(audioItem?.codecId ?: 0))?.getDisplayName(BVApp.context) ?: "未知"}"
+                    "音频编码：${if (muxedVideo != null) "内嵌音频" else (Audio.fromCode(audioItem?.codecId ?: 0))?.getDisplayName(BVApp.context) ?: "未知"}"
         )
         if (videoUrl != null) {
             addLogs("video host: ${videoUrl.toMediaLocationLog()}")
@@ -1978,7 +1966,11 @@ class VideoPlayerV3ViewModel(
         } else {
             addLogs("video host: audio only")
         }
-        addLogs("audio host: ${audioUrl.toMediaLocationLog()}")
+        if (audioUrl != null) {
+            addLogs("audio host: ${audioUrl.toMediaLocationLog()}")
+        } else {
+            addLogs("audio host: embedded in video")
+        }
         audioCdnSelection?.let { addLogs("audio cdn: ${it.reason}") }
 
         logger.fInfo { "Select audio: $audioItem" }
@@ -1987,8 +1979,8 @@ class VideoPlayerV3ViewModel(
 
         withContext(Dispatchers.Main) {
             if (!isVodPlaybackSessionActive(playbackSessionToken)) return@withContext
-            currentVideoHeight = videoItem?.height ?: 0
-            currentVideoWidth = videoItem?.width ?: 0
+            currentVideoHeight = selectedVideoItem?.height ?: 0
+            currentVideoWidth = selectedVideoItem?.width ?: 0
             val playbackSource = PendingVodPlaybackSource(
                 videoUrl = videoUrl,
                 audioUrl = audioUrl,
