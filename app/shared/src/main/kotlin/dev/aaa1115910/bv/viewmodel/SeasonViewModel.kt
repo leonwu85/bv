@@ -48,18 +48,32 @@ class SeasonViewModel(
     val uuid: String = UUID.randomUUID().toString()
 
     suspend fun updateSeasonData() {
-        runCatching {
-            val data = videoDetailRepository.getPgcVideoDetail(
-                seasonId = seasonId,
-                epid = epId,
-                preferApiType = if (proxyArea != ProxyArea.MainLand) ApiType.App else Prefs.apiType
+        val request = withContext(Dispatchers.Main.immediate) {
+            Triple(
+                seasonId,
+                epId,
+                if (proxyArea != ProxyArea.MainLand) ApiType.App else Prefs.apiType
             )
-            seasonData = data.copy()
-            seasons.swapList(data.seasons)
-            isFollowing = data.userStatus.follow
-            lastPlayProgress = data.userStatus.progress
+        }
+        runCatching {
+            withContext(Dispatchers.IO) {
+                videoDetailRepository.getPgcVideoDetail(
+                    seasonId = request.first,
+                    epid = request.second,
+                    preferApiType = request.third
+                )
+            }
+        }.onSuccess { data ->
+            withContext(Dispatchers.Main.immediate) {
+                seasonData = data.copy()
+                seasons.swapList(data.seasons)
+                isFollowing = data.userStatus.follow
+                lastPlayProgress = data.userStatus.progress
+            }
         }.onFailure {
-            tip = it.localizedMessage ?: "未知错误"
+            withContext(Dispatchers.Main.immediate) {
+                tip = it.localizedMessage ?: "未知错误"
+            }
             logger.fInfo { "Get season info failed: ${it.stackTraceToString()}" }
         }
     }

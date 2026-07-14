@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.viewmodel
 
+import androidx.annotation.MainThread
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -64,6 +65,7 @@ class CommentViewModel(
     val emotePackages = mutableStateListOf<DynamicEmotePackageDraft>()
     var loadingEmotes by mutableStateOf(false)
 
+    @MainThread
     fun setCommentTarget(commentId: Long, commentType: Long) {
         if (commentId <= 0L || commentType <= 0L) return
         if (this.commentId == commentId && this.commentType == commentType) return

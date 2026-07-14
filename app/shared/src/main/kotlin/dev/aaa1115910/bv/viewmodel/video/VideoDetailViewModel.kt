@@ -74,25 +74,33 @@ class VideoDetailViewModel(
 
     suspend fun loadDetail(aid: Long, fromPgcSeason: Boolean = false, withUserActions: Boolean = true) {
         logger.fInfo { "Load detail: [avid=$aid, preferApiType=${DETAIL_API_TYPE.name}]" }
-        state = VideoInfoState.Loading
+        withContext(Dispatchers.Main.immediate) {
+            state = VideoInfoState.Loading
+        }
         var loadedVideoDetail: VideoDetail? = null
         runCatching {
-            val videoDetailData = videoDetailRepository.getVideoDetail(
-                aid = aid,
-                preferApiType = DETAIL_API_TYPE,
-                withUserActions = withUserActions
-            )
+            val videoDetailData = withContext(Dispatchers.IO) {
+                videoDetailRepository.getVideoDetail(
+                    aid = aid,
+                    preferApiType = DETAIL_API_TYPE,
+                    withUserActions = withUserActions
+                )
+            }
             loadedVideoDetail = videoDetailData
-            withContext(Dispatchers.Main) {
+            withContext(Dispatchers.Main.immediate) {
                 videoDetail = videoDetailData
                 upOwnerStats = null
+                if (!fromPgcSeason) updateVideoList(aid)
             }
-            if (!fromPgcSeason) updateVideoList(aid)
         }.onFailure {
-            state = VideoInfoState.Error
+            withContext(Dispatchers.Main.immediate) {
+                state = VideoInfoState.Error
+            }
             logger.fInfo { "Load video av$aid failed: ${it.stackTraceToString()}" }
         }.onSuccess {
-            state = VideoInfoState.Success
+            withContext(Dispatchers.Main.immediate) {
+                state = VideoInfoState.Success
+            }
             logger.fInfo { "Load video av$aid success" }
 
             updateRelatedVideos()
@@ -137,7 +145,9 @@ class VideoDetailViewModel(
 
     private suspend fun updateRelatedVideos() {
         logger.fInfo { "Start update relate video" }
-        val relateVideoCardDataList = videoDetail?.toRelatedVideoCardDataList() ?: emptyList()
+        val relateVideoCardDataList = withContext(Dispatchers.Main.immediate) {
+            videoDetail?.toRelatedVideoCardDataList() ?: emptyList()
+        }
         relatedVideos.swapListWithMainContext(relateVideoCardDataList)
         logger.fInfo { "Update ${relateVideoCardDataList.size} relate videos" }
     }
@@ -350,9 +360,11 @@ class VideoDetailViewModel(
     private suspend fun refreshUpOwnerStats(mid: Long) {
         if (mid <= 0L) return
         runCatching {
-            userRepository.getUserCardInfo(mid)
+            withContext(Dispatchers.IO) {
+                userRepository.getUserCardInfo(mid)
+            }
         }.onSuccess { card ->
-            withContext(Dispatchers.Main) {
+            withContext(Dispatchers.Main.immediate) {
                 upOwnerStats = UpOwnerStats(
                     followerCount = card.follower,
                     archiveCount = card.archiveCount
@@ -366,19 +378,21 @@ class VideoDetailViewModel(
     suspend fun refreshFavoriteFolders(aid: Long = currentAid()): Result<Unit> {
         if (!Prefs.isLogin || aid <= 0L || Prefs.uid <= 0L) return Result.success(Unit)
         return runCatching {
-            withContext(Dispatchers.Main) { favoriteFoldersLoading = true }
-            val folders = favoriteRepository.getAllFavoriteFolderMetadataList(
-                mid = Prefs.uid,
-                rid = aid,
-                preferApiType = DETAIL_API_TYPE
-            )
+            withContext(Dispatchers.Main.immediate) { favoriteFoldersLoading = true }
+            val folders = withContext(Dispatchers.IO) {
+                favoriteRepository.getAllFavoriteFolderMetadataList(
+                    mid = Prefs.uid,
+                    rid = aid,
+                    preferApiType = DETAIL_API_TYPE
+                )
+            }
             favoriteFolders.swapListWithMainContext(folders)
             favoriteFolderIds.swapListWithMainContext(
                 folders.filter { it.videoInThisFav }.map { it.id }
             )
             Unit
         }.also {
-            withContext(Dispatchers.Main) { favoriteFoldersLoading = false }
+            withContext(Dispatchers.Main.immediate) { favoriteFoldersLoading = false }
         }
     }
 

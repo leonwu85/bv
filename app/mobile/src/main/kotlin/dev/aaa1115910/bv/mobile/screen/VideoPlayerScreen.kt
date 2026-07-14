@@ -262,7 +262,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.koin.androidx.compose.koinViewModel
 
 private data class ReplyDraftTarget(
     val title: String,
@@ -312,10 +311,10 @@ internal fun landscapeTiltDegrees(orientationDegrees: Int): Int? {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VideoPlayerScreen(
-    playerViewModel: VideoPlayerV3ViewModel = koinViewModel(),
-    commentVideModel: CommentViewModel = koinViewModel(),
-    seasonVideModel: SeasonViewModel = koinViewModel(),
-    videoDetailViewModel: VideoDetailViewModel = koinViewModel(),
+    playerViewModel: VideoPlayerV3ViewModel,
+    commentVideModel: CommentViewModel,
+    seasonVideModel: SeasonViewModel,
+    videoDetailViewModel: VideoDetailViewModel,
     windowSizeClass: WindowSizeClass
 ) {
     val context = LocalContext.current

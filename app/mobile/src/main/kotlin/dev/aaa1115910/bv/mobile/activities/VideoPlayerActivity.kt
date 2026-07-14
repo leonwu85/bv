@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.annotation.MainThread
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.lifecycle.lifecycleScope
@@ -339,13 +340,26 @@ class VideoPlayerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         MobileRuntime.install()
         super.onCreate(savedInstanceState)
+
+        // Resolve every Activity-scoped ViewModel on the main thread before parseIntent can
+        // launch asynchronous work. Passing the same instances into Compose also prevents
+        // koinViewModel() and the background startup path from racing to create a ViewModel.
+        val activityPlayerViewModel = playerViewModel
+        val activityCommentViewModel = commentViewModel
+        val activitySeasonViewModel = seasonViewModel
+        val activityVideoDetailViewModel = videoDetailViewModel
+
         val launchArgs = VideoLaunchArgs.fromIntent(intent)
         initVideoPlayer(launchArgs = launchArgs)
         if (!launchArgs.isLive) initDanmakuPlayer()
         setContent {
             val windowSizeClass = calculateWindowSizeClass(this)
-            BVMobileTheme(themeBackgroundEnabled = !playerViewModel.isLive) {
+            BVMobileTheme(themeBackgroundEnabled = !activityPlayerViewModel.isLive) {
                 VideoPlayerScreen(
+                    playerViewModel = activityPlayerViewModel,
+                    commentVideModel = activityCommentViewModel,
+                    seasonVideModel = activitySeasonViewModel,
+                    videoDetailViewModel = activityVideoDetailViewModel,
                     windowSizeClass = windowSizeClass
                 )
             }
@@ -453,6 +467,7 @@ class VideoPlayerActivity : ComponentActivity() {
         playerViewModel.danmakuPlayer = DanmakuPlayer(SimpleRenderer())
     }
 
+    @MainThread
     private fun parseIntent(launchArgs: VideoLaunchArgs = VideoLaunchArgs.fromIntent(intent)) {
         val settings = PlayerSettingsProvider.current
         if (launchArgs.isLive) {
@@ -487,17 +502,19 @@ class VideoPlayerActivity : ComponentActivity() {
         val epid = launchArgs.epid
         val seasonId = launchArgs.seasonId
 
-        lifecycleScope.launch(Dispatchers.IO) {
+        // Coordinate player and Compose state on Main. Only blocking network/file work is
+        // dispatched to IO below, so state creation and mutation cannot race initial composition.
+        lifecycleScope.launch {
             if (aid == 0L && cid == 0L) {
                 runCatching {
-                    val acid = BiliHttpApi.getAidCidByEpid(epid ?: 0)!!
+                    val acid = withContext(Dispatchers.IO) {
+                        BiliHttpApi.getAidCidByEpid(epid ?: 0)!!
+                    }
                     aid = acid.first
                     cid = acid.second
                 }.onFailure {
                     logger.fInfo { "get avid & cid by epid failed: ${it.stackTraceToString()}" }
-                    withContext(Dispatchers.Main) {
-                        it.message?.toast(this@VideoPlayerActivity)
-                    }
+                    it.message?.toast(this@VideoPlayerActivity)
                 }
             }
 
@@ -507,16 +524,21 @@ class VideoPlayerActivity : ComponentActivity() {
             )
 
             val offlineEntry = if (launchArgs.playOfflineCache && aid > 0L && cid > 0L) {
-                playerViewModel.completedOfflineCacheEntry(aid, cid)
+                withContext(Dispatchers.IO) {
+                    playerViewModel.completedOfflineCacheEntry(aid, cid)
+                }
             } else {
                 null
             }
 
             suspend fun applyOfflineDetailFallback() {
                 val entry = offlineEntry ?: return
+                val entries = withContext(Dispatchers.IO) {
+                    playerViewModel.completedOfflineCacheEntries(entry.aid)
+                }
                 videoDetailViewModel.applyOfflineCacheFallback(
                     entry = entry,
-                    entries = playerViewModel.completedOfflineCacheEntries(entry.aid)
+                    entries = entries
                 )
             }
 
@@ -530,9 +552,7 @@ class VideoPlayerActivity : ComponentActivity() {
                 runCatching {
                     videoDetailViewModel.loadDetail(aid, fromSeason)
                 }.onFailure {
-                    withContext(Dispatchers.Main) {
-                        it.message?.toast(this@VideoPlayerActivity)
-                    }
+                    it.message?.toast(this@VideoPlayerActivity)
                 }
             }
             runCatching {
@@ -572,9 +592,7 @@ class VideoPlayerActivity : ComponentActivity() {
                     preferOfflineCache = launchArgs.playOfflineCache
                 )
             }.onFailure {
-                withContext(Dispatchers.Main) {
-                    it.message?.toast(this@VideoPlayerActivity)
-                }
+                it.message?.toast(this@VideoPlayerActivity)
             }
         }
     }
