@@ -6,6 +6,7 @@ import android.os.Looper
 import org.videolan.libvlc.util.VLCVideoLayout
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.VideoPlayerOptions
+import dev.aaa1115910.bv.player.playbackRefererFor
 import dev.aaa1115910.bv.util.formatHourMinSec
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.videolan.libvlc.LibVLC
@@ -835,7 +836,7 @@ class VlcMediaPlayer(
                 addOption(":http-header=$key: $value")
             }
             // 设置 Referer
-            options.referer?.let {
+            options.playbackRefererFor(url, normalizedAudioUrl)?.let {
                 addOption(":http-referrer=$it")
             }
             // 设置 User-Agent

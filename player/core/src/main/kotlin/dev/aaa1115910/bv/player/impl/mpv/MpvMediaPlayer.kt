@@ -6,6 +6,7 @@ import android.os.Looper
 import android.view.Surface
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.VideoPlayerOptions
+import dev.aaa1115910.bv.player.playbackRefererFor
 import dev.aaa1115910.bv.player.entity.SuperResolutionType
 import dev.aaa1115910.bv.util.formatHourMinSec
 import `is`.xyz.mpv.MPVLib
@@ -422,7 +423,10 @@ class MpvMediaPlayer(
     private fun applyNetworkOptions() {
         runCatching {
             options.userAgent?.let { MPVLib.setOptionString("user-agent", it) }
-            options.referer?.let { MPVLib.setOptionString("referrer", it) }
+            MPVLib.setOptionString(
+                "referrer",
+                options.playbackRefererFor(currentVideoUrl, currentAudioUrl).orEmpty()
+            )
 
             val headerFields = buildList {
                 headers.forEach { (key, value) ->

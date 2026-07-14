@@ -32,6 +32,7 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.OkHttpUtil
 import dev.aaa1115910.bv.player.VideoPlayerOptions
+import dev.aaa1115910.bv.player.playbackRefererFor
 import dev.aaa1115910.bv.util.formatHourMinSec
 import kotlin.math.abs
 
@@ -80,16 +81,20 @@ class ExoMediaPlayer(
         }
     }
 
+    private val httpClient =
+        if (options.isLive) OkHttpUtil.generateLiveOkHttpClient(context)
+        else OkHttpUtil.generateCustomSslOkHttpClient(context)
+
     @OptIn(UnstableApi::class)
-    private val httpDataSourceFactory =
-        OkHttpDataSource.Factory(
-            if (options.isLive) OkHttpUtil.generateLiveOkHttpClient(context)
-            else OkHttpUtil.generateCustomSslOkHttpClient(context)
-        ).apply {
+    private fun createDataSourceFactory(url: String) = DefaultDataSource.Factory(
+        context,
+        OkHttpDataSource.Factory(httpClient).apply {
             options.userAgent?.let { setUserAgent(it) }
-            options.referer?.let { setDefaultRequestProperties(mapOf("referer" to it)) }
+            options.playbackRefererFor(url)?.let {
+                setDefaultRequestProperties(mapOf("Referer" to it))
+            }
         }
-    private val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+    )
 
     init {
         initPlayer()
@@ -184,7 +189,7 @@ class ExoMediaPlayer(
         return if (path.endsWith(".m3u8")) {
             createHlsMediaSource(uri)
         } else {
-            ProgressiveMediaSource.Factory(dataSourceFactory)
+            ProgressiveMediaSource.Factory(createDataSourceFactory(url))
                 .createMediaSource(MediaItem.fromUri(uri))
         }
     }
@@ -194,7 +199,7 @@ class ExoMediaPlayer(
      */
     @OptIn(UnstableApi::class)
     private fun createHlsMediaSource(uri: android.net.Uri): MediaSource {
-        val hlsFactory = HlsMediaSource.Factory(dataSourceFactory)
+        val hlsFactory = HlsMediaSource.Factory(createDataSourceFactory(uri.toString()))
 
         if (options.isLive) {
             // 直播专用配置
