@@ -200,6 +200,7 @@ import dev.aaa1115910.biliapi.http.entity.live.LiveEmotePackage
 import dev.aaa1115910.biliapi.http.entity.live.LiveEmoticon
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.mobile.activities.OfflineCacheActivity
+import dev.aaa1115910.bv.mobile.activities.UserSpaceActivity
 import dev.aaa1115910.bv.mobile.activities.VideoPlayerActivity
 import dev.aaa1115910.bv.mobile.component.emote.EmoteInputToken
 import dev.aaa1115910.bv.mobile.component.emote.EmoteTextSelection
@@ -1169,6 +1170,9 @@ fun VideoPlayerScreen(
                                                         ?: playerViewModel.upFace,
                                                     upName = videoDetailViewModel.videoDetail?.author?.name
                                                         ?: playerViewModel.upName,
+                                                    upMid = videoDetailViewModel.videoDetail?.author?.mid
+                                                        ?.takeIf { it > 0L }
+                                                        ?: playerViewModel.upId,
                                                     upFollowerCount = videoDetailViewModel.upOwnerStats?.followerCount,
                                                     upArchiveCount = videoDetailViewModel.upOwnerStats?.archiveCount,
                                                     title = videoDetailViewModel.videoDetail?.title
@@ -1221,7 +1225,10 @@ fun VideoPlayerScreen(
                                                     onPauseCache = { launchVideoAction { playerViewModel.pauseOfflineCache() } },
                                                     onResumeCache = { launchVideoAction { playerViewModel.resumeOfflineCache() } },
                                                     onClearCacheTask = { launchVideoAction { playerViewModel.clearOfflineCacheTask() } },
-                                                    onPlayCache = { launchVideoAction { playerViewModel.playOfflineCache() } }
+                                                    onPlayCache = { launchVideoAction { playerViewModel.playOfflineCache() } },
+                                                    onUpClick = { mid, name ->
+                                                        UserSpaceActivity.actionStart(context, mid, name)
+                                                    }
                                                 )
                                             }
                                             item {
@@ -1355,6 +1362,9 @@ fun VideoPlayerScreen(
                                 upAvatar = videoDetailViewModel.videoDetail?.author?.face
                                     ?: playerViewModel.upFace,
                                 upName = videoDetailViewModel.videoDetail?.author?.name ?: playerViewModel.upName,
+                                upMid = videoDetailViewModel.videoDetail?.author?.mid
+                                    ?.takeIf { it > 0L }
+                                    ?: playerViewModel.upId,
                                 upFollowerCount = videoDetailViewModel.upOwnerStats?.followerCount,
                                 upArchiveCount = videoDetailViewModel.upOwnerStats?.archiveCount,
                                 title = videoDetailViewModel.videoDetail?.title ?: playerViewModel.title,
@@ -1401,6 +1411,9 @@ fun VideoPlayerScreen(
                                 onResumeCache = { launchVideoAction { playerViewModel.resumeOfflineCache() } },
                                 onClearCacheTask = { launchVideoAction { playerViewModel.clearOfflineCacheTask() } },
                                 onPlayCache = { launchVideoAction { playerViewModel.playOfflineCache() } },
+                                onUpClick = { mid, name ->
+                                    UserSpaceActivity.actionStart(context, mid, name)
+                                },
                                 backgroundColor = MaterialTheme.colorScheme.surfaceContainer
                             )
                         }
@@ -1794,6 +1807,7 @@ fun VideoPlayerInfo(
     modifier: Modifier = Modifier,
     upAvatar: String,
     upName: String,
+    upMid: Long,
     upFollowerCount: Int?,
     upArchiveCount: Int?,
     title: String,
@@ -1831,6 +1845,7 @@ fun VideoPlayerInfo(
     onResumeCache: () -> Unit = {},
     onClearCacheTask: () -> Unit = {},
     onPlayCache: () -> Unit = {},
+    onUpClick: (Long, String) -> Unit = { _, _ -> },
     backgroundColor: Color = MaterialTheme.colorScheme.surface
 ) {
     val summaryTextStyle = MaterialTheme.typography.bodySmall.copy(
@@ -1849,7 +1864,11 @@ fun VideoPlayerInfo(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                modifier = Modifier.height(64.dp),
+                modifier = Modifier
+                    .height(64.dp)
+                    .clickable(enabled = upMid > 0L) {
+                        onUpClick(upMid, upName)
+                    },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -4742,6 +4761,7 @@ private fun VideoPlayerInfoPreview() {
                 modifier = Modifier.padding(24.dp),
                 upAvatar = "https://i0.hdslb.com/bfs/article/b6b843d84b84a3ba5526b09ebf538cd4b4c8c3f3.jpg@450w_450h_progressive.webp",
                 upName = "bishi",
+                upMid = 2L,
                 upFollowerCount = 1400000000,
                 upArchiveCount = 233,
                 title = "This is the video title... repeat, this is the video title.",

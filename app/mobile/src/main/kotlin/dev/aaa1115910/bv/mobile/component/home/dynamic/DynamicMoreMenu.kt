@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ForwardToInbox
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Report
 import androidx.compose.material.icons.rounded.SaveAlt
@@ -44,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.repositories.ToViewRepository
 import dev.aaa1115910.biliapi.repositories.UserRepository
+import dev.aaa1115910.bv.mobile.activities.UserSpaceActivity
 import dev.aaa1115910.bv.mobile.component.videocard.shareText
 import dev.aaa1115910.bv.mobile.util.saveImageToGallery
 import dev.aaa1115910.bv.util.Prefs
@@ -87,6 +89,7 @@ fun DynamicMoreMenu(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val authorName = dynamicItem.author.author.ifBlank { "UP主" }
     var showSheet by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
 
@@ -150,6 +153,20 @@ fun DynamicMoreMenu(
                                     bvid = target.bvid
                                 )
                             }
+                        }
+                    )
+                }
+                if (dynamicItem.author.mid > 0L) {
+                    DynamicSheetItem(
+                        icon = Icons.Rounded.AccountCircle,
+                        text = "访问：$authorName",
+                        onClick = {
+                            showSheet = false
+                            UserSpaceActivity.actionStart(
+                                context = context,
+                                mid = dynamicItem.author.mid,
+                                name = authorName
+                            )
                         }
                     )
                 }
