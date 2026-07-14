@@ -37,6 +37,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +64,7 @@ import dev.aaa1115910.bv.network.GeetestCompanionService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val logger = KotlinLogging.logger("GeetestTvVerify")
@@ -347,6 +349,7 @@ private fun GeetestPhoneCompanionContent(
     onResult: (GeetestTvResult) -> Unit,
 ) {
     val context = LocalContext.current
+    val callbackScope = rememberCoroutineScope()
     var statusText by remember { mutableStateOf("正在准备手机验证…") }
     var qrContent by remember { mutableStateOf("") }
     var sessionId by remember { mutableStateOf<String?>(null) }
@@ -376,13 +379,16 @@ private fun GeetestPhoneCompanionContent(
             challenge = challenge,
             mockMode = mockMode,
             onResult = { payload ->
-                onResult(
-                    GeetestTvResult(
-                        challenge = payload.challenge,
-                        validate = payload.validate,
-                        seccode = payload.seccode,
+                // HTTP 服务的回调发生在后台线程，回到 Compose 主线程再通知 UI。
+                callbackScope.launch {
+                    onResult(
+                        GeetestTvResult(
+                            challenge = payload.challenge,
+                            validate = payload.validate,
+                            seccode = payload.seccode,
+                        )
                     )
-                )
+                }
             }
         )
         sessionId = session.id
@@ -494,6 +500,7 @@ private fun GeetestTvVerifyContent(
     onResult: (GeetestTvResult) -> Unit,
 ) {
     val density = LocalDensity.current
+    val callbackScope = rememberCoroutineScope()
 
     var containerWidthPx by remember { mutableFloatStateOf(0f) }
     var containerHeightPx by remember { mutableFloatStateOf(0f) }
@@ -654,18 +661,23 @@ private fun GeetestTvVerifyContent(
                                     val c = geetestChallenge.orEmpty().trim()
                                     if (v.isBlank() || s.isBlank() || c.isBlank()) return
                                     logger.info { "Geetest verification succeeded" }
-                                    onResult(
-                                        GeetestTvResult(
-                                            challenge = c,
-                                            validate = v,
-                                            seccode = s
+                                    // JavascriptInterface 在 WebView 私有后台线程回调。
+                                    // 切回 Compose 主线程，避免丢失待验证令牌或跨线程更新状态。
+                                    callbackScope.launch {
+                                        onResult(
+                                            GeetestTvResult(
+                                                challenge = c,
+                                                validate = v,
+                                                seccode = s
+                                            )
                                         )
-                                    )
+                                    }
                                 }
 
                                 @JavascriptInterface
                                 fun onStatusUpdate(text: String?) {
-                                    text?.let { statusText = it }
+                                    val message = text ?: return
+                                    callbackScope.launch { statusText = message }
                                 }
                             },
                             "Android"
@@ -859,7 +871,7 @@ private fun buildMockGeetestHtml(): String {
     """.trimIndent()
 }
 
-private fun buildGeetestHtml(gt: String, challenge: String): String {
+internal fun buildGeetestHtml(gt: String, challenge: String): String {
     val safeGt = gt.replace("\\", "\\\\").replace("'", "\\'").replace("<", "&lt;")
     val safeChallenge = challenge.replace("\\", "\\\\").replace("'", "\\'").replace("<", "&lt;")
     return """
@@ -872,6 +884,7 @@ private fun buildGeetestHtml(gt: String, challenge: String): String {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
       width: 100%;
+      height: 100%;
       background: transparent;
       font-family: sans-serif;
       overflow: hidden;
@@ -889,9 +902,12 @@ private fun buildGeetestHtml(gt: String, challenge: String): String {
       align-items: center;
       justify-content: center;
     }
-    .geetest_panel { position: relative !important; }
-    .geetest_panel_box { position: relative !important; }
-    .geetest_wind { position: relative !important; }
+    /*
+     * bind 模式会把验证面板按 WebView 视口居中。不能改成 relative：
+     * 极验保留的 top/left 偏移会叠加到普通文档流位置，导致面板下移并被裁切。
+     */
+    .geetest_panel { position: fixed !important; }
+    .geetest_panel_box { position: absolute !important; }
     .geetest_panel_ghost,
     .geetest_close { display: none !important; }
   </style>

@@ -255,6 +255,19 @@ class VideoPlayerV3ViewModel(
         val playbackSessionToken: Long,
     )
 
+    private data class GeetestPlaybackRetryRequest(
+        val avid: Long,
+        val cid: Long,
+        val epid: Int?,
+        val seasonId: Int?,
+        val initialSeekPositionMs: Long?,
+    )
+
+    private data class PendingGeetestVerification(
+        val token: String,
+        val retryRequest: GeetestPlaybackRetryRequest,
+    )
+
     private data class OfflineCacheSnapshot(
         val aid: Long,
         val cid: Long,
@@ -351,7 +364,8 @@ class VideoPlayerV3ViewModel(
     var showGeetestDialog by mutableStateOf(false)
     var geetestGt by mutableStateOf("")
     var geetestChallenge by mutableStateOf("")
-    private var pendingGaiaToken: String? = null
+    private var pendingGeetestVerification: PendingGeetestVerification? = null
+    private var geetestValidationInProgress = false
 
     private var playData: PlayData? by mutableStateOf(null)
     val danmakuData: MutableList<DanmakuItemData> = ArrayList()
@@ -934,9 +948,10 @@ class VideoPlayerV3ViewModel(
                 )
             }
             val playUrlLoaded = loadPlayUrl(
-                avid,
-                cid,
-                epid ?: 0,
+                avid = avid,
+                cid = cid,
+                epid = epid ?: 0,
+                seasonId = seasonId,
                 preferApi = settings.apiType,
                 proxyArea = proxyArea,
                 initialSeekPositionMs = initialSeekPositionMs,
@@ -1245,6 +1260,7 @@ class VideoPlayerV3ViewModel(
         avid: Long,
         cid: Long,
         epid: Int = 0,
+        seasonId: Int? = null,
         preferApi: ApiType = settings.apiType,
         proxyArea: ProxyArea = ProxyArea.MainLand,
         initialSeekPositionMs: Long? = null,
@@ -1448,7 +1464,16 @@ class VideoPlayerV3ViewModel(
         } catch (e: VVoucherException) {
             logger.fWarn { "Risk control v_voucher detected: ${e.vVoucher}" }
             addLogs("触发风控，正在申请验证…")
-            handleVVoucher(e.vVoucher)
+            handleVVoucher(
+                vVoucher = e.vVoucher,
+                retryRequest = GeetestPlaybackRetryRequest(
+                    avid = avid,
+                    cid = cid,
+                    epid = epid.takeIf { it > 0 },
+                    seasonId = seasonId?.takeIf { it > 0 },
+                    initialSeekPositionMs = initialSeekPositionMs,
+                )
+            )
             false
         } catch (e: PlayDataUnavailableException) {
             addLogs("加载视频地址失败：${e.localizedMessage}")
@@ -1473,7 +1498,10 @@ class VideoPlayerV3ViewModel(
         }
     }
 
-    private suspend fun handleVVoucher(vVoucher: String) {
+    private suspend fun handleVVoucher(
+        vVoucher: String,
+        retryRequest: GeetestPlaybackRetryRequest,
+    ) {
         runCatching {
             val registerResponse = BiliHttpApi.gaiaVgateRegister(
                 vVoucher = vVoucher,
@@ -1487,7 +1515,11 @@ class VideoPlayerV3ViewModel(
                 error("gaia_vgate_register 返回数据不完整（可能无法通过 captcha 解除）")
             }
             withContext(Dispatchers.Main) {
-                pendingGaiaToken = token
+                pendingGeetestVerification = PendingGeetestVerification(
+                    token = token,
+                    retryRequest = retryRequest,
+                )
+                geetestValidationInProgress = false
                 geetestGt = gt
                 geetestChallenge = challenge
                 showGeetestDialog = true
@@ -1504,17 +1536,31 @@ class VideoPlayerV3ViewModel(
     }
 
     fun onGeetestResult(challenge: String, validate: String, seccode: String) {
-        val token = pendingGaiaToken ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                val validateResponse = BiliHttpApi.gaiaVgateValidate(
-                    token = token,
-                    geetestChallenge = challenge,
-                    validate = validate,
-                    seccode = seccode,
-                    sessData = authRepository.sessionData,
-                    csrf = authRepository.biliJct
-                ).getResponseData()
+        // TV WebView/HTTP 回调可能来自后台线程。先进入 ViewModel 主线程，
+        // 再读取待验证状态，避免读不到 token 后静默返回。
+        viewModelScope.launch {
+            val pending = pendingGeetestVerification
+            if (pending == null) {
+                logger.fWarn { "Ignore Geetest result because no verification is pending" }
+                return@launch
+            }
+            if (geetestValidationInProgress) {
+                logger.fDebug { "Ignore duplicated Geetest result while validation is in progress" }
+                return@launch
+            }
+            geetestValidationInProgress = true
+
+            try {
+                val validateResponse = withContext(Dispatchers.IO) {
+                    BiliHttpApi.gaiaVgateValidate(
+                        token = pending.token,
+                        geetestChallenge = challenge,
+                        validate = validate,
+                        seccode = seccode,
+                        sessData = authRepository.sessionData,
+                        csrf = authRepository.biliJct
+                    ).getResponseData()
+                }
                 if (validateResponse.isValid != 1) {
                     error("验证未通过")
                 }
@@ -1522,40 +1568,58 @@ class VideoPlayerV3ViewModel(
                 if (griskId.isBlank()) {
                     error("grisk_id 为空")
                 }
-                authRepository.gaiaVtoken = griskId
-                withContext(Dispatchers.Main) {
-                    showGeetestDialog = false
-                    pendingGaiaToken = null
+
+                // 验证期间若用户已取消或已发起新验证，不再重试旧请求。
+                if (pendingGeetestVerification !== pending) {
+                    logger.fWarn { "Skip stale Geetest validation result" }
+                    return@launch
                 }
+
+                authRepository.gaiaVtoken = griskId
+                showGeetestDialog = false
+                pendingGeetestVerification = null
+                geetestValidationInProgress = false
+                errorMessage = ""
+                loadState = RequestState.Ready
                 addLogs("风控验证通过")
                 logger.fInfo { "Gaia vgate validate success, retrying play url" }
-                withContext(Dispatchers.Main) {
+                pending.retryRequest.let { retry ->
                     loadPlayUrl(
-                        avid = currentAid,
-                        cid = currentCid,
-                        epid = currentEpid.takeIf { it > 0 },
-                        forceStartPlayback = true
+                        avid = retry.avid,
+                        cid = retry.cid,
+                        epid = retry.epid,
+                        seasonId = retry.seasonId,
+                        initialSeekPositionMs = retry.initialSeekPositionMs,
+                        forceStartPlayback = true,
                     )
                 }
-            }.onFailure {
-                addLogs("风控验证失败：${it.localizedMessage}")
-                withContext(Dispatchers.Main) {
-                    errorMessage = "风控验证失败：${it.localizedMessage}"
-                    loadState = RequestState.Failed
-                    showGeetestDialog = false
-                    pendingGaiaToken = null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (pendingGeetestVerification !== pending) {
+                    logger.fWarn { "Ignore stale Geetest validation failure: ${e.message}" }
+                    return@launch
                 }
-                logger.fException(it) { "gaiaVgateValidate failed" }
+                geetestValidationInProgress = false
+                addLogs("风控验证失败：${e.localizedMessage}")
+                errorMessage = "风控验证失败：${e.localizedMessage}"
+                loadState = RequestState.Failed
+                showGeetestDialog = false
+                pendingGeetestVerification = null
+                logger.fException(e) { "gaiaVgateValidate failed" }
             }
         }
     }
 
     fun onGeetestCancelled() {
-        showGeetestDialog = false
-        pendingGaiaToken = null
-        errorMessage = "验证已取消"
-        loadState = RequestState.Failed
         viewModelScope.launch {
+            // 成功后 SDK/WebView 可能还会补发关闭回调，不能把已开始的重试改回失败。
+            if (pendingGeetestVerification == null) return@launch
+            showGeetestDialog = false
+            pendingGeetestVerification = null
+            geetestValidationInProgress = false
+            errorMessage = "验证已取消"
+            loadState = RequestState.Failed
             addLogs("用户取消了风控验证")
         }
     }
@@ -4065,6 +4129,7 @@ class VideoPlayerV3ViewModel(
             avid = currentAid,
             cid = currentCid,
             epid = currentEpid,
+            seasonId = seasonId.takeIf { it > 0 },
             preferApi = settings.apiType,
             proxyArea = proxyArea,
             initialSeekPositionMs = resumePositionMs,
