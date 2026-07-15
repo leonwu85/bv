@@ -39,12 +39,13 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SecondaryScrollableTabRow
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -104,8 +105,9 @@ fun VideoPlayerPages(
     }
 ) {
     val scope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState(
-        skipPartiallyExpanded = true,
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
         confirmValueChange = { sheetValue ->
             println("confirmValueChange: $sheetValue")
             true
@@ -774,7 +776,7 @@ private fun PageListItem(
             .height(40.dp)
             .clip(MaterialTheme.shapes.medium)
             .clickable { onClick() },
-        headlineContent = {
+        content = {
             Text(
                 text = annotatedString,
                 maxLines = 1,
@@ -791,7 +793,7 @@ private fun PageListItem(
             )
         }).takeIf { duration != null },
         colors = ListItemDefaults.colors(
-            headlineColor = if (isPlaying) MaterialTheme.colorScheme.primary else Color.Unspecified,
+            contentColor = if (isPlaying) MaterialTheme.colorScheme.primary else Color.Unspecified,
             containerColor = Color.Transparent
         ),
     )

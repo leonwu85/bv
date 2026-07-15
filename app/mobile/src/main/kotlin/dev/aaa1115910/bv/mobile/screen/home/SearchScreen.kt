@@ -413,7 +413,7 @@ fun SearchBarResultContent(
     onSearch: (String) -> Unit,
     onDeleteHistory: (String) -> Unit
 ) {
-    val listItemColors = ListItemDefaults.colors().copy(
+    val listItemColors = ListItemDefaults.colors(
         containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
     )
 

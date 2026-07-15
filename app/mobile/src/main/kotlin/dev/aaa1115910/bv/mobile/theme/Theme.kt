@@ -1,9 +1,11 @@
 package dev.aaa1115910.bv.mobile.theme
 
-import android.app.Activity
 import android.content.Context
 import android.graphics.Typeface
 import android.os.Build
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -34,9 +36,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.core.view.WindowCompat
 import coil.compose.AsyncImage
-import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import dev.aaa1115910.bv.entity.ThemeType
 import dev.aaa1115910.bv.mobile.settings.MobilePrefs
 import dev.aaa1115910.bv.mobile.settings.MobileRuntime
@@ -55,9 +55,8 @@ fun BVMobileTheme(
 
     val context = LocalContext.current
     val density = LocalDensity.current
-    val window by lazy { (context as Activity).window }
     val view = LocalView.current
-    val systemUiController = rememberSystemUiController()
+    val activity = view.context as? ComponentActivity
 
     val themeType by if (view.isInEditMode) {
         androidx.compose.runtime.remember(darkTheme) {
@@ -164,32 +163,15 @@ fun BVMobileTheme(
         Typography().withFontFamily(customFontFamily)
     }
 
-    if (!view.isInEditMode) {
-        val currentWindow = (view.context as Activity).window
-        SideEffect {
-            (view.context as Activity).window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(currentWindow, view).apply {
-                isAppearanceLightStatusBars = useDarkIcons
-                isAppearanceLightNavigationBars = useDarkIcons
-            }
+    if (!view.isInEditMode && activity != null) {
+        val transparent = Color.Transparent.toArgb()
+        val systemBarStyle = if (useDarkIcons) {
+            SystemBarStyle.light(transparent, transparent)
+        } else {
+            SystemBarStyle.dark(transparent)
         }
-    }
-
-    SideEffect {
-        systemUiController.setStatusBarColor(
-            color = Color.Transparent,
-            darkIcons = useDarkIcons
-        )
-        systemUiController.setNavigationBarColor(
-            color = Color.Transparent,
-            darkIcons = useDarkIcons
-        )
-        if (!view.isInEditMode) {
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = useDarkIcons
-                isAppearanceLightNavigationBars = useDarkIcons
-            }
+        SideEffect {
+            activity.enableEdgeToEdge(systemBarStyle, systemBarStyle)
         }
     }
 

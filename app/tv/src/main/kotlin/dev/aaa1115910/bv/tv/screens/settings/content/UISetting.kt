@@ -654,8 +654,9 @@ fun HomeNavItemsEditDialog(
                                 }
                                 else -> false
                             }
+                        } else {
+                            false
                         }
-                        false
                     }
             ) {
                 // 提示文字
@@ -786,8 +787,9 @@ fun DrawerNavItemsEditDialog(
                                 }
                                 else -> false
                             }
+                        } else {
+                            false
                         }
-                        false
                     }
             ) {
                 Text(
@@ -925,8 +927,9 @@ fun UgcNavItemsEditDialog(
                                 }
                                 else -> false
                             }
+                        } else {
+                            false
                         }
-                        false
                     }
             ) {
                 Text(

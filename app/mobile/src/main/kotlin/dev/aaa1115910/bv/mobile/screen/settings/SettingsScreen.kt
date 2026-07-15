@@ -36,7 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.window.core.layout.WindowWidthSizeClass
+import androidx.window.core.layout.WindowSizeClass
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.PlayerType
 import dev.aaa1115910.bv.mobile.settings.MobilePrefs
@@ -71,8 +71,9 @@ fun SettingsScreen(
     } else {
         selectedSettings
     }
-    val singlePart = listOf(WindowWidthSizeClass.COMPACT, WindowWidthSizeClass.MEDIUM)
-        .contains(currentWindowAdaptiveInfo().windowSizeClass.windowWidthSizeClass)
+    val singlePart = !currentWindowAdaptiveInfo().windowSizeClass.isWidthAtLeastBreakpoint(
+        WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND
+    )
 
     BackHandler(scaffoldNavigator.canNavigateBack()) {
         scope.launch { scaffoldNavigator.navigateBack() }

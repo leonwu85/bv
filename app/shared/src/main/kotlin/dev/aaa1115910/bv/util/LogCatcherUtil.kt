@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.util
 
+import androidx.core.content.pm.PackageInfoCompat
 import dev.aaa1115910.bv.BVApp
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.BufferedReader
@@ -75,7 +76,7 @@ object LogCatcherUtil {
 
     private fun OutputStreamWriter.writeExceptionInfo(thread: Thread, exception: Throwable) {
         appendLine("======== Exception Info ========")
-        appendLine("Thread: ${thread.name} (${thread.id})")
+        appendLine("Thread: ${thread.name}")
         appendLine("Exception Type: ${exception::class.qualifiedName ?: exception.javaClass.name}")
         appendLine("Message: ${exception.message ?: "<no message>"}")
         appendLine("======== Stack Trace ========")
@@ -85,7 +86,7 @@ object LogCatcherUtil {
     private fun OutputStreamWriter.writeDeviceInfo() {
         val info = BVApp.context.packageManager.getPackageInfo(BVApp.context.packageName, 0)
         appendLine("======== Device info ========")
-        appendLine("App Version: ${info.versionName} (${info.versionCode})")
+        appendLine("App Version: ${info.versionName} (${PackageInfoCompat.getLongVersionCode(info)})")
         appendLine("Android Version: ${android.os.Build.VERSION.RELEASE} (${android.os.Build.VERSION.SDK_INT})")
         appendLine("Device: ${android.os.Build.DEVICE}")
         appendLine("Model: ${android.os.Build.MODEL}")

@@ -1,6 +1,7 @@
 package dev.aaa1115910.biliapi.repositories
 
-import dev.aaa1115910.biliapi.entity.ugc.UgcType
+import dev.aaa1115910.biliapi.entity.ugc.UgcTypeV2
+import dev.aaa1115910.biliapi.entity.ugc.region.UgcFeedPage
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.nio.file.Paths
@@ -35,23 +36,12 @@ class UgcRepositoryTest {
     }
 
     @Test
-    fun `get region data`() = runBlocking {
-        UgcType.entries
-            .filter { it.locId != -1 }
+    fun `get region feed recommendations`() = runBlocking {
+        UgcTypeV2.entries
+            .filter { it.channelId != null }
             .forEach { ugcType ->
                 println("ugcType: $ugcType")
-                val result = ugcRepository.getRegionData(ugcType)
-                println(result)
-            }
-    }
-
-    @Test
-    fun `get region more data`() = runBlocking {
-        UgcType.entries
-            .filter { it.locId != -1 }
-            .forEach { ugcType ->
-                println("ugcType: $ugcType")
-                val result = ugcRepository.getRegionMoreData(ugcType)
+                val result = ugcRepository.getRegionFeedRcmd(ugcType, UgcFeedPage())
                 println(result)
             }
     }

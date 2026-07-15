@@ -155,7 +155,7 @@ fun UserDialogContent(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 ),
                 windowInsets = WindowInsets(0, 0, 0, 0),
@@ -175,7 +175,7 @@ fun UserDialogContent(
                     ) {
                         ListItem(
                             modifier = Modifier.clickable { onAddUser() },
-                            headlineContent = { Text(text = "登录") },
+                            content = { Text(text = "登录") },
                             leadingContent = {
                                 Icon(
                                     imageVector = Icons.Outlined.PersonAdd,
@@ -235,7 +235,7 @@ fun UserDialogContent(
                                 }
                                 ListItem(
                                     modifier = Modifier.clickable { onAddUser() },
-                                    headlineContent = { Text(text = "添加其他账号") },
+                                    content = { Text(text = "添加其他账号") },
                                     leadingContent = {
                                         Icon(
                                             modifier = Modifier
@@ -248,7 +248,7 @@ fun UserDialogContent(
                                 )
                                 ListItem(
                                     modifier = Modifier.clickable { onDeleteUser(currentUser) },
-                                    headlineContent = { Text(text = "移除此设备上的账号") },
+                                    content = { Text(text = "移除此设备上的账号") },
                                     leadingContent = {
                                         Icon(
                                             modifier = Modifier
@@ -276,7 +276,7 @@ fun UserDialogContent(
                         Column {
                             ListItem(
                                 modifier = Modifier.clickable { onOpenFollowingUser() },
-                                headlineContent = { Text(text = "我的关注") },
+                                content = { Text(text = "我的关注") },
                                 leadingContent = {
                                     Icon(
                                         imageVector = Icons.Rounded.SupervisorAccount,
@@ -286,7 +286,7 @@ fun UserDialogContent(
                             )
                             ListItem(
                                 modifier = Modifier.clickable { onOpenHistory() },
-                                headlineContent = { Text(text = "历史记录") },
+                                content = { Text(text = "历史记录") },
                                 leadingContent = {
                                     Icon(
                                         imageVector = Icons.Rounded.History,
@@ -296,7 +296,7 @@ fun UserDialogContent(
                             )
                             ListItem(
                                 modifier = Modifier.clickable { onOpenFavorite() },
-                                headlineContent = { Text(text = "我的收藏") },
+                                content = { Text(text = "我的收藏") },
                                 leadingContent = {
                                     Icon(
                                         imageVector = Icons.Rounded.Favorite,
@@ -306,7 +306,7 @@ fun UserDialogContent(
                             )
                             ListItem(
                                 modifier = Modifier.clickable { onOpenFollowingPgc() },
-                                headlineContent = { Text(text = "我的追番") },
+                                content = { Text(text = "我的追番") },
                                 leadingContent = {
                                     Icon(
                                         imageVector = Icons.Rounded.SupervisorAccount,
@@ -316,7 +316,7 @@ fun UserDialogContent(
                             )
                             ListItem(
                                 modifier = Modifier.clickable { onOpenToView() },
-                                headlineContent = { Text(text = "稍后再看") },
+                                content = { Text(text = "稍后再看") },
                                 leadingContent = {
                                     Icon(
                                         imageVector = Icons.Rounded.SupervisorAccount,
@@ -330,7 +330,7 @@ fun UserDialogContent(
 
                 ListItem(
                     modifier = Modifier.clickable { onOpenSettings() },
-                    headlineContent = { Text(text = "设置") },
+                    content = { Text(text = "设置") },
                     leadingContent = {
                         Icon(
                             imageVector = Icons.Rounded.Settings,
@@ -509,7 +509,7 @@ private fun UserItem(
     ListItem(
         modifier = modifier
             .clickable { onClick() },
-        headlineContent = {
+        content = {
             Text(text = username)
         },
         supportingContent = {

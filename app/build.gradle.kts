@@ -1,6 +1,7 @@
 @file:Suppress("UnstableApiUsage")
 
-import com.android.build.gradle.internal.api.ApkVariantOutputImpl
+import com.android.build.api.variant.FilterConfiguration.FilterType
+import com.android.build.api.variant.impl.VariantOutputImpl
 import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
 import java.io.FileInputStream
 import java.util.Properties
@@ -11,7 +12,6 @@ plugins {
     alias(gradleLibs.plugins.firebase.crashlytics)
     alias(gradleLibs.plugins.google.ksp)
     alias(gradleLibs.plugins.google.services)
-    alias(gradleLibs.plugins.kotlin.android)
     alias(gradleLibs.plugins.kotlin.serialization)
 }
 
@@ -146,16 +146,16 @@ android {
 
     // 使用 ABI Filters 替代 Splits，在 defaultConfig 中配置
 
-    applicationVariants.configureEach {
-        val variant = this
-        outputs.configureEach {
-            (this as ApkVariantOutputImpl).apply {
-                val abi = this.filters.find { it.filterType == "ABI" }?.identifier ?: "universal"
-                outputFileName =
-                    "BV_${AppConfiguration.versionCode}_${AppConfiguration.versionName}.${variant.buildType.name}_${variant.flavorName}_$abi.apk"
-                versionNameOverride =
-                    "${variant.versionName}.${variant.buildType.name}"
-            }
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.outputs.forEach { output ->
+            val abi = output.filters.find { it.filterType == FilterType.ABI }?.identifier ?: "universal"
+            (output as VariantOutputImpl).outputFileName.set(
+                "BV_${AppConfiguration.versionCode}_${AppConfiguration.versionName}.${variant.buildType}_${variant.flavorName}_$abi.apk"
+            )
+            output.versionName.set("${AppConfiguration.versionName}.${variant.buildType}")
         }
     }
 }

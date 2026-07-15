@@ -5,7 +5,7 @@ import dev.aaa1115910.biliapi.repositories.LoginRepository
 import dev.aaa1115910.biliapi.repositories.SendSmsResult
 import dev.aaa1115910.biliapi.repositories.SendSmsState
 import kotlinx.coroutines.runBlocking
-import java.net.URL
+import java.net.URI
 
 class BvLoginRepositoryTest {
     private val loginRepository = LoginRepository()
@@ -54,7 +54,7 @@ class BvLoginRepositoryTest {
                 println("require recaptcha")
                 println("recaptcha url: ${sendSmsResult!!.recaptchaUrl}")
 
-                URL(sendSmsResult!!.recaptchaUrl).query.split("&").forEach {
+                URI.create(sendSmsResult!!.recaptchaUrl).toURL().query.split("&").forEach {
                     val (key, value) = it.split("=")
                     when (key) {
                         "recaptcha_token" -> recaptchaToken = value

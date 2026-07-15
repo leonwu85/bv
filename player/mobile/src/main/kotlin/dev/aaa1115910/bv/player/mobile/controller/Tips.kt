@@ -16,12 +16,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.VolumeDown
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.BrightnessHigh
 import androidx.compose.material.icons.rounded.BrightnessLow
 import androidx.compose.material.icons.rounded.BrightnessMedium
-import androidx.compose.material.icons.rounded.VolumeDown
-import androidx.compose.material.icons.rounded.VolumeOff
-import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -261,9 +261,9 @@ fun VolumeTip(
                 ) {
                     Icon(
                         imageVector = when {
-                            progress == 0f -> Icons.Rounded.VolumeOff
-                            progress < 0.5f -> Icons.Rounded.VolumeDown
-                            else -> Icons.Rounded.VolumeUp
+                            progress == 0f -> Icons.AutoMirrored.Rounded.VolumeOff
+                            progress < 0.5f -> Icons.AutoMirrored.Rounded.VolumeDown
+                            else -> Icons.AutoMirrored.Rounded.VolumeUp
                         },
                         contentDescription = null,
                         tint = Color.White

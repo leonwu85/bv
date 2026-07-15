@@ -2,31 +2,31 @@
 accompanist = "0.36.0"
 ashley = "1.7.4"
 brotli = "0.1.2"
-gdx = "1.14.0"
+gdx = "1.14.2"
 akdanmaku = "v1.3.7" # 1.0.0
 androidsvg = "1.4"
 coil = "2.7.0"
-firebase-bom = "34.12.0"
+firebase-bom = "34.16.0"
 geetest-sensebot = "4.4.4"
-grpc = "1.80.0"
+grpc = "1.82.2"
 grpc-kotlin = "1.5.0"
 jsoup = "1.22.1"
-koin = "4.2.1"
-koin-compose = "4.2.1"
-kotlinx-coroutines = "1.10.2"
+koin = "4.2.2"
+koin-compose = "4.2.2"
+kotlinx-coroutines = "1.11.0"
 kotlinx-serialization = "1.11.0"
-ktor = "3.4.3"
+ktor = "3.5.1"
 ktor-jsoup = "2.3.0"
-logging = "7.0.14"
+logging = "8.0.4"
 lottie = "6.7.1"
 markwon = "4.6.2"
-material = "1.13.0"
+material = "1.14.0"
 material-symbols-compose = "1.0.1"
-protobuf = "4.34.1"
+protobuf = "4.35.1"
 qrcode = "4.5.0"
 rememberPreference = "1.1.1"
 slf4j-android-mvysny = "2.0.13"
-slf4j-simple = "2.0.17"
+slf4j-simple = "2.0.18"
 jpinyin = "1.1.8"
 vlc = "3.6.5"
 zxing = "3.5.4"
@@ -84,7 +84,7 @@ koin-compose = { module = "io.insert-koin:koin-androidx-compose", version.ref = 
 koin-compose-navigation = { module = "io.insert-koin:koin-androidx-compose-navigation", version.ref = "koin-compose" }
 
 # https://kotlinlang.org/docs/jvm-test-using-junit.html
-kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test" }
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test-junit5" }
 
 # https://github.com/Kotlin/kotlinx.coroutines
 kotlinx-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }

@@ -1,12 +1,13 @@
 package dev.aaa1115910.bv.tv.screens.settings.content
 
-import android.app.Activity
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
+import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
+import android.view.Display
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -69,22 +70,20 @@ fun InfoSetting(
         )
     }
 
-    @Suppress("DEPRECATION")
     val screenInfo by remember {
         mutableStateOf(
             lazy {
                 val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    context.display!!
+                    context.display
                 } else {
-                    (context as Activity).windowManager.defaultDisplay
+                    requireNotNull(
+                        context.getSystemService(DisplayManager::class.java)
+                            .getDisplay(Display.DEFAULT_DISPLAY)
+                    ) { "Default display is unavailable" }
                 }
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    val mode = display.mode
-                    Triple(mode.physicalWidth, mode.physicalHeight, mode.refreshRate)
-                } else {
-                    Triple(display.width, display.height, display.refreshRate)
-                }
+                val mode = display.mode
+                Triple(mode.physicalWidth, mode.physicalHeight, mode.refreshRate)
             }.value
         )
     }

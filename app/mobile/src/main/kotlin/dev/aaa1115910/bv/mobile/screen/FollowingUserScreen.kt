@@ -148,7 +148,7 @@ private fun FollowingUserListItem(
     ListItem(
         modifier = modifier
             .clickable { onClick(followedUser) },
-        headlineContent = { Text(text = followedUser.name) },
+        content = { Text(text = followedUser.name) },
         supportingContent = {
             Text(
                 text = followedUser.sign,

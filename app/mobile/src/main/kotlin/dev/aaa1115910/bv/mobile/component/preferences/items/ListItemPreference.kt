@@ -17,7 +17,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.aaa1115910.bv.mobile.component.preferences.PreferenceGroupScope
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
@@ -32,22 +31,19 @@ private fun ListItemPreference(
     trailingContent: @Composable (() -> Unit)? = null,
     colors: ListItemColors = ListItemDefaults.colors(),
     shape: Shape = RoundedCornerShape(0.dp),
-    tonalElevation: Dp = ListItemDefaults.Elevation,
-    shadowElevation: Dp = ListItemDefaults.Elevation,
     onClick: (() -> Unit)? = null
 ) {
     ListItem(
         modifier = modifier
             .clip(shape)
             .clickable { onClick?.invoke() },
-        headlineContent = headlineContent,
+        content = headlineContent,
         overlineContent = overlineContent,
         supportingContent = supportingContent,
         leadingContent = leadingContent,
         trailingContent = trailingContent,
         colors = colors,
-        tonalElevation = tonalElevation,
-        shadowElevation = shadowElevation
+        elevation = ListItemDefaults.elevation(),
     )
 }
 

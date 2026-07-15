@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.IntentCompat
 import dev.aaa1115910.bv.entity.AuthData
 import dev.aaa1115910.bv.entity.BvScheme
 import dev.aaa1115910.bv.mobile.R
@@ -102,7 +103,11 @@ fun QrTokenResultScreen(
 
     LaunchedEffect(Unit) {
         runCatching {
-            val uri = (context as Activity).intent.getParcelableExtra<Uri>("uri")
+            val uri = IntentCompat.getParcelableExtra(
+                (context as Activity).intent,
+                "uri",
+                Uri::class.java,
+            )
                 ?: throw IllegalArgumentException("Uri not found in intent extras")
             val data = BvScheme.QrToken.fromUri(uri)
                 ?: throw IllegalArgumentException("Invalid QR token URI: $uri")

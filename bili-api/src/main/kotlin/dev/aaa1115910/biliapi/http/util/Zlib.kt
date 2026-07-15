@@ -1,6 +1,5 @@
 package dev.aaa1115910.biliapi.http.util
 
-import io.ktor.utils.io.core.use
 import java.io.ByteArrayOutputStream
 import java.util.zip.Deflater
 import java.util.zip.Inflater

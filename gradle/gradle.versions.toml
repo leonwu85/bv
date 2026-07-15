@@ -1,10 +1,10 @@
 [versions]
-agp = "8.13.2"
+agp = "9.1.1"
 firebase-crashlytics = "3.0.7"
-gms = "4.4.4"
-koin-compiler = "0.6.2"
-kotlin = "2.3.20"
-ksp = "2.2.21-2.0.4"
+gms = "4.5.0"
+koin-compiler = "1.0.2"
+kotlin = "2.4.10"
+ksp = "2.3.9"
 protobuf = "0.10.0"
 versions = "0.54.0"
 
@@ -12,7 +12,6 @@ versions = "0.54.0"
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 

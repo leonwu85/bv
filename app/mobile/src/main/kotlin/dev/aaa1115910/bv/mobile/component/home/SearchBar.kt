@@ -31,10 +31,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
@@ -101,7 +101,7 @@ fun HomeSearchTopBarCompact(
             )
         }
 
-        TabRow(
+        PrimaryTabRow(
             modifier = Modifier
                 .padding(top = 100.dp)
                 .zIndex(1f),
@@ -178,7 +178,7 @@ fun HomeSearchTopBarExpanded(
                     .fillMaxWidth(),
                 contentAlignment = Alignment.BottomCenter
             ) {
-                TabRow(
+                PrimaryTabRow(
                     selectedTabIndex = state
                 ) {
                     titles.forEachIndexed { index, title ->
@@ -333,7 +333,7 @@ fun Demo(modifier: Modifier = Modifier) {
                 repeat(40) { idx ->
                     val resultText = "Suggestion $idx"
                     ListItem(
-                        headlineContent = { Text(resultText) },
+                        content = { Text(resultText) },
                         supportingContent = { Text("Additional info") },
                         leadingContent = { Icon(Icons.Filled.Star, contentDescription = null) },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),

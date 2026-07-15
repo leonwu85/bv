@@ -101,11 +101,19 @@ private class TvUiSurfaceHost(
                         }
                     }
                 }
-                val host = SurfaceControlViewHost(
-                    activity,
-                    activity.display,
-                    surfaceView.hostToken,
-                )
+                val display = requireNotNull(activity.display) { "Activity display is unavailable" }
+                val host = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                    val rootSurfaceControl = requireNotNull(surfaceView.rootSurfaceControl) {
+                        "Root surface control is unavailable"
+                    }
+                    SurfaceControlViewHost(
+                        activity,
+                        display,
+                        rootSurfaceControl.inputTransferToken,
+                    )
+                } else {
+                    createLegacySurfaceControlViewHost(surfaceView, display)
+                }
                 host.setView(composeView, TV_UI_TARGET_WIDTH_PX, TV_UI_TARGET_HEIGHT_PX)
                 surfaceView.setChildSurfacePackage(
                     requireNotNull(host.surfacePackage) { "UI SurfacePackage is unavailable" },
@@ -127,4 +135,14 @@ private class TvUiSurfaceHost(
         surfaceHost = null
         hostSurfaceView = null
     }
+
+    @Suppress("DEPRECATION")
+    private fun createLegacySurfaceControlViewHost(
+        surfaceView: SurfaceView,
+        display: android.view.Display,
+    ): SurfaceControlViewHost = SurfaceControlViewHost(
+        activity,
+        display,
+        surfaceView.hostToken,
+    )
 }

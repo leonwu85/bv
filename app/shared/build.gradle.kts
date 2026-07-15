@@ -7,7 +7,6 @@ plugins {
     alias(gradleLibs.plugins.google.protobuf)
     alias(gradleLibs.plugins.google.services) apply false
     alias(gradleLibs.plugins.koin.compiler)
-    alias(gradleLibs.plugins.kotlin.android)
     alias(gradleLibs.plugins.kotlin.serialization)
 }
 

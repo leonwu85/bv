@@ -26,10 +26,10 @@ fun BaseListItem(
     trailingContent: @Composable (() -> Unit)? = null,
     colors: ListItemColors = ListItemDefaults.colors().copy(
         containerColor = MaterialTheme.colorScheme.surfaceBright,
-        supportingTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+        supportingContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
     ),
-    tonalElevation: Dp = ListItemDefaults.Elevation,
-    shadowElevation: Dp = ListItemDefaults.Elevation,
+    tonalElevation: Dp = 0.dp,
+    shadowElevation: Dp = 0.dp,
     selected: Boolean = false,
     enabled: Boolean = true,
     shape: Shape = MaterialTheme.shapes.medium,
@@ -50,24 +50,25 @@ fun BaseListItem(
         shadowElevation = shadowElevation
     ) {
         ListItem(
-            headlineContent = headlineContent,
+            content = headlineContent,
             overlineContent = overlineContent,
             supportingContent = supportingContent,
             leadingContent = leadingContent,
             trailingContent = trailingContent,
             colors = if (!enabled) colors.copy(
                 containerColor = MaterialTheme.colorScheme.surfaceBright.copy(alpha = 0.38f),
-                headlineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                leadingIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                overlineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
-                supportingTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                leadingContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                overlineContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                supportingContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
             ) else if (selected) colors.copy(
-                containerColor = Color.Transparent
+                containerColor = Color.Transparent,
+                contentColor = colors.contentColor,
             ) else colors.copy(
-                containerColor = Color.Transparent
+                containerColor = Color.Transparent,
+                contentColor = colors.contentColor,
             ),
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp
+            elevation = ListItemDefaults.elevation(),
         )
     }
 }

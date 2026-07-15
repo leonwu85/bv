@@ -125,9 +125,8 @@ import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberBottomSheetScaffoldState
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -486,9 +485,13 @@ fun VideoPlayerScreen(
         pageCount = { pictures.size },
         getKey = { pictures[it].key }
     )
-    val replyBottomSheetState = rememberStandardBottomSheetState(
+    val replyBottomSheetState = rememberBottomSheetState(
         initialValue = SheetValue.PartiallyExpanded,
-        skipHiddenState = false
+        enabledValues = setOf(
+            SheetValue.Hidden,
+            SheetValue.PartiallyExpanded,
+            SheetValue.Expanded,
+        ),
     )
     val replySheetState = rememberBottomSheetScaffoldState(
         bottomSheetState = replyBottomSheetState
@@ -2393,7 +2396,10 @@ private fun OfflineCacheBottomSheet(
     var showCacheAllConfirm by remember { mutableStateOf(false) }
     val qualityOptions = remember { Resolution.entries.sortedByDescending { it.code } }
     val context = LocalContext.current
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
+    )
     val items = remember(videoDetail, currentCid) {
         buildOfflineCacheSheetItems(videoDetail, currentCid)
     }
@@ -2943,7 +2949,10 @@ private fun VideoSendDanmakuSheet(
     onDismiss: () -> Unit,
     onSend: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
+    )
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val dismissSheet = {
@@ -4144,7 +4153,10 @@ private fun ReplyInputSheet(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
+    )
     var text by remember { mutableStateOf("") }
     var selection by remember { mutableStateOf(EmoteTextSelection.Zero) }
     var activePanel by remember { mutableStateOf<ReplyInputPanel?>(null) }

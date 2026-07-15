@@ -1,10 +1,10 @@
 package dev.aaa1115910.biliapi.entity.danmaku
 
-import io.ktor.util.decodeBase64String
 import okio.ByteString.Companion.readByteString
 import java.io.ByteArrayInputStream
 import java.io.DataInputStream
 import java.util.zip.GZIPInputStream
+import kotlin.io.encoding.Base64
 
 data class DanmakuMaskSegment(
     val range: LongRange,
@@ -105,7 +105,8 @@ data class DanmakuMask(
                             }
                             val decodedSvg = svgParts[1]
                                 .replace("\n", "")
-                                .decodeBase64String()
+                                .let(Base64.Default::decode)
+                                .decodeToString()
                             frameList.add(
                                 DanmakuWebMaskFrame(
                                     range = lastTime..<time,

@@ -207,7 +207,7 @@ private fun ContactUserItem(
         colors = ListItemDefaults.colors(
             containerColor = Color.Transparent
         ),
-        headlineContent = {
+        content = {
             Text(
                 text = user.name,
                 maxLines = 1,

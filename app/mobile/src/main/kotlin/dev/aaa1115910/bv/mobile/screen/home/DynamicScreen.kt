@@ -85,6 +85,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -97,6 +98,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -105,7 +107,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
@@ -429,7 +431,10 @@ private fun CreateDynamicSheet(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
+    )
     var content by remember { mutableStateOf("") }
     var contentSelection by remember { mutableStateOf(DynamicTextSelection.Zero) }
     var title by remember { mutableStateOf("") }
@@ -2016,7 +2021,7 @@ private fun findDynamicTokenRange(
 private fun Drawable.freshDrawable(): Drawable =
     constantState?.newDrawable()?.mutate() ?: mutate()
 
-private class DynamicSelectionEditText(context: Context) : EditText(context) {
+private class DynamicSelectionEditText(context: Context) : androidx.appcompat.widget.AppCompatEditText(context) {
     var onSelectionChangedListener: ((Int, Int) -> Unit)? = null
 
     override fun onSelectionChanged(selStart: Int, selEnd: Int) {
@@ -2096,7 +2101,7 @@ private fun showDynamicDateTimePicker(
     }.show()
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DynamicTabContent(
     modifier: Modifier = Modifier,
@@ -2282,6 +2287,7 @@ private fun DynamicCard(
     )
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DynamicUpPanel(
     dynamicViewModel: DynamicViewModel,

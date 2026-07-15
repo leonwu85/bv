@@ -5,9 +5,9 @@ object AppConfiguration {
     private const val defaultApplicationId = "dev.aaa1115910.bv2"
     private const val applicationIdSystemProperty = "bv.applicationId"
     private const val applicationIdEnvName = "BV_APPLICATION_ID"
-    const val compileSdk = 36
+    const val compileSdk = 37
     const val minSdk = 23
-    const val targetSdk = 36
+    const val targetSdk = 37
     const val jdk = 21
     private const val major = 0
     private const val minor = 3

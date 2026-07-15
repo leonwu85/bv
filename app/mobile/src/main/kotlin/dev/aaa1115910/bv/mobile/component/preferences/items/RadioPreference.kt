@@ -98,7 +98,7 @@ private fun <T> RadioDialog(
                         modifier = Modifier
                             .clip(MaterialTheme.shapes.medium)
                             .clickable { onValueChange(itemValue) },
-                        headlineContent = { Text(text = label) },
+                        content = { Text(text = label) },
                         leadingContent = {
                             RadioButton(
                                 selected = itemValue == value,
@@ -226,4 +226,3 @@ fun <T> PreferenceGroupScope.radioPreference(
         )
     }
 }
-

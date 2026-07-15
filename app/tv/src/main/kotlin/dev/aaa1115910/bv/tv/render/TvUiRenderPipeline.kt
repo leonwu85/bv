@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.render
 
-import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.res.Configuration
@@ -64,9 +63,11 @@ internal data class TvDisplayPipeline(
 
 internal object TvUiRenderPipeline {
     fun resolve(activity: Activity): TvDisplayPipeline {
-        val display = activity.display ?: activity.windowManager.defaultDisplay
+        val display = requireNotNull(activity.display) { "Activity display is unavailable" }
         val physicalSize = display.currentPhysicalSize()
-        val uiSize = display.currentUiSize()
+        val uiSize = activity.resources.displayMetrics.let { metrics ->
+            Point(metrics.widthPixels, metrics.heightPixels)
+        }
         val isTelevision = DeviceUtil.isTvDevice(activity) ||
             (activity.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
                 Configuration.UI_MODE_TYPE_TELEVISION
@@ -124,9 +125,6 @@ internal fun resolveRenderPath(
     }
     return if (shouldEmbed) TvUiRenderPath.Embedded1080p else TvUiRenderPath.Native
 }
-
-@SuppressLint("Deprecated")
-private fun Display.currentUiSize(): Point = Point().also(::getSize)
 
 private fun Display.currentPhysicalSize(): Point {
     val mode = mode

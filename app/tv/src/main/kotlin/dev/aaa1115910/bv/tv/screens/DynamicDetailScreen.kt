@@ -30,11 +30,11 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.ModeComment
 import androidx.compose.material.icons.rounded.Image
-import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -528,7 +528,7 @@ fun DynamicDetailScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Rounded.OpenInNew,
+                                    imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
                                     contentDescription = "跳转原动态",
                                     modifier = Modifier.size(20.dp),
                                     tint = LocalContentColor.current
