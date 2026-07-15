@@ -264,8 +264,20 @@ class VideoPlayerV3ViewModel(
     )
 
     private data class PendingGeetestVerification(
+        val vVoucher: String,
         val token: String,
         val retryRequest: GeetestPlaybackRetryRequest,
+    )
+
+    private data class RegisteredGeetestChallenge(
+        val token: String,
+        val gt: String,
+        val challenge: String,
+    )
+
+    private data class GeetestChallengeRefreshContext(
+        val generation: Long,
+        val pending: PendingGeetestVerification,
     )
 
     private data class OfflineCacheSnapshot(
@@ -365,7 +377,8 @@ class VideoPlayerV3ViewModel(
     var geetestGt by mutableStateOf("")
     var geetestChallenge by mutableStateOf("")
     private var pendingGeetestVerification: PendingGeetestVerification? = null
-    private var geetestValidationInProgress = false
+    private var geetestValidationPending: PendingGeetestVerification? = null
+    private var geetestRegistrationGeneration = 0L
 
     private var playData: PlayData? by mutableStateOf(null)
     val danmakuData: MutableList<DanmakuItemData> = ArrayList()
@@ -1502,36 +1515,118 @@ class VideoPlayerV3ViewModel(
         vVoucher: String,
         retryRequest: GeetestPlaybackRetryRequest,
     ) {
-        runCatching {
-            val registerResponse = BiliHttpApi.gaiaVgateRegister(
+        val registrationGeneration = withContext(Dispatchers.Main.immediate) {
+            ++geetestRegistrationGeneration
+        }
+        try {
+            val registration = registerGeetestChallenge(vVoucher)
+            val applied = withContext(Dispatchers.Main.immediate) {
+                if (registrationGeneration != geetestRegistrationGeneration) {
+                    return@withContext false
+                }
+                pendingGeetestVerification = PendingGeetestVerification(
+                    vVoucher = vVoucher,
+                    token = registration.token,
+                    retryRequest = retryRequest,
+                )
+                geetestValidationPending = null
+                geetestGt = registration.gt
+                geetestChallenge = registration.challenge
+                showGeetestDialog = true
+                true
+            }
+            if (applied) addLogs("请完成人机验证")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val isCurrent = withContext(Dispatchers.Main.immediate) {
+                registrationGeneration == geetestRegistrationGeneration
+            }
+            if (!isCurrent) {
+                logger.fDebug { "Ignore stale Gaia vgate register failure: ${e.message}" }
+                return
+            }
+            addLogs("风控验证申请失败：${e.localizedMessage}")
+            withContext(Dispatchers.Main.immediate) {
+                errorMessage = "风控验证申请失败：${e.localizedMessage}"
+                loadState = RequestState.Failed
+            }
+            logger.fException(e) { "gaiaVgateRegister failed" }
+        }
+    }
+
+    private suspend fun registerGeetestChallenge(vVoucher: String): RegisteredGeetestChallenge {
+        val registerResponse = withContext(Dispatchers.IO) {
+            BiliHttpApi.gaiaVgateRegister(
                 vVoucher = vVoucher,
                 sessData = authRepository.sessionData,
                 csrf = authRepository.biliJct
             ).getResponseData()
-            val token = registerResponse.token
-            val gt = registerResponse.geetest.gt
-            val challenge = registerResponse.geetest.challenge
-            if (token.isBlank() || gt.isBlank() || challenge.isBlank()) {
+        }
+        return RegisteredGeetestChallenge(
+            token = registerResponse.token,
+            gt = registerResponse.geetest.gt,
+            challenge = registerResponse.geetest.challenge,
+        ).also { registration ->
+            if (
+                registration.token.isBlank() ||
+                registration.gt.isBlank() ||
+                registration.challenge.isBlank()
+            ) {
                 error("gaia_vgate_register 返回数据不完整（可能无法通过 captcha 解除）")
             }
-            withContext(Dispatchers.Main) {
-                pendingGeetestVerification = PendingGeetestVerification(
-                    token = token,
-                    retryRequest = retryRequest,
+        }
+    }
+
+    /**
+     * 本机验证与手机验证不能复用已初始化的 challenge。
+     * 切换验证方式前重新向 Gaia 注册，同时替换 token/gt/challenge。
+     */
+    suspend fun refreshGeetestChallenge(): Boolean {
+        val refreshContext = withContext(Dispatchers.Main.immediate) {
+            val pending = pendingGeetestVerification ?: return@withContext null
+            if (geetestValidationPending != null) return@withContext null
+            GeetestChallengeRefreshContext(
+                generation = ++geetestRegistrationGeneration,
+                pending = pending,
+            )
+        } ?: return false
+
+        return try {
+            val registration = registerGeetestChallenge(refreshContext.pending.vVoucher)
+            val applied = withContext(Dispatchers.Main.immediate) {
+                if (
+                    refreshContext.generation != geetestRegistrationGeneration ||
+                    pendingGeetestVerification !== refreshContext.pending ||
+                    geetestValidationPending != null
+                ) {
+                    return@withContext false
+                }
+                pendingGeetestVerification = refreshContext.pending.copy(
+                    token = registration.token,
                 )
-                geetestValidationInProgress = false
-                geetestGt = gt
-                geetestChallenge = challenge
-                showGeetestDialog = true
+                geetestValidationPending = null
+                geetestGt = registration.gt
+                geetestChallenge = registration.challenge
+                true
             }
-            addLogs("请完成人机验证")
-        }.onFailure {
-            addLogs("风控验证申请失败：${it.localizedMessage}")
-            withContext(Dispatchers.Main) {
-                errorMessage = "风控验证申请失败：${it.localizedMessage}"
-                loadState = RequestState.Failed
+            if (applied) {
+                addLogs("已获取新的人机验证")
+                logger.fInfo { "Refreshed Geetest challenge before switching verification mode" }
             }
-            logger.fException(it) { "gaiaVgateRegister failed" }
+            applied
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val isCurrent = withContext(Dispatchers.Main.immediate) {
+                refreshContext.generation == geetestRegistrationGeneration &&
+                    pendingGeetestVerification === refreshContext.pending
+            }
+            if (isCurrent) {
+                addLogs("刷新人机验证失败：${e.localizedMessage}")
+                logger.fException(e) { "Refresh Geetest challenge failed" }
+            }
+            false
         }
     }
 
@@ -1544,11 +1639,11 @@ class VideoPlayerV3ViewModel(
                 logger.fWarn { "Ignore Geetest result because no verification is pending" }
                 return@launch
             }
-            if (geetestValidationInProgress) {
+            if (geetestValidationPending != null) {
                 logger.fDebug { "Ignore duplicated Geetest result while validation is in progress" }
                 return@launch
             }
-            geetestValidationInProgress = true
+            geetestValidationPending = pending
 
             try {
                 val validateResponse = withContext(Dispatchers.IO) {
@@ -1571,14 +1666,16 @@ class VideoPlayerV3ViewModel(
 
                 // 验证期间若用户已取消或已发起新验证，不再重试旧请求。
                 if (pendingGeetestVerification !== pending) {
+                    if (geetestValidationPending === pending) geetestValidationPending = null
                     logger.fWarn { "Skip stale Geetest validation result" }
                     return@launch
                 }
 
                 authRepository.gaiaVtoken = griskId
+                geetestRegistrationGeneration += 1
                 showGeetestDialog = false
                 pendingGeetestVerification = null
-                geetestValidationInProgress = false
+                geetestValidationPending = null
                 errorMessage = ""
                 loadState = RequestState.Ready
                 addLogs("风控验证通过")
@@ -1597,10 +1694,12 @@ class VideoPlayerV3ViewModel(
                 throw e
             } catch (e: Exception) {
                 if (pendingGeetestVerification !== pending) {
+                    if (geetestValidationPending === pending) geetestValidationPending = null
                     logger.fWarn { "Ignore stale Geetest validation failure: ${e.message}" }
                     return@launch
                 }
-                geetestValidationInProgress = false
+                geetestRegistrationGeneration += 1
+                geetestValidationPending = null
                 addLogs("风控验证失败：${e.localizedMessage}")
                 errorMessage = "风控验证失败：${e.localizedMessage}"
                 loadState = RequestState.Failed
@@ -1615,9 +1714,10 @@ class VideoPlayerV3ViewModel(
         viewModelScope.launch {
             // 成功后 SDK/WebView 可能还会补发关闭回调，不能把已开始的重试改回失败。
             if (pendingGeetestVerification == null) return@launch
+            geetestRegistrationGeneration += 1
             showGeetestDialog = false
             pendingGeetestVerification = null
-            geetestValidationInProgress = false
+            geetestValidationPending = null
             errorMessage = "验证已取消"
             loadState = RequestState.Failed
             addLogs("用户取消了风控验证")

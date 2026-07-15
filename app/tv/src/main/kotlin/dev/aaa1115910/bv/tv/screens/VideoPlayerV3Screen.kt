@@ -1272,6 +1272,7 @@ fun VideoPlayerV3Screen(
                 onDismiss = {
                     playerViewModel.onGeetestCancelled()
                 },
+                onRefreshChallenge = playerViewModel::refreshGeetestChallenge,
             )
         }
     }

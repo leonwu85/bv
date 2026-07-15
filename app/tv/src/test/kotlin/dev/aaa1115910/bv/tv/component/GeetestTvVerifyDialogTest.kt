@@ -17,4 +17,65 @@ class GeetestTvVerifyDialogTest {
         assertFalse(html.contains(".geetest_panel { position: relative !important; }"))
         assertFalse(html.contains(".geetest_panel_box { position: relative !important; }"))
     }
+
+    @Test
+    fun switchingVerificationModeRequiresFreshChallenge() {
+        assertTrue(
+            shouldRefreshGeetestChallenge(
+                currentMode = GeetestVerifyMode.TvRemote,
+                requestedMode = GeetestVerifyMode.PhoneCompanion,
+                challengeReady = true,
+                mockMode = false,
+                refreshAvailable = true,
+            )
+        )
+        assertTrue(
+            shouldRefreshGeetestChallenge(
+                currentMode = GeetestVerifyMode.PhoneCompanion,
+                requestedMode = GeetestVerifyMode.TvRemote,
+                challengeReady = true,
+                mockMode = false,
+                refreshAvailable = true,
+            )
+        )
+    }
+
+    @Test
+    fun failedRefreshCanRetryWithoutChangingMode() {
+        assertTrue(
+            shouldRefreshGeetestChallenge(
+                currentMode = GeetestVerifyMode.PhoneCompanion,
+                requestedMode = GeetestVerifyMode.PhoneCompanion,
+                challengeReady = false,
+                mockMode = false,
+                refreshAvailable = true,
+            )
+        )
+    }
+
+    @Test
+    fun currentReadyModeDoesNotRefreshOnFocusOrConfirm() {
+        assertFalse(
+            shouldRefreshGeetestChallenge(
+                currentMode = GeetestVerifyMode.TvRemote,
+                requestedMode = GeetestVerifyMode.TvRemote,
+                challengeReady = true,
+                mockMode = false,
+                refreshAvailable = true,
+            )
+        )
+    }
+
+    @Test
+    fun mockModeDoesNotRequireGaiaRefresh() {
+        assertFalse(
+            shouldRefreshGeetestChallenge(
+                currentMode = GeetestVerifyMode.TvRemote,
+                requestedMode = GeetestVerifyMode.PhoneCompanion,
+                challengeReady = true,
+                mockMode = true,
+                refreshAvailable = true,
+            )
+        )
+    }
 }

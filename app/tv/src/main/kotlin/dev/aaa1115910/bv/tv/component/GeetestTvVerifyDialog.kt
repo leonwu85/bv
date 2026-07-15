@@ -86,6 +86,17 @@ enum class GeetestVerifyMode {
     PhoneCompanion,
 }
 
+internal fun shouldRefreshGeetestChallenge(
+    currentMode: GeetestVerifyMode,
+    requestedMode: GeetestVerifyMode,
+    challengeReady: Boolean,
+    mockMode: Boolean,
+    refreshAvailable: Boolean,
+): Boolean =
+    !mockMode &&
+        refreshAvailable &&
+        (requestedMode != currentMode || !challengeReady)
+
 /**
  * TV 端 Geetest 风控验证弹窗
  *
@@ -101,6 +112,7 @@ fun GeetestTvVerifyDialog(
     challenge: String,
     onResult: (GeetestTvResult) -> Unit,
     onDismiss: () -> Unit,
+    onRefreshChallenge: (suspend () -> Boolean)? = null,
     mockMode: Boolean = false,
     initialMode: GeetestVerifyMode = GeetestVerifyMode.TvRemote,
 ) {
@@ -110,6 +122,11 @@ fun GeetestTvVerifyDialog(
     val contentFocusRequester = remember { FocusRequester() }
     // >0 表示用户在模式 Tab 按了确定，需要把焦点交回验证区
     var enterContentToken by remember { mutableIntStateOf(0) }
+    var challengeReady by remember { mutableStateOf(true) }
+    var challengeRefreshing by remember { mutableStateOf(false) }
+    var challengeRefreshRequest by remember { mutableIntStateOf(0) }
+    var challengeRefreshError by remember { mutableStateOf<String?>(null) }
+    var enterAfterChallengeRefresh by remember { mutableStateOf(false) }
 
     // 当前选中模式对应的 tab 焦点，验证区按返回时落到这里
     val activeModeFocusRequester = when (mode) {
@@ -123,11 +140,65 @@ fun GeetestTvVerifyDialog(
     }
 
     // 模式 Tab 按确定后：等 content 重组再抢焦点（避免左右选 tab 时抢焦点）
-    LaunchedEffect(enterContentToken, mode) {
+    LaunchedEffect(enterContentToken) {
         if (enterContentToken <= 0) return@LaunchedEffect
         delay(48)
         runCatching { contentFocusRequester.requestFocus() }
             .onFailure { logger.warn(it) { "focus content after confirm failed" } }
+    }
+
+    fun requestMode(newMode: GeetestVerifyMode, enterContent: Boolean) {
+        val refreshRequired = shouldRefreshGeetestChallenge(
+            currentMode = mode,
+            requestedMode = newMode,
+            challengeReady = challengeReady,
+            mockMode = mockMode,
+            refreshAvailable = onRefreshChallenge != null,
+        )
+        if (!refreshRequired) {
+            mode = newMode
+            challengeReady = true
+            challengeRefreshError = null
+            if (enterContent) enterContentToken += 1
+            return
+        }
+
+        // 同一目标模式已在刷新时，确认键只记录“刷新后进入”，不重复请求。
+        if (newMode == mode && challengeRefreshing) {
+            enterAfterChallengeRefresh = enterAfterChallengeRefresh || enterContent
+            return
+        }
+
+        // 先卸载旧 WebView/手机会话，获得新 challenge 后才创建目标验证页。
+        mode = newMode
+        challengeReady = false
+        challengeRefreshError = null
+        enterAfterChallengeRefresh = enterContent
+        challengeRefreshRequest += 1
+    }
+
+    LaunchedEffect(challengeRefreshRequest) {
+        if (challengeRefreshRequest <= 0) return@LaunchedEffect
+        val refreshChallenge = onRefreshChallenge ?: return@LaunchedEffect
+        challengeRefreshing = true
+        val refreshed = try {
+            refreshChallenge()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn(e) { "Refresh Geetest challenge before mode switch failed" }
+            false
+        }
+        challengeRefreshing = false
+        challengeReady = refreshed
+        challengeRefreshError = if (refreshed) {
+            null
+        } else {
+            "获取新验证码失败，请在当前模式上按确定重试"
+        }
+        val shouldEnterContent = enterAfterChallengeRefresh
+        enterAfterChallengeRefresh = false
+        if (refreshed && shouldEnterContent) enterContentToken += 1
     }
 
     TvOverlayDialog(
@@ -167,25 +238,37 @@ fun GeetestTvVerifyDialog(
                     tvModeFocusRequester = tvModeFocusRequester,
                     phoneModeFocusRequester = phoneModeFocusRequester,
                     contentFocusRequester = contentFocusRequester,
-                    onModeChange = { newMode -> mode = newMode },
-                    onConfirmEnterContent = { selected ->
-                        mode = selected
-                        enterContentToken += 1
-                    },
+                    onModeChange = { newMode -> requestMode(newMode, enterContent = false) },
+                    onConfirmEnterContent = { selected -> requestMode(selected, enterContent = true) },
                     onBackFromModeTab = onDismiss,
                 )
 
                 Text(
-                    text = "验证区按返回 → 模式 Tab ｜ 模式上按确定 → 进入验证区 ｜ 模式上再返回关闭",
+                    text = when {
+                        challengeRefreshing -> "正在获取新的验证码…"
+                        challengeRefreshError != null -> challengeRefreshError.orEmpty()
+                        else -> "验证区按返回 → 模式 Tab ｜ 模式上按确定 → 进入验证区 ｜ 模式上再返回关闭"
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 2.dp),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                    color = if (challengeRefreshError != null) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
+                    },
                     textAlign = TextAlign.Center,
                 )
 
-                when (mode) {
+                if (!challengeReady) {
+                    GeetestChallengeRefreshContent(
+                        refreshing = challengeRefreshing,
+                        errorMessage = challengeRefreshError,
+                        contentFocusRequester = contentFocusRequester,
+                        modeTabFocusRequester = activeModeFocusRequester,
+                    )
+                } else when (mode) {
                     GeetestVerifyMode.TvRemote -> GeetestTvVerifyContent(
                         gt = gt,
                         challenge = challenge,
@@ -206,6 +289,49 @@ fun GeetestTvVerifyDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun GeetestChallengeRefreshContent(
+    refreshing: Boolean,
+    errorMessage: String?,
+    contentFocusRequester: FocusRequester,
+    modeTabFocusRequester: FocusRequester,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(360.dp)
+            .onPreviewKeyEvent { event ->
+                val isBack = event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                    event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_BACK
+                if (isBack) {
+                    runCatching { modeTabFocusRequester.requestFocus() }
+                }
+                isBack
+            }
+            .focusRequester(contentFocusRequester)
+            .focusProperties { up = modeTabFocusRequester }
+            .focusable(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = when {
+                refreshing -> "正在为当前验证方式获取新的验证参数…"
+                errorMessage != null -> errorMessage
+                else -> "正在准备新的验证码…"
+            },
+            modifier = Modifier.padding(horizontal = 24.dp),
+            style = MaterialTheme.typography.titleSmall,
+            color = if (errorMessage != null) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
