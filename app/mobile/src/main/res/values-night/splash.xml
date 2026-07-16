@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="mobile_splash_background">#171215</color>
+    <color name="mobile_splash_logo">#FF8EAA</color>
+    <bool name="mobile_splash_use_light_system_bars">false</bool>
+</resources>

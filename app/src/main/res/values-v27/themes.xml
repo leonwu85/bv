@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style
+        name="Theme.BV.Launcher.Routing"
+        parent="@style/Theme.BV.Mobile">
+        <item name="android:windowBackground">@color/mobile_splash_background</item>
+        <item name="android:statusBarColor">@color/mobile_splash_background</item>
+        <item name="android:navigationBarColor">@color/mobile_splash_background</item>
+        <item name="android:windowLightStatusBar">@bool/mobile_splash_use_light_system_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/mobile_splash_use_light_system_bars</item>
+    </style>
+</resources>

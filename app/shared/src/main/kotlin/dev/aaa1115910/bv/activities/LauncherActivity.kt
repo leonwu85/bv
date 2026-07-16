@@ -3,7 +3,8 @@ package dev.aaa1115910.bv.activities
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import dev.aaa1115910.bv.util.DeviceUtil
 import io.github.oshai.kotlinlogging.KotlinLogging
 
@@ -12,10 +13,11 @@ import io.github.oshai.kotlinlogging.KotlinLogging
  * 
  * 这个活动是应用的入口点，它会根据设备类型路由到合适的主活动
  */
-class LauncherActivity : ComponentActivity() {
+class LauncherActivity : AppCompatActivity() {
     private val logger = KotlinLogging.logger { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         if (!isTaskRoot && intent.isLauncherEntryIntent()) {
             logger.info { "Skip duplicate launcher entry, existing task will resume" }

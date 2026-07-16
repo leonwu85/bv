@@ -50,6 +50,7 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -66,6 +67,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -577,10 +580,23 @@ private fun NavigationIcon(
     dynamicUnreadCount: Int
 ) {
     if (navItem == MobileMainScreenNav.Dynamic && dynamicUnreadCount > 0) {
+        val badgeText = if (dynamicUnreadCount > 99) "99+" else dynamicUnreadCount.toString()
+        val density = LocalDensity.current
+        val fixedBadgeDensity = remember(density.density) {
+            Density(density = density.density, fontScale = 1f)
+        }
         BadgedBox(
             badge = {
-                Badge {
-                    Text(text = if (dynamicUnreadCount > 99) "99+" else dynamicUnreadCount.toString())
+                CompositionLocalProvider(LocalDensity provides fixedBadgeDensity) {
+                    Badge(
+                        modifier = if (dynamicUnreadCount < 10) {
+                            Modifier.size(16.dp)
+                        } else {
+                            Modifier
+                        }
+                    ) {
+                        Text(text = badgeText)
+                    }
                 }
             }
         ) {

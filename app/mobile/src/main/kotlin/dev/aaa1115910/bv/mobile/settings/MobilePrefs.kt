@@ -30,6 +30,7 @@ import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.player.entity.SuperResolutionType
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.player.util.DanmakuSpeedPolicy
+import dev.aaa1115910.bv.util.MobileThemeModeManager
 import dev.aaa1115910.bv.util.PlaybackPreferenceSelector
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -64,12 +65,11 @@ object MobilePrefs {
     }
 
     var themeType: ThemeType
-        get() = ThemeType.entries[read(MobilePrefKeys.themeTypeRequest)]
-        set(value) = write(MobilePrefKeys.themeTypeKey, value.ordinal)
+        get() = MobileThemeModeManager.themeType
+        set(value) = MobileThemeModeManager.setThemeType(value)
 
     val themeTypeFlow: Flow<ThemeType>
-        get() = dsm.getPreferenceFlow(MobilePrefKeys.themeTypeRequest)
-            .transform { emit(ThemeType.entries[it]) }
+        get() = MobileThemeModeManager.themeTypeFlow
 
     var themePalette: MobileThemePalette
         get() = resolveMobileThemePalette(read(MobilePrefKeys.themePaletteRequest))
@@ -472,7 +472,6 @@ object MobilePrefs {
 }
 
 object MobilePrefKeys {
-    val themeTypeKey = intPreferencesKey("mobile_theme_type")
     val themePaletteKey = intPreferencesKey("mobile_theme_palette")
     val dynamicColorKey = booleanPreferencesKey("mobile_theme_dynamic_color")
     val seedColorKey = intPreferencesKey("mobile_theme_seed_color")
@@ -555,7 +554,6 @@ object MobilePrefKeys {
     val showLiveDanmakuEmojiKey = booleanPreferencesKey("mobile_show_live_danmaku_emoji")
     val incognitoModeKey = booleanPreferencesKey("mobile_incognito_mode")
 
-    val themeTypeRequest = PreferenceRequest(themeTypeKey, ThemeType.Auto.ordinal)
     val themePaletteRequest = PreferenceRequest(themePaletteKey, MobileThemePalette.Default.ordinal)
     val dynamicColorRequest = PreferenceRequest(dynamicColorKey, false)
     val seedColorRequest = PreferenceRequest(seedColorKey, MobilePrefs.DEFAULT_SEED_COLOR)

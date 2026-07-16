@@ -98,6 +98,7 @@ dependencies {
     implementation(kotlin("reflect"))
     api(platform("${libs.firebase.bom.get()}"))
     api(androidx.activity.compose)
+    api(androidx.appcompat)
     api(androidx.core.ktx)
     api(androidx.core.splashscreen)
     api(androidx.compose.constraintlayout)

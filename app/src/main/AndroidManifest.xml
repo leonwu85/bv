@@ -22,7 +22,7 @@
         <activity
             android:name="dev.aaa1115910.bv.activities.LauncherActivity"
             android:exported="true"
-            android:theme="@style/Theme.BV">
+            android:theme="@style/Theme.BV.Launcher.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

@@ -1,13 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-
     <style name="Theme.BV.Mobile.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/mobile_splash_background</item>
         <item name="postSplashScreenTheme">@style/Theme.BV.Mobile</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_mobile_splash_logo</item>
         <item name="android:statusBarColor">@color/mobile_splash_background</item>
-        <item name="android:navigationBarColor">@color/mobile_splash_legacy_navigation_bar</item>
+        <item name="android:navigationBarColor">@color/mobile_splash_background</item>
         <item name="android:windowLightStatusBar">@bool/mobile_splash_use_light_system_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/mobile_splash_use_light_system_bars</item>
     </style>
-
-    <style name="Theme.BV.Mobile" parent="Theme.Material3.DayNight.NoActionBar" />
 </resources>

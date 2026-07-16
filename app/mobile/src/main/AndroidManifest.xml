@@ -4,6 +4,7 @@
     <application>
         <activity
             android:name="dev.aaa1115910.bv.mobile.activities.MainActivity"
+            android:configChanges="uiMode"
             android:exported="true"
             android:theme="@style/Theme.BV.Mobile.Splash">
         </activity>
@@ -26,6 +27,7 @@
             android:theme="@style/Theme.BV.Mobile" />
         <activity
             android:name=".activities.SettingsActivity"
+            android:configChanges="uiMode"
             android:exported="false"
             android:label="@string/title_mobile_activity_settings"
             android:theme="@style/Theme.BV.Mobile" />

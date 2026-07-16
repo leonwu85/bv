@@ -1,5 +1,6 @@
 [versions]
 activity = "1.13.0"
+appcompat = "1.7.1"
 compose = "1.11.4"
 compose-constraintlayout = "1.1.1"
 compose-material-icons = "1.7.8"
@@ -21,6 +22,9 @@ webkit = "1.15.0"
 [libraries]
 # https://developer.android.com/jetpack/androidx/releases/activity
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
+
+# https://developer.android.com/jetpack/androidx/releases/appcompat
+appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 
 # https://developer.android.com/jetpack/compose/layout
 compose-constraintlayout = { module = "androidx.constraintlayout:constraintlayout-compose", version.ref = "compose-constraintlayout" }

@@ -26,8 +26,10 @@ import dev.aaa1115910.bv.network.HttpServer
 import dev.aaa1115910.bv.repository.UserRepository
 import dev.aaa1115910.bv.util.BlacklistUtil
 import dev.aaa1115910.bv.util.CoilConfig
+import dev.aaa1115910.bv.util.DeviceUtil
 import dev.aaa1115910.bv.util.FirebaseUtil
 import dev.aaa1115910.bv.util.LogCatcherUtil
+import dev.aaa1115910.bv.util.MobileThemeModeManager
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.toast
 import kotlinx.coroutines.CoroutineScope
@@ -64,6 +66,9 @@ class BVApp : Application() {
         context = this.applicationContext
         HandroidLoggerAdapter.DEBUG = BuildConfig.DEBUG
         dataStoreManager = DataStoreManager(applicationContext.dataStore)
+        if (!DeviceUtil.isTvDevice(this)) {
+            MobileThemeModeManager.sync(this)
+        }
         if (Prefs.blacklistUser) {
             R.string.blacklist_user_toast.toast(context)
             return
