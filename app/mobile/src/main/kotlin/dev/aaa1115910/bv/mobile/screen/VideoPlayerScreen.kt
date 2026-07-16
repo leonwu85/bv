@@ -1126,7 +1126,10 @@ fun VideoPlayerScreen(
                         }
                     }
                 } else {
-                    val titles = listOf("简介", "评论")
+                    val commentTabTitle = videoDetailViewModel.videoDetail?.stat?.reply
+                        ?.let { "评论 ${it.coerceAtLeast(0)}" }
+                        ?: "评论"
+                    val titles = listOf("简介", commentTabTitle)
                     val pagerState = rememberPagerState(
                         initialPage = 0,
                         initialPageOffsetFraction = 0f,

@@ -172,7 +172,7 @@ class OptimizedTextRenderer(
      * Level 1: 检查是否与上次测量相同（内容相等比较，支持不同引用）
      * Level 2: 直接测量（measureText 本身很快）
      */
-    private inline fun fastWidthLookup(text: String, size: Float, bold: Boolean): Float {
+    private fun fastWidthLookup(text: String, size: Float, bold: Boolean): Float {
         // Level 1: 最近一次测量缓存（支持内容相同但引用不同）
         if (text == lastText && size == lastSize && bold == lastBold) {
             return lastWidth
@@ -187,7 +187,7 @@ class OptimizedTextRenderer(
     /**
      * 更新最近查找记录 - inline 消除函数调用开销
      */
-    private inline fun updateLastLookup(text: String, size: Float, bold: Boolean, width: Float) {
+    private fun updateLastLookup(text: String, size: Float, bold: Boolean, width: Float) {
         lastText = text
         lastSize = size
         lastBold = bold
@@ -197,7 +197,7 @@ class OptimizedTextRenderer(
     /**
      * 获取字体度量信息 - 简单高效的 data class key 方案
      */
-    private inline fun obtainMetrics(size: Float, bold: Boolean): Metrics {
+    private fun obtainMetrics(size: Float, bold: Boolean): Metrics {
         val key = MetricsKey(size, bold)
         return metricsCache[key] ?: run {
             val fm = textPaint.fontMetrics

@@ -42,6 +42,7 @@ import dev.aaa1115910.bv.viewmodel.SeasonViewModel
 import dev.aaa1115910.bv.viewmodel.VideoPlayerV3ViewModel
 import dev.aaa1115910.bv.viewmodel.video.VideoDetailViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -508,6 +509,7 @@ class VideoPlayerActivity : ComponentActivity() {
                     aid = acid.first
                     cid = acid.second
                 }.onFailure {
+                    if (it is CancellationException) throw it
                     logger.fInfo { "get avid & cid by epid failed: ${it.stackTraceToString()}" }
                     it.message?.toast(this@VideoPlayerActivity)
                 }
@@ -547,6 +549,7 @@ class VideoPlayerActivity : ComponentActivity() {
                 runCatching {
                     videoDetailViewModel.loadDetail(aid, fromSeason)
                 }.onFailure {
+                    if (it is CancellationException) throw it
                     it.message?.toast(this@VideoPlayerActivity)
                 }
             }
@@ -587,6 +590,7 @@ class VideoPlayerActivity : ComponentActivity() {
                     preferOfflineCache = launchArgs.playOfflineCache
                 )
             }.onFailure {
+                if (it is CancellationException) throw it
                 it.message?.toast(this@VideoPlayerActivity)
             }
         }

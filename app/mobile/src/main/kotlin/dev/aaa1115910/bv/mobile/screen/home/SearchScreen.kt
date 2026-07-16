@@ -5,6 +5,9 @@ import android.content.res.Configuration
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -45,7 +48,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
@@ -413,12 +419,22 @@ fun SearchBarResultContent(
     onSearch: (String) -> Unit,
     onDeleteHistory: (String) -> Unit
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val listItemColors = ListItemDefaults.colors(
         containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
     )
 
     Surface(
-        modifier = modifier,
+        modifier = modifier.pointerInput(focusManager, keyboardController) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false)
+                if (waitForUpOrCancellation() != null) {
+                    focusManager.clearFocus(force = true)
+                    keyboardController?.hide()
+                }
+            }
+        },
         color = MaterialTheme.colorScheme.surfaceContainer
     ) {
         LazyColumn(

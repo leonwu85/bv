@@ -1,6 +1,10 @@
 package dev.aaa1115910.bv.mobile.screen.home
 
 import android.content.Context
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -54,6 +58,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +73,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -915,6 +921,7 @@ private fun LiveChannelPage(
     liveViewModel: LiveViewModel
 ) {
     val context = LocalContext.current
+    val liveCardTextExtent = liveCardTextExtent()
     val liveTabs = remember {
         listOf(
             LiveTabType.Recommend,
@@ -924,6 +931,12 @@ private fun LiveChannelPage(
         )
     }
     val gridState = rememberLazyGridState()
+    val followingStripExpanded by remember {
+        derivedStateOf {
+            gridState.firstVisibleItemIndex == 0 &&
+                gridState.firstVisibleItemScrollOffset == 0
+        }
+    }
     val currentContentKey = liveViewModel.currentContentKey()
     val rooms = liveViewModel.getCurrentRoomList()
     val histories = liveViewModel.historyList
@@ -984,22 +997,28 @@ private fun LiveChannelPage(
                 } else if (liveViewModel.currentTabType == LiveTabType.Recommend &&
                     liveViewModel.followingList.isNotEmpty()
                 ) {
-                    LiveFollowingStrip(
-                        liveCount = liveViewModel.followingLiveCount,
-                        rooms = liveViewModel.followingList,
-                        onMoreClick = { liveViewModel.switchTab(LiveTabType.Following) },
-                        onClickRoom = { room ->
-                            VideoPlayerActivity.actionStartLive(
-                                context = context,
-                                roomId = room.roomId,
-                                title = room.title,
-                                upName = room.uname,
-                                upFace = room.face,
-                                upMid = room.uid,
-                                watchedNum = room.watchedShow?.num ?: room.online
-                            )
-                        }
-                    )
+                    AnimatedVisibility(
+                        visible = followingStripExpanded,
+                        enter = expandVertically(expandFrom = Alignment.Top),
+                        exit = shrinkVertically(shrinkTowards = Alignment.Top)
+                    ) {
+                        LiveFollowingStrip(
+                            liveCount = liveViewModel.followingLiveCount,
+                            rooms = liveViewModel.followingList,
+                            onMoreClick = { liveViewModel.switchTab(LiveTabType.Following) },
+                            onClickRoom = { room ->
+                                VideoPlayerActivity.actionStartLive(
+                                    context = context,
+                                    roomId = room.roomId,
+                                    title = room.title,
+                                    upName = room.uname,
+                                    upFace = room.face,
+                                    upMid = room.uid,
+                                    watchedNum = room.online
+                                )
+                            }
+                        )
+                    }
                 }
                 if (liveViewModel.currentTabType == LiveTabType.Recommend) {
                     LiveAreaSelector(
@@ -1024,7 +1043,7 @@ private fun LiveChannelPage(
                             state = gridState,
                             maxCrossAxisExtent = HomeContentStyle.LiveCardMaxWidth,
                             childAspectRatio = HomeContentStyle.VideoAspectRatio,
-                            mainAxisExtent = HomeContentStyle.LiveTextExtent,
+                            mainAxisExtent = liveCardTextExtent,
                             mainAxisSpacing = HomeContentStyle.CardSpace,
                             crossAxisSpacing = HomeContentStyle.CardSpace,
                             contentPadding = PaddingValues(
@@ -1060,7 +1079,7 @@ private fun LiveChannelPage(
                                             upName = room.uname,
                                             upFace = room.face,
                                             upMid = room.uid,
-                                            watchedNum = room.watchedShow?.num ?: room.online
+                                            watchedNum = room.online
                                         )
                                     }
                                 )
@@ -1559,9 +1578,7 @@ private fun LiveRoomCard(
         title = room.title,
         upName = room.uname,
         areaText = room.areaName.ifBlank { room.parentName },
-        statText = room.watchedShow?.textLarge?.ifBlank { null }
-            ?: room.watchedShow?.textSmall?.ifBlank { null }
-            ?: "${formatCount(room.online)}人看过",
+        statText = "${formatCount(room.online)}人气",
         onClick = onClick
     )
 }
@@ -1599,6 +1616,10 @@ private fun LiveCard(
         shape = HomeContentStyle.MdShape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
         )
     ) {
         Column {
@@ -1638,8 +1659,7 @@ private fun LiveCard(
                     Text(
                         modifier = Modifier.weight(1f, fill = false),
                         text = areaText,
-                        fontSize = 11.sp,
-                        lineHeight = 11.sp,
+                        style = MaterialTheme.typography.bodySmall,
                         color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -1647,8 +1667,7 @@ private fun LiveCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = statText,
-                        fontSize = 11.sp,
-                        lineHeight = 11.sp,
+                        style = MaterialTheme.typography.bodySmall,
                         color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -1658,16 +1677,14 @@ private fun LiveCard(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 5.dp, top = 8.dp, end = 5.dp, bottom = 4.dp),
-                verticalArrangement = Arrangement.SpaceBetween
+                    .padding(HomeContentStyle.LiveTextPadding),
+                verticalArrangement = Arrangement.spacedBy(HomeContentStyle.LiveTextSpacing)
             ) {
                 Text(
                     text = title.removeHtmlTags(),
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        lineHeight = MaterialTheme.typography.bodyMedium.fontSize * 1.42f,
-                        letterSpacing = 0.3.sp
-                    ),
+                    style = MaterialTheme.typography.titleSmall,
                     maxLines = 2,
+                    minLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
@@ -2071,6 +2088,23 @@ private fun formatCount(count: Long): String = when {
     else -> count.toString()
 }
 
+@Composable
+private fun liveCardTextExtent(): Dp {
+    val density = LocalDensity.current
+    val typography = MaterialTheme.typography
+    val scaledTextExtent = with(density) {
+        typography.titleSmall.lineHeight.toDp() * 2f +
+            typography.labelMedium.lineHeight.toDp()
+    }
+    return maxOf(
+        HomeContentStyle.LiveTextExtent,
+        scaledTextExtent +
+            HomeContentStyle.LiveTextPadding * 2f +
+            HomeContentStyle.LiveTextSpacing +
+            HomeContentStyle.LiveTextHeightBuffer
+    )
+}
+
 private fun Timeline.weekDisplay(): String {
     if (isToday) return "今天"
     return when (dayOfWeek) {
@@ -2123,7 +2157,10 @@ private object HomeContentStyle {
     const val ZoneCardAspectRatio = 1.6f * 2.2f
 
     val LiveCardMaxWidth = 240.dp
-    val LiveTextExtent = 90.dp
+    val LiveTextExtent = 80.dp
+    val LiveTextPadding = 8.dp
+    val LiveTextSpacing = 4.dp
+    val LiveTextHeightBuffer = 4.dp
     val PgcCardMaxWidth = 144.dp
     val PgcTextExtent = 50.dp
     val PgcRailCardWidth = 120.dp

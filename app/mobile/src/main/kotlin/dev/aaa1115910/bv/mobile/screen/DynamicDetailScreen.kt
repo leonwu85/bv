@@ -89,6 +89,9 @@ import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
 import dev.aaa1115910.biliapi.entity.reply.CommentVote
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
+import dev.aaa1115910.biliapi.entity.user.DynamicType
+import dev.aaa1115910.bv.mobile.activities.DynamicDetailActivity
+import dev.aaa1115910.bv.mobile.activities.VideoPlayerActivity
 import dev.aaa1115910.bv.mobile.component.ImagePreviewerActions
 import dev.aaa1115910.bv.mobile.component.home.dynamic.DynamicContent
 import dev.aaa1115910.bv.mobile.component.home.dynamic.DynamicHeader
@@ -965,6 +968,7 @@ private fun DynamicPart(
     articleParagraphs: List<dev.aaa1115910.biliapi.entity.user.ArticleParagraph> = emptyList(),
     onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit
 ) {
+    val context = LocalContext.current
     Column(
         modifier = modifier
     ) {
@@ -987,7 +991,7 @@ private fun DynamicPart(
                 previewerState = previewerState,
                 articleParagraphs = articleParagraphs,
                 onShowPreviewer = onShowPreviewer,
-                onClick = { }
+                onClick = { openReferencedDynamic(context = context, dynamicItem = it) }
             )
             dynamicItem.vote?.let { vote ->
                 DynamicVoteCard(
@@ -996,6 +1000,21 @@ private fun DynamicPart(
                     vote = vote
                 )
             }
+        }
+    }
+}
+
+private fun openReferencedDynamic(context: Context, dynamicItem: DynamicItem) {
+    when (dynamicItem.type) {
+        DynamicType.Av, DynamicType.Pgc -> {
+            VideoPlayerActivity.actionStart(context = context, dynamicItem = dynamicItem)
+        }
+
+        else -> {
+            dynamicItem.id
+                ?.takeIf { it.isNotBlank() }
+                ?.let { DynamicDetailActivity.actionStart(context, it) }
+                ?: "原动态不存在".toast(context)
         }
     }
 }

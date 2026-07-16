@@ -120,23 +120,22 @@ class PgcHomeViewModel(
             }
         }
     }
-
-    private fun mergeTimelines(first: List<Timeline>, second: List<Timeline>): List<Timeline> {
-        if (first.isEmpty()) return second
-        if (second.isEmpty()) return first
-
-        val secondByDate = second.associateBy { it.dateString }
-        return first.map { item ->
-            val other = secondByDate[item.dateString]
-            if (other == null) {
-                item
-            } else {
-                item.copy(
-                    episodes = (item.episodes + other.episodes)
-                        .sortedBy { it.publishDate.time }
-                        .distinctBy { it.seasonId }
-                )
-            }
-        }
-    }
 }
+
+internal fun mergeTimelines(
+    first: List<Timeline>,
+    second: List<Timeline>
+): List<Timeline> = (first + second)
+    .groupBy { it.dateString }
+    .values
+    .map { sameDateTimelines ->
+        val base = sameDateTimelines.first()
+        base.copy(
+            isToday = sameDateTimelines.any { it.isToday },
+            episodes = sameDateTimelines
+                .flatMap { it.episodes }
+                .sortedBy { it.publishDate.time }
+                .distinctBy { it.seasonId }
+        )
+    }
+    .sortedBy { it.date.time }
