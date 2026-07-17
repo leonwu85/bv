@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -74,6 +75,7 @@ private val logger = KotlinLogging.logger("GeetestTvVerify")
  */
 data class GeetestTvResult(
     val challenge: String,
+    val sourceChallenge: String,
     val validate: String,
     val seccode: String,
 )
@@ -89,13 +91,18 @@ enum class GeetestVerifyMode {
 internal fun shouldRefreshGeetestChallenge(
     currentMode: GeetestVerifyMode,
     requestedMode: GeetestVerifyMode,
-    challengeReady: Boolean,
     mockMode: Boolean,
     refreshAvailable: Boolean,
 ): Boolean =
     !mockMode &&
         refreshAvailable &&
-        (requestedMode != currentMode || !challengeReady)
+        requestedMode != currentMode
+
+internal fun resolveGeetestModeAfterRefresh(
+    currentMode: GeetestVerifyMode,
+    requestedMode: GeetestVerifyMode,
+    refreshSucceeded: Boolean,
+): GeetestVerifyMode = if (refreshSucceeded) requestedMode else currentMode
 
 /**
  * TV 端 Geetest 风控验证弹窗
@@ -122,7 +129,7 @@ fun GeetestTvVerifyDialog(
     val contentFocusRequester = remember { FocusRequester() }
     // >0 表示用户在模式 Tab 按了确定，需要把焦点交回验证区
     var enterContentToken by remember { mutableIntStateOf(0) }
-    var challengeReady by remember { mutableStateOf(true) }
+    var pendingMode by remember { mutableStateOf<GeetestVerifyMode?>(null) }
     var challengeRefreshing by remember { mutableStateOf(false) }
     var challengeRefreshRequest by remember { mutableIntStateOf(0) }
     var challengeRefreshError by remember { mutableStateOf<String?>(null) }
@@ -151,27 +158,31 @@ fun GeetestTvVerifyDialog(
         val refreshRequired = shouldRefreshGeetestChallenge(
             currentMode = mode,
             requestedMode = newMode,
-            challengeReady = challengeReady,
             mockMode = mockMode,
             refreshAvailable = onRefreshChallenge != null,
         )
         if (!refreshRequired) {
+            // 回到仍可用的当前模式时，取消尚未完成的目标模式刷新。
+            if (pendingMode != null) {
+                pendingMode = null
+                challengeRefreshRequest += 1
+                challengeRefreshing = false
+            }
             mode = newMode
-            challengeReady = true
             challengeRefreshError = null
+            enterAfterChallengeRefresh = false
             if (enterContent) enterContentToken += 1
             return
         }
 
         // 同一目标模式已在刷新时，确认键只记录“刷新后进入”，不重复请求。
-        if (newMode == mode && challengeRefreshing) {
+        if (pendingMode == newMode && challengeRefreshing) {
             enterAfterChallengeRefresh = enterAfterChallengeRefresh || enterContent
             return
         }
 
-        // 先卸载旧 WebView/手机会话，获得新 challenge 后才创建目标验证页。
-        mode = newMode
-        challengeReady = false
+        // 刷新成功后才提交模式切换；失败时保留当前 WebView/手机会话继续验证。
+        pendingMode = newMode
         challengeRefreshError = null
         enterAfterChallengeRefresh = enterContent
         challengeRefreshRequest += 1
@@ -180,6 +191,9 @@ fun GeetestTvVerifyDialog(
     LaunchedEffect(challengeRefreshRequest) {
         if (challengeRefreshRequest <= 0) return@LaunchedEffect
         val refreshChallenge = onRefreshChallenge ?: return@LaunchedEffect
+        val targetMode = pendingMode ?: return@LaunchedEffect
+        val requestId = challengeRefreshRequest
+        val currentMode = mode
         challengeRefreshing = true
         val refreshed = try {
             refreshChallenge()
@@ -189,12 +203,24 @@ fun GeetestTvVerifyDialog(
             logger.warn(e) { "Refresh Geetest challenge before mode switch failed" }
             false
         }
+
+        // 用户已选回当前模式或发起了另一轮请求，忽略旧请求结果。
+        if (
+            requestId != challengeRefreshRequest ||
+            pendingMode != targetMode
+        ) return@LaunchedEffect
+
         challengeRefreshing = false
-        challengeReady = refreshed
+        mode = resolveGeetestModeAfterRefresh(
+            currentMode = currentMode,
+            requestedMode = targetMode,
+            refreshSucceeded = refreshed,
+        )
+        pendingMode = null
         challengeRefreshError = if (refreshed) {
             null
         } else {
-            "获取新验证码失败，请在当前模式上按确定重试"
+            "切换验证方式失败，当前验证仍可继续；请在目标模式上按确定重试"
         }
         val shouldEnterContent = enterAfterChallengeRefresh
         enterAfterChallengeRefresh = false
@@ -234,7 +260,7 @@ fun GeetestTvVerifyDialog(
                 )
 
                 ModeSwitcher(
-                    mode = mode,
+                    mode = pendingMode ?: mode,
                     tvModeFocusRequester = tvModeFocusRequester,
                     phoneModeFocusRequester = phoneModeFocusRequester,
                     contentFocusRequester = contentFocusRequester,
@@ -245,7 +271,7 @@ fun GeetestTvVerifyDialog(
 
                 Text(
                     text = when {
-                        challengeRefreshing -> "正在获取新的验证码…"
+                        challengeRefreshing -> "正在获取新的验证码，当前验证仍可继续…"
                         challengeRefreshError != null -> challengeRefreshError.orEmpty()
                         else -> "验证区按返回 → 模式 Tab ｜ 模式上按确定 → 进入验证区 ｜ 模式上再返回关闭"
                     },
@@ -261,31 +287,26 @@ fun GeetestTvVerifyDialog(
                     textAlign = TextAlign.Center,
                 )
 
-                if (!challengeReady) {
-                    GeetestChallengeRefreshContent(
-                        refreshing = challengeRefreshing,
-                        errorMessage = challengeRefreshError,
-                        contentFocusRequester = contentFocusRequester,
-                        modeTabFocusRequester = activeModeFocusRequester,
-                    )
-                } else when (mode) {
-                    GeetestVerifyMode.TvRemote -> GeetestTvVerifyContent(
-                        gt = gt,
-                        challenge = challenge,
-                        mockMode = mockMode,
-                        contentFocusRequester = contentFocusRequester,
-                        modeTabFocusRequester = activeModeFocusRequester,
-                        onResult = onResult,
-                    )
+                key(mode, gt, challenge, mockMode) {
+                    when (mode) {
+                        GeetestVerifyMode.TvRemote -> GeetestTvVerifyContent(
+                            gt = gt,
+                            challenge = challenge,
+                            mockMode = mockMode,
+                            contentFocusRequester = contentFocusRequester,
+                            modeTabFocusRequester = activeModeFocusRequester,
+                            onResult = onResult,
+                        )
 
-                    GeetestVerifyMode.PhoneCompanion -> GeetestPhoneCompanionContent(
-                        gt = gt,
-                        challenge = challenge,
-                        mockMode = mockMode,
-                        contentFocusRequester = contentFocusRequester,
-                        modeTabFocusRequester = activeModeFocusRequester,
-                        onResult = onResult,
-                    )
+                        GeetestVerifyMode.PhoneCompanion -> GeetestPhoneCompanionContent(
+                            gt = gt,
+                            challenge = challenge,
+                            mockMode = mockMode,
+                            contentFocusRequester = contentFocusRequester,
+                            modeTabFocusRequester = activeModeFocusRequester,
+                            onResult = onResult,
+                        )
+                    }
                 }
             }
         }
@@ -487,9 +508,9 @@ private fun GeetestPhoneCompanionContent(
 
         // 等待本地 HTTP 服务就绪
         var port = 0
-        repeat(20) {
+        for (attempt in 0 until 20) {
             port = GeetestCompanionService.resolveServerPort()
-            if (port > 0) return@repeat
+            if (port > 0) break
             delay(100)
         }
         val host = withContext(Dispatchers.IO) {
@@ -510,6 +531,7 @@ private fun GeetestPhoneCompanionContent(
                     onResult(
                         GeetestTvResult(
                             challenge = payload.challenge,
+                            sourceChallenge = challenge,
                             validate = payload.validate,
                             seccode = payload.seccode,
                         )
@@ -793,6 +815,7 @@ private fun GeetestTvVerifyContent(
                                         onResult(
                                             GeetestTvResult(
                                                 challenge = c,
+                                                sourceChallenge = challenge,
                                                 validate = v,
                                                 seccode = s
                                             )

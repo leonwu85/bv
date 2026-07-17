@@ -75,6 +75,26 @@ class VodPlayDataResolverTest {
         assertEquals(listOf(ApiType.Web), attempts)
     }
 
+    @Test
+    fun `fallback risk voucher is propagated`() {
+        val attempts = mutableListOf<ApiType>()
+
+        val error = assertFailsWith<VVoucherException> {
+            runBlocking {
+                resolvePlayableVodPlayData(preferredApi = ApiType.App, fetch = { api ->
+                    attempts += api
+                    when (api) {
+                        ApiType.App -> throw PlayDataUnavailableException("grpc unavailable")
+                        ApiType.Web -> throw VVoucherException("voucher_from_web")
+                    }
+                })
+            }
+        }
+
+        assertEquals("voucher_from_web", error.vVoucher)
+        assertEquals(listOf(ApiType.App, ApiType.Web), attempts)
+    }
+
     private fun emptyData() = PlayData(
         dashVideos = emptyList(),
         dashAudios = emptyList()

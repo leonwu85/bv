@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.os.Looper
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -117,8 +118,11 @@ import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.ensureActive
@@ -149,6 +153,8 @@ data class LiveDanmakuMessage(
 
 private const val DANMAKU_BYTES_IN_MB = 1024L * 1024L
 private const val DANMAKU_BYTES_IN_GB = 1024L * DANMAKU_BYTES_IN_MB
+private const val GEETEST_REFRESH_SOURCE_MAX_ATTEMPTS = 3
+private const val GEETEST_REFRESH_FLIGHT_TTL_MILLIS = 120_000L
 
 internal enum class DanmakuPreloadMode {
     WINDOW_ONLY,
@@ -261,11 +267,15 @@ class VideoPlayerV3ViewModel(
         val epid: Int?,
         val seasonId: Int?,
         val initialSeekPositionMs: Long?,
+        val preferApi: ApiType,
+        val proxyArea: ProxyArea,
+        val fromSeason: Boolean,
     )
 
     private data class PendingGeetestVerification(
         val vVoucher: String,
         val token: String,
+        val challenge: String,
         val retryRequest: GeetestPlaybackRetryRequest,
     )
 
@@ -275,9 +285,26 @@ class VideoPlayerV3ViewModel(
         val challenge: String,
     )
 
-    private data class GeetestChallengeRefreshContext(
+    private sealed interface GeetestChallengeRefreshSource {
+        data class FreshVoucher(val value: String) : GeetestChallengeRefreshSource
+
+        data class PlayableData(val value: PlayData) : GeetestChallengeRefreshSource
+    }
+
+    private sealed interface GeetestChallengeRefreshOutcome {
+        data class FreshRegistration(
+            val vVoucher: String,
+            val registration: RegisteredGeetestChallenge,
+        ) : GeetestChallengeRefreshOutcome
+
+        data class PlayableData(val value: PlayData) : GeetestChallengeRefreshOutcome
+    }
+
+    private data class GeetestChallengeRefreshFlight(
         val generation: Long,
         val pending: PendingGeetestVerification,
+        val startedAtMillis: Long,
+        val deferred: Deferred<GeetestChallengeRefreshOutcome>,
     )
 
     private data class OfflineCacheSnapshot(
@@ -379,6 +406,9 @@ class VideoPlayerV3ViewModel(
     private var pendingGeetestVerification: PendingGeetestVerification? = null
     private var geetestValidationPending: PendingGeetestVerification? = null
     private var geetestRegistrationGeneration = 0L
+    private val geetestVoucherRegisterMutex = Mutex()
+    private val attemptedGeetestVVouchers = mutableSetOf<String>()
+    private var geetestChallengeRefreshFlight: GeetestChallengeRefreshFlight? = null
 
     private var playData: PlayData? by mutableStateOf(null)
     val danmakuData: MutableList<DanmakuItemData> = ArrayList()
@@ -1485,6 +1515,9 @@ class VideoPlayerV3ViewModel(
                     epid = epid.takeIf { it > 0 },
                     seasonId = seasonId?.takeIf { it > 0 },
                     initialSeekPositionMs = initialSeekPositionMs,
+                    preferApi = preferApi,
+                    proxyArea = proxyArea,
+                    fromSeason = fromSeason,
                 )
             )
             false
@@ -1519,14 +1552,15 @@ class VideoPlayerV3ViewModel(
             ++geetestRegistrationGeneration
         }
         try {
-            val registration = registerGeetestChallenge(vVoucher)
+            val (reservedVoucher, registration) = registerGeetestChallengeOnce(vVoucher)
             val applied = withContext(Dispatchers.Main.immediate) {
                 if (registrationGeneration != geetestRegistrationGeneration) {
                     return@withContext false
                 }
                 pendingGeetestVerification = PendingGeetestVerification(
-                    vVoucher = vVoucher,
+                    vVoucher = reservedVoucher,
                     token = registration.token,
+                    challenge = registration.challenge.trim(),
                     retryRequest = retryRequest,
                 )
                 geetestValidationPending = null
@@ -1555,6 +1589,17 @@ class VideoPlayerV3ViewModel(
         }
     }
 
+    private suspend fun registerGeetestChallengeOnce(
+        candidate: String,
+    ): Pair<String, RegisteredGeetestChallenge> =
+        geetestVoucherRegisterMutex.withLock {
+            val reservedVoucher = reserveFreshVVoucher(
+                attemptedVVouchers = attemptedGeetestVVouchers,
+                candidate = candidate,
+            )
+            reservedVoucher to registerGeetestChallenge(reservedVoucher)
+        }
+
     private suspend fun registerGeetestChallenge(vVoucher: String): RegisteredGeetestChallenge {
         val registerResponse = withContext(Dispatchers.IO) {
             BiliHttpApi.gaiaVgateRegister(
@@ -1579,31 +1624,164 @@ class VideoPlayerV3ViewModel(
     }
 
     /**
+     * Gaia 的 v_voucher 只能注册一次。切换验证载体前重新请求原播放接口，
+     * 从新的风控响应中取得未使用的 voucher；若风控已经解除，则直接复用本次播放数据。
+     */
+    private suspend fun requestGeetestChallengeRefreshSource(
+        pending: PendingGeetestVerification,
+    ): GeetestChallengeRefreshSource {
+        val retry = pending.retryRequest
+        return try {
+            val playData = withContext(Dispatchers.IO) {
+                fetchPlayableVodPlayData(
+                    avid = retry.avid,
+                    cid = retry.cid,
+                    epid = retry.epid ?: 0,
+                    preferApi = retry.preferApi,
+                    proxyArea = retry.proxyArea,
+                    fromSeason = retry.fromSeason,
+                )
+            }
+            GeetestChallengeRefreshSource.PlayableData(playData)
+        } catch (e: VVoucherException) {
+            GeetestChallengeRefreshSource.FreshVoucher(e.vVoucher)
+        }
+    }
+
+    private suspend fun performGeetestChallengeRefresh(
+        pending: PendingGeetestVerification,
+    ): GeetestChallengeRefreshOutcome {
+        repeat(GEETEST_REFRESH_SOURCE_MAX_ATTEMPTS) { attemptIndex ->
+            when (val source = requestGeetestChallengeRefreshSource(pending)) {
+                is GeetestChallengeRefreshSource.PlayableData -> {
+                    return GeetestChallengeRefreshOutcome.PlayableData(source.value)
+                }
+
+                is GeetestChallengeRefreshSource.FreshVoucher -> {
+                    try {
+                        val (vVoucher, registration) =
+                            registerGeetestChallengeOnce(source.value)
+                        return GeetestChallengeRefreshOutcome.FreshRegistration(
+                            vVoucher = vVoucher,
+                            registration = registration,
+                        )
+                    } catch (e: VVoucherAlreadyAttemptedException) {
+                        if (attemptIndex == GEETEST_REFRESH_SOURCE_MAX_ATTEMPTS - 1) throw e
+                        logger.fDebug {
+                            "Protected playback returned an already attempted v_voucher; retrying"
+                        }
+                        delay(100L * (attemptIndex + 1))
+                    }
+                }
+            }
+        }
+        error("无法获取未使用的 v_voucher")
+    }
+
+    /**
      * 本机验证与手机验证不能复用已初始化的 challenge。
-     * 切换验证方式前重新向 Gaia 注册，同时替换 token/gt/challenge。
+     * 切换验证方式前先取得新的 v_voucher，再向 Gaia 注册并原子替换验证状态。
      */
     suspend fun refreshGeetestChallenge(): Boolean {
-        val refreshContext = withContext(Dispatchers.Main.immediate) {
+        val flight = withContext(Dispatchers.Main.immediate) {
             val pending = pendingGeetestVerification ?: return@withContext null
             if (geetestValidationPending != null) return@withContext null
-            GeetestChallengeRefreshContext(
-                generation = ++geetestRegistrationGeneration,
+            val now = SystemClock.elapsedRealtime()
+            val reusableFlight = geetestChallengeRefreshFlight?.takeIf { existing ->
+                existing.pending === pending &&
+                    !existing.deferred.isCancelled &&
+                    (
+                        existing.deferred.isActive ||
+                            now - existing.startedAtMillis <= GEETEST_REFRESH_FLIGHT_TTL_MILLIS
+                    )
+            }
+            if (reusableFlight != null) return@withContext reusableFlight
+
+            val generation = ++geetestRegistrationGeneration
+            val deferred = viewModelScope.async(start = CoroutineStart.LAZY) {
+                try {
+                    performGeetestChallengeRefresh(pending)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.fException(e) { "Geetest challenge refresh flight failed" }
+                    throw e
+                }
+            }
+            GeetestChallengeRefreshFlight(
+                generation = generation,
                 pending = pending,
-            )
+                startedAtMillis = now,
+                deferred = deferred,
+            ).also { createdFlight ->
+                geetestChallengeRefreshFlight = createdFlight
+                deferred.invokeOnCompletion { cause ->
+                    if (cause != null) {
+                        viewModelScope.launch {
+                            if (geetestChallengeRefreshFlight === createdFlight) {
+                                geetestChallengeRefreshFlight = null
+                            }
+                        }
+                    }
+                }
+                deferred.start()
+            }
         } ?: return false
 
         return try {
-            val registration = registerGeetestChallenge(refreshContext.pending.vVoucher)
+            val outcome = flight.deferred.await()
+            if (outcome is GeetestChallengeRefreshOutcome.PlayableData) {
+                val resumed = withContext(Dispatchers.Main.immediate) {
+                    if (
+                        flight.generation != geetestRegistrationGeneration ||
+                        pendingGeetestVerification !== flight.pending ||
+                        geetestValidationPending != null ||
+                        geetestChallengeRefreshFlight !== flight
+                    ) {
+                        return@withContext false
+                    }
+                    geetestChallengeRefreshFlight = null
+                    geetestRegistrationGeneration += 1
+                    showGeetestDialog = false
+                    pendingGeetestVerification = null
+                    geetestValidationPending = null
+                    errorMessage = ""
+                    loadState = RequestState.Ready
+                    true
+                }
+                if (resumed) {
+                    addLogs("风控已解除，继续播放")
+                    flight.pending.retryRequest.let { retry ->
+                        loadPlayUrl(
+                            avid = retry.avid,
+                            cid = retry.cid,
+                            epid = retry.epid,
+                            seasonId = retry.seasonId,
+                            initialSeekPositionMs = retry.initialSeekPositionMs,
+                            preparedPlayData = outcome.value,
+                            forceStartPlayback = true,
+                        )
+                    }
+                }
+                return resumed
+            }
+
+            val freshRegistration = outcome as GeetestChallengeRefreshOutcome.FreshRegistration
+            val registration = freshRegistration.registration
             val applied = withContext(Dispatchers.Main.immediate) {
                 if (
-                    refreshContext.generation != geetestRegistrationGeneration ||
-                    pendingGeetestVerification !== refreshContext.pending ||
-                    geetestValidationPending != null
+                    flight.generation != geetestRegistrationGeneration ||
+                    pendingGeetestVerification !== flight.pending ||
+                    geetestValidationPending != null ||
+                    geetestChallengeRefreshFlight !== flight
                 ) {
                     return@withContext false
                 }
-                pendingGeetestVerification = refreshContext.pending.copy(
+                geetestChallengeRefreshFlight = null
+                pendingGeetestVerification = flight.pending.copy(
+                    vVoucher = freshRegistration.vVoucher,
                     token = registration.token,
+                    challenge = registration.challenge.trim(),
                 )
                 geetestValidationPending = null
                 geetestGt = registration.gt
@@ -1619,24 +1797,40 @@ class VideoPlayerV3ViewModel(
             throw e
         } catch (e: Exception) {
             val isCurrent = withContext(Dispatchers.Main.immediate) {
-                refreshContext.generation == geetestRegistrationGeneration &&
-                    pendingGeetestVerification === refreshContext.pending
+                if (geetestChallengeRefreshFlight === flight) {
+                    geetestChallengeRefreshFlight = null
+                }
+                flight.generation == geetestRegistrationGeneration &&
+                    pendingGeetestVerification === flight.pending
             }
             if (isCurrent) {
                 addLogs("刷新人机验证失败：${e.localizedMessage}")
-                logger.fException(e) { "Refresh Geetest challenge failed" }
             }
             false
         }
     }
 
-    fun onGeetestResult(challenge: String, validate: String, seccode: String) {
+    fun onGeetestResult(
+        challenge: String,
+        validate: String,
+        seccode: String,
+        sourceChallenge: String? = null,
+    ) {
         // TV WebView/HTTP 回调可能来自后台线程。先进入 ViewModel 主线程，
         // 再读取待验证状态，避免读不到 token 后静默返回。
         viewModelScope.launch {
             val pending = pendingGeetestVerification
             if (pending == null) {
                 logger.fWarn { "Ignore Geetest result because no verification is pending" }
+                return@launch
+            }
+            val resultChallenge = validatedGeetestResultChallengeOrNull(
+                expectedSourceChallenge = pending.challenge,
+                sourceChallenge = sourceChallenge,
+                resultChallenge = challenge,
+            )
+            if (resultChallenge == null) {
+                logger.fWarn { "Ignore invalid or stale Geetest result" }
                 return@launch
             }
             if (geetestValidationPending != null) {
@@ -1649,7 +1843,7 @@ class VideoPlayerV3ViewModel(
                 val validateResponse = withContext(Dispatchers.IO) {
                     BiliHttpApi.gaiaVgateValidate(
                         token = pending.token,
-                        geetestChallenge = challenge,
+                        geetestChallenge = resultChallenge,
                         validate = validate,
                         seccode = seccode,
                         sessData = authRepository.sessionData,

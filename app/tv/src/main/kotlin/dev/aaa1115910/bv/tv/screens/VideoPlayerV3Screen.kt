@@ -1265,6 +1265,7 @@ fun VideoPlayerV3Screen(
                 onResult = { result ->
                     playerViewModel.onGeetestResult(
                         challenge = result.challenge,
+                        sourceChallenge = result.sourceChallenge,
                         validate = result.validate,
                         seccode = result.seccode,
                     )
