@@ -64,6 +64,7 @@ import dev.aaa1115910.bv.tv.util.TvUiPerformanceProfile
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.isDpadDown
+import dev.aaa1115910.bv.util.isDpadLeft
 import dev.aaa1115910.bv.util.isDpadRight
 import dev.aaa1115910.bv.util.isDpadUp
 import dev.aaa1115910.bv.util.isKeyDown
@@ -210,6 +211,9 @@ fun DrawerContent(
             .focusGroup()
             .focusRestorer(currentDrawerFocusRequester)
             .onPreviewKeyEvent { keyEvent ->
+                if (keyEvent.isDpadLeft()) {
+                    return@onPreviewKeyEvent true
+                }
                 if (keyEvent.isDpadUp() || keyEvent.isDpadDown()) {
                     when {
                         keyEvent.isKeyDown() -> {
