@@ -1,7 +1,7 @@
 package dev.aaa1115910.bv.ui.theme
 
-import android.app.Activity
 import android.os.Build
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalRippleConfiguration
@@ -35,6 +35,7 @@ fun BVTheme(
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
+    val activity = LocalActivity.current
     val fontScale = LocalDensity.current.fontScale
     val view = LocalView.current
 
@@ -74,8 +75,10 @@ fun BVTheme(
 
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = useDarkStatusBarIcons
+            activity?.window?.let { window ->
+                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars =
+                    useDarkStatusBarIcons
+            }
         }
     }
 

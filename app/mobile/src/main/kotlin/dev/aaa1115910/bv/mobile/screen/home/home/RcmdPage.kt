@@ -41,6 +41,9 @@ fun RcmdPage(
     val logger = KotlinLogging.logger { }
     val pullRefreshState = rememberPullRefreshState(refreshing, { onRefresh() })
     val isCompact = windowSize == WindowWidthSizeClass.Compact
+    // LazyGrid reads item content after composition. Keep its size and indexed reads on the
+    // same immutable snapshot when the backing SnapshotStateList is cleared during refresh.
+    val videoSnapshot = videos.toList()
 
     state.OnBottomReached(
         loading = loading,
@@ -65,7 +68,7 @@ fun RcmdPage(
                 vertical = if (isCompact) 8.dp else 12.dp
             )
         ) {
-            items(videos) { video ->
+            items(videoSnapshot) { video ->
                 SmallVideoCard(
                     data = VideoCardData(
                         avid = video.aid,

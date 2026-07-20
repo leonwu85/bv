@@ -63,7 +63,7 @@ internal data class TvDisplayPipeline(
 
 internal object TvUiRenderPipeline {
     fun resolve(activity: Activity): TvDisplayPipeline {
-        val display = requireNotNull(activity.display) { "Activity display is unavailable" }
+        val display = activity.compatDisplay()
         val physicalSize = display.currentPhysicalSize()
         val uiSize = activity.resources.displayMetrics.let { metrics ->
             Point(metrics.widthPixels, metrics.heightPixels)
@@ -110,6 +110,14 @@ internal object TvUiRenderPipeline {
 
     private const val DisplayMetricsDpiBaseline = 160f
 }
+
+@Suppress("DEPRECATION")
+private fun Activity.compatDisplay(): Display =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        requireNotNull(display) { "Activity display is unavailable" }
+    } else {
+        windowManager.defaultDisplay
+    }
 
 internal fun resolveRenderPath(
     isTelevision: Boolean,

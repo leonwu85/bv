@@ -225,15 +225,20 @@ class UserRepository(
     }
 
     suspend fun reloadAvatar() {
-        val user = db.userDao().findUserByUid(uid)
-        if (user == null || !isLogin) {
-            username = ""
-            avatar = ""
-            return
-        }
-        user.let {
-            username = it.username
-            avatar = it.avatar
+        val requestedUid = withContext(Dispatchers.Main.immediate) { uid }
+        val user = db.userDao().findUserByUid(requestedUid)
+
+        withContext(Dispatchers.Main.immediate) {
+            // The active account may have changed while Room was loading the user.
+            if (uid != requestedUid) return@withContext
+
+            if (user == null || !isLogin) {
+                username = ""
+                avatar = ""
+            } else {
+                username = user.username
+                avatar = user.avatar
+            }
         }
     }
 

@@ -41,7 +41,10 @@ abstract class TvComponentActivity : ComponentActivity() {
                 "physical=${pipeline.physicalWidthPx}x${pipeline.physicalHeightPx}, " +
                 "ui=${pipeline.uiWidthPx}x${pipeline.uiHeightPx}"
         }
-        if (pipeline.renderPath == TvUiRenderPath.Native) {
+        if (
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
+            pipeline.renderPath == TvUiRenderPath.Native
+        ) {
             setComposeContent(content = content)
             return
         }
@@ -53,7 +56,9 @@ abstract class TvComponentActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        uiSurfaceHost?.release()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            uiSurfaceHost?.release()
+        }
         uiSurfaceHost = null
         super.onDestroy()
     }
