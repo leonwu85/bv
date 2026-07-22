@@ -1,9 +1,9 @@
 package dev.aaa1115910.bv.activities
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import dev.aaa1115910.bv.util.DeviceUtil
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -12,8 +12,10 @@ import io.github.oshai.kotlinlogging.KotlinLogging
  * 启动器活动
  * 
  * 这个活动是应用的入口点，它会根据设备类型路由到合适的主活动
+ * 它不承载界面或 AndroidX 生命周期组件，因此使用原生 Activity，避免快速路由销毁时
+ * FragmentActivity 的 LifecycleRegistry 尚未完成初始化。
  */
-class LauncherActivity : AppCompatActivity() {
+class LauncherActivity : Activity() {
     private val logger = KotlinLogging.logger { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
