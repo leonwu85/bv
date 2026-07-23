@@ -137,6 +137,7 @@ data class VideoPlayerConfigData(
     val currentDanmakuOpacity: Float = 1f,
     val currentDanmakuArea: Float = 1f,
     val currentDanmakuMask: Boolean = false,
+    val danmakuMaskSupported: Boolean = true,
     val currentDanmakuFilterLevel: Int = 1,      // 视频弹幕过滤等级 (1-10)
     val currentDanmakuMergeEnabled: Boolean = false,
     val currentDanmakuSpeedMode: DanmakuSpeedMode = DanmakuSpeedMode.FollowVideo,

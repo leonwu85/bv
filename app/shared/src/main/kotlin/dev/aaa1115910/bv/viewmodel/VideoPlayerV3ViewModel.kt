@@ -73,6 +73,7 @@ import dev.aaa1115910.bv.player.autoplay.PreparedAutoPlayTransitionContext
 import dev.aaa1115910.bv.player.autoplay.toPreparedAutoPlayTransitionContext
 import dev.aaa1115910.bv.player.renderer.OptimizedTextRenderer
 import dev.aaa1115910.bv.player.renderer.SimpleRenderer
+import dev.aaa1115910.bv.player.util.TvDanmakuCompatibilityPolicy
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.DanmakuType
@@ -455,10 +456,24 @@ class VideoPlayerV3ViewModel(
     var currentDanmakuArea by mutableFloatStateOf(settings.defaultDanmakuArea)
     var currentDanmakuSpeedMode by mutableStateOf(settings.defaultDanmakuSpeedMode)
     var currentDanmakuPresentationSpeed by mutableFloatStateOf(settings.defaultDanmakuPresentationSpeed)
-    private var currentDanmakuMaskState by mutableStateOf(settings.defaultDanmakuMask)
+    private val danmakuCapabilities = TvDanmakuCompatibilityPolicy.resolve(
+        sdkInt = Build.VERSION.SDK_INT,
+        isTvDevice = DeviceUtil.isTvDevice(),
+    )
+    val danmakuMaskSupported: Boolean
+        get() = danmakuCapabilities.danmakuMaskSupported
+    private var currentDanmakuMaskState by mutableStateOf(
+        settings.defaultDanmakuMask && danmakuMaskSupported
+    )
     var currentDanmakuMask: Boolean
-        get() = currentDanmakuMaskState
+        get() = currentDanmakuMaskState && danmakuMaskSupported
         set(value) {
+            if (!danmakuMaskSupported) {
+                currentDanmakuMaskState = false
+                resetResolvedDanmakuMask(clearMasks = true)
+                return
+            }
+
             if (currentDanmakuMaskState == value) return
 
             currentDanmakuMaskState = value
@@ -4464,6 +4479,8 @@ class VideoPlayerV3ViewModel(
     }
 
     private suspend fun updateDanmakuMask() {
+        if (!danmakuMaskSupported) return
+
         // 直播模式不获取蒙版数据
         if (isLive) return
 

@@ -58,6 +58,7 @@
 
     <string name="video_player_menu_danmaku_area">显示区域</string>
     <string name="video_player_menu_danmaku_mask">防遮挡</string>
+    <string name="video_player_danmaku_mask_unsupported_legacy_android">Android 8 以下版本不支持弹幕防遮挡</string>
     <string name="video_player_menu_danmaku_merge">智能过滤</string>
     <string name="video_player_menu_danmaku_opacity">不透明度</string>
     <string name="video_player_menu_danmaku_size">字体缩放</string>

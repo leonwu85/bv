@@ -433,6 +433,7 @@ fun VideoPlayerV3Screen(
             currentDanmakuOpacity = playerViewModel.currentDanmakuOpacity,
             currentDanmakuArea = playerViewModel.currentDanmakuArea,
             currentDanmakuMask = playerViewModel.currentDanmakuMask,
+            danmakuMaskSupported = playerViewModel.danmakuMaskSupported,
             currentDanmakuFilterLevel = playerViewModel.currentDanmakuFilterLevel,
             currentDanmakuMergeEnabled = playerViewModel.currentDanmakuMergeEnabled,
             currentDanmakuSpeedMode = playerViewModel.currentDanmakuSpeedMode,
@@ -849,8 +850,10 @@ fun VideoPlayerV3Screen(
                     playerViewModel.currentDanmakuPresentationSpeed = speed
                 },
                 onDanmakuMaskChange = { mask ->
-                    Prefs.defaultDanmakuMask = mask
-                    playerViewModel.currentDanmakuMask = mask
+                    if (playerViewModel.danmakuMaskSupported) {
+                        Prefs.defaultDanmakuMask = mask
+                        playerViewModel.currentDanmakuMask = mask
+                    }
                 },
                 onDanmakuMergeChange = { enabled ->
                     Prefs.defaultDanmakuMergeEnabled = enabled

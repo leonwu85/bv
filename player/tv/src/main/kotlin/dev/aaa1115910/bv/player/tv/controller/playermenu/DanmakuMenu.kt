@@ -32,6 +32,7 @@ import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.DanmakuType
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.VideoPlayerDanmakuMenuItem
+import dev.aaa1115910.bv.player.shared.R
 import dev.aaa1115910.bv.player.tv.controller.LocalMenuFocusStateData
 import dev.aaa1115910.bv.player.tv.controller.MenuFocusState
 import dev.aaa1115910.bv.player.tv.controller.playermenu.component.CheckBoxMenuList
@@ -39,8 +40,11 @@ import dev.aaa1115910.bv.player.tv.controller.playermenu.component.MenuListItem
 import dev.aaa1115910.bv.player.tv.controller.playermenu.component.RadioMenuList
 import dev.aaa1115910.bv.player.tv.controller.playermenu.component.StepLessMenuItem
 import dev.aaa1115910.bv.player.tv.theme.PlayerColors
+import dev.aaa1115910.bv.player.util.DanmakuMaskSelectionDecision
 import dev.aaa1115910.bv.player.util.DanmakuSpeedPolicy
+import dev.aaa1115910.bv.player.util.TvDanmakuCompatibilityPolicy
 import dev.aaa1115910.bv.util.ifElse
+import dev.aaa1115910.bv.util.toast
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -209,7 +213,23 @@ fun DanmakuMenuList(
                     modifier = menuItemsModifier,
                     items = listOf("关闭", "开启"),
                     selected = if (videoPlayerConfigData.currentDanmakuMask) 1 else 0,
-                    onSelectedChanged = { onDanmakuMaskChange(it == 1) },
+                    onSelectedChanged = { selectedIndex ->
+                        val requestedEnabled = selectedIndex == 1
+                        when (
+                            TvDanmakuCompatibilityPolicy.resolveMaskSelection(
+                                danmakuMaskSupported = videoPlayerConfigData.danmakuMaskSupported,
+                                requestedEnabled = requestedEnabled,
+                            )
+                        ) {
+                            DanmakuMaskSelectionDecision.Apply -> {
+                                onDanmakuMaskChange(requestedEnabled)
+                            }
+
+                            DanmakuMaskSelectionDecision.Unsupported -> {
+                                R.string.video_player_danmaku_mask_unsupported_legacy_android.toast(context)
+                            }
+                        }
+                    },
                     onFocusBackToParent = {
                         onFocusStateChange(MenuFocusState.Menu)
                         parentMenuFocusRequester.requestFocus()

@@ -83,12 +83,13 @@ class DanmakuLayerHandle(
 fun DanmakuLayer(
     modifier: Modifier = Modifier,
     handle: DanmakuLayerHandle,
+    useSurfaceViewForVod: Boolean = true,
     onVideoDanmakuSurfaceViewReady: ((VideoDanmakuSurfaceView?) -> Unit)? = null,
     onVideoDanmakuSurfaceViewRelease: ((VideoDanmakuSurfaceView) -> Unit)? = null,
     onDanmakuPlayerBound: ((DanmakuPlayer) -> Unit)? = null,
 ) {
     val player = handle.danmakuPlayer
-    val useSurfaceViewForNormalMode = !handle.isLiveMode
+    val useSurfaceViewForNormalMode = !handle.isLiveMode && useSurfaceViewForVod
 
     // 普通模式 GLSurfaceView 走独立 Surface，宿主 Compose bitmap mask 对它不生效。
     val maskModifier = if (!useSurfaceViewForNormalMode && handle.maskBitmap != null && handle.videoAspectRatio > 0f) {

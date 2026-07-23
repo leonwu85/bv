@@ -1,6 +1,7 @@
 package dev.aaa1115910.bv.player.tv
 
 import android.graphics.Bitmap
+import android.os.Build
 import android.os.CountDownTimer
 import android.util.LruCache
 import androidx.compose.foundation.layout.Column
@@ -82,6 +83,7 @@ import dev.aaa1115910.bv.player.tv.controller.VideoPlayerController
 import dev.aaa1115910.bv.util.countDownTimer
 import dev.aaa1115910.bv.player.util.DanmakuMaskFinder
 import dev.aaa1115910.bv.player.util.DanmakuSpeedPolicy
+import dev.aaa1115910.bv.player.util.TvDanmakuCompatibilityPolicy
 import dev.aaa1115910.bv.player.util.renderMaskFrameToBitmap
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.formatHourMinSec
@@ -425,12 +427,20 @@ fun BvPlayer(
     val currentOnShowSponsorBlockTip by rememberUpdatedState(onShowSponsorBlockTip)
     val currentOnSkipSponsorSegment by rememberUpdatedState(onSkipSponsorSegment)
     val currentOnDismissSponsorBlockTip by rememberUpdatedState(onDismissSponsorBlockTip)
-    val useSurfaceViewDanmaku = !videoPlayerConfigData.isLive
+    val danmakuCapabilities = remember {
+        TvDanmakuCompatibilityPolicy.resolve(
+            sdkInt = Build.VERSION.SDK_INT,
+            isTvDevice = true,
+        )
+    }
+    val useSurfaceViewDanmaku =
+        !videoPlayerConfigData.isLive && danmakuCapabilities.useSurfaceViewForVod
     val currentDanmakuMasks by rememberUpdatedState(videoPlayerDanmakuMaskData.danmakuMasks)
     val currentIsPlaying by rememberUpdatedState(isPlaying)
-    val currentDanmakuMaskEnabled by rememberUpdatedState(videoPlayerConfigData.currentDanmakuMask)
+    val currentDanmakuMaskEnabled by rememberUpdatedState(
+        videoPlayerConfigData.currentDanmakuMask && danmakuCapabilities.danmakuMaskSupported
+    )
     val currentIsLive by rememberUpdatedState(videoPlayerConfigData.isLive)
-    val currentUseSurfaceViewDanmaku by rememberUpdatedState(useSurfaceViewDanmaku)
     val currentVideoCid by rememberUpdatedState(videoPlayerConfigData.currentVideoCid)
     val currentAspectRatioValue by rememberUpdatedState(aspectRatioValue)
     val currentMaskDownsampleTargetShortSide by rememberUpdatedState(
@@ -1211,6 +1221,8 @@ fun BvPlayer(
     // 独立定时器：高频更新蒙版（每 33ms，约 30fps）
     // 直播模式下不启用蒙版
     LaunchedEffect(Unit) {
+        if (!danmakuCapabilities.danmakuMaskSupported) return@LaunchedEffect
+
         while (true) {
             if (isDanmakuMaskDisposed) break
 
@@ -1728,10 +1740,14 @@ fun BvPlayer(
                 danmakuLayerHandle = danmakuLayerHandle,
                 visible = videoPlayerConfigData.showDanmaku,
                 maskFrame = currentDanmakuMaskFrame.takeIf {
-                    videoPlayerConfigData.currentDanmakuMask && !useSurfaceViewDanmaku
+                    danmakuCapabilities.danmakuMaskSupported &&
+                        videoPlayerConfigData.currentDanmakuMask &&
+                        !useSurfaceViewDanmaku
                 },
                 maskBitmap = currentDanmakuMaskBitmap.takeIf {
-                    videoPlayerConfigData.currentDanmakuMask && !useSurfaceViewDanmaku
+                    danmakuCapabilities.danmakuMaskSupported &&
+                        videoPlayerConfigData.currentDanmakuMask &&
+                        !useSurfaceViewDanmaku
                 },
                 videoAspectRatio = aspectRatioValue
             )
@@ -1763,6 +1779,7 @@ fun BvPlayer(
             DanmakuLayer(
                 modifier = Modifier.align(Alignment.TopCenter),
                 handle = danmakuLayerHandle,
+                useSurfaceViewForVod = useSurfaceViewDanmaku,
                 onVideoDanmakuSurfaceViewReady = bindDanmakuSurfaceView,
                 onVideoDanmakuSurfaceViewRelease = unbindDanmakuSurfaceView,
                 onDanmakuPlayerBound = { boundPlayer ->
