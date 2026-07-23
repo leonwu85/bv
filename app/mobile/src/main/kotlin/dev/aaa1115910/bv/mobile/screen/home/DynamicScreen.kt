@@ -339,12 +339,12 @@ fun DynamicScreen(
                         onSelectUp = { up ->
                             Log.i("DynamicScreen", "select up from side panel: mid=${up.mid}, name=${up.uname}")
                             logger.fInfo { "select dynamic up: mid=${up.mid}, name=${up.uname}" }
-                            dynamicViewModel.selectUp(up)
                             selectedTab = DynamicTabType.Up
                             scope.launch {
                                 pagerState.animateScrollToPage(tabs.indexOf(DynamicTabType.Up))
                             }
                             scope.launch(Dispatchers.IO) {
+                                dynamicViewModel.selectUp(up)
                                 dynamicViewModel.loadMoreUp()
                             }
                         },
@@ -2170,6 +2170,7 @@ private fun DynamicTabContent(
                                 dynamicViewModel.tempBlockAuthor(it.mid)
                                 "已临时屏蔽${it.author}(${it.mid})，重启后恢复".toast(context)
                             },
+                            onLike = dynamicViewModel::toggleDynamicLike,
                             onClick = onClickDynamicItem
                         )
                     }
@@ -2199,6 +2200,7 @@ private fun DynamicTabContent(
                                 dynamicViewModel.tempBlockAuthor(it.mid)
                                 "已临时屏蔽${it.author}(${it.mid})，重启后恢复".toast(context)
                             },
+                            onLike = dynamicViewModel::toggleDynamicLike,
                             onClick = onClickDynamicItem
                         )
                     }
@@ -2215,6 +2217,7 @@ private fun DynamicTabContent(
                                 dynamicViewModel.tempBlockAuthor(it.mid)
                                 "已临时屏蔽${it.author}(${it.mid})，重启后恢复".toast(context)
                             },
+                            onLike = dynamicViewModel::toggleDynamicLike,
                             onClick = onClickDynamicItem
                         )
                     }
@@ -2231,6 +2234,7 @@ private fun DynamicTabContent(
                                 dynamicViewModel.tempBlockAuthor(it.mid)
                                 "已临时屏蔽${it.author}(${it.mid})，重启后恢复".toast(context)
                             },
+                            onLike = dynamicViewModel::toggleDynamicLike,
                             onClick = onClickDynamicItem
                         )
                     }
@@ -2275,6 +2279,7 @@ private fun DynamicCard(
     previewerState: ImagePreviewerState,
     onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit,
     onTempBlockAuthor: (DynamicItem.DynamicAuthorModule) -> Unit,
+    onLike: (DynamicItem) -> Unit,
     onClick: (DynamicItem) -> Unit
 ) {
     DynamicItem(
@@ -2283,6 +2288,7 @@ private fun DynamicCard(
         previewerState = previewerState,
         onShowPreviewer = onShowPreviewer,
         onTempBlockAuthor = onTempBlockAuthor,
+        onLike = onLike,
         onClick = onClick
     )
 }

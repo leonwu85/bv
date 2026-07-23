@@ -35,6 +35,8 @@ import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.swapListWithMainContext
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.koin.core.annotation.KoinViewModel
 import java.util.Date
@@ -68,6 +70,10 @@ class VideoDetailViewModel(
     var favoriteFolders = mutableStateListOf<FavoriteFolderMetadata>()
     var favoriteFolderIds = mutableStateListOf<Long>()
     var upOwnerStats: UpOwnerStats? by mutableStateOf(null)
+    var upFollowing: Boolean? by mutableStateOf(null)
+        private set
+    var upRelationLoading by mutableStateOf(false)
+        private set
     var inToView by mutableStateOf(false)
     var userActionUpdating by mutableStateOf(false)
     var favoriteFoldersLoading by mutableStateOf(false)
@@ -90,6 +96,10 @@ class VideoDetailViewModel(
             withContext(Dispatchers.Main.immediate) {
                 videoDetail = videoDetailData
                 upOwnerStats = null
+                upFollowing = if (Prefs.isLogin) null else false
+                upRelationLoading = Prefs.isLogin &&
+                        videoDetailData.author.mid > 0L &&
+                        videoDetailData.author.mid != Prefs.uid
                 if (!fromPgcSeason) updateVideoList(aid)
             }
         }.onFailure {
@@ -137,6 +147,8 @@ class VideoDetailViewModel(
             videoDetail = offlineDetail
             state = VideoInfoState.Success
             upOwnerStats = null
+            upFollowing = null
+            upRelationLoading = false
             relatedVideos.clear()
             videoInfoRepository.videoList.clear()
             videoInfoRepository.videoList.addAll(offlineDetail.toVideoListForTargetCid(entry.cid))
@@ -357,21 +369,121 @@ class VideoDetailViewModel(
         }
     }
 
-    private suspend fun refreshUpOwnerStats(mid: Long) {
-        if (mid <= 0L) return
-        runCatching {
-            withContext(Dispatchers.IO) {
-                userRepository.getUserCardInfo(mid)
+    private suspend fun refreshUpOwnerStats(mid: Long) = coroutineScope {
+        if (mid <= 0L) return@coroutineScope
+
+        val cardDeferred = async(Dispatchers.IO) {
+            runCatching { userRepository.getUserCardInfo(mid) }
+        }
+        val relationDeferred = if (Prefs.isLogin && mid != Prefs.uid) {
+            async(Dispatchers.IO) {
+                userRepository.checkIsFollowing(mid, DETAIL_API_TYPE)
             }
-        }.onSuccess { card ->
-            withContext(Dispatchers.Main.immediate) {
-                upOwnerStats = UpOwnerStats(
-                    followerCount = card.follower,
-                    archiveCount = card.archiveCount
+        } else {
+            null
+        }
+
+        val cardResult = cardDeferred.await()
+        val card = cardResult.getOrNull()
+        val following = when {
+            !Prefs.isLogin || mid == Prefs.uid -> false
+            else -> relationDeferred?.await() ?: card?.following
+        }
+
+        cardResult.exceptionOrNull()?.let {
+            logger.fInfo { "Load up owner stats failed: ${it.stackTraceToString()}" }
+        }
+        withContext(Dispatchers.Main.immediate) {
+            if (videoDetail?.author?.mid != mid) return@withContext
+            upOwnerStats = card?.let {
+                UpOwnerStats(
+                    followerCount = it.follower,
+                    archiveCount = it.archiveCount
                 )
             }
+            upFollowing = following
+            upRelationLoading = false
+        }
+    }
+
+    private fun applyUpFollowTransition(
+        mid: Long,
+        fromFollowing: Boolean,
+        toFollowing: Boolean
+    ) {
+        if (videoDetail?.author?.mid != mid) return
+        upFollowing = toFollowing
+        if (fromFollowing == toFollowing) return
+        val followerDelta = if (toFollowing) 1 else -1
+        upOwnerStats = upOwnerStats?.let { stats ->
+            stats.copy(
+                followerCount = (stats.followerCount + followerDelta).coerceAtLeast(0)
+            )
+        }
+    }
+
+    suspend fun toggleUpFollow(): Result<String> {
+        val mid = withContext(Dispatchers.Main.immediate) {
+            videoDetail?.author?.mid?.takeIf { it > 0L }
+        } ?: return Result.failure(IllegalStateException("UP 主信息未加载"))
+        if (!Prefs.isLogin) return Result.failure(IllegalStateException("账号未登录"))
+        if (mid == Prefs.uid) return Result.failure(IllegalStateException("不能关注自己"))
+
+        val (actionReserved, knownFollowing) = withContext(Dispatchers.Main.immediate) {
+            if (upRelationLoading) {
+                false to upFollowing
+            } else {
+                upRelationLoading = true
+                true to upFollowing
+            }
+        }
+        if (!actionReserved) {
+            return Result.failure(IllegalStateException("关注状态正在更新"))
+        }
+
+        val previousFollowing = knownFollowing ?: withContext(Dispatchers.IO) {
+            userRepository.checkIsFollowing(mid, DETAIL_API_TYPE)
+        }
+        if (previousFollowing == null) {
+            withContext(Dispatchers.Main.immediate) {
+                if (videoDetail?.author?.mid == mid) upRelationLoading = false
+            }
+            return Result.failure(IllegalStateException("无法获取关注状态，请稍后重试"))
+        }
+
+        val targetFollowing = !previousFollowing
+        val actionStarted = withContext(Dispatchers.Main.immediate) {
+            if (videoDetail?.author?.mid != mid) {
+                false
+            } else {
+                applyUpFollowTransition(mid, previousFollowing, targetFollowing)
+                true
+            }
+        }
+        if (!actionStarted) {
+            return Result.failure(IllegalStateException("视频信息已变化，请重试"))
+        }
+
+        return runCatching {
+            val success = withContext(Dispatchers.IO) {
+                if (targetFollowing) {
+                    userRepository.followUser(mid, DETAIL_API_TYPE)
+                } else {
+                    userRepository.unfollowUser(mid, DETAIL_API_TYPE)
+                }
+            }
+            check(success) {
+                if (targetFollowing) "关注失败，请稍后重试" else "取消关注失败，请稍后重试"
+            }
+            if (targetFollowing) "关注成功" else "已取消关注"
         }.onFailure {
-            logger.fInfo { "Load up owner stats failed: ${it.stackTraceToString()}" }
+            withContext(Dispatchers.Main.immediate) {
+                applyUpFollowTransition(mid, targetFollowing, previousFollowing)
+            }
+        }.also {
+            withContext(Dispatchers.Main.immediate) {
+                if (videoDetail?.author?.mid == mid) upRelationLoading = false
+            }
         }
     }
 

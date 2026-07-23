@@ -253,6 +253,43 @@ class VideoPlayRepository(
             .distinct()
     }
 
+    /**
+     * Returns the progressive stream used by a DLNA renderer.
+     *
+     * The TV play-url endpoint differs from the regular DASH endpoint by returning a
+     * muxed audio/video stream that standalone renderers can consume directly.
+     */
+    suspend fun getDlnaPlayUrl(
+        aid: Long,
+        cid: Long,
+        epid: Int? = null,
+        qn: Int = 80,
+    ): String {
+        require(aid > 0L) { "无效的视频 aid" }
+        require(cid > 0L) { "无效的视频 cid" }
+
+        val pgcEpid = epid?.takeIf { it > 0 }
+        val response = runCatching {
+            BiliHttpApi.getTvPlayUrl(
+                accessKey = authRepository.accessToken,
+                cid = cid,
+                objectId = pgcEpid?.toLong() ?: aid,
+                playurlType = if (pgcEpid != null) 2 else 1,
+                qn = qn.coerceAtLeast(1),
+            )
+        }.onFailure(::notifyPlayUrlAuthFailureIfNeeded)
+            .getOrThrow()
+
+        val url = response.getResponseData()
+            .durl
+            .firstOrNull()
+            ?.url
+            ?.trim()
+            .orEmpty()
+        check(url.isNotEmpty()) { "当前视频不支持投屏" }
+        return url
+    }
+
     private fun buildPlayViewUniteRequest(
         aid: Long,
         cid: Long,

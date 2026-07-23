@@ -105,6 +105,7 @@ import dev.aaa1115910.biliapi.http.entity.video.VideoShot
 import dev.aaa1115910.biliapi.http.entity.web.NavResponseData
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
 import dev.aaa1115910.biliapi.http.util.BiliAppConf
+import dev.aaa1115910.biliapi.http.util.encAppGet
 import dev.aaa1115910.biliapi.http.util.encWbi
 import dev.aaa1115910.biliapi.http.util.encApiSign
 import dev.aaa1115910.biliapi.http.util.signWbi
@@ -512,6 +513,41 @@ object BiliHttpApi {
         checkForVVoucher(bodyText)
         return json.decodeFromString(bodyText)
     }
+
+    /**
+     * 获取 DLNA 投屏使用的单流播放地址。
+     *
+     * @param objectId UGC 使用 avid，PGC 使用 epid
+     * @param playurlType UGC 为 1，PGC 为 2
+     */
+    suspend fun getTvPlayUrl(
+        accessKey: String? = null,
+        cid: Long,
+        objectId: Long,
+        playurlType: Int,
+        qn: Int = 80,
+    ): BiliResponse<PlayUrlData> = client.get("/x/tv/playurl") {
+        accessKey?.takeIf { it.isNotBlank() }?.let {
+            parameter("access_key", it)
+        }
+        parameter("actionKey", "appkey")
+        parameter("cid", cid)
+        parameter("fourk", 1)
+        parameter("is_proj", 1)
+        accessKey?.takeIf { it.isNotBlank() }?.let {
+            parameter("mobile_access_key", it)
+        }
+        parameter("object_id", objectId)
+        parameter("mobi_app", "android")
+        parameter("platform", "android")
+        parameter("playurl_type", playurlType)
+        parameter("protocol", 0)
+        parameter("qn", qn)
+
+        // Logged-in App requests are signed by the client's request interceptor.
+        // Guest requests have no access_key marker, so sign them explicitly here.
+        if (accessKey.isNullOrBlank()) encAppGet()
+    }.body()
 
     suspend fun getVideoWbiPlayUrl(
         av: Long? = null,

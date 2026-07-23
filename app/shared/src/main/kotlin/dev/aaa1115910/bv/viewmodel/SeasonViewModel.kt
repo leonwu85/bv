@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.viewmodel
 
+import androidx.annotation.MainThread
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -18,6 +19,7 @@ import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.swapList
 import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -47,6 +49,17 @@ class SeasonViewModel(
 
     val uuid: String = UUID.randomUUID().toString()
 
+    @MainThread
+    fun clearSeasonData() {
+        seasonId = null
+        epId = null
+        seasonData = null
+        seasons.clear()
+        isFollowing = false
+        lastPlayProgress = null
+        tip = "Loading"
+    }
+
     suspend fun updateSeasonData() {
         val request = withContext(Dispatchers.Main.immediate) {
             Triple(
@@ -71,6 +84,7 @@ class SeasonViewModel(
                 lastPlayProgress = data.userStatus.progress
             }
         }.onFailure {
+            if (it is CancellationException) throw it
             withContext(Dispatchers.Main.immediate) {
                 tip = it.localizedMessage ?: "未知错误"
             }

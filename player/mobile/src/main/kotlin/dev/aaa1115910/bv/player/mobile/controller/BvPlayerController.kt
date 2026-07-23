@@ -92,6 +92,7 @@ import kotlin.math.roundToInt
 fun BvPlayerController(
     modifier: Modifier = Modifier,
     isFullScreen: Boolean,
+    controlsEnabled: Boolean = true,
     onEnterFullScreen: () -> Unit,
     onExitFullScreen: () -> Unit,
     onBack: () -> Unit,
@@ -124,6 +125,16 @@ fun BvPlayerController(
     onDismissSponsorBlockTip: () -> Unit = {},
     content: @Composable BoxScope.() -> Unit
 ) {
+    if (!controlsEnabled) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            content = content
+        )
+        return
+    }
+
     val context = LocalContext.current
     val density = LocalDensity.current
     val view = LocalView.current

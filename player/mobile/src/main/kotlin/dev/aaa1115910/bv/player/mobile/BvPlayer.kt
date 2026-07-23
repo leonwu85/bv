@@ -118,6 +118,7 @@ private class DanmakuMaskBitmapPool {
 fun BvPlayer(
     modifier: Modifier = Modifier,
     isFullScreen: Boolean,
+    controlsEnabled: Boolean = true,
     onEnterFullScreen: () -> Unit,
     onExitFullScreen: () -> Unit,
     onBack: () -> Unit,
@@ -700,6 +701,7 @@ fun BvPlayer(
         BvPlayerController(
             modifier = modifier,
             isFullScreen = isFullScreen,
+            controlsEnabled = controlsEnabled,
             onEnterFullScreen = onEnterFullScreen,
             onExitFullScreen = onExitFullScreen,
             onBack = onBack,

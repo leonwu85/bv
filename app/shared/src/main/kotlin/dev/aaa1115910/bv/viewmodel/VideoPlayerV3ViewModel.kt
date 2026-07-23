@@ -237,6 +237,20 @@ private fun Subtitle.matchesLanguagePreference(preference: SubtitleLanguagePrefe
         (preferredLangDoc.isNotBlank() && langDoc.trim() == preferredLangDoc)
 }
 
+data class DlnaMediaSource(
+    val url: String,
+    val title: String,
+    val partTitle: String,
+    val positionMs: Long,
+) {
+    val displayTitle: String
+        get() = when {
+            title.isBlank() -> partTitle.ifBlank { "哔哩哔哩视频" }
+            partTitle.isBlank() || partTitle == title -> title
+            else -> "$title - $partTitle"
+        }
+}
+
 @KoinViewModel
 class VideoPlayerV3ViewModel(
     private val videoInfoRepository: VideoInfoRepository,
@@ -260,6 +274,16 @@ class VideoPlayerV3ViewModel(
         val initialSeekPositionMs: Long?,
         val historySeekPositionMs: Long?,
         val playbackSessionToken: Long,
+    )
+
+    private data class DlnaSourceSnapshot(
+        val aid: Long,
+        val cid: Long,
+        val epid: Int?,
+        val qn: Int,
+        val title: String,
+        val partTitle: String,
+        val positionMs: Long,
     )
 
     private data class GeetestPlaybackRetryRequest(
@@ -4806,6 +4830,51 @@ class VideoPlayerV3ViewModel(
             } finally {
                 withContext(Dispatchers.Main) { sendingVideoDanmaku = false }
             }
+        }
+    }
+
+    suspend fun getDlnaMediaSource(): Result<DlnaMediaSource> {
+        val snapshot = try {
+            withContext(Dispatchers.Main.immediate) {
+                check(!isLive) { "直播暂不支持投屏" }
+                check(!currentPlaybackOffline) { "离线缓存无法投屏" }
+                check(currentAid > 0L && currentCid > 0L) { "视频信息无效，无法投屏" }
+
+                DlnaSourceSnapshot(
+                    aid = currentAid,
+                    cid = currentCid,
+                    epid = currentEpid.takeIf { it > 0 },
+                    qn = currentQuality.code,
+                    title = title,
+                    partTitle = partTitle,
+                    positionMs = videoPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L,
+                )
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            return Result.failure(error)
+        }
+
+        return try {
+            val url = videoPlayRepository.getDlnaPlayUrl(
+                aid = snapshot.aid,
+                cid = snapshot.cid,
+                epid = snapshot.epid,
+                qn = snapshot.qn,
+            )
+            Result.success(
+                DlnaMediaSource(
+                    url = url,
+                    title = snapshot.title,
+                    partTitle = snapshot.partTitle,
+                    positionMs = snapshot.positionMs,
+                )
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            Result.failure(error)
         }
     }
 

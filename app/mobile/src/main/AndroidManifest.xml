@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+
     <application>
         <activity
             android:name="dev.aaa1115910.bv.mobile.activities.MainActivity"
@@ -10,10 +13,12 @@
         </activity>
         <activity
             android:name=".activities.VideoPlayerActivity"
-            android:configChanges="orientation|screenSize"
+            android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
             android:exported="true"
             android:label="@string/title_mobile_activity_video_player"
             android:launchMode="singleTop"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
             android:theme="@style/Theme.BV.Mobile" />
         <activity
             android:name=".activities.LoginActivity"

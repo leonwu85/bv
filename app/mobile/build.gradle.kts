@@ -67,3 +67,7 @@ dependencies {
     implementation(libs.markwon.image.coil)
     testImplementation(libs.kotlin.test)
 }
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+}

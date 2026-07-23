@@ -438,9 +438,11 @@ fun HomeContent(
                                     DynamicTabType.Video
                                 }
                             logger.fInfo { "clear dynamic data [$selectedType]" }
-                            dynamicViewModel.refreshByType(selectedType)
-                            logger.fInfo { "reload dynamic data [$selectedType]" }
-                            scope.launch(Dispatchers.IO) { dynamicViewModel.loadMoreByType(selectedType) }
+                            scope.launch(Dispatchers.IO) {
+                                dynamicViewModel.refreshByType(selectedType)
+                                logger.fInfo { "reload dynamic data [$selectedType]" }
+                                dynamicViewModel.loadMoreByType(selectedType)
+                            }
                         }
 
                         HomeTopNavItem.Favorite -> {

@@ -75,6 +75,7 @@ import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.rounded.Cast
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
@@ -88,6 +89,7 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Paid
+import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
@@ -195,6 +197,7 @@ import dev.aaa1115910.biliapi.entity.reply.CommentSort
 import dev.aaa1115910.biliapi.entity.reply.CommentVote
 import dev.aaa1115910.biliapi.entity.video.VideoDetail
 import dev.aaa1115910.biliapi.entity.video.VideoPage
+import dev.aaa1115910.biliapi.entity.video.season.Episode
 import dev.aaa1115910.biliapi.http.entity.live.LiveEmotePackage
 import dev.aaa1115910.biliapi.http.entity.live.LiveEmoticon
 import dev.aaa1115910.bv.R
@@ -210,6 +213,7 @@ import dev.aaa1115910.bv.mobile.component.player.VideoPlayerPages
 import dev.aaa1115910.bv.mobile.component.reply.CommentItem
 import dev.aaa1115910.bv.mobile.component.reply.CommentVoteCard
 import dev.aaa1115910.bv.mobile.component.reply.ReplySheetScaffold
+import dev.aaa1115910.bv.mobile.dlna.DlnaCastDialog
 import dev.aaa1115910.bv.mobile.settings.MobilePrefs
 import dev.aaa1115910.bv.mobile.component.videocard.RelatedVideoItem
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
@@ -315,7 +319,11 @@ fun VideoPlayerScreen(
     commentVideModel: CommentViewModel,
     seasonVideModel: SeasonViewModel,
     videoDetailViewModel: VideoDetailViewModel,
-    windowSizeClass: WindowSizeClass
+    windowSizeClass: WindowSizeClass,
+    isInPictureInPictureMode: Boolean = false,
+    pictureInPictureSupported: Boolean = false,
+    onEnterPictureInPicture: () -> Unit = {},
+    onPlayPgcEpisode: (Episode) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -348,11 +356,12 @@ fun VideoPlayerScreen(
     DisposableEffect(
         context,
         isVideoFullscreen,
+        isInPictureInPictureMode,
         autoRotateVideo,
         autoRotateVideoAngle
     ) {
         // 小窗阶段即开始监听，不依赖视频详情或播放地址是否已经加载完成。
-        if (isVideoFullscreen || !autoRotateVideo) {
+        if (isVideoFullscreen || isInPictureInPictureMode || !autoRotateVideo) {
             return@DisposableEffect onDispose {}
         }
 
@@ -509,8 +518,22 @@ fun VideoPlayerScreen(
     var savingPreviewImage by remember { mutableStateOf(false) }
     var savingCoverImage by remember { mutableStateOf(false) }
     var showOfflineCacheDialog by remember { mutableStateOf(false) }
+    var showDlnaDialog by remember { mutableStateOf(false) }
     var offlineCacheDialogLoading by remember { mutableStateOf(false) }
     val offlineCacheState = playerViewModel.offlineCacheState
+
+    LaunchedEffect(isInPictureInPictureMode) {
+        if (isInPictureInPictureMode) {
+            showOfflineCacheDialog = false
+            showDlnaDialog = false
+            showVideoDanmakuSheet = false
+            showLiveDanmakuDialog = false
+            replyDraftTarget = null
+            if (previewerState.canClose) {
+                previewerState.closeTransform()
+            }
+        }
+    }
 
     val setPreviewerPictures: (List<Picture>, () -> Unit) -> Unit =
         { newPictures, afterSetPictures ->
@@ -694,7 +717,7 @@ fun VideoPlayerScreen(
         val insetsController = WindowCompat.getInsetsController(window, window.decorView)
 
         // 设置系统栏可见性
-        if (isVideoFullscreen) {
+        if (isVideoFullscreen || isInPictureInPictureMode) {
             insetsController.hide(WindowInsetsCompat.Type.systemBars())
             insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         } else {
@@ -702,13 +725,15 @@ fun VideoPlayerScreen(
         }
 
         // 设置系统栏外观
-        if (!isVideoFullscreen) {
+        if (!isVideoFullscreen && !isInPictureInPictureMode) {
             insetsController.isAppearanceLightStatusBars = !useLightSystemBarIcons
             insetsController.isAppearanceLightNavigationBars = !useLightSystemBarIcons
         }
 
         // 设置屏幕方向
-        if (forcePortrait) {
+        if (isInPictureInPictureMode) {
+            context.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        } else if (forcePortrait) {
             if (isVideoFullscreen) {
                 context.requestedOrientation =
                     ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -730,7 +755,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    BackHandler(isVideoFullscreen) {
+    BackHandler(isVideoFullscreen && !isInPictureInPictureMode) {
         autoRotateSuppressed = true
         isVideoFullscreen = false
     }
@@ -753,23 +778,38 @@ fun VideoPlayerScreen(
         }
     )
 
+    if (showDlnaDialog) {
+        DlnaCastDialog(
+            sourceProvider = playerViewModel::getDlnaMediaSource,
+            onCastStarted = { device, _ ->
+                playerViewModel.videoPlayer?.pause()
+                "已开始投屏到 ${device.name}".toast(context)
+            },
+            onDismiss = { showDlnaDialog = false }
+        )
+    }
+
     Scaffold(
-        containerColor = if (isVideoFullscreen) Color.Black else Color.Transparent
+        containerColor = if (isVideoFullscreen || isInPictureInPictureMode) Color.Black else Color.Transparent
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
-            if (playerViewModel.isLive && !isVideoFullscreen) {
+            if (playerViewModel.isLive && !isVideoFullscreen && !isInPictureInPictureMode) {
                 LiveRoomScreenBackground(backgroundUrl = playerViewModel.liveBackground)
             }
             Row(
                 modifier = Modifier
                     .ifElse(
-                        !isVideoFullscreen,
+                        !isVideoFullscreen && !isInPictureInPictureMode,
                         Modifier.padding(top = innerPadding.calculateTopPadding())
                     )
                 //.padding(top = innerPadding.calculateTopPadding())
             ) {
             val leftPartWidth by animateFloatAsState(
-                targetValue = if (windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded && !isVideoFullscreen) 0.6f else 1f,
+                targetValue = if (
+                    windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded &&
+                    !isVideoFullscreen &&
+                    !isInPictureInPictureMode
+                ) 0.6f else 1f,
                 label = "VideoPlayerLeftPartWidth"
             )
             Column(
@@ -862,7 +902,7 @@ fun VideoPlayerScreen(
                         ),
                     ) {
                         BvPlayer(
-                            modifier = if (isVideoFullscreen) Modifier
+                            modifier = if (isVideoFullscreen || isInPictureInPictureMode) Modifier
                                 .fillMaxSize()
                                 .zIndex(1f)
                             else Modifier
@@ -874,7 +914,8 @@ fun VideoPlayerScreen(
                                 )
                                 .fillMaxWidth()
                                 .aspectRatio(16f / 9f),
-                            isFullScreen = isVideoFullscreen,
+                            isFullScreen = isVideoFullscreen || isInPictureInPictureMode,
+                            controlsEnabled = !isInPictureInPictureMode,
                             videoPlayer = playerViewModel.videoPlayer!!,
                             danmakuPlayer = playerViewModel.danmakuPlayer,
                             onClearBackToHistoryData = { playerViewModel.lastPlayed = 0 },
@@ -1027,7 +1068,7 @@ fun VideoPlayerScreen(
                         )
                     }
                 }
-                if (playerViewModel.isLive) {
+                if (!isInPictureInPictureMode && playerViewModel.isLive) {
                     if (windowSizeClass.widthSizeClass != WindowWidthSizeClass.Expanded) {
                         LiveRoomPanel(
                             modifier = Modifier.fillMaxSize(),
@@ -1125,7 +1166,7 @@ fun VideoPlayerScreen(
                             }
                         }
                     }
-                } else {
+                } else if (!isInPictureInPictureMode) {
                     val commentTabTitle = videoDetailViewModel.videoDetail?.stat?.reply
                         ?.let { "评论 ${it.coerceAtLeast(0)}" }
                         ?: "评论"
@@ -1181,6 +1222,8 @@ fun VideoPlayerScreen(
                                                         ?: playerViewModel.upId,
                                                     upFollowerCount = videoDetailViewModel.upOwnerStats?.followerCount,
                                                     upArchiveCount = videoDetailViewModel.upOwnerStats?.archiveCount,
+                                                    upFollowing = videoDetailViewModel.upFollowing,
+                                                    upRelationLoading = videoDetailViewModel.upRelationLoading,
                                                     title = videoDetailViewModel.videoDetail?.title
                                                         ?: playerViewModel.title,
                                                     description = videoDetailViewModel.videoDetail?.description
@@ -1214,6 +1257,8 @@ fun VideoPlayerScreen(
                                                     savingCover = savingCoverImage,
                                                     offlineCacheState = offlineCacheState,
                                                     offlinePlayback = playerViewModel.currentPlaybackOffline,
+                                                    dlnaAvailable = !playerViewModel.currentPlaybackOffline,
+                                                    pictureInPictureSupported = pictureInPictureSupported,
                                                     onToggleLike = { launchVideoAction { videoDetailViewModel.toggleLike() } },
                                                     onTripleLike = { launchVideoAction { videoDetailViewModel.tripleLike() } },
                                                     onToggleDislike = { launchVideoAction { videoDetailViewModel.toggleDislike() } },
@@ -1226,12 +1271,17 @@ fun VideoPlayerScreen(
                                                     },
                                                     onToggleToView = { launchVideoAction { videoDetailViewModel.toggleToView() } },
                                                     onShare = shareVideo,
+                                                    onCast = { showDlnaDialog = true },
+                                                    onEnterPictureInPicture = onEnterPictureInPicture,
                                                     onSaveCover = saveCover,
                                                     onCacheVideo = { showOfflineCacheDialog = true },
                                                     onPauseCache = { launchVideoAction { playerViewModel.pauseOfflineCache() } },
                                                     onResumeCache = { launchVideoAction { playerViewModel.resumeOfflineCache() } },
                                                     onClearCacheTask = { launchVideoAction { playerViewModel.clearOfflineCacheTask() } },
                                                     onPlayCache = { launchVideoAction { playerViewModel.playOfflineCache() } },
+                                                    onToggleUpFollow = {
+                                                        launchVideoAction { videoDetailViewModel.toggleUpFollow() }
+                                                    },
                                                     onUpClick = { mid, name ->
                                                         UserSpaceActivity.actionStart(context, mid, name)
                                                     }
@@ -1245,8 +1295,16 @@ fun VideoPlayerScreen(
                                                     pages = videoDetailViewModel.videoDetail?.pages
                                                         ?: emptyList(),
                                                     ugcSeason = videoDetailViewModel.videoDetail?.ugcSeason,
-                                                    pgcSections = seasonVideModel.seasonData?.sections
-                                                        ?: emptyList(),
+                                                    pgcEpisodes = if (playerViewModel.fromSeason) {
+                                                        seasonVideModel.seasonData?.episodes.orEmpty()
+                                                    } else {
+                                                        emptyList()
+                                                    },
+                                                    pgcSections = if (playerViewModel.fromSeason) {
+                                                        seasonVideModel.seasonData?.sections.orEmpty()
+                                                    } else {
+                                                        emptyList()
+                                                    },
                                                     onClickInteractiveNode = { node ->
                                                         playerViewModel.selectInteractiveNode(node.nodeId)
                                                         playerViewModel.loadPlayUrl(
@@ -1264,6 +1322,7 @@ fun VideoPlayerScreen(
                                                             continuePlayNext = true
                                                         )
                                                     },
+                                                    onClickPgcEpisode = onPlayPgcEpisode,
                                                     onClickEpisode = { sectionIndex, episode ->
                                                         videoDetailViewModel.updateUgcSeasonSectionVideoList(
                                                             sectionIndex
@@ -1373,6 +1432,8 @@ fun VideoPlayerScreen(
                                     ?: playerViewModel.upId,
                                 upFollowerCount = videoDetailViewModel.upOwnerStats?.followerCount,
                                 upArchiveCount = videoDetailViewModel.upOwnerStats?.archiveCount,
+                                upFollowing = videoDetailViewModel.upFollowing,
+                                upRelationLoading = videoDetailViewModel.upRelationLoading,
                                 title = videoDetailViewModel.videoDetail?.title ?: playerViewModel.title,
                                 description = videoDetailViewModel.videoDetail?.description
                                     ?: "",
@@ -1399,6 +1460,8 @@ fun VideoPlayerScreen(
                                 savingCover = savingCoverImage,
                                 offlineCacheState = offlineCacheState,
                                 offlinePlayback = playerViewModel.currentPlaybackOffline,
+                                dlnaAvailable = !playerViewModel.currentPlaybackOffline,
+                                pictureInPictureSupported = pictureInPictureSupported,
                                 onToggleLike = { launchVideoAction { videoDetailViewModel.toggleLike() } },
                                 onTripleLike = { launchVideoAction { videoDetailViewModel.tripleLike() } },
                                 onToggleDislike = { launchVideoAction { videoDetailViewModel.toggleDislike() } },
@@ -1411,12 +1474,17 @@ fun VideoPlayerScreen(
                                 },
                                 onToggleToView = { launchVideoAction { videoDetailViewModel.toggleToView() } },
                                 onShare = shareVideo,
+                                onCast = { showDlnaDialog = true },
+                                onEnterPictureInPicture = onEnterPictureInPicture,
                                 onSaveCover = saveCover,
                                 onCacheVideo = { showOfflineCacheDialog = true },
                                 onPauseCache = { launchVideoAction { playerViewModel.pauseOfflineCache() } },
                                 onResumeCache = { launchVideoAction { playerViewModel.resumeOfflineCache() } },
                                 onClearCacheTask = { launchVideoAction { playerViewModel.clearOfflineCacheTask() } },
                                 onPlayCache = { launchVideoAction { playerViewModel.playOfflineCache() } },
+                                onToggleUpFollow = {
+                                    launchVideoAction { videoDetailViewModel.toggleUpFollow() }
+                                },
                                 onUpClick = { mid, name ->
                                     UserSpaceActivity.actionStart(context, mid, name)
                                 },
@@ -1433,7 +1501,16 @@ fun VideoPlayerScreen(
                                     ?: emptyList(),
                                 pages = videoDetailViewModel.videoDetail?.pages ?: emptyList(),
                                 ugcSeason = videoDetailViewModel.videoDetail?.ugcSeason,
-                                pgcSections = seasonVideModel.seasonData?.sections ?: emptyList(),
+                                pgcEpisodes = if (playerViewModel.fromSeason) {
+                                    seasonVideModel.seasonData?.episodes.orEmpty()
+                                } else {
+                                    emptyList()
+                                },
+                                pgcSections = if (playerViewModel.fromSeason) {
+                                    seasonVideModel.seasonData?.sections.orEmpty()
+                                } else {
+                                    emptyList()
+                                },
                                 onClickInteractiveNode = { node ->
                                     playerViewModel.selectInteractiveNode(node.nodeId)
                                     playerViewModel.loadPlayUrl(
@@ -1451,6 +1528,7 @@ fun VideoPlayerScreen(
                                         continuePlayNext = true
                                     )
                                 },
+                                onClickPgcEpisode = onPlayPgcEpisode,
                                 onClickEpisode = { sectionIndex, episode ->
                                     videoDetailViewModel.updateUgcSeasonSectionVideoList(
                                         sectionIndex
@@ -1518,7 +1596,10 @@ fun VideoPlayerScreen(
                     }
                 }
             }
-            if (windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded) {
+            if (
+                windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded &&
+                !isInPictureInPictureMode
+            ) {
                 if (playerViewModel.isLive) {
                     LiveRoomPanel(
                         modifier = Modifier
@@ -1816,6 +1897,8 @@ fun VideoPlayerInfo(
     upMid: Long,
     upFollowerCount: Int?,
     upArchiveCount: Int?,
+    upFollowing: Boolean? = null,
+    upRelationLoading: Boolean = false,
     title: String,
     description: String,
     playCount: Long,
@@ -1837,6 +1920,8 @@ fun VideoPlayerInfo(
     savingCover: Boolean = false,
     offlineCacheState: OfflineVideoCacheTaskState = OfflineVideoCacheTaskState(aid = 0L, cid = 0L),
     offlinePlayback: Boolean = false,
+    dlnaAvailable: Boolean = false,
+    pictureInPictureSupported: Boolean = false,
     onToggleLike: () -> Unit = {},
     onTripleLike: () -> Unit = {},
     onToggleDislike: () -> Unit = {},
@@ -1845,12 +1930,15 @@ fun VideoPlayerInfo(
     onUpdateFavoriteFolders: (List<Long>) -> Unit = {},
     onToggleToView: () -> Unit = {},
     onShare: () -> Unit = {},
+    onCast: () -> Unit = {},
+    onEnterPictureInPicture: () -> Unit = {},
     onSaveCover: () -> Unit = {},
     onCacheVideo: () -> Unit = {},
     onPauseCache: () -> Unit = {},
     onResumeCache: () -> Unit = {},
     onClearCacheTask: () -> Unit = {},
     onPlayCache: () -> Unit = {},
+    onToggleUpFollow: () -> Unit = {},
     onUpClick: (Long, String) -> Unit = { _, _ -> },
     backgroundColor: Color = MaterialTheme.colorScheme.surface
 ) {
@@ -1911,8 +1999,21 @@ fun VideoPlayerInfo(
                 }
             }
 
-            Button(onClick = { /*TODO*/ }) {
-                Text(text = "关注")
+            if (upMid > 0L && upMid != Prefs.uid) {
+                Button(
+                    enabled = !upRelationLoading,
+                    onClick = onToggleUpFollow
+                ) {
+                    if (upRelationLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text(text = if (upFollowing == true) "已关注" else "关注")
+                    }
+                }
             }
         }
         LongPressCopyText(
@@ -1970,6 +2071,8 @@ fun VideoPlayerInfo(
                 savingCover = savingCover,
                 offlineCacheState = offlineCacheState,
                 offlinePlayback = offlinePlayback,
+                dlnaAvailable = dlnaAvailable,
+                pictureInPictureSupported = pictureInPictureSupported,
                 onToggleLike = onToggleLike,
                 onTripleLike = onTripleLike,
                 onToggleDislike = onToggleDislike,
@@ -1978,6 +2081,8 @@ fun VideoPlayerInfo(
                 onUpdateFavoriteFolders = onUpdateFavoriteFolders,
                 onToggleToView = onToggleToView,
                 onShare = onShare,
+                onCast = onCast,
+                onEnterPictureInPicture = onEnterPictureInPicture,
                 onSaveCover = onSaveCover,
                 onCacheVideo = onCacheVideo,
                 onPauseCache = onPauseCache,
@@ -2067,6 +2172,8 @@ private fun VideoActionGrid(
     savingCover: Boolean,
     offlineCacheState: OfflineVideoCacheTaskState,
     offlinePlayback: Boolean,
+    dlnaAvailable: Boolean,
+    pictureInPictureSupported: Boolean,
     onToggleLike: () -> Unit,
     onTripleLike: () -> Unit,
     onToggleDislike: () -> Unit,
@@ -2075,6 +2182,8 @@ private fun VideoActionGrid(
     onUpdateFavoriteFolders: (List<Long>) -> Unit,
     onToggleToView: () -> Unit,
     onShare: () -> Unit,
+    onCast: () -> Unit,
+    onEnterPictureInPicture: () -> Unit,
     onSaveCover: () -> Unit,
     onCacheVideo: () -> Unit,
     onPauseCache: () -> Unit,
@@ -2184,6 +2293,36 @@ private fun VideoActionGrid(
                 expanded = showMoreMenu,
                 onDismissRequest = { showMoreMenu = false }
             ) {
+                if (dlnaAvailable) {
+                    DropdownMenuItem(
+                        text = { Text(text = "投屏") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Cast,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            showMoreMenu = false
+                            onCast()
+                        }
+                    )
+                }
+                if (pictureInPictureSupported) {
+                    DropdownMenuItem(
+                        text = { Text(text = "画中画") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.PictureInPictureAlt,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            showMoreMenu = false
+                            onEnterPictureInPicture()
+                        }
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text(text = cacheMenuText) },
                     leadingIcon = {

@@ -96,9 +96,11 @@ fun VideoPlayerPages(
     interactiveNodes: List<InteractiveNode>,
     pages: List<VideoPage>,
     ugcSeason: UgcSeason?,
+    pgcEpisodes: List<Episode>,
     pgcSections: List<Section>,
     onClickInteractiveNode: (InteractiveNode) -> Unit,
     onClickPage: (VideoPage) -> Unit,
+    onClickPgcEpisode: (Episode) -> Unit,
     onClickEpisode: (sectionIndex: Int, episode: Episode) -> Unit,
     onClickEpisodePage: (sectionIndex: Int, episode: Episode, page: VideoPage) -> Unit = { _, _, page ->
         onClickPage(page)
@@ -116,17 +118,25 @@ fun VideoPlayerPages(
     var openBottomSheet by rememberSaveable { mutableStateOf(false) }
 
     var currentSection by remember { mutableStateOf<Section?>(null) }
+    val pgcEpisodeGroups = remember(pgcEpisodes, pgcSections) {
+        buildPgcEpisodeGroups(
+            episodes = pgcEpisodes,
+            sections = pgcSections
+        )
+    }
+    val currentPgcEpisodeGroup = remember(pgcEpisodeGroups, currentCid) {
+        pgcEpisodeGroups.firstOrNull { group ->
+            group.episodes.any { it.matchesCurrentCid(currentCid) }
+        } ?: pgcEpisodeGroups.firstOrNull()
+    }
 
-    LaunchedEffect(currentCid) {
-        if (pgcSections.isNotEmpty()) {
-            currentSection =
-                pgcSections.find { it.episodes.any { episode -> episode.cid == currentCid } }
-        } else if (ugcSeason != null) {
+    LaunchedEffect(currentCid, ugcSeason) {
+        if (ugcSeason != null) {
             currentSection = ugcSeason.sections.find {
                 it.episodes.any { episode ->
                     episode.cid == currentCid || episode.pages.any { page -> page.cid == currentCid }
                 }
-            }
+            } ?: ugcSeason.sections.firstOrNull()
         }
     }
 
@@ -135,8 +145,16 @@ fun VideoPlayerPages(
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceContainer)
     ) {
-        if (pgcSections.isNotEmpty()) {
-            // TODO pgc
+        if (currentPgcEpisodeGroup != null) {
+            VideoPlayerEpisodesRow(
+                title = currentPgcEpisodeGroup.title
+                    .takeIf { pgcEpisodeGroups.size > 1 },
+                episodes = currentPgcEpisodeGroup.episodes,
+                onClickMore = { openBottomSheet = !openBottomSheet },
+                onClickEpisode = onClickPgcEpisode,
+                currentCid = currentCid,
+                episodeTitle = ::buildPgcEpisodeTitle
+            )
         } else if (interactiveNodes.isNotEmpty()) {
             VideoPlayerInteractiveNodesRow(
                 nodes = interactiveNodes,
@@ -188,15 +206,13 @@ fun VideoPlayerPages(
                 interactiveNodes = interactiveNodes,
                 pages = pages,
                 ugcSeason = ugcSeason,
+                pgcEpisodes = pgcEpisodes,
                 pgcSections = pgcSections,
                 onClickInteractiveNode = onClickInteractiveNode,
                 onClickPage = onClickPage,
-                onClickEpisode = { episode ->
-                    onClickEpisode(ugcSeason!!.sections.indexOf(currentSection), episode)
-                },
-                onClickEpisodePage = { episode, page ->
-                    onClickEpisodePage(ugcSeason!!.sections.indexOf(currentSection), episode, page)
-                }
+                onClickPgcEpisode = onClickPgcEpisode,
+                onClickEpisode = onClickEpisode,
+                onClickEpisodePage = onClickEpisodePage
             )
         }
     }
@@ -308,7 +324,10 @@ fun VideoPlayerEpisodesRow(
     currentCid: Long,
     onClickMore: () -> Unit = {},
     onClickEpisode: (Episode) -> Unit = {},
-    onClickPage: (episode: Episode, page: VideoPage) -> Unit = { _, _ -> }
+    onClickPage: (episode: Episode, page: VideoPage) -> Unit = { _, _ -> },
+    episodeTitle: (index: Int, episode: Episode) -> String = { index, episode ->
+        "EP${index + 1} ${episode.title}"
+    }
 ) {
     val currentEpisodeIndex = remember(episodes, currentCid) {
         episodes.indexOfFirst { it.matchesCurrentCid(currentCid) }
@@ -358,7 +377,7 @@ fun VideoPlayerEpisodesRow(
                 itemsIndexed(episodes) { index, episode ->
                     VideoPlayerPageItem(
                         modifier = modifier,
-                        text = "EP${index + 1} ${episode.title}",
+                        text = episodeTitle(index, episode),
                         onClick = {
                             val firstPage = episode.pages.firstOrNull()
                             if (episode.pages.size > 1 && firstPage != null) {
@@ -544,18 +563,36 @@ private fun VideoPlayerPartSheetContent(
     interactiveNodes: List<InteractiveNode>,
     pages: List<VideoPage>,
     ugcSeason: UgcSeason?,
+    pgcEpisodes: List<Episode>,
     pgcSections: List<Section>,
     onClickInteractiveNode: (InteractiveNode) -> Unit,
     onClickPage: (VideoPage) -> Unit,
-    onClickEpisode: (Episode) -> Unit,
-    onClickEpisodePage: (episode: Episode, page: VideoPage) -> Unit = { _, _ -> }
+    onClickPgcEpisode: (Episode) -> Unit,
+    onClickEpisode: (sectionIndex: Int, episode: Episode) -> Unit,
+    onClickEpisodePage: (sectionIndex: Int, episode: Episode, page: VideoPage) -> Unit
 ) {
     var currentSection by remember { mutableStateOf(ugcSeason?.sections?.first()) }
+    var selectedPgcGroupIndex by rememberSaveable { mutableStateOf(0) }
     val interactiveListState = rememberLazyListState()
+    val pgcEpisodeListState = rememberLazyListState()
     val ugcEpisodeListState = rememberLazyListState()
     val pageListState = rememberLazyListState()
+    val pgcEpisodeGroups = remember(pgcEpisodes, pgcSections) {
+        buildPgcEpisodeGroups(
+            episodes = pgcEpisodes,
+            sections = pgcSections
+        )
+    }
+    val safeSelectedPgcGroupIndex = selectedPgcGroupIndex.coerceIn(
+        minimumValue = 0,
+        maximumValue = (pgcEpisodeGroups.lastIndex).coerceAtLeast(0)
+    )
+    val selectedPgcGroup = pgcEpisodeGroups.getOrNull(safeSelectedPgcGroupIndex)
     val currentInteractiveIndex = remember(interactiveNodes, currentCid) {
         interactiveNodes.indexOfFirst { it.cid == currentCid }
+    }
+    val currentPgcEpisodeIndex = remember(selectedPgcGroup, currentCid) {
+        selectedPgcGroup?.episodes?.indexOfFirst { it.matchesCurrentCid(currentCid) } ?: -1
     }
     val currentEpisodeIndex = remember(currentSection, currentCid) {
         currentSection?.episodes?.indexOfFirst { it.matchesCurrentCid(currentCid) } ?: -1
@@ -568,22 +605,36 @@ private fun VideoPlayerPartSheetContent(
         currentSection = section
     }
 
-    LaunchedEffect(currentCid) {
-        if (pgcSections.isNotEmpty()) {
-            currentSection =
-                pgcSections.find { it.episodes.any { episode -> episode.cid == currentCid } }
+    LaunchedEffect(currentCid, pgcEpisodeGroups, ugcSeason) {
+        if (pgcEpisodeGroups.isNotEmpty()) {
+            val currentGroupIndex = pgcEpisodeGroups.indexOfFirst { group ->
+                group.episodes.any { it.matchesCurrentCid(currentCid) }
+            }
+            if (currentGroupIndex >= 0) {
+                selectedPgcGroupIndex = currentGroupIndex
+            } else {
+                selectedPgcGroupIndex = 0
+            }
         } else if (ugcSeason != null) {
             currentSection = ugcSeason.sections.find {
                 it.episodes.any { episode ->
                     episode.cid == currentCid || episode.pages.any { page -> page.cid == currentCid }
                 }
-            }
+            } ?: ugcSeason.sections.firstOrNull()
         }
     }
 
     LaunchedEffect(currentInteractiveIndex) {
         if (currentInteractiveIndex >= 0) {
             interactiveListState.scrollToItem((currentInteractiveIndex - 1).coerceAtLeast(0))
+        }
+    }
+
+    LaunchedEffect(safeSelectedPgcGroupIndex, currentPgcEpisodeIndex) {
+        if (currentPgcEpisodeIndex >= 0) {
+            pgcEpisodeListState.scrollToItem((currentPgcEpisodeIndex - 1).coerceAtLeast(0))
+        } else {
+            pgcEpisodeListState.scrollToItem(0)
         }
     }
 
@@ -608,7 +659,7 @@ private fun VideoPlayerPartSheetContent(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (pgcSections.isNotEmpty()) {
+                        text = if (pgcEpisodeGroups.isNotEmpty()) {
                             "视频选集"
                         } else if (interactiveNodes.isNotEmpty()) {
                             "互动分支"
@@ -626,9 +677,57 @@ private fun VideoPlayerPartSheetContent(
             )
         }
         //Text("ugcSeason: $ugcSeason")
-        if (pgcSections.isNotEmpty()) {
-            // TODO pgc
-            Text("pgc")
+        if (pgcEpisodeGroups.isNotEmpty()) {
+            if (pgcEpisodeGroups.size > 1) {
+                SecondaryScrollableTabRow(
+                    selectedTabIndex = safeSelectedPgcGroupIndex,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    divider = {}
+                ) {
+                    pgcEpisodeGroups.forEachIndexed { index, group ->
+                        Tab(
+                            selected = safeSelectedPgcGroupIndex == index,
+                            onClick = { selectedPgcGroupIndex = index }
+                        ) {
+                            Box(
+                                modifier = Modifier.height(48.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    text = group.title,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            HorizontalDivider()
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface),
+                state = pgcEpisodeListState,
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                selectedPgcGroup?.let { group ->
+                    itemsIndexed(
+                        items = group.episodes,
+                        key = { index, episode -> "${group.key}:$index:${episode.id}:${episode.cid}" }
+                    ) { index, episode ->
+                        PageListItem(
+                            modifier = modifier,
+                            text = buildPgcEpisodeTitle(index, episode),
+                            duration = episode.duration,
+                            isPlaying = episode.matchesCurrentCid(currentCid),
+                            onClick = { onClickPgcEpisode(episode) }
+                        )
+                    }
+                }
+                item { Spacer(modifier = Modifier.navigationBarsPadding()) }
+            }
         } else if (interactiveNodes.isNotEmpty()) {
             HorizontalDivider()
             LazyColumn(
@@ -683,13 +782,18 @@ private fun VideoPlayerPartSheetContent(
                     contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
                     itemsIndexed(currentSection!!.episodes) { epIndex, episode ->
+                        val sectionIndex = ugcSeason.sections.indexOf(currentSection)
                         if (episode.pages.size <= 1) {
                             PageListItem(
                                 modifier = modifier,
                                 text = "EP${epIndex + 1} ${episode.title}",
                                 duration = episode.duration,
                                 isPlaying = episode.matchesCurrentCid(currentCid),
-                                onClick = { onClickEpisode(episode) }
+                                onClick = {
+                                    if (sectionIndex >= 0) {
+                                        onClickEpisode(sectionIndex, episode)
+                                    }
+                                }
                             )
                         } else {
                             Column {
@@ -715,7 +819,11 @@ private fun VideoPlayerPartSheetContent(
                                                 text = "P${pageIndex + 1} ${page.title}",
                                                 duration = page.duration,
                                                 isPlaying = page.cid == currentCid,
-                                                onClick = { onClickEpisodePage(episode, page) }
+                                                onClick = {
+                                                    if (sectionIndex >= 0) {
+                                                        onClickEpisodePage(sectionIndex, episode, page)
+                                                    }
+                                                }
                                             )
                                         }
                                     }
@@ -801,6 +909,53 @@ private fun PageListItem(
 
 private fun Episode.matchesCurrentCid(currentCid: Long): Boolean {
     return cid == currentCid || pages.any { it.cid == currentCid }
+}
+
+private data class PgcEpisodeGroup(
+    val key: String,
+    val title: String,
+    val episodes: List<Episode>
+)
+
+private fun buildPgcEpisodeGroups(
+    episodes: List<Episode>,
+    sections: List<Section>
+): List<PgcEpisodeGroup> = buildList {
+    if (episodes.isNotEmpty()) {
+        add(
+            PgcEpisodeGroup(
+                key = "positive",
+                title = "正片",
+                episodes = episodes
+            )
+        )
+    }
+    sections.forEachIndexed { index, section ->
+        if (section.episodes.isNotEmpty()) {
+            add(
+                PgcEpisodeGroup(
+                    key = "section:${section.id}:$index",
+                    title = section.title.ifBlank { "相关视频 ${index + 1}" },
+                    episodes = section.episodes
+                )
+            )
+        }
+    }
+}
+
+private fun buildPgcEpisodeTitle(index: Int, episode: Episode): String {
+    val title = episode.title.trim()
+    val longTitle = episode.longTitle.trim()
+    val primaryTitle = when {
+        title.isBlank() -> "第${index + 1}话"
+        title.all(Char::isDigit) -> "第${title}话"
+        else -> title
+    }
+    return if (longTitle.isNotBlank() && longTitle != title) {
+        "$primaryTitle $longTitle"
+    } else {
+        primaryTitle
+    }
 }
 
 @Composable
@@ -910,10 +1065,13 @@ private fun VideoPlayerPartSheetContentPagesPreview() {
             interactiveNodes = emptyList(),
             pages = pages,
             ugcSeason = null,
+            pgcEpisodes = emptyList(),
             pgcSections = emptyList(),
             onClickInteractiveNode = {},
             onClickPage = {},
-            onClickEpisode = {}
+            onClickPgcEpisode = {},
+            onClickEpisode = { _, _ -> },
+            onClickEpisodePage = { _, _, _ -> }
         )
     }
 }
@@ -966,10 +1124,13 @@ private fun VideoPlayerPartSheetContentUgcSeasonPreview() {
             interactiveNodes = emptyList(),
             pages = emptyList(),
             ugcSeason = ugcSeason,
+            pgcEpisodes = emptyList(),
             pgcSections = emptyList(),
             onClickInteractiveNode = {},
             onClickPage = {},
-            onClickEpisode = {}
+            onClickPgcEpisode = {},
+            onClickEpisode = { _, _ -> },
+            onClickEpisodePage = { _, _, _ -> }
         )
     }
 }
@@ -977,25 +1138,49 @@ private fun VideoPlayerPartSheetContentUgcSeasonPreview() {
 @Preview
 @Composable
 private fun VideoPlayerPartSheetContentPgcSectionsPreview() {
-    val pages = List(10) {
-        VideoPage(
-            cid = it.toLong(),
-            index = it,
-            title = "Page title $it",
-            duration = 1,
-            dimension = Dimension(0, 0)
+    val episodes = List(12) { index ->
+        Episode(
+            id = index + 1,
+            aid = (index + 1).toLong(),
+            bvid = "",
+            cid = (index + 1).toLong(),
+            epid = index + 1,
+            title = "${index + 1}",
+            longTitle = "第 ${index + 1} 集标题",
+            cover = "",
+            duration = 24 * 60,
+            dimension = Dimension(1920, 1080),
+            pages = emptyList()
         )
     }
+    val sections = listOf(
+        Section(
+            id = 100,
+            title = "预告与花絮",
+            episodes = episodes.take(3).mapIndexed { index, episode ->
+                episode.copy(
+                    id = 100 + index,
+                    cid = 100L + index,
+                    epid = 100 + index,
+                    title = "预告 ${index + 1}",
+                    longTitle = ""
+                )
+            }
+        )
+    )
     BVMobileTheme {
         VideoPlayerPartSheetContent(
             currentCid = 1,
             interactiveNodes = emptyList(),
-            pages = pages,
+            pages = emptyList(),
             ugcSeason = null,
-            pgcSections = emptyList(),
+            pgcEpisodes = episodes,
+            pgcSections = sections,
             onClickInteractiveNode = {},
             onClickPage = {},
-            onClickEpisode = {}
+            onClickPgcEpisode = {},
+            onClickEpisode = { _, _ -> },
+            onClickEpisodePage = { _, _, _ -> }
         )
     }
 }

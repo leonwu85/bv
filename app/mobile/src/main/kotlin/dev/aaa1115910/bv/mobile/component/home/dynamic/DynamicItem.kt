@@ -90,7 +90,6 @@ import dev.aaa1115910.bv.mobile.component.videocard.shareText
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.Prefs
-import dev.aaa1115910.bv.util.notYetImplemented
 import dev.aaa1115910.bv.util.resizedImageUrl
 import dev.aaa1115910.bv.util.toast
 import kotlinx.coroutines.Dispatchers
@@ -106,6 +105,7 @@ fun DynamicItem(
     previewerState: ImagePreviewerState = rememberPreviewerState(pageCount = { 0 }),
     onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit = { _, _ -> },
     onTempBlockAuthor: ((DynamicItem.DynamicAuthorModule) -> Unit)? = null,
+    onLike: (DynamicItem) -> Unit = {},
     onClick: (DynamicItem) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -152,8 +152,7 @@ fun DynamicItem(
                         onClick(dynamicItem)
                     },
                     onLike = {
-                        //TODO 动态点赞按钮
-                        notYetImplemented()
+                        onLike(dynamicItem)
                     }
                 )
             }

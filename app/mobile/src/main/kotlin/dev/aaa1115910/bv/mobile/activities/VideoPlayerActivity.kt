@@ -1,13 +1,21 @@
 package dev.aaa1115910.bv.mobile.activities
 
+import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.annotation.MainThread
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.kuaishou.akdanmaku.render.SimpleRenderer
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
@@ -44,6 +52,7 @@ import dev.aaa1115910.bv.viewmodel.video.VideoDetailViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.androidx.viewmodel.ext.android.viewModel
@@ -327,6 +336,13 @@ class VideoPlayerActivity : ComponentActivity() {
     private val seasonViewModel: SeasonViewModel by viewModel()
     private val videoDetailViewModel: VideoDetailViewModel by viewModel()
     private val logger = KotlinLogging.logger {}
+    private var pipModeActive by mutableStateOf(false)
+    private var pgcEpisodeRefreshJob: Job? = null
+    private var vodLaunchJob: Job? = null
+
+    private val pictureInPictureSupported: Boolean
+        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
 
     private data class InitialVodPlaybackTarget(
         val aid: Long,
@@ -361,8 +377,92 @@ class VideoPlayerActivity : ComponentActivity() {
                     commentVideModel = activityCommentViewModel,
                     seasonVideModel = activitySeasonViewModel,
                     videoDetailViewModel = activityVideoDetailViewModel,
-                    windowSizeClass = windowSizeClass
+                    windowSizeClass = windowSizeClass,
+                    isInPictureInPictureMode = pipModeActive,
+                    pictureInPictureSupported = pictureInPictureSupported,
+                    onEnterPictureInPicture = ::enterPlayerPictureInPicture,
+                    onPlayPgcEpisode = ::playPgcEpisode
                 )
+            }
+        }
+    }
+
+    private fun enterPlayerPictureInPicture() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (!pictureInPictureSupported || pipModeActive || isFinishing) return
+
+        val width = playerViewModel.currentVideoWidth.takeIf { it > 0 }
+            ?: playerViewModel.videoPlayer?.videoWidth?.takeIf { it > 0 }
+            ?: 16
+        val height = playerViewModel.currentVideoHeight.takeIf { it > 0 }
+            ?: playerViewModel.videoPlayer?.videoHeight?.takeIf { it > 0 }
+            ?: 9
+        val aspectRatio = when {
+            width.toFloat() / height > 2.39f -> Rational(239, 100)
+            width.toFloat() / height < 1f / 2.39f -> Rational(100, 239)
+            else -> Rational(width, height)
+        }
+
+        runCatching {
+            enterPictureInPictureMode(
+                PictureInPictureParams.Builder()
+                    .setAspectRatio(aspectRatio)
+                    .build()
+            )
+        }.onFailure {
+            logger.warn(it) { "Enter picture-in-picture failed" }
+            "无法进入画中画：${it.localizedMessage ?: "系统不支持"}".toast(this)
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        pipModeActive = isInPictureInPictureMode
+    }
+
+    private fun playPgcEpisode(episode: Episode) {
+        val season = seasonViewModel.seasonData
+        val episodeId = episode.epid ?: episode.id.takeIf { it > 0 }
+        if (season == null || episode.aid <= 0L || episode.cid <= 0L || episodeId == null) {
+            "剧集信息无效，无法播放".toast(this)
+            return
+        }
+
+        seasonViewModel.epId = episodeId
+        seasonViewModel.seasonId = season.seasonId
+        playerViewModel.fromSeason = true
+        playerViewModel.epid = episodeId
+        playerViewModel.seasonId = season.seasonId
+        playerViewModel.subType = season.subType
+        applySeasonMetadata(season, episode)
+        commentViewModel.setCommentTarget(commentId = episode.aid, commentType = 1)
+        playerViewModel.loadPlayUrl(
+            avid = episode.aid,
+            cid = episode.cid,
+            epid = episodeId,
+            seasonId = season.seasonId,
+            continuePlayNext = true
+        )
+
+        pgcEpisodeRefreshJob?.cancel()
+        pgcEpisodeRefreshJob = lifecycleScope.launch {
+            launch {
+                runCatching {
+                    videoDetailViewModel.loadDetail(
+                        aid = episode.aid,
+                        fromPgcSeason = true
+                    )
+                }.onFailure {
+                    if (it is CancellationException) throw it
+                    logger.fInfo { "Refresh selected PGC episode detail failed: ${it.stackTraceToString()}" }
+                    it.message?.toast(this@VideoPlayerActivity)
+                }
+            }
+            launch {
+                commentViewModel.loadMoreComment()
             }
         }
     }
@@ -467,8 +567,15 @@ class VideoPlayerActivity : ComponentActivity() {
     private fun parseIntent(launchArgs: VideoLaunchArgs = VideoLaunchArgs.fromIntent(intent)) {
         val settings = PlayerSettingsProvider.current
         if (launchArgs.isLive) {
+            vodLaunchJob?.cancel()
+            pgcEpisodeRefreshJob?.cancel()
+            seasonViewModel.clearSeasonData()
             logger.fInfo { "Launch live parameter: [roomId=${launchArgs.liveRoomId}, watchedNum=${launchArgs.liveWatchedNum}]" }
             playerViewModel.apply {
+                fromSeason = false
+                epid = 0
+                seasonId = 0
+                subType = 0
                 this.title = launchArgs.title
                 this.upName = launchArgs.upName
                 this.upFace = launchArgs.upFace
@@ -498,9 +605,17 @@ class VideoPlayerActivity : ComponentActivity() {
         val epid = launchArgs.epid
         val seasonId = launchArgs.seasonId
 
+        vodLaunchJob?.cancel()
+        pgcEpisodeRefreshJob?.cancel()
+        seasonViewModel.clearSeasonData()
+        playerViewModel.fromSeason = false
+        playerViewModel.epid = 0
+        playerViewModel.seasonId = 0
+        playerViewModel.subType = 0
+
         // Coordinate player and Compose state on Main. Only blocking network/file work is
         // dispatched to IO below, so state creation and mutation cannot race initial composition.
-        lifecycleScope.launch {
+        vodLaunchJob = lifecycleScope.launch {
             if (aid == 0L && cid == 0L) {
                 runCatching {
                     val acid = withContext(Dispatchers.IO) {
@@ -576,11 +691,28 @@ class VideoPlayerActivity : ComponentActivity() {
                     )
                 }
 
+                commentViewModel.setCommentTarget(
+                    commentId = target.aid,
+                    commentType = 1
+                )
+                if (!useOfflineOnly && target.aid > 0L && target.aid != aid) {
+                    runCatching {
+                        videoDetailViewModel.loadDetail(target.aid, fromSeason)
+                    }.onFailure {
+                        if (it is CancellationException) throw it
+                        it.message?.toast(this@VideoPlayerActivity)
+                    }
+                }
+
                 playerViewModel.fromSeason = fromSeason && !useOfflineOnly
                 playerViewModel.lastPlayed = target.playedMs
                 playerViewModel.subType = target.subType
                 playerViewModel.epid = target.epid ?: 0
                 playerViewModel.seasonId = target.seasonId ?: 0
+                if (fromSeason && !useOfflineOnly) {
+                    seasonViewModel.epId = target.epid
+                    seasonViewModel.seasonId = target.seasonId
+                }
                 playerViewModel.loadPlayUrl(
                     avid = target.aid,
                     cid = target.cid,
@@ -649,18 +781,20 @@ class VideoPlayerActivity : ComponentActivity() {
         val targetEpisode = historyEpisode ?: requestedEpisode ?: season?.episodes?.firstOrNull()
 
         return if (targetEpisode != null && season != null) {
+            val targetEpisodeId = targetEpisode.epid ?: targetEpisode.id.takeIf { it > 0 }
             applySeasonMetadata(season, targetEpisode)
             InitialVodPlaybackTarget(
                 aid = targetEpisode.aid,
                 cid = targetEpisode.cid,
-                epid = targetEpisode.epid,
+                epid = targetEpisodeId,
                 seasonId = season.seasonId,
                 subType = season.subType,
                 playedMs = if (
                     settings.playerDefaultStartPosition == PlayerDefaultStartPosition.History &&
-                    historyEpisode?.epid == targetEpisode.epid
+                    historyEpisode != null &&
+                    (historyEpisode.epid ?: historyEpisode.id) == targetEpisodeId
                 ) {
-                    history?.lastTime?.coerceAtLeast(0)?.times(1000) ?: 0
+                    history.lastTime.coerceAtLeast(0) * 1000
                 } else {
                     0
                 }
@@ -727,7 +861,9 @@ class VideoPlayerActivity : ComponentActivity() {
 
     private fun SeasonDetail.findEpisodeByEpId(epId: Int?): Episode? {
         if (epId == null) return null
-        return allEpisodes().firstOrNull { it.epid == epId }
+        return allEpisodes().firstOrNull {
+            it.epid == epId || (it.epid == null && it.id == epId)
+        }
     }
 
     private fun SeasonDetail.findEpisodeByAidCid(aid: Long, cid: Long): Episode? {
@@ -753,6 +889,9 @@ class VideoPlayerActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        if (pipModeActive || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode)) {
+            return
+        }
         if (playerViewModel.isLive) {
             playerViewModel.stopLiveDanmaku()
         } else {
