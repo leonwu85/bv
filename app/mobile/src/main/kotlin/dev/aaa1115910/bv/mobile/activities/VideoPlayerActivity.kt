@@ -64,6 +64,7 @@ data class VideoLaunchArgs(
     val fromSeason: Boolean,
     val fromToView: Boolean,
     val playOfflineCache: Boolean,
+    val resumeHistory: Boolean,
     val cover: String,
     val partTitle: String,
     val epid: Int?,
@@ -87,6 +88,7 @@ data class VideoLaunchArgs(
                 fromSeason = intent.getBooleanExtra("fromSeason", false),
                 fromToView = intent.getBooleanExtra("fromToView", false),
                 playOfflineCache = intent.getBooleanExtra("playOfflineCache", false),
+                resumeHistory = intent.getBooleanExtra("resumeHistory", true),
                 cover = intent.getStringExtra("cover") ?: "",
                 partTitle = intent.getStringExtra("partTitle") ?: "",
                 epid = intent.getIntExtra("epid", 0).takeIf { it != 0 },
@@ -146,6 +148,7 @@ class VideoPlayerActivity : ComponentActivity() {
             epid: Int? = null,
             seasonId: Int? = null,
             playOfflineCache: Boolean = false,
+            resumeHistory: Boolean = true,
         ) {
             context.startActivity(
                 Intent(context, VideoPlayerActivity::class.java).apply {
@@ -155,6 +158,7 @@ class VideoPlayerActivity : ComponentActivity() {
                     putExtra("fromSeason", fromSeason)
                     putExtra("fromToView", fromToView)
                     putExtra("playOfflineCache", playOfflineCache)
+                    putExtra("resumeHistory", resumeHistory)
                     putExtra("cover", cover)
                     putExtra("title", title)
                     putExtra("partTitle", partTitle)
@@ -681,6 +685,7 @@ class VideoPlayerActivity : ComponentActivity() {
                         cid = cid,
                         epid = epid,
                         seasonId = seasonId,
+                        resumeHistory = launchArgs.resumeHistory,
                         settings = settings
                     )
                 } else {
@@ -765,6 +770,7 @@ class VideoPlayerActivity : ComponentActivity() {
         cid: Long,
         epid: Int?,
         seasonId: Int?,
+        resumeHistory: Boolean,
         settings: dev.aaa1115910.bv.settings.PlayerSettingsSource
     ): InitialVodPlaybackTarget {
         seasonViewModel.epId = epid
@@ -778,7 +784,11 @@ class VideoPlayerActivity : ComponentActivity() {
         }
         val requestedEpisode = season?.findEpisodeByEpId(epid)
             ?: season?.findEpisodeByAidCid(aid, cid)
-        val targetEpisode = historyEpisode ?: requestedEpisode ?: season?.episodes?.firstOrNull()
+        val targetEpisode = if (resumeHistory) {
+            historyEpisode ?: requestedEpisode
+        } else {
+            requestedEpisode ?: historyEpisode
+        } ?: season?.episodes?.firstOrNull()
 
         return if (targetEpisode != null && season != null) {
             val targetEpisodeId = targetEpisode.epid ?: targetEpisode.id.takeIf { it > 0 }
@@ -792,6 +802,11 @@ class VideoPlayerActivity : ComponentActivity() {
                 playedMs = if (
                     settings.playerDefaultStartPosition == PlayerDefaultStartPosition.History &&
                     historyEpisode != null &&
+                    (
+                        resumeHistory ||
+                            (requestedEpisode?.epid ?: requestedEpisode?.id) ==
+                            (historyEpisode.epid ?: historyEpisode.id)
+                        ) &&
                     (historyEpisode.epid ?: historyEpisode.id) == targetEpisodeId
                 ) {
                     history.lastTime.coerceAtLeast(0) * 1000

@@ -6,8 +6,8 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.snapshots.SnapshotStateMap
@@ -225,24 +225,15 @@ fun LazyListState.OnBottomReached(
     enabled: Boolean = true,
     loadMore: () -> Unit
 ) {
-    val shouldLoadMore = remember(enabled) {
-        derivedStateOf {
-            if (!enabled) return@derivedStateOf false
-
-            val totalItemsCount = layoutInfo.totalItemsCount
-            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
-                ?: return@derivedStateOf totalItemsCount == 0
-
-            lastVisibleItem.index >= totalItemsCount - 5
-        }
-    }
-
-    LaunchedEffect(shouldLoadMore, loading, enabled) {
-        snapshotFlow { shouldLoadMore.value }
-            .collect {
-                if (it && enabled && !loading) loadMore()
-            }
-    }
+    val state = this
+    BottomReachedEffect(
+        stateKey = state,
+        loading = loading,
+        enabled = enabled,
+        totalItemsCount = { state.layoutInfo.totalItemsCount },
+        lastVisibleItemIndex = { state.layoutInfo.visibleItemsInfo.lastOrNull()?.index },
+        loadMore = loadMore
+    )
 }
 
 @Composable
@@ -251,24 +242,15 @@ fun LazyGridState.OnBottomReached(
     enabled: Boolean = true,
     loadMore: () -> Unit
 ) {
-    val shouldLoadMore = remember(enabled) {
-        derivedStateOf {
-            if (!enabled) return@derivedStateOf false
-
-            val totalItemsCount = layoutInfo.totalItemsCount
-            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
-                ?: return@derivedStateOf totalItemsCount == 0
-
-            lastVisibleItem.index >= totalItemsCount - 5
-        }
-    }
-
-    LaunchedEffect(shouldLoadMore, loading, enabled) {
-        snapshotFlow { shouldLoadMore.value }
-            .collect {
-                if (it && enabled && !loading) loadMore()
-            }
-    }
+    val state = this
+    BottomReachedEffect(
+        stateKey = state,
+        loading = loading,
+        enabled = enabled,
+        totalItemsCount = { state.layoutInfo.totalItemsCount },
+        lastVisibleItemIndex = { state.layoutInfo.visibleItemsInfo.lastOrNull()?.index },
+        loadMore = loadMore
+    )
 }
 
 @Composable
@@ -277,22 +259,82 @@ fun LazyStaggeredGridState.OnBottomReached(
     enabled: Boolean = true,
     loadMore: () -> Unit
 ) {
-    val shouldLoadMore = remember(enabled) {
-        derivedStateOf {
-            if (!enabled) return@derivedStateOf false
+    val state = this
+    BottomReachedEffect(
+        stateKey = state,
+        loading = loading,
+        enabled = enabled,
+        totalItemsCount = { state.layoutInfo.totalItemsCount },
+        lastVisibleItemIndex = { state.layoutInfo.visibleItemsInfo.lastOrNull()?.index },
+        loadMore = loadMore
+    )
+}
 
-            val totalItemsCount = layoutInfo.totalItemsCount
-            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
-                ?: return@derivedStateOf totalItemsCount == 0
+@Composable
+private fun BottomReachedEffect(
+    stateKey: Any,
+    loading: Boolean,
+    enabled: Boolean,
+    totalItemsCount: () -> Int,
+    lastVisibleItemIndex: () -> Int?,
+    loadMore: () -> Unit
+) {
+    val currentLoading = rememberUpdatedState(loading)
+    val currentEnabled = rememberUpdatedState(enabled)
+    val currentLoadMore = rememberUpdatedState(loadMore)
+    val loadGuard = remember(stateKey) { BottomReachedLoadGuard() }
 
-            lastVisibleItem.index >= totalItemsCount - 5
+    LaunchedEffect(stateKey) {
+        snapshotFlow {
+            val itemCount = totalItemsCount()
+            val lastVisibleIndex = lastVisibleItemIndex()
+            val isNearEnd = lastVisibleIndex?.let {
+                it >= itemCount - BottomReachedThreshold
+            } ?: (itemCount == 0)
+            BottomReachedSnapshot(
+                shouldLoadMore = currentEnabled.value && isNearEnd,
+                loading = currentLoading.value,
+                totalItemsCount = itemCount
+            )
+        }.collect { snapshot ->
+            if (
+                loadGuard.shouldTrigger(
+                    shouldLoadMore = snapshot.shouldLoadMore,
+                    loading = snapshot.loading,
+                    totalItemsCount = snapshot.totalItemsCount
+                )
+            ) {
+                currentLoadMore.value()
+            }
         }
     }
+}
 
-    LaunchedEffect(shouldLoadMore, loading, enabled) {
-        snapshotFlow { shouldLoadMore.value }
-            .collect {
-                if (it && enabled && !loading) loadMore()
-            }
+private const val BottomReachedThreshold = 5
+
+private data class BottomReachedSnapshot(
+    val shouldLoadMore: Boolean,
+    val loading: Boolean,
+    val totalItemsCount: Int
+)
+
+internal class BottomReachedLoadGuard {
+    private var lastTriggeredItemCount: Int? = null
+
+    fun shouldTrigger(
+        shouldLoadMore: Boolean,
+        loading: Boolean,
+        totalItemsCount: Int
+    ): Boolean {
+        if (!shouldLoadMore) {
+            lastTriggeredItemCount = null
+            return false
+        }
+        if (loading || lastTriggeredItemCount == totalItemsCount) {
+            return false
+        }
+
+        lastTriggeredItemCount = totalItemsCount
+        return true
     }
 }

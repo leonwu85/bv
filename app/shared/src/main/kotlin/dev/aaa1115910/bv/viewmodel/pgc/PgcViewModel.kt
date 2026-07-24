@@ -21,8 +21,10 @@ import dev.aaa1115910.bv.util.fWarn
 import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 
 abstract class PgcViewModel(
@@ -49,6 +51,7 @@ abstract class PgcViewModel(
     var updating by mutableStateOf(false)
     var hasNext by mutableStateOf(true)
     private var cursor = 0
+    private val feedLoadMutex = Mutex()
 
     fun init() {
         loadMore()
@@ -61,9 +64,16 @@ abstract class PgcViewModel(
      * 加载更多推荐数据
      */
     fun loadMore() {
-        if (hasNext) {
-            viewModelScope.launch(Dispatchers.IO) {
+        if (!hasNext || !feedLoadMutex.tryLock()) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
                 updateFeed()
+            } finally {
+                feedLoadMutex.unlock()
+                withContext(NonCancellable + Dispatchers.Main) {
+                    updating = false
+                }
             }
         }
     }
@@ -74,9 +84,9 @@ abstract class PgcViewModel(
     fun reloadAll() {
         logger.fInfo { "Reload all $pgcType data" }
         clearAll()
+        loadMore()
         viewModelScope.launch(Dispatchers.IO) {
             updateCarousel()
-            updateFeed()
         }
     }
 
@@ -124,9 +134,8 @@ abstract class PgcViewModel(
      * 获取推荐数据
      */
     private suspend fun updateFeed() {
-        if (updating) return
         withContext(Dispatchers.Main) { updating = true }
-        logger.fInfo { "Update anime feed" }
+        logger.fInfo { "Update $pgcType feed" }
         runCatching {
             val pgcFeedData = pgcRepository.getFeed(
                 pgcType = pgcType,
@@ -138,7 +147,6 @@ abstract class PgcViewModel(
         }.onFailure {
             logger.fInfo { "Update $pgcType feeds failed: ${it.stackTraceToString()}" }
         }
-        withContext(Dispatchers.Main) { updating = false }
     }
 
     /**

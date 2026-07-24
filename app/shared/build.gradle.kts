@@ -176,6 +176,10 @@ dependencies {
     debugApi(androidx.compose.ui.tooling)
 }
 
+tasks.withType<Test> {
+    useJUnitPlatform()
+}
+
 protobuf {
     protoc {
         artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"

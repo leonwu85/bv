@@ -192,6 +192,22 @@
     <string name="season_count_tip">系列共 %1$s 部</string>
     <string name="season_feature_film">正片</string>
     <string name="season_no_feature_film">还没有正片</string>
+    <string name="season_info_episode_section">剧集</string>
+    <string name="season_info_episode_count">共 %1$d 集</string>
+    <string name="season_info_start_play">开始播放 %1$s</string>
+    <string name="season_info_continue_play">继续播放 %1$s</string>
+    <string name="season_info_last_watched">上次看到 %1$s</string>
+    <string name="season_info_last_watched_badge">上次看到</string>
+    <string name="season_info_comments">评论</string>
+    <string name="season_info_settings">看设定</string>
+    <string name="season_info_settings_title">剧集设定</string>
+    <string name="season_info_description">简介</string>
+    <string name="season_info_original_title">原名</string>
+    <string name="season_info_genres">类型</string>
+    <string name="season_info_published_at">开播</string>
+    <string name="season_info_latest_update">最新更新</string>
+    <string name="season_info_comment_episode">正在查看 %1$s 的评论</string>
+    <string name="season_info_comment_reply_hint">请在播放页发表评论</string>
 
     <string name="settings_crash_test_text">点一下崩一下，崩溃不花一份钱</string>
     <string name="settings_crash_test_title">崩溃测试</string>
