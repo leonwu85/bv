@@ -152,8 +152,12 @@ object GeetestCompanionService {
         if (payload.challenge.isBlank() || payload.validate.isBlank() || payload.seccode.isBlank()) {
             return false
         }
-        session.completed = true
-        session.result = payload
+        synchronized(session) {
+            // 手机浏览器可能因重复点击或网络重试并发提交；同一会话只投递一次结果。
+            if (session.completed) return true
+            session.completed = true
+            session.result = payload
+        }
         runCatching { session.onResult(payload) }
             .onFailure { logger.warn(it) { "Geetest companion onResult failed" } }
         return true

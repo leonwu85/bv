@@ -3,6 +3,8 @@ package dev.aaa1115910.bv.viewmodel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class GeetestChallengeRefreshTest {
     @Test
@@ -68,6 +70,34 @@ class GeetestChallengeRefreshTest {
                 expectedSourceChallenge = "registration-new",
                 sourceChallenge = "registration-old",
                 resultChallenge = "result-old",
+            )
+        )
+    }
+
+    @Test
+    fun acceptsRegistrationOnlyForCurrentPlaybackSessionAndGeneration() {
+        assertTrue(
+            isCurrentGeetestRegistration(
+                registrationGeneration = 7,
+                currentRegistrationGeneration = 7,
+                playbackSessionToken = 12,
+                currentPlaybackSessionToken = 12,
+            )
+        )
+        assertFalse(
+            isCurrentGeetestRegistration(
+                registrationGeneration = 7,
+                currentRegistrationGeneration = 7,
+                playbackSessionToken = 11,
+                currentPlaybackSessionToken = 12,
+            )
+        )
+        assertFalse(
+            isCurrentGeetestRegistration(
+                registrationGeneration = 6,
+                currentRegistrationGeneration = 7,
+                playbackSessionToken = 12,
+                currentPlaybackSessionToken = 12,
             )
         )
     }

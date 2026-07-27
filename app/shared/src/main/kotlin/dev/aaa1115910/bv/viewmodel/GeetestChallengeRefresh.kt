@@ -32,3 +32,12 @@ internal fun validatedGeetestResultChallengeOrNull(
     }
     return normalizedResult
 }
+
+internal fun isCurrentGeetestRegistration(
+    registrationGeneration: Long,
+    currentRegistrationGeneration: Long,
+    playbackSessionToken: Long,
+    currentPlaybackSessionToken: Long,
+): Boolean =
+    registrationGeneration == currentRegistrationGeneration &&
+        playbackSessionToken == currentPlaybackSessionToken
