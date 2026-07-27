@@ -209,7 +209,7 @@ fun BvPlayer(
     onOpenUpSpace: () -> Unit = {},
     onShowDanmakuChange: (Boolean) -> Unit = {},
     onLoopPlayModeChange: (Boolean) -> Unit = {},
-    onRefreshVideo: () -> Unit = {},
+    onRefreshVideo: (resumePositionMs: Long) -> Unit = {},
     onLiveRetry: () -> Unit = {},
     onInfoVisibilityChanged: (Boolean) -> Unit = {},
     commentPanelVisible: Boolean = false,
@@ -1678,7 +1678,28 @@ fun BvPlayer(
             },
             onRequestFocus = { focusRequester.requestFocus(scope) },
             onOpenUpSpace = onOpenUpSpace,
-            onRefreshVideo = onRefreshVideo,
+            onRefreshVideo = {
+                val resumePositionMs = videoPlayer.currentPosition
+                    .takeIf { it > 0L }
+                    ?: videoPlayerHistoryData.lastPlayed.toLong().coerceAtLeast(0L)
+                logger.info {
+                    "Retry playback from ${resumePositionMs.formatHourMinSec()}"
+                }
+
+                if (!videoPlayerConfigData.isLive) {
+                    if (resumePositionMs > 0L) {
+                        scheduleDanmakuSeekSync(resumePositionMs, true)
+                    } else {
+                        pendingDanmakuPosition = 0L
+                        danmakuNeedsResume = true
+                        mDanmakuPlayer?.pause()
+                    }
+                }
+                isError = false
+                exception = null
+                isBuffering = true
+                onRefreshVideo(resumePositionMs)
+            },
             onOpenDanmaku = {
                 onShowDanmakuChange(true)
                 videoPlayerConfigData.showDanmaku = true

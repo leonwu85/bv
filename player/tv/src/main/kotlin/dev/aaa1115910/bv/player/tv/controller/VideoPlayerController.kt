@@ -409,6 +409,22 @@ fun VideoPlayerController(
             .focusable()
             //.ifElse(hasFocus, Modifier.border(2.dp, Color.Yellow))
             .onPreviewKeyEvent {
+                val isRetryConfirmKey = when (it.nativeKeyEvent.keyCode) {
+                    AndroidKeyEvent.KEYCODE_DPAD_CENTER,
+                    AndroidKeyEvent.KEYCODE_ENTER,
+                    AndroidKeyEvent.KEYCODE_NUMPAD_ENTER -> true
+
+                    else -> false
+                }
+                if (videoPlayerStateData.isError && isRetryConfirmKey) {
+                    if (it.type == KeyEventType.KeyUp) {
+                        logger.fInfo { "[${it.key}] retry playback after error" }
+                        hideAllControllers()
+                        onRefreshVideo()
+                    }
+                    return@onPreviewKeyEvent true
+                }
+
                 val shortcutAction = shortcutActionForKeyCode(it.nativeKeyEvent.keyCode)
                 if (shortcutAction != null) {
                     if (showClickableControllers || showSeekController) {

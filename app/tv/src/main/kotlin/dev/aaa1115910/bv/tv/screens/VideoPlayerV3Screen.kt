@@ -718,7 +718,7 @@ fun VideoPlayerV3Screen(
                         }
                     }
                 },
-                onRefreshVideo = {
+                onRefreshVideo = { resumePositionMs ->
                     if (playerViewModel.isLive) {
                         // 直播模式：重新获取直播流 URL
                         logger.info { "Reload live stream for room ${playerViewModel.liveRoomId}" }
@@ -727,15 +727,18 @@ fun VideoPlayerV3Screen(
                             playerViewModel.currentLiveQn
                         )
                     } else {
-                        val time = playerViewModel.videoPlayer?.currentPosition ?: 0
-                        logger.info { "Reload video and back to time: ${time.formatHourMinSec()}" }
-                        scope.launch {
-                            playerViewModel.playQuality()
-                            delay(300)
-                            playerViewModel.videoPlayer?.seekTo(time)
-                            playerViewModel.danmakuPlayer?.pause()
-                            playerViewModel.videoPlayer?.start()
+                        logger.info {
+                            "Reload video and resume from ${resumePositionMs.formatHourMinSec()}"
                         }
+                        playerViewModel.loadPlayUrl(
+                            avid = playerViewModel.currentAid,
+                            cid = playerViewModel.currentCid,
+                            epid = playerViewModel.epid.takeIf { it > 0 },
+                            seasonId = playerViewModel.seasonId.takeIf { it > 0 },
+                            initialSeekPositionMs = resumePositionMs.takeIf { it > 0L },
+                            forceStartPlayback = true,
+                            preferOfflineCache = playerViewModel.currentPlaybackOffline
+                        )
                     }
                 },
                 onLiveRetry = {

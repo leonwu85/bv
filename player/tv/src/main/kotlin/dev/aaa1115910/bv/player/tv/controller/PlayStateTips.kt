@@ -176,7 +176,7 @@ fun PlayErrorTip(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "按任意键重试",
+                text = "按确定键重试",
                 color = PlayerColors.textSecondary,
                 style = MaterialTheme.typography.bodyMedium
             )
