@@ -1097,7 +1097,13 @@ class UserRepository(
     suspend fun getUserInfo(mid: Long): UserInfoData {
         val response = BiliHttpApi.getUserInfo(
             uid = mid,
-            sessData = authRepository.sessionData ?: ""
+            sessData = authRepository.sessionData ?: "",
+            dedeUserID = authRepository.mid,
+            buvid3 = authRepository.buvid3,
+            dedeUserIDCkMd5 = authRepository.dedeUserIDCkMd5,
+            biliJct = authRepository.biliJct,
+            sid = authRepository.sid,
+            gaiaVtoken = authRepository.gaiaVtoken
         ).getResponseData()
         return response
     }
@@ -1115,6 +1121,9 @@ class UserRepository(
     }
 
     suspend fun getAppUserSpace(mid: Long): AppUserSpaceData {
-        return BiliHttpApi.getAppUserSpace(mid).getResponseData()
+        return BiliHttpApi.getAppUserSpace(
+            mid = mid,
+            accessKey = authRepository.accessToken
+        ).getResponseData()
     }
 }

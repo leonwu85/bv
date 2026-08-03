@@ -23,6 +23,12 @@ import kotlinx.coroutines.withContext
 import org.koin.core.annotation.Single
 import java.util.Date
 
+data class ValidatedUserIdentity(
+    val uid: Long,
+    val username: String,
+    val avatar: String
+)
+
 @Single
 class UserRepository(
     private val authRepository: AuthRepository,
@@ -170,29 +176,54 @@ class UserRepository(
      * Verifies that the cookie returned by a login flow is usable before it is persisted.
      * The account id from the authenticated endpoint must match the one from the login result.
      */
-    suspend fun validateAuthData(authData: AuthData) {
+    suspend fun validateAuthData(authData: AuthData): ValidatedUserIdentity {
         require(authData.uid > 0L) { "Invalid account id returned by login" }
         require(authData.sessData.isNotBlank()) { "Login cookie is empty" }
 
-        val profile = BiliHttpApi.getUserSelfInfo(
+        val profile = BiliHttpApi.getWebInterfaceNav(
             buvid3 = Prefs.buvid3,
-            sessData = authData.sessData
+            sessData = authData.sessData,
+            dedeUserID = authData.uid,
+            dedeUserIDCkMd5 = authData.uidCkMd5,
+            biliJct = authData.biliJct,
+            sid = authData.sid
         ).getResponseData()
+        check(profile.isLogin) { "Login cookie is not authenticated" }
         check(profile.mid == authData.uid) {
             "Login cookie does not match the returned account"
         }
+        return ValidatedUserIdentity(
+            uid = profile.mid,
+            username = profile.uname,
+            avatar = profile.face
+        )
     }
 
-    suspend fun addUser(authData: AuthData) {
+    suspend fun addUser(
+        authData: AuthData,
+        identity: ValidatedUserIdentity? = null
+    ) {
+        require(identity == null || identity.uid == authData.uid) {
+            "Validated account does not match the login result"
+        }
+
         val existUser = db.userDao().findUserByUid(authData.uid)
         existUser?.let {
             it.auth = authData.toJson()
+            identity?.username?.takeIf(String::isNotBlank)?.let { username ->
+                it.username = username
+            }
+            identity?.avatar?.takeIf(String::isNotBlank)?.let { avatar ->
+                it.avatar = avatar
+            }
             db.userDao().update(it)
         } ?: let {
             val newUser = UserDB(
                 uid = authData.uid,
-                username = "User ${authData.uid}",
-                avatar = "https://i0.hdslb.com/bfs/article/b6b843d84b84a3ba5526b09ebf538cd4b4c8c3f3.jpg",
+                username = identity?.username?.takeIf(String::isNotBlank)
+                    ?: "User ${authData.uid}",
+                avatar = identity?.avatar?.takeIf(String::isNotBlank)
+                    ?: "https://i0.hdslb.com/bfs/article/b6b843d84b84a3ba5526b09ebf538cd4b4c8c3f3.jpg",
                 auth = authData.toJson()
             )
             db.userDao().insert(newUser)
@@ -201,7 +232,11 @@ class UserRepository(
         reloadFromPrefs()
         BVApp.instance?.initRepository()
         BVApp.instance?.initProxy()
-        updateAvatar()
+        if (identity == null) {
+            updateAvatar()
+        } else {
+            reloadAvatar()
+        }
     }
 
     suspend fun updateAvatar() {
@@ -209,9 +244,19 @@ class UserRepository(
         user?.let {
             runCatching {
                 val responseData =
-                    BiliHttpApi.getUserSelfInfo(sessData = Prefs.sessData).getResponseData()
+                    BiliHttpApi.getWebInterfaceNav(
+                        buvid3 = Prefs.buvid3,
+                        sessData = sessData,
+                        dedeUserID = uid,
+                        dedeUserIDCkMd5 = uidCkMd5,
+                        biliJct = biliJct,
+                        sid = sid
+                    ).getResponseData()
+                check(responseData.isLogin && responseData.mid == uid) {
+                    "Current account cookie is not authenticated"
+                }
                 logger.fInfo { "Updating user name and avatar" }
-                username = responseData.name
+                username = responseData.uname
                 avatar = responseData.face
                 user.username = username
                 user.avatar = avatar

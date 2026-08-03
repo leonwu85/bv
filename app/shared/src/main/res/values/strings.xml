@@ -360,6 +360,16 @@
     <string name="sms_login_code">验证码</string>
     <string name="sms_login_phone_number">手机号</string>
     <string name="sms_login_toast_send_sms_first">请先发送验证码</string>
+    <string name="sms_login_title">短信登录</string>
+    <string name="sms_login_phone_hint">当前支持中国大陆 +86 手机号；若触发人机验证，可使用遥控器或手机完成</string>
+    <string name="sms_login_invalid_phone">请输入 11 位手机号</string>
+    <string name="sms_login_invalid_code">请输入 6 位短信验证码</string>
+    <string name="sms_login_sending">发送中…</string>
+    <string name="sms_login_logging_in">登录中…</string>
+    <string name="sms_login_code_sent">验证码已发送，请在 5 分钟内完成登录</string>
+    <string name="login_method_web_qr">Web 扫码登录</string>
+    <string name="login_method_app_qr">App 扫码登录</string>
+    <string name="login_method_sms">短信登录</string>
 
     <string name="theme_type_auto">跟随系统</string>
     <string name="theme_type_dark">深色</string>

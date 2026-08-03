@@ -48,6 +48,8 @@ class LoginRepository {
         var resultCookies: WebCookies? = null
         val resultState = when (responseData.code) {
             0 -> {
+                val sessDataCookie = cookies.find { it.name == "SESSDATA" }
+                    ?: throw IllegalArgumentException("Cookie SESSDATA not found")
                 resultCookies = WebCookies(
                     dedeUserId = cookies.find { it.name == "DedeUserID" }?.value?.toLong()
                         ?: throw IllegalArgumentException("Cookie DedeUserID not found"),
@@ -57,10 +59,10 @@ class LoginRepository {
                         ?: throw IllegalArgumentException("Cookie sid not found"),
                     biliJct = cookies.find { it.name == "bili_jct" }?.value
                         ?: throw IllegalArgumentException("Cookie bili_jct not found"),
-                    sessData = cookies.find { it.name == "SESSDATA" }?.value
-                        ?: throw IllegalArgumentException("Cookie SESSDATA not found"),
-                    expiredDate = cookies.firstOrNull()?.expires?.toJvmDate()
-                        ?: throw IllegalArgumentException("Cookie expires date not found")
+                    sessData = sessDataCookie.value,
+                    // Some Web login responses omit Expires. The value is metadata only;
+                    // authentication validity is checked against the authenticated profile API.
+                    expiredDate = sessDataCookie.expires?.toJvmDate() ?: Date(0)
                 )
                 QrLoginState.Success
             }
@@ -73,7 +75,11 @@ class LoginRepository {
         return QrLoginResult(
             state = resultState,
             accessToken = null,
-            refreshToken = null,
+            // Web QR login does not issue an App access token, but its refresh token is
+            // still required by the Web cookie refresh flow and must not be discarded.
+            refreshToken = responseData.refreshToken.takeIf {
+                resultState == QrLoginState.Success && it.isNotBlank()
+            },
             cookies = resultCookies
         )
     }

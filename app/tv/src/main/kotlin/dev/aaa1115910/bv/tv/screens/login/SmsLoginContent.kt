@@ -6,11 +6,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -23,25 +23,25 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import com.geetest.sdk.GT3ConfigBean
-import com.geetest.sdk.GT3ErrorBean
-import com.geetest.sdk.GT3GeetestUtils
-import com.geetest.sdk.GT3Listener
 import dev.aaa1115910.biliapi.repositories.SendSmsState
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.tv.component.GeetestTvVerifyDialog
 import dev.aaa1115910.bv.util.toast
-import dev.aaa1115910.bv.viewmodel.login.GeetestResult
 import dev.aaa1115910.bv.viewmodel.login.SmsLoginViewModel
-import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
-import org.json.JSONObject
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
+
+private data class LoginCaptchaPrompt(
+    val gt: String,
+    val challenge: String,
+)
 
 @Composable
 fun SmsLoginContent(
@@ -49,173 +49,192 @@ fun SmsLoginContent(
     smsLoginViewModel: SmsLoginViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
-    val logger = KotlinLogging.logger { }
     val scope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    var gt3GeetestUtils: GT3GeetestUtils? by remember { mutableStateOf(null) }
-    val gt3ConfigBean by remember { mutableStateOf(GT3ConfigBean()) }
     var phoneNumberText by remember { mutableStateOf("") }
     var codeText by remember { mutableStateOf("") }
+    var captchaPrompt by remember { mutableStateOf<LoginCaptchaPrompt?>(null) }
+    var sendingSms by remember { mutableStateOf(false) }
+    var loggingIn by remember { mutableStateOf(false) }
 
-    val setConfig: (challenge: String, gt: String) -> Unit = { challenge, gt ->
-        gt3GeetestUtils!!.startCustomFlow()
-        gt3ConfigBean.api1Json = JSONObject().apply {
-            put("success", 1)
-            put("gt", gt)
-            put("challenge", challenge)
-        }
-        gt3GeetestUtils!!.getGeetest()
-    }
-
-    val sendSms = {
-        keyboardController?.hide()
+    fun requestSms(phone: Long) {
+        if (sendingSms) return
+        sendingSms = true
         scope.launch(Dispatchers.IO) {
-            runCatching {
-                smsLoginViewModel.sendSms(phoneNumberText.toLong()) { challenge: String, gt: String ->
+            try {
+                smsLoginViewModel.sendSms(phone) { challenge, gt ->
                     scope.launch(Dispatchers.Main) {
-                        setConfig(challenge, gt)
+                        captchaPrompt = LoginCaptchaPrompt(gt = gt, challenge = challenge)
                     }
                 }
+            } finally {
+                withContext(Dispatchers.Main) { sendingSms = false }
             }
         }
     }
 
-    val loginWithSms = {
+    fun sendSms() {
+        keyboardController?.hide()
+        val phone = phoneNumberText.takeIf { it.length == 11 }?.toLongOrNull()
+        if (phone == null) {
+            R.string.sms_login_invalid_phone.toast(context)
+            return
+        }
+        requestSms(phone)
+    }
+
+    fun loginWithSms() {
         keyboardController?.hide()
         if (smsLoginViewModel.sendSmsState != SendSmsState.Success) {
             R.string.sms_login_toast_send_sms_first.toast(context)
-        } else {
-            scope.launch(Dispatchers.IO) {
-                runCatching {
-                    smsLoginViewModel.loginWithSms(codeText.toInt()) {
-                        (context as Activity).finish()
-                    }
-                }
-            }
+            return
         }
-    }
-
-    DisposableEffect(Unit) {
-        gt3GeetestUtils = GT3GeetestUtils(context)
-        gt3ConfigBean.apply {
-            pattern = 1
-            isCanceledOnTouchOutside = false
-            lang = null
-            timeout = 10000
-            webviewTimeout = 10000
-            corners = 24
-            listener = object : GT3Listener() {
-                override fun onReceiveCaptchaCode(p0: Int) {
-                    logger.info { "Geetest - onReceiveCaptchaCode: $p0" }
-                }
-
-                override fun onStatistics(p0: String?) {
-                    logger.info { "Geetest - onStatistics: $p0" }
-                }
-
-                override fun onClosed(p0: Int) {
-                    logger.info { "Geetest - onClosed: $p0" }
-                    smsLoginViewModel.clearCaptchaData()
-                }
-
-                override fun onSuccess(p0: String?) {
-                    logger.info { "Geetest - onSuccess: $p0" }
-                }
-
-                override fun onFailed(p0: GT3ErrorBean?) {
-                    logger.info { "Geetest - onFailed: $p0" }
-                    smsLoginViewModel.clearCaptchaData()
-                }
-
-                override fun onButtonClick() {
-                    logger.info { "Geetest - onButtonClick" }
-                }
-
-                override fun onDialogResult(result: String) {
-                    logger.info { "Geetest - onDialogResult: $result" }
-                    runCatching {
-                        val geetestResult = Json.decodeFromString<GeetestResult>(result)
-                        smsLoginViewModel.geetestChallenge = geetestResult.geetestChallenge
-                        smsLoginViewModel.geetestValidate = geetestResult.geetestValidate
-                        smsLoginViewModel.geetestSeccode = geetestResult.geetestSeccode
-                        smsLoginViewModel.sendSmsState = SendSmsState.Ready
-                        gt3GeetestUtils?.showSuccessDialog()
-                        scope.launch(Dispatchers.IO) {
-                            smsLoginViewModel.sendSms(phoneNumberText.toLong()) { _, _ -> }
-                        }
-                    }.onFailure {
-                        gt3GeetestUtils?.showFailedDialog()
-                    }
-                }
-            }
+        val code = codeText.toIntOrNull()
+        if (code == null || codeText.length != 6) {
+            R.string.sms_login_invalid_code.toast(context)
+            return
         }
-        gt3GeetestUtils!!.init(gt3ConfigBean)
-
-        onDispose {
-            gt3GeetestUtils?.destory()
+        if (loggingIn) return
+        loggingIn = true
+        scope.launch(Dispatchers.IO) {
+            try {
+                smsLoginViewModel.loginWithSms(code) {
+                    (context as Activity).finish()
+                }
+            } finally {
+                withContext(Dispatchers.Main) { loggingIn = false }
+            }
         }
     }
 
     Box(
-        modifier = modifier
-            .fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         Column(
-            horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
+            Text(
+                text = stringResource(R.string.sms_login_title),
+                style = MaterialTheme.typography.displaySmall,
+            )
+            Text(
+                text = stringResource(R.string.sms_login_phone_hint),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                textAlign = TextAlign.Center,
+            )
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedTextField(
+                    modifier = Modifier.width(420.dp),
                     value = phoneNumberText,
-                    onValueChange = {
-                        phoneNumberText = it
-                        // Clear captcha data when phone number changed
+                    onValueChange = { value ->
+                        phoneNumberText = value.filter(Char::isDigit).take(11)
+                        captchaPrompt = null
                         smsLoginViewModel.clearCaptchaData()
                     },
                     label = { Text(text = stringResource(R.string.sms_login_phone_number)) },
-                    maxLines = 1,
+                    singleLine = true,
                     shape = MaterialTheme.shapes.medium,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Phone,
                         imeAction = ImeAction.Send
                     ),
-                    keyboardActions = KeyboardActions(
-                        onSend = { sendSms() }
-                    )
+                    keyboardActions = KeyboardActions(onSend = { sendSms() })
                 )
-                Button(onClick = { sendSms() }) {
-                    Text(text = stringResource(R.string.sms_login_button_send_sms))
+                Button(
+                    enabled = !sendingSms && phoneNumberText.length == 11,
+                    onClick = { sendSms() }
+                ) {
+                    Text(
+                        text = stringResource(
+                            if (sendingSms) R.string.sms_login_sending
+                            else R.string.sms_login_button_send_sms
+                        )
+                    )
                 }
             }
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedTextField(
+                    modifier = Modifier.width(420.dp),
                     value = codeText,
-                    onValueChange = { codeText = it },
+                    onValueChange = { codeText = it.filter(Char::isDigit).take(6) },
                     label = { Text(text = stringResource(R.string.sms_login_code)) },
-                    maxLines = 1,
+                    singleLine = true,
                     shape = MaterialTheme.shapes.medium,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number,
                         imeAction = ImeAction.Done
                     ),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            loginWithSms()
-                        }
-                    )
+                    keyboardActions = KeyboardActions(onDone = { loginWithSms() })
                 )
-                Button(onClick = { loginWithSms() }) {
-                    Text(text = stringResource(R.string.sms_login_button_login))
+                Button(
+                    enabled = !loggingIn && codeText.length == 6,
+                    onClick = { loginWithSms() }
+                ) {
+                    Text(
+                        text = stringResource(
+                            if (loggingIn) R.string.sms_login_logging_in
+                            else R.string.sms_login_button_login
+                        )
+                    )
                 }
             }
+            if (smsLoginViewModel.sendSmsState == SendSmsState.Success) {
+                Text(
+                    text = stringResource(R.string.sms_login_code_sent),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
+    }
+
+    captchaPrompt?.let { prompt ->
+        GeetestTvVerifyDialog(
+            gt = prompt.gt,
+            challenge = prompt.challenge,
+            onResult = { result ->
+                // Ignore a delayed result from a challenge that has already been refreshed.
+                if (result.sourceChallenge != captchaPrompt?.challenge) return@GeetestTvVerifyDialog
+                val phone = phoneNumberText.toLongOrNull()
+                if (phone == null) {
+                    captchaPrompt = null
+                    smsLoginViewModel.clearCaptchaData()
+                    return@GeetestTvVerifyDialog
+                }
+                smsLoginViewModel.applyGeetestResult(
+                    challenge = result.challenge,
+                    validate = result.validate,
+                    seccode = result.seccode,
+                )
+                captchaPrompt = null
+                requestSms(phone)
+            },
+            onDismiss = {
+                captchaPrompt = null
+                smsLoginViewModel.clearCaptchaData()
+            },
+            onRefreshChallenge = {
+                val captcha = smsLoginViewModel.refreshCaptchaChallenge()
+                if (captcha == null) {
+                    false
+                } else {
+                    captchaPrompt = LoginCaptchaPrompt(
+                        gt = captcha.gt,
+                        challenge = captcha.challenge,
+                    )
+                    true
+                }
+            },
+        )
     }
 }

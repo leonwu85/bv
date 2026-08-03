@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import dev.aaa1115910.biliapi.entity.login.Captcha
 import dev.aaa1115910.biliapi.repositories.LoginRepository
 import dev.aaa1115910.biliapi.repositories.SendSmsState
 import dev.aaa1115910.bv.BVApp
@@ -14,6 +15,7 @@ import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fDebug
 import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
@@ -127,9 +129,7 @@ class SmsLoginViewModel(
 
         return runCatching {
             val captcha = loginRepository.preCapture()
-            recaptchaToken = captcha.token
-            geetestGt = captcha.gt
-            geetestChallenge = captcha.challenge
+            applyCaptcha(captcha)
             isCaptchaDataReady()
         }.getOrElse {
             logger.warn { "Pre capture failed: ${it.stackTraceToString()}" }
@@ -155,6 +155,48 @@ class SmsLoginViewModel(
                 geetestGt?.isNotBlank() == true &&
                 geetestChallenge?.isNotBlank() == true
 
+    /**
+     * TV verification can switch between remote-control and phone-companion modes.
+     * A Geetest challenge must not be initialized twice, so fetch a fresh challenge
+     * before switching modes and atomically replace the login captcha parameters.
+     */
+    suspend fun refreshCaptchaChallenge(): Captcha? {
+        return try {
+            val captcha = withContext(Dispatchers.IO) {
+                loginRepository.preCapture()
+            }
+            applyCaptcha(captcha)
+            captcha
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn { "Refresh login captcha failed: ${e.stackTraceToString()}" }
+            withContext(Dispatchers.Main) {
+                "刷新验证码失败：${e.message}".toast(BVApp.context)
+            }
+            null
+        }
+    }
+
+    fun applyGeetestResult(
+        challenge: String,
+        validate: String,
+        seccode: String
+    ) {
+        geetestChallenge = challenge
+        geetestValidate = validate
+        geetestSeccode = seccode
+        sendSmsState = SendSmsState.Ready
+    }
+
+    private fun applyCaptcha(captcha: Captcha) {
+        recaptchaToken = captcha.token
+        geetestGt = captcha.gt
+        geetestChallenge = captcha.challenge
+        geetestValidate = null
+        geetestSeccode = null
+    }
+
     suspend fun loginWithSms(code: Int, onSuccess: () -> Unit) {
         logger.info { "Login with sms code: $code" }
         runCatching {
@@ -176,8 +218,8 @@ class SmsLoginViewModel(
                     refreshToken = loginResult.refreshToken
                 )
                 BlacklistUtil.checkUid(authData.uid)
-                userRepository.validateAuthData(authData)
-                userRepository.addUser(authData)
+                val identity = userRepository.validateAuthData(authData)
+                userRepository.addUser(authData, identity)
 
                 withContext(Dispatchers.Main) {
                     "登录成功".toast(BVApp.context)
@@ -202,9 +244,11 @@ class SmsLoginViewModel(
     fun clearCaptchaData() {
         logger.info { "Clear captcha data" }
         recaptchaToken = null
+        geetestGt = null
         geetestChallenge = null
         geetestValidate = null
         geetestSeccode = null
+        captchaKey = null
         sendSmsState = SendSmsState.Ready
     }
 }

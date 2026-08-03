@@ -1360,20 +1360,36 @@ object BiliHttpApi {
      */
     suspend fun getUserInfo(
         uid: Long,
-        sessData: String = ""
+        sessData: String = "",
+        dedeUserID: Long? = null,
+        buvid3: String? = null,
+        dedeUserIDCkMd5: String? = null,
+        biliJct: String? = null,
+        sid: String? = null,
+        gaiaVtoken: String? = null
     ): BiliResponse<UserInfoData> = client.get("/x/space/wbi/acc/info") {
         parameter("mid", uid)
-        header("Cookie", "SESSDATA=$sessData;")
+        parameter("token", "")
+        parameter("platform", "web")
+        parameter("web_location", 1550101)
 
         // 风控
         parameter("dm_img_list", "[]")
-        parameter("dm_img_str", "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ")
-        parameter(
-            "dm_cover_img_str",
-            "QU5HTEUgKEFNRCwgQU1EIFJhZGVvbiA3ODBNIEdyYXBoaWNzICgweDAwMDAxNUJGKSBEaXJlY3QzRDExIHZzXzVfMCBwc181XzAsIEQzRDExKUdvb2dsZSBJbmMuIChBTU"
+        parameter("dm_img_str", randomWbiDmString(minLength = 16, maxLength = 64))
+        parameter("dm_cover_img_str", randomWbiDmString(minLength = 32, maxLength = 128))
+        parameter("dm_img_inter", """{"ds":[],"wh":[0,0,0],"of":[0,0,0]}""")
+        appendWebCookie(
+            sessData = sessData,
+            dedeUserID = dedeUserID,
+            buvid3 = buvid3,
+            dedeUserIDCkMd5 = dedeUserIDCkMd5,
+            biliJct = biliJct,
+            sid = sid,
+            gaiaVtoken = gaiaVtoken
         )
-        parameter("dm_img_inter", "{\"ds\":[],\"wh\":[4769,2793,43],\"of\":[285,570,285]}")
-        header("referer", "https://space.bilibili.com")
+        header("origin", "https://space.bilibili.com")
+        header("referer", "https://space.bilibili.com/$uid/dynamic")
+        header("user-agent", USER_AGENT_WEB)
     }.body()
 
 
@@ -1397,7 +1413,8 @@ object BiliHttpApi {
      * 获取 App 端用户空间资料，包含移动端空间头图 images 字段。
      */
     suspend fun getAppUserSpace(
-        mid: Long
+        mid: Long,
+        accessKey: String? = null
     ): BiliResponse<AppUserSpaceData> = client.get("https://app.bilibili.com/x/v2/space") {
         parameter("build", 8430300)
         parameter("version", "8.43.0")
@@ -1408,6 +1425,7 @@ object BiliHttpApi {
         parameter("s_locale", "zh_CN")
         parameter("statistics", """{"appId":1,"platform":3,"version":"8.43.0","abtest":""}""")
         parameter("vmid", mid)
+        accessKey?.takeIf(String::isNotBlank)?.let { parameter("access_key", it) }
         header("bili-http-engine", "cronet")
         header("user-agent", USER_AGENT_APP)
     }.body()
@@ -2892,14 +2910,21 @@ object BiliHttpApi {
      */
     suspend fun getWebInterfaceNav(
         buvid3: String? = null,
-        sessData: String = ""
+        sessData: String = "",
+        dedeUserID: Long? = null,
+        dedeUserIDCkMd5: String? = null,
+        biliJct: String? = null,
+        sid: String? = null
     ): BiliResponse<NavResponseData> {
         val response = client.get("/x/web-interface/nav") {
-            if (buvid3 != null && sessData.isNotEmpty()) {
-                header("Cookie", "buvid3=$buvid3; SESSDATA=$sessData;")
-            } else if (sessData.isNotEmpty()) {
-                header("Cookie", "SESSDATA=$sessData;")
-            }
+            appendWebCookie(
+                sessData = sessData,
+                dedeUserID = dedeUserID,
+                buvid3 = buvid3,
+                dedeUserIDCkMd5 = dedeUserIDCkMd5,
+                biliJct = biliJct,
+                sid = sid
+            )
         }.body<BiliResponse<NavResponseData>>()
         return response
     }
