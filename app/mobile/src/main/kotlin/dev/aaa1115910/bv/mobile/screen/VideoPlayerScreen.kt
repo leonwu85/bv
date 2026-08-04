@@ -497,7 +497,6 @@ fun VideoPlayerScreen(
     val replyBottomSheetState = rememberBottomSheetState(
         initialValue = SheetValue.PartiallyExpanded,
         enabledValues = setOf(
-            SheetValue.Hidden,
             SheetValue.PartiallyExpanded,
             SheetValue.Expanded,
         ),

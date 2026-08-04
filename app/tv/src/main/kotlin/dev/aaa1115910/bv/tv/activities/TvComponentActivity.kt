@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent as setComposeContent
+import androidx.activity.setViewTreeOnBackPressedDispatcherOwner
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
@@ -98,6 +99,7 @@ private class TvUiSurfaceHost(
                     setViewTreeLifecycleOwner(activity)
                     setViewTreeViewModelStoreOwner(activity)
                     setViewTreeSavedStateRegistryOwner(activity)
+                    setViewTreeOnBackPressedDispatcherOwner(activity)
                     isFocusable = true
                     isFocusableInTouchMode = true
                     setContent {

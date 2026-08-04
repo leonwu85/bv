@@ -77,3 +77,7 @@ dependencies {
     implementation(libs.vlc.android.all)
     testImplementation(libs.kotlin.test)
 }
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+}

@@ -186,7 +186,11 @@ open class PreviewerTransformState(
 
     // 根据index查询key
     fun findTransformItemByIndex(index: Int): TransformItemState? {
-        val key = getKey?.invoke(index) ?: return null
+        val key = transformKeyAtOrNull(
+            index = index,
+            pageCount = galleryState.pagerState.pageCount,
+            getKey = getKey,
+        ) ?: return null
         return findTransformItem(key)
     }
 
@@ -401,4 +405,22 @@ open class PreviewerTransformState(
         stateCloseEnd()
     }
 
+}
+
+/**
+ * 预览关闭期间数据源可能已经被清空或替换，此时 Pager 仍会短暂保留旧页码。
+ * 无法解析旧页码时返回 null，让调用方退化为普通淡出动画。
+ */
+internal fun transformKeyAtOrNull(
+    index: Int,
+    pageCount: Int,
+    getKey: ((Int) -> Any)?,
+): Any? {
+    if (getKey == null || index !in 0 until pageCount) return null
+    return try {
+        getKey(index)
+    } catch (_: IndexOutOfBoundsException) {
+        // pageCount 与外部列表不是同一次快照，读取期间列表仍可能缩短。
+        null
+    }
 }

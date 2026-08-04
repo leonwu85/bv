@@ -150,7 +150,9 @@ fun ReplySheetScaffold(
                 )
             ),
         scaffoldState = sheetState,
-        sheetPeekHeight = 0.dp,
+        // 0.dp 会在 lookahead 的瞬时空布局中只生成 Hidden 锚点，
+        // 与正在展开的 Expanded 目标冲突。保留一个不可感知的有效折叠锚点。
+        sheetPeekHeight = 1.dp,
         sheetContent = {
             LazyColumn(
                 modifier = Modifier.fillMaxHeight(),

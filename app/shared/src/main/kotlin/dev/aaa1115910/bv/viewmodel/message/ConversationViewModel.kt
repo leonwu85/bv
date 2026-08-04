@@ -13,6 +13,7 @@ import dev.aaa1115910.biliapi.entity.message.DirectMessageEmote
 import dev.aaa1115910.biliapi.entity.user.DynamicEmotePackageDraft
 import dev.aaa1115910.biliapi.repositories.MessageRepository
 import dev.aaa1115910.bv.repository.UserRepository
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -23,6 +24,8 @@ class ConversationViewModel(
     private val messageRepository: MessageRepository,
     private val userRepository: UserRepository
 ) : ViewModel() {
+    private val logger = KotlinLogging.logger("ConversationViewModel")
+
     val messages = mutableStateListOf<DirectMessage>()
     val emotes = mutableStateMapOf<String, DirectMessageEmote>()
     val emotePackages = mutableStateListOf<DynamicEmotePackageDraft>()
@@ -89,7 +92,16 @@ class ConversationViewModel(
                     oldestSeqno = page.minSeqno ?: page.messages.firstOrNull()?.msgSeqno
                 }
                 val readSeqno = page.maxSeqno ?: page.messages.maxOfOrNull { it.msgSeqno }
-                readSeqno?.let { messageRepository.markRead(talkerId, it) }
+                readSeqno?.let { seqno ->
+                    runCatching {
+                        messageRepository.markRead(talkerId, seqno)
+                    }.onFailure { error ->
+                        // 会话已成功加载；已读回执是可重试的附加操作，不应终止应用。
+                        logger.warn(error) {
+                            "Mark conversation as read failed: talkerId=$talkerId, seqno=$seqno"
+                        }
+                    }
+                }
             }.onFailure { error ->
                 withContext(Dispatchers.Main) {
                     errorMessage = error.message ?: "加载失败"
