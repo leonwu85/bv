@@ -31,10 +31,12 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.aaa1115910.biliapi.entity.live.LiveAreaItem
+import dev.aaa1115910.bv.tv.R
 import dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity
 import dev.aaa1115910.bv.tv.component.live.LiveHistoryCard
 import dev.aaa1115910.bv.tv.component.LoadingTip
@@ -117,6 +119,8 @@ fun LiveContent(
     val context = LocalContext.current
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
     val gridColumns by Prefs.gridColumnsFlow.collectAsState(Prefs.gridColumns)
+    val gridPadding = dimensionResource(R.dimen.grid_padding) / 2
+    val gridSpacing = dimensionResource(R.dimen.grid_spacedBy) / 2
     val performanceProfile = LocalTvUiPerformanceProfile.current
     val enablePageAnimation =
         enableMainUiAnimation && performanceProfile.allowFullPageAnimation
@@ -502,9 +506,9 @@ fun LiveContent(
                     modifier = Modifier.fillMaxSize(),
                     state = gridState,
                     columns = GridCells.Fixed(gridColumns),
-                    contentPadding = PaddingValues(20.dp, 0.dp, 20.dp, 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(20.dp)
+                    contentPadding = PaddingValues(gridPadding),
+                    verticalArrangement = Arrangement.spacedBy(gridSpacing),
+                    horizontalArrangement = Arrangement.spacedBy(gridSpacing)
                 ) {
                     if (liveViewModel.currentTabType == LiveTabType.History) {
                         itemsIndexed(

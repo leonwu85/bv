@@ -2261,6 +2261,18 @@ fun VideoUgcSeasonRow(
         ) {
             itemsIndexed(items = episodes) { index, episode ->
                 val episodeTitle by remember { mutableStateOf(ugcEpisodeDisplayTitle(episode)) }
+                val isLastPlayed = remember(episode, lastPlayedCid) {
+                    episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid }
+                }
+                val playedSeconds = remember(episode, lastPlayedCid, lastPlayedTime) {
+                    calculateUgcEpisodePlayedSeconds(
+                        episodeCid = episode.cid,
+                        pages = episode.pages,
+                        episodeDurationSeconds = episode.duration,
+                        lastPlayedCid = lastPlayedCid,
+                        currentPagePlayedSeconds = lastPlayedTime
+                    )
+                }
                 UgcEpisodeButton(
                     modifier = Modifier
                         .ifElse(index == initialFocusIndex, Modifier.focusRequester(focusRequester))
@@ -2273,8 +2285,8 @@ fun VideoUgcSeasonRow(
                     isChargingArc = episode.isChargingArc,
                     chargingArcBadge = episode.chargingArcBadge,
                     partCount = episode.pages.size,
-                    played = if (episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid }) lastPlayedTime else 0,
-                    isLastPlayed = episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid },
+                    played = playedSeconds,
+                    isLastPlayed = isLastPlayed,
                     duration = episode.duration,
                     onClick = { onClickEp(episode.aid, episode.cid) }
                 )
@@ -2314,6 +2326,45 @@ private fun ugcEpisodeDisplayTitle(episode: Episode): String {
     return episode.longTitle.ifBlank { episode.title }
 }
 
+/**
+ * Converts the history position for one P into the position within the whole UGC episode.
+ * Both page durations and history progress use seconds here.
+ */
+internal fun calculateUgcEpisodePlayedSeconds(
+    episodeCid: Long,
+    pages: List<VideoPage>,
+    episodeDurationSeconds: Int,
+    lastPlayedCid: Long,
+    currentPagePlayedSeconds: Int
+): Long {
+    val currentPageIndex = pages.indexOfFirst { it.cid == lastPlayedCid }
+    if (lastPlayedCid == 0L || (episodeCid != lastPlayedCid && currentPageIndex < 0)) return 0L
+
+    val episodeDuration = episodeDurationSeconds.coerceAtLeast(0).toLong()
+    if (currentPagePlayedSeconds < 0) return episodeDuration
+
+    val playedBeforeCurrentPage = if (currentPageIndex > 0) {
+        pages.take(currentPageIndex).sumOf { it.duration.coerceAtLeast(0).toLong() }
+    } else {
+        0L
+    }
+    val currentPageDuration = pages.getOrNull(currentPageIndex)
+        ?.duration
+        ?.coerceAtLeast(0)
+        ?.toLong()
+        ?: 0L
+    val playedInCurrentPage = currentPagePlayedSeconds.coerceAtLeast(0).toLong().let { played ->
+        if (currentPageDuration > 0L) played.coerceAtMost(currentPageDuration) else played
+    }
+    val cumulativePlayed = playedBeforeCurrentPage + playedInCurrentPage
+
+    return if (episodeDuration > 0L) {
+        cumulativePlayed.coerceAtMost(episodeDuration)
+    } else {
+        cumulativePlayed
+    }
+}
+
 private fun formatUgcEpisodeCount(count: Long): String {
     return when {
         count >= 10000 -> "${count / 10000}万"
@@ -2333,7 +2384,7 @@ private fun UgcEpisodeButton(
     chargingArcBadge: String = "",
     partCount: Int = 1,
     duration: Int,
-    played: Int = 0,
+    played: Long = 0,
     isLastPlayed: Boolean = false,
     onClick: () -> Unit
 ) {
@@ -2847,6 +2898,18 @@ private fun VideoUgcListDialog(
                                 if (index == 0) Modifier.focusRequester(videoListFocusRequester) else Modifier
                             val absoluteIndex = selectedTabIndex * 20 + index + 1
                             val episodeTitle by remember { mutableStateOf(ugcEpisodeDisplayTitle(episode)) }
+                            val isLastPlayed = remember(episode, lastPlayedCid) {
+                                episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid }
+                            }
+                            val playedSeconds = remember(episode, lastPlayedCid, lastPlayedTime) {
+                                calculateUgcEpisodePlayedSeconds(
+                                    episodeCid = episode.cid,
+                                    pages = episode.pages,
+                                    episodeDurationSeconds = episode.duration,
+                                    lastPlayedCid = lastPlayedCid,
+                                    currentPagePlayedSeconds = lastPlayedTime
+                                )
+                            }
 
                             UgcEpisodeButton(
                                 modifier = buttonModifier.focusedScale(0.95f),
@@ -2858,8 +2921,8 @@ private fun VideoUgcListDialog(
                                 isChargingArc = episode.isChargingArc,
                                 chargingArcBadge = episode.chargingArcBadge,
                                 partCount = episode.pages.size,
-                                played = if (episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid }) lastPlayedTime else 0,
-                                isLastPlayed = episode.cid == lastPlayedCid || episode.pages.any { it.cid == lastPlayedCid },
+                                played = playedSeconds,
+                                isLastPlayed = isLastPlayed,
                                 duration = episode.duration,
                                 onClick = { onClick(episode.aid, episode.cid) }
                             )
