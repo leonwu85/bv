@@ -225,14 +225,18 @@ fun SmsLoginContent(
             },
             onRefreshChallenge = {
                 val captcha = smsLoginViewModel.refreshCaptchaChallenge()
-                if (captcha == null) {
-                    false
-                } else {
+                if (captcha != null) {
                     captchaPrompt = LoginCaptchaPrompt(
                         gt = captcha.gt,
                         challenge = captcha.challenge,
                     )
                     true
+                } else if (smsLoginViewModel.sendSmsState == SendSmsState.Success) {
+                    // 刷新 challenge 时短信接口可能直接放行并发送验证码，此时无需再验证。
+                    captchaPrompt = null
+                    true
+                } else {
+                    false
                 }
             },
         )

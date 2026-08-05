@@ -36,9 +36,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,8 +84,10 @@ data class GeetestTvResult(
 
 /** 验证交互模式（调试入口可指定初始页） */
 enum class GeetestVerifyMode {
-    /** 本机：遥控器十字光标 + WebView */
+    /** 本机：遥控器十字光标点击 WebView */
     TvRemote,
+    /** 本机：遥控器控制按下、移动、松开，适用于滑块验证 */
+    TvSlider,
     /** 手机：局域网扫码代完成 */
     PhoneCompanion,
 }
@@ -96,7 +100,11 @@ internal fun shouldRefreshGeetestChallenge(
 ): Boolean =
     !mockMode &&
         refreshAvailable &&
-        requestedMode != currentMode
+        requestedMode != currentMode &&
+        (
+            currentMode == GeetestVerifyMode.PhoneCompanion ||
+                requestedMode == GeetestVerifyMode.PhoneCompanion
+            )
 
 internal fun resolveGeetestModeAfterRefresh(
     currentMode: GeetestVerifyMode,
@@ -108,8 +116,9 @@ internal fun resolveGeetestModeAfterRefresh(
  * TV 端 Geetest 风控验证弹窗
  *
  * 模式：
- * 1. 本机验证：WebView + 十字光标，遥控器方向键移动、确认键点击
- * 2. 手机验证：局域网 HTTP 页面 + 二维码，手机触屏完成极验后自动回传
+ * 1. 点击验证：WebView + 十字光标，遥控器方向键移动、确认键点击
+ * 2. 滑块验证：确认键按下/松开滑块，方向键在按下期间注入拖动事件
+ * 3. 手机验证：局域网 HTTP 页面 + 二维码，手机触屏完成极验后自动回传
  *
  * @param mockMode Debug 用：不请求真实极验，用可点击 mock 页测遥控器/手机链路
  */
@@ -125,6 +134,7 @@ fun GeetestTvVerifyDialog(
 ) {
     var mode by remember { mutableStateOf(initialMode) }
     val tvModeFocusRequester = remember { FocusRequester() }
+    val sliderModeFocusRequester = remember { FocusRequester() }
     val phoneModeFocusRequester = remember { FocusRequester() }
     val contentFocusRequester = remember { FocusRequester() }
     // >0 表示用户在模式 Tab 按了确定，需要把焦点交回验证区
@@ -138,6 +148,7 @@ fun GeetestTvVerifyDialog(
     // 当前选中模式对应的 tab 焦点，验证区按返回时落到这里
     val activeModeFocusRequester = when (mode) {
         GeetestVerifyMode.TvRemote -> tvModeFocusRequester
+        GeetestVerifyMode.TvSlider -> sliderModeFocusRequester
         GeetestVerifyMode.PhoneCompanion -> phoneModeFocusRequester
     }
 
@@ -262,6 +273,7 @@ fun GeetestTvVerifyDialog(
                 ModeSwitcher(
                     mode = pendingMode ?: mode,
                     tvModeFocusRequester = tvModeFocusRequester,
+                    sliderModeFocusRequester = sliderModeFocusRequester,
                     phoneModeFocusRequester = phoneModeFocusRequester,
                     contentFocusRequester = contentFocusRequester,
                     onModeChange = { newMode -> requestMode(newMode, enterContent = false) },
@@ -287,12 +299,15 @@ fun GeetestTvVerifyDialog(
                     textAlign = TextAlign.Center,
                 )
 
-                key(mode, gt, challenge, mockMode) {
+                // 点击与滑块只改变同一个 WebView 的遥控器事件注入方式，不重新初始化 challenge。
+                key(mode == GeetestVerifyMode.PhoneCompanion, gt, challenge, mockMode) {
                     when (mode) {
-                        GeetestVerifyMode.TvRemote -> GeetestTvVerifyContent(
+                        GeetestVerifyMode.TvRemote,
+                        GeetestVerifyMode.TvSlider -> GeetestTvVerifyContent(
                             gt = gt,
                             challenge = challenge,
                             mockMode = mockMode,
+                            sliderMode = mode == GeetestVerifyMode.TvSlider,
                             contentFocusRequester = contentFocusRequester,
                             modeTabFocusRequester = activeModeFocusRequester,
                             onResult = onResult,
@@ -360,6 +375,7 @@ private fun GeetestChallengeRefreshContent(
 private fun ModeSwitcher(
     mode: GeetestVerifyMode,
     tvModeFocusRequester: FocusRequester,
+    sliderModeFocusRequester: FocusRequester,
     phoneModeFocusRequester: FocusRequester,
     contentFocusRequester: FocusRequester,
     onModeChange: (GeetestVerifyMode) -> Unit,
@@ -374,10 +390,10 @@ private fun ModeSwitcher(
     ) {
         ModeChip(
             selected = mode == GeetestVerifyMode.TvRemote,
-            label = "本机验证",
+            label = "点击验证",
             focusRequester = tvModeFocusRequester,
             leftFocusRequester = null,
-            rightFocusRequester = phoneModeFocusRequester,
+            rightFocusRequester = sliderModeFocusRequester,
             downFocusRequester = contentFocusRequester,
             onSelect = {
                 // 左右移到 chip 时只预选模式，不立刻进内容
@@ -387,10 +403,21 @@ private fun ModeSwitcher(
             onBack = onBackFromModeTab,
         )
         ModeChip(
+            selected = mode == GeetestVerifyMode.TvSlider,
+            label = "滑块验证",
+            focusRequester = sliderModeFocusRequester,
+            leftFocusRequester = tvModeFocusRequester,
+            rightFocusRequester = phoneModeFocusRequester,
+            downFocusRequester = contentFocusRequester,
+            onSelect = { onModeChange(GeetestVerifyMode.TvSlider) },
+            onConfirm = { onConfirmEnterContent(GeetestVerifyMode.TvSlider) },
+            onBack = onBackFromModeTab,
+        )
+        ModeChip(
             selected = mode == GeetestVerifyMode.PhoneCompanion,
             label = "手机验证",
             focusRequester = phoneModeFocusRequester,
-            leftFocusRequester = tvModeFocusRequester,
+            leftFocusRequester = sliderModeFocusRequester,
             rightFocusRequester = null,
             downFocusRequester = contentFocusRequester,
             onSelect = { onModeChange(GeetestVerifyMode.PhoneCompanion) },
@@ -643,12 +670,15 @@ private fun GeetestTvVerifyContent(
     gt: String,
     challenge: String,
     mockMode: Boolean = false,
+    sliderMode: Boolean,
     contentFocusRequester: FocusRequester,
     modeTabFocusRequester: FocusRequester,
     onResult: (GeetestTvResult) -> Unit,
 ) {
     val density = LocalDensity.current
     val callbackScope = rememberCoroutineScope()
+    val currentSliderMode = rememberUpdatedState(sliderMode)
+    val currentOnResult = rememberUpdatedState(onResult)
 
     var containerWidthPx by remember { mutableFloatStateOf(0f) }
     var containerHeightPx by remember { mutableFloatStateOf(0f) }
@@ -656,9 +686,19 @@ private fun GeetestTvVerifyContent(
     var cursorX by remember { mutableFloatStateOf(0f) }
     var cursorY by remember { mutableFloatStateOf(0f) }
     var cursorInitialized by remember { mutableStateOf(false) }
+    var dragActive by remember { mutableStateOf(false) }
+    var dragDownTime by remember { mutableLongStateOf(0L) }
+    var sliderHandleX by remember { mutableFloatStateOf(Float.NaN) }
+    var sliderHandleY by remember { mutableFloatStateOf(Float.NaN) }
 
     var statusText by remember {
-        mutableStateOf(if (mockMode) "Mock：请用十字光标点下方绿色区域" else "正在加载验证码…")
+        mutableStateOf(
+            when {
+                mockMode && sliderMode -> "Mock：左右键直接拖动，按确认键提交"
+                mockMode -> "Mock：请用十字光标点下方绿色区域"
+                else -> "正在加载验证码…"
+            }
+        )
     }
 
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
@@ -666,6 +706,8 @@ private fun GeetestTvVerifyContent(
 
     val baseStep = with(density) { 6.dp.toPx() }
     val fastStep = with(density) { 20.dp.toPx() }
+    val sliderStep = with(density) { 3.dp.toPx() }
+    val sliderFastStep = with(density) { 14.dp.toPx() }
 
     LaunchedEffect(containerWidthPx, containerHeightPx) {
         if (containerWidthPx > 0 && containerHeightPx > 0 && !cursorInitialized) {
@@ -675,28 +717,44 @@ private fun GeetestTvVerifyContent(
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            webViewRef?.let { wv ->
-                runCatching {
-                    wv.removeJavascriptInterface("Android")
-                    wv.stopLoading()
-                    wv.destroy()
-                }
-            }
+    fun moveCursor(
+        dx: Float,
+        dy: Float,
+        fast: Boolean,
+        preciseSliderMove: Boolean = false,
+    ): Pair<Float, Float> {
+        val step = when {
+            preciseSliderMove && fast -> sliderFastStep
+            preciseSliderMove -> sliderStep
+            fast -> fastStep
+            else -> baseStep
         }
+        val nextX = (cursorX + dx * step)
+            .coerceIn(0f, containerWidthPx.coerceAtLeast(0f))
+        val nextY = (cursorY + dy * step)
+            .coerceIn(0f, containerHeightPx.coerceAtLeast(0f))
+        cursorX = nextX
+        cursorY = nextY
+        overlayRef?.setCursorPosition(nextX, nextY)
+        return nextX to nextY
     }
 
-    fun clampCursor() {
-        cursorX = cursorX.coerceIn(0f, containerWidthPx.coerceAtLeast(0f))
-        cursorY = cursorY.coerceIn(0f, containerHeightPx.coerceAtLeast(0f))
-    }
-
-    fun moveCursor(dx: Float, dy: Float, fast: Boolean) {
-        val step = if (fast) fastStep else baseStep
-        cursorX += dx * step
-        cursorY += dy * step
-        clampCursor()
+    fun moveCursorToSliderHandle() {
+        if (!sliderHandleX.isFinite() || !sliderHandleY.isFinite()) return
+        val nextX = if (containerWidthPx > 0f) {
+            sliderHandleX.coerceIn(0f, containerWidthPx)
+        } else {
+            sliderHandleX
+        }
+        val nextY = if (containerHeightPx > 0f) {
+            sliderHandleY.coerceIn(0f, containerHeightPx)
+        } else {
+            sliderHandleY
+        }
+        cursorX = nextX
+        cursorY = nextY
+        cursorInitialized = true
+        overlayRef?.setCursorPosition(nextX, nextY)
     }
 
     fun dispatchClickToWebView() {
@@ -713,6 +771,73 @@ private fun GeetestTvVerifyContent(
         logger.debug { "Dispatched click at ($x, $y)" }
     }
 
+    fun dispatchDragEvent(action: Int, x: Float = cursorX, y: Float = cursorY) {
+        val wv = webViewRef ?: return
+        val now = SystemClock.uptimeMillis()
+        val downTime = dragDownTime.takeIf { it > 0L } ?: now
+        val event = MotionEvent.obtain(downTime, now, action, x, y, 0)
+        wv.dispatchTouchEvent(event)
+        event.recycle()
+    }
+
+    fun startDrag() {
+        if (dragActive || webViewRef == null) return
+        dragDownTime = SystemClock.uptimeMillis()
+        dragActive = true
+        overlayRef?.setDragging(true)
+        dispatchDragEvent(MotionEvent.ACTION_DOWN)
+        statusText = "拖动中：用左右键对齐缺口，按确认键提交当前位置"
+        logger.debug { "Started drag at ($cursorX, $cursorY)" }
+    }
+
+    fun finishDrag(cancelled: Boolean = false) {
+        if (!dragActive) return
+        dispatchDragEvent(
+            if (cancelled) MotionEvent.ACTION_CANCEL else MotionEvent.ACTION_UP
+        )
+        dragActive = false
+        dragDownTime = 0L
+        overlayRef?.setDragging(false)
+        statusText = if (cancelled) {
+            "拖动已取消"
+        } else {
+            "已确认滑块位置，正在等待验证结果…"
+        }
+        logger.debug { "Finished drag at ($cursorX, $cursorY), cancelled=$cancelled" }
+    }
+
+    LaunchedEffect(sliderMode) {
+        if (!sliderMode) finishDrag(cancelled = true)
+        statusText = when {
+            sliderMode -> "左右键直接拖动滑块，按确认键提交对齐位置"
+            mockMode -> "Mock：请用十字光标点下方绿色区域"
+            else -> "请使用方向键移动光标，确认键点击"
+        }
+    }
+
+    LaunchedEffect(
+        sliderMode,
+        sliderHandleX,
+        sliderHandleY,
+        containerWidthPx,
+        containerHeightPx,
+    ) {
+        if (sliderMode && !dragActive) moveCursorToSliderHandle()
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            finishDrag(cancelled = true)
+            webViewRef?.let { wv ->
+                runCatching {
+                    wv.removeJavascriptInterface("Android")
+                    wv.stopLoading()
+                    wv.destroy()
+                }
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -725,29 +850,63 @@ private fun GeetestTvVerifyContent(
 
                 when (keyCode) {
                     KeyEvent.KEYCODE_DPAD_UP -> {
-                        moveCursor(0f, -1f, isLongPress); true
+                        if (!sliderMode || !dragActive) {
+                            moveCursor(0f, -1f, isLongPress)
+                        }
+                        true
                     }
 
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        moveCursor(0f, 1f, isLongPress); true
+                        if (!sliderMode || !dragActive) {
+                            moveCursor(0f, 1f, isLongPress)
+                        }
+                        true
                     }
 
                     KeyEvent.KEYCODE_DPAD_LEFT -> {
-                        moveCursor(-1f, 0f, isLongPress); true
+                        if (sliderMode && !dragActive) startDrag()
+                        val (x, y) = moveCursor(
+                            dx = -1f,
+                            dy = 0f,
+                            fast = isLongPress,
+                            preciseSliderMove = sliderMode,
+                        )
+                        if (dragActive) dispatchDragEvent(MotionEvent.ACTION_MOVE, x, y)
+                        true
                     }
 
                     KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        moveCursor(1f, 0f, isLongPress); true
+                        if (sliderMode && !dragActive) startDrag()
+                        val (x, y) = moveCursor(
+                            dx = 1f,
+                            dy = 0f,
+                            fast = isLongPress,
+                            preciseSliderMove = sliderMode,
+                        )
+                        if (dragActive) dispatchDragEvent(MotionEvent.ACTION_MOVE, x, y)
+                        true
                     }
 
                     KeyEvent.KEYCODE_DPAD_CENTER,
                     KeyEvent.KEYCODE_ENTER,
                     KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                        dispatchClickToWebView(); true
+                        if (!isLongPress) {
+                            if (sliderMode) {
+                                if (dragActive) {
+                                    finishDrag()
+                                } else {
+                                    statusText = "请先按左右键拖动滑块，再按确认键提交"
+                                }
+                            } else {
+                                dispatchClickToWebView()
+                            }
+                        }
+                        true
                     }
 
                     // 返回：焦点回到模式 Tab（不关闭弹窗）
                     KeyEvent.KEYCODE_BACK -> {
+                        finishDrag(cancelled = true)
                         runCatching { modeTabFocusRequester.requestFocus() }
                         true
                     }
@@ -812,7 +971,7 @@ private fun GeetestTvVerifyContent(
                                     // JavascriptInterface 在 WebView 私有后台线程回调。
                                     // 切回 Compose 主线程，避免丢失待验证令牌或跨线程更新状态。
                                     callbackScope.launch {
-                                        onResult(
+                                        currentOnResult.value(
                                             GeetestTvResult(
                                                 challenge = c,
                                                 sourceChallenge = challenge,
@@ -826,7 +985,30 @@ private fun GeetestTvVerifyContent(
                                 @JavascriptInterface
                                 fun onStatusUpdate(text: String?) {
                                     val message = text ?: return
-                                    callbackScope.launch { statusText = message }
+                                    callbackScope.launch {
+                                        statusText = when {
+                                            currentSliderMode.value &&
+                                                message == "请使用方向键移动光标，确认键点击" ->
+                                                "左右键直接拖动滑块，按确认键提交对齐位置"
+
+                                            currentSliderMode.value && message.startsWith("Mock：请") ->
+                                                "Mock：左右键直接拖动，按确认键提交"
+
+                                            else -> message
+                                        }
+                                    }
+                                }
+
+                                @JavascriptInterface
+                                fun onSliderPosition(x: Double, y: Double) {
+                                    if (!x.isFinite() || !y.isFinite()) return
+                                    callbackScope.launch {
+                                        sliderHandleX = x.toFloat()
+                                        sliderHandleY = y.toFloat()
+                                        if (currentSliderMode.value && !dragActive) {
+                                            moveCursorToSliderHandle()
+                                        }
+                                    }
                                 }
                             },
                             "Android"
@@ -874,7 +1056,11 @@ private fun GeetestTvVerifyContent(
         }
 
         Text(
-            text = "方向键移动光标 ｜ 确认键点击 ｜ 返回回到模式 ｜ 模式上再返回关闭",
+            text = if (sliderMode) {
+                "左右键直接拖动 ｜ 确认键提交位置 ｜ 上下键可微调起点 ｜ 返回回到模式"
+            } else {
+                "方向键移动光标 ｜ 确认键点击 ｜ 返回回到模式 ｜ 模式上再返回关闭"
+            },
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
@@ -889,6 +1075,7 @@ private fun GeetestTvVerifyContent(
 private class CrosshairOverlayView(context: Context) : View(context) {
     private var cx = 0f
     private var cy = 0f
+    private var dragging = false
 
     private val density = context.resources.displayMetrics.density
     private val armLen = 18f * density
@@ -927,6 +1114,12 @@ private class CrosshairOverlayView(context: Context) : View(context) {
     fun setCursorPosition(x: Float, y: Float) {
         cx = x
         cy = y
+        invalidate()
+    }
+
+    fun setDragging(value: Boolean) {
+        dragging = value
+        dashPaint.color = if (value) 0xFF69F0AE.toInt() else 0xB3FFFFFF.toInt()
         invalidate()
     }
 
@@ -1068,6 +1261,38 @@ internal fun buildGeetestHtml(gt: String, challenge: String): String {
       function notify(msg) {
         try { window.Android.onStatusUpdate(msg); } catch(e) {}
       }
+      function reportSliderPosition(attempt) {
+        var selectors = [
+          '.geetest_slider_button',
+          '[class*="slider_button"]',
+          '[class*="slider-btn"]'
+        ];
+        var handle = null;
+        for (var i = 0; i < selectors.length && !handle; i++) {
+          var nodes = document.querySelectorAll(selectors[i]);
+          for (var j = 0; j < nodes.length; j++) {
+            var candidateRect = nodes[j].getBoundingClientRect();
+            if (candidateRect.width > 0 && candidateRect.height > 0) {
+              handle = nodes[j];
+              break;
+            }
+          }
+        }
+        if (handle) {
+          var rect = handle.getBoundingClientRect();
+          var scale = window.devicePixelRatio || 1;
+          try {
+            window.Android.onSliderPosition(
+              (rect.left + rect.width / 2) * scale,
+              (rect.top + rect.height / 2) * scale
+            );
+          } catch(e) {}
+          return;
+        }
+        if (attempt < 40) {
+          setTimeout(function() { reportSliderPosition(attempt + 1); }, 100);
+        }
+      }
       if (typeof initGeetest !== 'function') {
         notify('验证码脚本加载失败，请检查网络');
         return;
@@ -1085,6 +1310,7 @@ internal fun buildGeetestHtml(gt: String, challenge: String): String {
         captchaObj.onReady(function() {
           notify('请使用方向键移动光标，确认键点击');
           captchaObj.verify();
+          setTimeout(function() { reportSliderPosition(0); }, 100);
         });
         captchaObj.onSuccess(function() {
           var res = captchaObj.getValidate();

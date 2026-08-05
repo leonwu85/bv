@@ -34,23 +34,17 @@ import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.login.QrLoginState
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.component.QrImage
-import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.viewmodel.login.AppQrLoginViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import org.koin.androidx.compose.koinViewModel
 
-private const val TvWebQrSource = "main-fe-header"
-private const val TvWebQrGoUrl = "https://www.bilibili.com/"
 private const val TvQrRefreshCountdownSeconds = 180
 
 @Composable
 fun AppQRLoginContent(
     modifier: Modifier = Modifier,
-    preferApiType: ApiType = Prefs.apiType,
-    webQrSource: String = TvWebQrSource,
-    webQrGoUrl: String = TvWebQrGoUrl,
     appQrLoginViewModel: AppQrLoginViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
@@ -60,13 +54,11 @@ fun AppQRLoginContent(
     val requestQrCode = {
         refreshCountdown = TvQrRefreshCountdownSeconds
         appQrLoginViewModel.requestQRCode(
-            preferApiType = preferApiType,
-            webQrSource = webQrSource,
-            webQrGoUrl = webQrGoUrl
+            preferApiType = ApiType.App
         )
     }
 
-    LaunchedEffect(preferApiType, webQrSource, webQrGoUrl) {
+    LaunchedEffect(Unit) {
         requestQrCode()
     }
 

@@ -40,6 +40,26 @@ class GeetestTvVerifyDialogTest {
     }
 
     @Test
+    fun switchingClickAndSliderModesKeepsCurrentChallenge() {
+        assertFalse(
+            shouldRefreshGeetestChallenge(
+                currentMode = GeetestVerifyMode.TvRemote,
+                requestedMode = GeetestVerifyMode.TvSlider,
+                mockMode = false,
+                refreshAvailable = true,
+            )
+        )
+        assertFalse(
+            shouldRefreshGeetestChallenge(
+                currentMode = GeetestVerifyMode.TvSlider,
+                requestedMode = GeetestVerifyMode.TvRemote,
+                mockMode = false,
+                refreshAvailable = true,
+            )
+        )
+    }
+
+    @Test
     fun failedRefreshKeepsCurrentModeAndAllowsRetry() {
         val currentMode = GeetestVerifyMode.TvRemote
         val requestedMode = GeetestVerifyMode.PhoneCompanion

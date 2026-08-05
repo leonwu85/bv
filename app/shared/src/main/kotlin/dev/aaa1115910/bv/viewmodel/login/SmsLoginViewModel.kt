@@ -24,6 +24,35 @@ import org.koin.core.annotation.KoinViewModel
 import java.net.URI
 import java.net.URLDecoder
 
+internal fun parseSmsCaptchaUrl(recaptchaUrl: String?): Captcha? {
+    if (recaptchaUrl.isNullOrBlank()) return null
+    val parameters = runCatching {
+        parseSmsCaptchaQuery(URI(recaptchaUrl).rawQuery.orEmpty())
+    }.getOrNull() ?: return null
+    val token = parameters["recaptcha_token"].orEmpty()
+    val gt = parameters["gee_gt"].orEmpty()
+    val challenge = parameters["gee_challenge"].orEmpty()
+    if (token.isBlank() || gt.isBlank() || challenge.isBlank()) return null
+    return Captcha(
+        token = token,
+        gt = gt,
+        challenge = challenge,
+    )
+}
+
+private fun parseSmsCaptchaQuery(query: String): Map<String, String> {
+    if (query.isBlank()) return emptyMap()
+    return query.split("&")
+        .mapNotNull { parameter ->
+            val index = parameter.indexOf("=")
+            if (index <= 0) return@mapNotNull null
+            val key = URLDecoder.decode(parameter.substring(0, index), "UTF-8")
+            val value = URLDecoder.decode(parameter.substring(index + 1), "UTF-8")
+            key to value
+        }
+        .toMap()
+}
+
 @KoinViewModel
 class SmsLoginViewModel(
     private val userRepository: UserRepository,
@@ -111,21 +140,13 @@ class SmsLoginViewModel(
     }
 
     private suspend fun loadCaptchaData(recaptchaUrl: String?): Boolean {
-        if (!recaptchaUrl.isNullOrBlank()) {
-            runCatching {
-                parseQuery(URI(recaptchaUrl).rawQuery.orEmpty()).forEach { (key, value) ->
-                    when (key) {
-                        "recaptcha_token" -> recaptchaToken = value
-                        "gee_gt" -> geetestGt = value
-                        "gee_challenge" -> geetestChallenge = value
-                    }
-                }
-            }.onFailure {
-                logger.warn { "Parse recaptcha url failed: ${it.message}" }
-            }
+        parseSmsCaptchaUrl(recaptchaUrl)?.let { captcha ->
+            applyCaptcha(captcha)
+            return true
         }
-
-        if (isCaptchaDataReady()) return true
+        if (!recaptchaUrl.isNullOrBlank()) {
+            logger.warn { "SMS recaptcha url does not contain complete Geetest parameters" }
+        }
 
         return runCatching {
             val captcha = loginRepository.preCapture()
@@ -137,36 +158,55 @@ class SmsLoginViewModel(
         }
     }
 
-    private fun parseQuery(query: String): Map<String, String> {
-        if (query.isBlank()) return emptyMap()
-        return query.split("&")
-            .mapNotNull { parameter ->
-                val index = parameter.indexOf("=")
-                if (index <= 0) return@mapNotNull null
-                val key = URLDecoder.decode(parameter.substring(0, index), "UTF-8")
-                val value = URLDecoder.decode(parameter.substring(index + 1), "UTF-8")
-                key to value
-            }
-            .toMap()
-    }
-
     private fun isCaptchaDataReady(): Boolean =
         recaptchaToken?.isNotBlank() == true &&
                 geetestGt?.isNotBlank() == true &&
                 geetestChallenge?.isNotBlank() == true
 
     /**
-     * TV verification can switch between remote-control and phone-companion modes.
-     * A Geetest challenge must not be initialized twice, so fetch a fresh challenge
-     * before switching modes and atomically replace the login captcha parameters.
+     * 本机 WebView 与手机浏览器不能重复初始化同一个 challenge。切换设备前重新请求短信接口，
+     * 从同一短信风控流程取得新的 challenge，避免通用 preCapture 把滑块题替换成点击题。
+     * 若本次请求直接发送短信成功，则返回 null，并将 [sendSmsState] 更新为 Success。
      */
     suspend fun refreshCaptchaChallenge(): Captcha? {
         return try {
-            val captcha = withContext(Dispatchers.IO) {
-                loginRepository.preCapture()
+            check(phone > 0) { "手机号无效" }
+            val result = withContext(Dispatchers.IO) {
+                loginRepository.requestSms(
+                    phone = phone,
+                    buvid = buvid,
+                )
             }
-            applyCaptcha(captcha)
-            captcha
+            when (result.state) {
+                SendSmsState.RecaptchaRequire -> {
+                    val captcha = parseSmsCaptchaUrl(result.recaptchaUrl)
+                        ?: error("短信接口未返回有效的极验参数")
+                    applyCaptcha(captcha)
+                    sendSmsState = SendSmsState.RecaptchaRequire
+                    captcha
+                }
+
+                SendSmsState.Success -> {
+                    captchaKey = result.captchaKey
+                        ?: error("短信接口未返回 captcha_key")
+                    recaptchaToken = null
+                    geetestGt = null
+                    geetestChallenge = null
+                    geetestValidate = null
+                    geetestSeccode = null
+                    withContext(Dispatchers.Main) {
+                        sendSmsState = SendSmsState.Success
+                        "验证码已发送".toast(BVApp.context)
+                    }
+                    null
+                }
+
+                SendSmsState.Error -> error(
+                    result.message.ifBlank { "短信接口刷新验证码失败" }
+                )
+
+                SendSmsState.Ready -> error("短信接口返回了无效状态")
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

@@ -19,9 +19,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
-import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.bv.R
-import dev.aaa1115910.bv.util.Prefs
 
 private enum class TvLoginMethod {
     QrCode,
@@ -32,7 +30,6 @@ private enum class TvLoginMethod {
 fun LoginScreen(
     modifier: Modifier = Modifier
 ) {
-    val preferredApiType = Prefs.apiType
     var selectedMethod by remember { mutableStateOf(TvLoginMethod.QrCode) }
     val methods = TvLoginMethod.entries
 
@@ -49,10 +46,7 @@ fun LoginScreen(
             ) {
                 methods.forEach { method ->
                     val title = when (method) {
-                        TvLoginMethod.QrCode -> stringResource(
-                            if (preferredApiType == ApiType.Web) R.string.login_method_web_qr
-                            else R.string.login_method_app_qr
-                        )
+                        TvLoginMethod.QrCode -> stringResource(R.string.login_method_app_qr)
 
                         TvLoginMethod.Sms -> stringResource(R.string.login_method_sms)
                     }
@@ -78,7 +72,6 @@ fun LoginScreen(
                 when (selectedMethod) {
                     TvLoginMethod.QrCode -> AppQRLoginContent(
                         modifier = Modifier.fillMaxSize(),
-                        preferApiType = preferredApiType,
                     )
 
                     TvLoginMethod.Sms -> SmsLoginContent(
