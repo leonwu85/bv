@@ -116,6 +116,7 @@ fun LiveContent(
     val logger = KotlinLogging.logger("LiveContent")
     val context = LocalContext.current
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
+    val gridColumns by Prefs.gridColumnsFlow.collectAsState(Prefs.gridColumns)
     val performanceProfile = LocalTvUiPerformanceProfile.current
     val enablePageAnimation =
         enableMainUiAnimation && performanceProfile.allowFullPageAnimation
@@ -440,6 +441,9 @@ fun LiveContent(
                         onLeftKeyEvent = {
                             navFocusRequester.requestFocus(scope)
                         },
+                        onUpKeyEvent = {
+                            navFocusRequester.requestFocus(scope)
+                        },
                         onPendingDownKeyEvent = {
                             commitPendingSubNavForDown()
                         },
@@ -497,7 +501,7 @@ fun LiveContent(
                 LazyVerticalGrid(
                     modifier = Modifier.fillMaxSize(),
                     state = gridState,
-                    columns = GridCells.Fixed(4),
+                    columns = GridCells.Fixed(gridColumns),
                     contentPadding = PaddingValues(20.dp, 0.dp, 20.dp, 20.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp),
                     horizontalArrangement = Arrangement.spacedBy(20.dp)

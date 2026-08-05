@@ -649,6 +649,9 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefGridColumnsRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefGridColumnsKey, value) }
 
+    val gridColumnsFlow: Flow<Int>
+        get() = dsm.getPreferenceFlow(PrefKeys.prefGridColumnsRequest)
+
     var enableMainUiAnimation: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableMainUiAnimationRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableMainUiAnimationKey, value) }

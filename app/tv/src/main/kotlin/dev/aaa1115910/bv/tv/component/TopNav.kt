@@ -55,6 +55,7 @@ fun TopNav(
     onSelectedChanged: (TopNavItem) -> Unit = {},
     onClick: (TopNavItem) -> Unit = {},
     onLeftKeyEvent: () -> Unit = {},
+    onUpKeyEvent: (() -> Unit)? = null,
     onPendingDownKeyEvent: (() -> Boolean)? = null,
     onDownKeyEvent: (() -> Boolean)? = null
 ) {
@@ -135,6 +136,9 @@ fun TopNav(
                 }
                 .onPreviewKeyEvent {
                     if (it.key == Key.DirectionUp) {
+                        if (it.isKeyDown()) {
+                            onUpKeyEvent?.invoke()
+                        }
                         return@onPreviewKeyEvent true
                     }
                     if (it.isKeyDown()) {
