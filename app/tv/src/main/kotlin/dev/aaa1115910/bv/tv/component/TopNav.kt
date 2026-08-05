@@ -134,6 +134,9 @@ fun TopNav(
                     hasNavFocus = it.hasFocus
                 }
                 .onPreviewKeyEvent {
+                    if (it.key == Key.DirectionUp) {
+                        return@onPreviewKeyEvent true
+                    }
                     if (it.isKeyDown()) {
                         if (it.key == Key.DirectionLeft && highlightedTabIndex == 0) {
                             onLeftKeyEvent()

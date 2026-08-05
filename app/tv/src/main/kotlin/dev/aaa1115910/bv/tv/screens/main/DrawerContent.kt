@@ -253,6 +253,7 @@ fun DrawerContent(
             modifier = Modifier
                 .focusRequester(userFocusRequester)
                 .focusProperties {
+                    up = FocusRequester.Cancel
                     down = firstMenuFocusRequester ?: settingsFocusRequester
                 }
                 .onPreviewKeyEvent { keyEvent ->
