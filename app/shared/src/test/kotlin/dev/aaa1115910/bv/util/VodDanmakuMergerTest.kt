@@ -1,6 +1,7 @@
 package dev.aaa1115910.bv.util
 
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
+import kotlin.system.measureTimeMillis
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -200,6 +201,44 @@ class VodDanmakuMergerTest {
     }
 
     @Test
+    fun immediateDisplayDoesNotWaitForNextSegmentToFlushTail() {
+        val state = VodDanmakuMergeState()
+
+        val result = VodDanmakuMerger.processSegmentForImmediateDisplay(
+            segmentDanmaku = listOf(
+                danmaku(time = 350f, dmid = 1L, text = "片尾弹幕")
+            ),
+            segmentIndex = 1,
+            segmentDurationMs = 360_000L,
+            state = state
+        )
+
+        assertEquals(listOf("片尾弹幕"), result.emittedDanmaku.map { it.content })
+        assertTrue(state.isEmpty())
+    }
+
+    @Test
+    fun immediateDisplayUsesNormalizedExactFastPath() {
+        val state = VodDanmakuMergeState()
+
+        val result = VodDanmakuMerger.processSegmentForImmediateDisplay(
+            segmentDanmaku = listOf(
+                danmaku(time = 1f, dmid = 1L, text = "来 了!!!"),
+                danmaku(time = 2f, dmid = 2L, text = "来了"),
+                danmaku(time = 3f, dmid = 3L, text = "好看"),
+                danmaku(time = 4f, dmid = 4L, text = "郝侃")
+            ),
+            segmentIndex = 1,
+            segmentDurationMs = 360_000L,
+            state = state
+        )
+
+        assertEquals(1, result.mergedDuplicateCount)
+        assertEquals(listOf(2, 1, 1), result.emittedDanmaku.map { it.totalCount })
+        assertTrue(state.isEmpty())
+    }
+
+    @Test
     fun flushesPendingGroupsOnSegmentDiscontinuity() {
         val state = VodDanmakuMergeState()
 
@@ -249,6 +288,38 @@ class VodDanmakuMergerTest {
         assertEquals(8, result.emittedDanmaku.size)
         assertEquals(0, result.mergedDuplicateCount)
         assertTrue(result.emittedDanmaku.all { it.totalCount == 1 })
+    }
+
+    @Test
+    fun processesPopularVideoSizedSegmentWithoutQuadraticDelay() {
+        val state = VodDanmakuMergeState()
+        val hanChars = "阿波次德饿发个喝一机开了么你哦跑去日思特无西有中"
+        val danmaku = buildList {
+            repeat(1_542) { index ->
+                val text = buildString {
+                    append(hanChars[index % hanChars.length])
+                    append(hanChars[index / hanChars.length % hanChars.length])
+                    append(hanChars[index / (hanChars.length * hanChars.length) % hanChars.length])
+                    append(index.toString(36))
+                }
+                val time = index * 0.2f
+                add(danmaku(time = time, dmid = index * 2L, text = text))
+                add(danmaku(time = time + 0.1f, dmid = index * 2L + 1L, text = text))
+            }
+        }
+
+        lateinit var result: DanmakuSegmentMergeResult
+        val elapsedMs = measureTimeMillis {
+            result = VodDanmakuMerger.processSegmentForImmediateDisplay(
+                segmentDanmaku = danmaku,
+                segmentIndex = 1,
+                segmentDurationMs = 360_000L,
+                state = state
+            )
+        }
+
+        assertTrue(result.mergedDuplicateCount >= 1_542)
+        assertTrue(elapsedMs < 1_500L, "3084 条弹幕合并耗时 ${elapsedMs}ms")
     }
 
     private fun danmaku(

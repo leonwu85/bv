@@ -1,10 +1,11 @@
 package dev.aaa1115910.bv.util
 
-import com.github.stuxuhai.jpinyin.PinyinFormat
-import com.github.stuxuhai.jpinyin.PinyinHelper
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
 import java.util.Locale
 import kotlin.math.abs
+
+private const val MAX_TEXT_EDIT_DISTANCE = 3
+private const val MAX_PINYIN_EDIT_DISTANCE = 2
 
 internal data class MergedDanmakuEntry(
     val source: DanmakuData,
@@ -20,48 +21,241 @@ internal data class DanmakuSegmentMergeResult(
     val mergedDuplicateCount: Int
 )
 
+private data class DanmakuTextIndexKey(
+    val type: Int,
+    val normalized: String
+)
+
+private data class DanmakuTextCharIndexKey(
+    val type: Int,
+    val length: Int,
+    val char: Char
+)
+
+private data class DanmakuPinyinIndexKey(
+    val type: Int,
+    val tokens: List<String>
+)
+
+private data class DanmakuPinyinTokenIndexKey(
+    val type: Int,
+    val tokenCount: Int,
+    val token: String
+)
+
+internal data class ActiveDanmakuGroupRef(
+    val id: Int,
+    val group: ActiveDanmakuGroup
+)
+
 internal class VodDanmakuMergeState {
     private val lock = Any()
     private val activeGroups = LinkedHashMap<Int, ActiveDanmakuGroup>()
+    private val groupsByExactText = mutableMapOf<DanmakuTextIndexKey, LinkedHashSet<Int>>()
+    private val groupsByTextChar = mutableMapOf<DanmakuTextCharIndexKey, LinkedHashSet<Int>>()
+    private val groupsByExactPinyin = mutableMapOf<DanmakuPinyinIndexKey, LinkedHashSet<Int>>()
+    private val groupsByPinyinToken = mutableMapOf<DanmakuPinyinTokenIndexKey, LinkedHashSet<Int>>()
     private var nextGroupId = 0
     internal var lastProcessedSegmentIndex: Int? = null
 
-    internal fun activeGroups(): List<ActiveDanmakuGroup> = synchronized(lock) {
-        activeGroups.values.toList()
-    }
-
     internal fun putGroup(group: ActiveDanmakuGroup) {
         synchronized(lock) {
-            activeGroups[nextGroupId++] = group
+            val groupId = nextGroupId++
+            activeGroups[groupId] = group
+            indexAnalysis(groupId, group.type, group.analysis)
         }
     }
+
+    internal fun addToGroup(
+        groupRef: ActiveDanmakuGroupRef,
+        danmaku: DanmakuData,
+        analysis: DanmakuTextAnalysis
+    ) {
+        synchronized(lock) {
+            if (activeGroups[groupRef.id] !== groupRef.group) return
+            if (groupRef.group.add(danmaku, analysis)) {
+                indexAnalysis(groupRef.id, groupRef.group.type, analysis)
+            }
+        }
+    }
+
+    internal fun findExactTextGroup(type: Int, normalized: String): ActiveDanmakuGroupRef? =
+        synchronized(lock) {
+            if (normalized.isBlank()) return@synchronized null
+            findFirstActiveGroup(groupsByExactText[DanmakuTextIndexKey(type, normalized)])
+        }
+
+    internal fun findExactPinyinGroup(type: Int, tokens: List<String>): ActiveDanmakuGroupRef? =
+        synchronized(lock) {
+            if (tokens.size < 2) return@synchronized null
+            findFirstActiveGroup(groupsByExactPinyin[DanmakuPinyinIndexKey(type, tokens)])
+        }
+
+    internal fun textCandidateGroups(
+        type: Int,
+        analysis: DanmakuTextAnalysis
+    ): List<ActiveDanmakuGroupRef> =
+        synchronized(lock) {
+            if (analysis.normalized.isBlank()) return@synchronized emptyList()
+            val candidateIds = LinkedHashSet<Int>()
+            val minLength = maxOf(1, analysis.normalized.length - MAX_TEXT_EDIT_DISTANCE)
+            val maxLength = analysis.normalized.length + MAX_TEXT_EDIT_DISTANCE
+            analysis.distinctTextChars.forEach { char ->
+                for (length in minLength..maxLength) {
+                    groupsByTextChar[DanmakuTextCharIndexKey(type, length, char)]
+                        ?.let(candidateIds::addAll)
+                }
+            }
+            activeGroupRefs(candidateIds)
+        }
+
+    internal fun pinyinCandidateGroups(
+        type: Int,
+        analysis: DanmakuTextAnalysis
+    ): List<ActiveDanmakuGroupRef> =
+        synchronized(lock) {
+            val tokens = analysis.pinyinTokens
+            if (tokens.size < 2) return@synchronized emptyList()
+            val candidateIds = LinkedHashSet<Int>()
+            val minTokenCount = maxOf(2, tokens.size - MAX_PINYIN_EDIT_DISTANCE)
+            val maxTokenCount = tokens.size + MAX_PINYIN_EDIT_DISTANCE
+            analysis.distinctPinyinTokens.forEach { token ->
+                for (tokenCount in minTokenCount..maxTokenCount) {
+                    groupsByPinyinToken[DanmakuPinyinTokenIndexKey(type, tokenCount, token)]
+                        ?.let(candidateIds::addAll)
+                }
+            }
+            activeGroupRefs(candidateIds)
+        }
 
     internal fun isEmpty(): Boolean = synchronized(lock) {
         activeGroups.isEmpty()
     }
 
-    internal fun takeMatchingGroups(
-        predicate: (ActiveDanmakuGroup) -> Boolean
+    internal fun takeGroupsBefore(
+        thresholdSeconds: Float
     ): List<ActiveDanmakuGroup> = synchronized(lock) {
         if (activeGroups.isEmpty()) return emptyList()
 
-        val matchedGroups = mutableListOf<ActiveDanmakuGroup>()
+        val groups = mutableListOf<ActiveDanmakuGroup>()
         val iterator = activeGroups.entries.iterator()
         while (iterator.hasNext()) {
             val entry = iterator.next()
-            if (!predicate(entry.value)) continue
-            matchedGroups += entry.value
+            if (entry.value.firstTime >= thresholdSeconds) break
+            groups += entry.value
             iterator.remove()
+            removeGroupFromIndexes(entry.key, entry.value)
         }
-        matchedGroups
+        groups
+    }
+
+    internal fun takeAllGroups(): List<ActiveDanmakuGroup> = synchronized(lock) {
+        if (activeGroups.isEmpty()) return emptyList()
+        val groups = activeGroups.values.toList()
+        activeGroups.clear()
+        clearIndexes()
+        groups
     }
 
     fun clear() {
         synchronized(lock) {
             activeGroups.clear()
+            clearIndexes()
             nextGroupId = 0
             lastProcessedSegmentIndex = null
         }
+    }
+
+    private fun indexAnalysis(groupId: Int, type: Int, analysis: DanmakuTextAnalysis) {
+        if (analysis.normalized.isNotBlank()) {
+            groupsByExactText.addIndex(
+                DanmakuTextIndexKey(type, analysis.normalized),
+                groupId
+            )
+            analysis.distinctTextChars.forEach { char ->
+                groupsByTextChar.addIndex(
+                    DanmakuTextCharIndexKey(type, analysis.normalized.length, char),
+                    groupId
+                )
+            }
+        }
+
+        val pinyinTokens = analysis.pinyinTokens
+        if (pinyinTokens.size >= 2) {
+            groupsByExactPinyin.addIndex(DanmakuPinyinIndexKey(type, pinyinTokens), groupId)
+            analysis.distinctPinyinTokens.forEach { token ->
+                groupsByPinyinToken.addIndex(
+                    DanmakuPinyinTokenIndexKey(type, pinyinTokens.size, token),
+                    groupId
+                )
+            }
+        }
+    }
+
+    private fun removeGroupFromIndexes(groupId: Int, group: ActiveDanmakuGroup) {
+        group.analyses().forEach { analysis ->
+            if (analysis.normalized.isNotBlank()) {
+                groupsByExactText.removeIndex(
+                    DanmakuTextIndexKey(group.type, analysis.normalized),
+                    groupId
+                )
+                analysis.distinctTextChars.forEach { char ->
+                    groupsByTextChar.removeIndex(
+                        DanmakuTextCharIndexKey(
+                            group.type,
+                            analysis.normalized.length,
+                            char
+                        ),
+                        groupId
+                    )
+                }
+            }
+
+            val pinyinTokens = analysis.pinyinTokens
+            if (pinyinTokens.size >= 2) {
+                groupsByExactPinyin.removeIndex(
+                    DanmakuPinyinIndexKey(group.type, pinyinTokens),
+                    groupId
+                )
+                analysis.distinctPinyinTokens.forEach { token ->
+                    groupsByPinyinToken.removeIndex(
+                        DanmakuPinyinTokenIndexKey(group.type, pinyinTokens.size, token),
+                        groupId
+                    )
+                }
+            }
+        }
+    }
+
+    private fun findFirstActiveGroup(groupIds: Set<Int>?): ActiveDanmakuGroupRef? {
+        if (groupIds.isNullOrEmpty()) return null
+        val groupId = groupIds.minOrNull() ?: return null
+        val group = activeGroups[groupId] ?: return null
+        return ActiveDanmakuGroupRef(groupId, group)
+    }
+
+    private fun activeGroupRefs(candidateIds: Set<Int>): List<ActiveDanmakuGroupRef> {
+        if (candidateIds.isEmpty()) return emptyList()
+        return candidateIds.sorted().mapNotNull { groupId ->
+            activeGroups[groupId]?.let { group -> ActiveDanmakuGroupRef(groupId, group) }
+        }
+    }
+
+    private fun clearIndexes() {
+        groupsByExactText.clear()
+        groupsByTextChar.clear()
+        groupsByExactPinyin.clear()
+        groupsByPinyinToken.clear()
+    }
+
+    private fun <K> MutableMap<K, LinkedHashSet<Int>>.addIndex(key: K, groupId: Int) {
+        getOrPut(key) { LinkedHashSet() }.add(groupId)
+    }
+
+    private fun <K> MutableMap<K, LinkedHashSet<Int>>.removeIndex(key: K, groupId: Int) {
+        val groupIds = this[key] ?: return
+        groupIds.remove(groupId)
+        if (groupIds.isEmpty()) remove(key)
     }
 }
 
@@ -91,6 +285,11 @@ internal object VodDanmakuMerger {
             )
         }
 
+        DanmakuTextAnalyzer.preparePinyin(
+            segmentDanmaku.asSequence()
+                .filterNot { it.shouldBypassMerge() }
+                .map { it.text }
+        )
         segmentDanmaku.sortedBy { it.time }.forEach { danmaku ->
             emittedDanmaku += flushExpiredGroups(state, danmaku.time)
 
@@ -103,9 +302,9 @@ internal object VodDanmakuMerger {
             }
 
             val analysis = DanmakuTextAnalyzer.analyze(danmaku.text)
-            val activeGroup = findMatchingGroup(state, danmaku, analysis)
-            if (activeGroup != null) {
-                activeGroup.add(danmaku, analysis)
+            val activeGroupRef = findMatchingGroup(state, danmaku, analysis)
+            if (activeGroupRef != null) {
+                state.addToGroup(activeGroupRef, danmaku, analysis)
                 mergedDuplicateCount++
             } else {
                 state.putGroup(
@@ -130,6 +329,61 @@ internal object VodDanmakuMerger {
         )
     }
 
+    /**
+     * Uses normalized exact-text coalescing for the foreground segment. Edit-distance and pinyin
+     * matching remain enabled for background segments, but never block startup rendering.
+     */
+    fun processSegmentForImmediateDisplay(
+        segmentDanmaku: List<DanmakuData>,
+        segmentIndex: Int,
+        segmentDurationMs: Long,
+        state: VodDanmakuMergeState
+    ): DanmakuSegmentMergeResult {
+        val emittedDanmaku = flushPending(state).toMutableList()
+        val groups = mutableListOf<ActiveDanmakuGroup>()
+        val latestGroupByExactText = mutableMapOf<DanmakuTextIndexKey, ActiveDanmakuGroup>()
+        var mergedDuplicateCount = 0
+
+        segmentDanmaku.sortedBy { it.time }.forEach { danmaku ->
+            if (danmaku.shouldBypassMerge()) {
+                emittedDanmaku += MergedDanmakuEntry(
+                    source = danmaku,
+                    totalCount = 1
+                )
+                return@forEach
+            }
+
+            val analysis = DanmakuTextAnalyzer.analyze(danmaku.text)
+            val exactTextKey = analysis.normalized
+                .takeIf { it.isNotBlank() }
+                ?.let { normalized -> DanmakuTextIndexKey(danmaku.type, normalized) }
+            val activeGroup = exactTextKey
+                ?.let(latestGroupByExactText::get)
+                ?.takeIf { group ->
+                    danmaku.time - group.firstTime <= MERGE_WINDOW_SECONDS
+                }
+
+            if (activeGroup != null) {
+                activeGroup.add(danmaku, analysis)
+                mergedDuplicateCount++
+            } else {
+                val group = ActiveDanmakuGroup(
+                    source = danmaku,
+                    analysis = analysis
+                )
+                groups += group
+                if (exactTextKey != null) latestGroupByExactText[exactTextKey] = group
+            }
+        }
+
+        emittedDanmaku += groups.map { group -> group.toEntry() }
+
+        return DanmakuSegmentMergeResult(
+            emittedDanmaku = emittedDanmaku.sortedBy { it.source.time },
+            mergedDuplicateCount = mergedDuplicateCount
+        )
+    }
+
     fun flushPending(state: VodDanmakuMergeState): List<MergedDanmakuEntry> {
         return flushAll(state)
     }
@@ -138,46 +392,45 @@ internal object VodDanmakuMerger {
         state: VodDanmakuMergeState,
         currentTimeSeconds: Float
     ): List<MergedDanmakuEntry> {
-        return flushMatchingGroups(state) { currentTimeSeconds - it.source.time > MERGE_WINDOW_SECONDS }
+        return state.takeGroupsBefore(currentTimeSeconds - MERGE_WINDOW_SECONDS)
+            .map { group -> group.toEntry() }
     }
 
     private fun flushGroupsBefore(
         state: VodDanmakuMergeState,
         thresholdSeconds: Float
     ): List<MergedDanmakuEntry> {
-        return flushMatchingGroups(state) { it.source.time < thresholdSeconds }
+        return state.takeGroupsBefore(thresholdSeconds)
+            .map { group -> group.toEntry() }
     }
 
     private fun flushAll(state: VodDanmakuMergeState): List<MergedDanmakuEntry> {
-        return flushMatchingGroups(state) { true }.also {
-            state.lastProcessedSegmentIndex = null
-        }
-    }
-
-    private fun flushMatchingGroups(
-        state: VodDanmakuMergeState,
-        predicate: (ActiveDanmakuGroup) -> Boolean
-    ): List<MergedDanmakuEntry> {
-        if (state.isEmpty()) return emptyList()
-
-        val matchedGroups = state.takeMatchingGroups(predicate)
-            .sortedBy { group -> group.firstTime }
-
-        if (matchedGroups.isEmpty()) return emptyList()
-
-        return matchedGroups.map { group -> group.toEntry() }
+        return state.takeAllGroups()
+            .map { group -> group.toEntry() }
+            .also {
+                state.lastProcessedSegmentIndex = null
+            }
     }
 
     private fun findMatchingGroup(
         state: VodDanmakuMergeState,
         danmaku: DanmakuData,
         analysis: DanmakuTextAnalysis
-    ): ActiveDanmakuGroup? {
-        return state.activeGroups().firstOrNull { group ->
-            group.type == danmaku.type &&
-                danmaku.time - group.firstTime <= MERGE_WINDOW_SECONDS &&
-                group.canMerge(analysis)
-        }
+    ): ActiveDanmakuGroupRef? {
+        state.findExactTextGroup(danmaku.type, analysis.normalized)?.let { return it }
+        if (analysis.isPureNoise) return null
+
+        val textCandidates = state.textCandidateGroups(danmaku.type, analysis)
+        textCandidates
+            .firstOrNull { groupRef -> groupRef.group.canMergeText(analysis) }
+            ?.let { return it }
+
+        val pinyinTokens = analysis.pinyinTokens
+        if (pinyinTokens.size < 2) return null
+        state.findExactPinyinGroup(danmaku.type, pinyinTokens)?.let { return it }
+        val pinyinCandidates = state.pinyinCandidateGroups(danmaku.type, analysis)
+        return pinyinCandidates
+            .firstOrNull { groupRef -> groupRef.group.canMergePinyin(analysis) }
     }
 
     private fun DanmakuData.shouldBypassMerge(): Boolean {
@@ -191,21 +444,34 @@ internal data class ActiveDanmakuGroup(
 ) {
     private val peers = mutableListOf(source)
     private val analyses = mutableListOf(analysis)
+    private val normalizedAnalyses = mutableSetOf(analysis.normalized)
     private val textCounts = linkedMapOf(source.text to 1)
     val type: Int = source.type
     val firstTime: Float = source.time
 
-    fun canMerge(candidate: DanmakuTextAnalysis): Boolean {
+    fun canMergeText(candidate: DanmakuTextAnalysis): Boolean {
         return analyses.any { existing ->
-            DanmakuSimilarity.isSimilar(existing, candidate)
+            DanmakuSimilarity.isTextSimilar(existing, candidate)
         }
     }
 
-    fun add(danmaku: DanmakuData, analysis: DanmakuTextAnalysis) {
-        peers += danmaku
-        analyses += analysis
-        textCounts[danmaku.text] = (textCounts[danmaku.text] ?: 0) + 1
+    fun canMergePinyin(candidate: DanmakuTextAnalysis): Boolean {
+        return analyses.any { existing ->
+            DanmakuSimilarity.isPinyinSimilar(existing, candidate)
+        }
     }
+
+    /** Returns true when this analysis adds a new lookup shape to the group. */
+    fun add(danmaku: DanmakuData, analysis: DanmakuTextAnalysis): Boolean {
+        peers += danmaku
+        textCounts[danmaku.text] = (textCounts[danmaku.text] ?: 0) + 1
+        if (!normalizedAnalyses.add(analysis.normalized)) return false
+
+        analyses += analysis
+        return true
+    }
+
+    internal fun analyses(): List<DanmakuTextAnalysis> = analyses
 
     fun toEntry(): MergedDanmakuEntry {
         val representativeText = chooseRepresentativeText()
@@ -240,14 +506,28 @@ internal data class ActiveDanmakuGroup(
     }
 }
 
-internal data class DanmakuTextAnalysis(
+internal class DanmakuTextAnalysis(
     val normalized: String,
-    val pinyinTokens: List<String>,
-    val isPureNoise: Boolean
-)
+    val isPureNoise: Boolean,
+    pinyinTokensProvider: () -> List<String>
+) {
+    val distinctTextChars: Set<Char> by lazy(LazyThreadSafetyMode.NONE) {
+        normalized.toSet()
+    }
+    val pinyinTokens: List<String> by lazy(LazyThreadSafetyMode.NONE, pinyinTokensProvider)
+    val distinctPinyinTokens: Set<String> by lazy(LazyThreadSafetyMode.NONE) {
+        pinyinTokens.toSet()
+    }
+}
 
 private object DanmakuTextAnalyzer {
-    private const val MAX_PINYIN_CACHE_SIZE = 2048
+    private const val MAX_PINYIN_CACHE_SIZE = 4096
+    // Supplied by the jpinyin dependency. Reading the single-character table directly avoids its
+    // expensive Android cold-start initialization of the multi-pronunciation trie.
+    private const val PINYIN_RESOURCE_PATH = "data/pinyin.dict"
+    private const val MARKED_VOWELS = "āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ"
+    private const val UNMARKED_VOWELS = "aeiouv"
+    private val pinyinTableLock = Any()
     private val force233Regex = Regex("^23{2,}$")
     private val force666Regex = Regex("^6{3,}$")
     private val pinyinCache = object : LinkedHashMap<String, List<String>>(MAX_PINYIN_CACHE_SIZE, 0.75f, true) {
@@ -255,20 +535,45 @@ private object DanmakuTextAnalyzer {
             return size > MAX_PINYIN_CACHE_SIZE
         }
     }
+    private val pinyinByChar = arrayOfNulls<String>(Char.MAX_VALUE.code + 1)
+    private val loadedPinyinChars = BooleanArray(Char.MAX_VALUE.code + 1)
+    private val pinyinResourceBytes: ByteArray by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        DanmakuTextAnalyzer::class.java.classLoader
+            ?.getResourceAsStream(PINYIN_RESOURCE_PATH)
+            ?.use { stream -> stream.readBytes() }
+            ?: ByteArray(0)
+    }
+
+    fun preparePinyin(texts: Sequence<String>) {
+        val requiredChars = buildSet {
+            texts.forEach { text ->
+                text.forEach { char ->
+                    if (char.isChinese()) add(char)
+                }
+            }
+        }
+        if (requiredChars.isEmpty()) return
+
+        synchronized(pinyinTableLock) {
+            loadMissingPinyin(requiredChars)
+        }
+    }
 
     fun analyze(text: String): DanmakuTextAnalysis {
         val normalized = normalize(text)
         return DanmakuTextAnalysis(
             normalized = normalized.text,
-            pinyinTokens = if (normalized.isPureNoise) emptyList() else pinyinTokens(normalized.text),
-            isPureNoise = normalized.isPureNoise
+            isPureNoise = normalized.isPureNoise,
+            pinyinTokensProvider = {
+                if (normalized.isPureNoise) emptyList() else pinyinTokens(normalized.text)
+            }
         )
     }
 
     private fun normalize(text: String): NormalizedText {
-        val halfWidth = text
-            .map { it.toHalfWidth() }
-            .joinToString(separator = "")
+        val halfWidth = buildString(text.length) {
+            text.forEach { char -> append(char.toHalfWidth()) }
+        }
             .lowercase(Locale.ROOT)
         normalizePureNoise(halfWidth)?.let {
             return NormalizedText(text = it, isPureNoise = true)
@@ -304,12 +609,7 @@ private object DanmakuTextAnalyzer {
         val tokens = normalized
             .mapNotNull { char ->
                 if (!char.isChinese()) return@mapNotNull null
-                runCatching {
-                    PinyinHelper
-                        .convertToPinyinArray(char, PinyinFormat.WITHOUT_TONE)
-                        ?.firstOrNull()
-                        ?.lowercase(Locale.ROOT)
-                }.getOrNull()
+                pinyinToken(char)
             }
             .filter { it.isNotBlank() }
         val result = if (tokens.size >= 2) tokens else emptyList()
@@ -318,6 +618,86 @@ private object DanmakuTextAnalyzer {
             pinyinCache[normalized] = result
         }
         return result
+    }
+
+    private fun pinyinToken(char: Char): String? {
+        return synchronized(pinyinTableLock) {
+            if (!loadedPinyinChars[char.code]) loadMissingPinyin(setOf(char))
+            pinyinByChar[char.code]
+        }
+    }
+
+    private fun loadMissingPinyin(requiredChars: Set<Char>) {
+        val missingChars = requiredChars
+            .filterTo(mutableSetOf()) { char -> !loadedPinyinChars[char.code] }
+        if (missingChars.isEmpty()) return
+
+        val bytes = pinyinResourceBytes
+        var lineStart = 0
+        while (lineStart < bytes.size && missingChars.isNotEmpty()) {
+            var lineEnd = lineStart
+            while (lineEnd < bytes.size && bytes[lineEnd] != '\n'.code.toByte()) {
+                lineEnd++
+            }
+
+            var separatorIndex = lineStart
+            while (
+                separatorIndex < lineEnd &&
+                bytes[separatorIndex] != '='.code.toByte()
+            ) {
+                separatorIndex++
+            }
+            val char = decodeUtf8Char(bytes, lineStart, separatorIndex)
+            if (char != null && char in missingChars && separatorIndex < lineEnd) {
+                val firstPinyinStart = separatorIndex + 1
+                var firstPinyinEnd = firstPinyinStart
+                while (
+                    firstPinyinEnd < lineEnd &&
+                    bytes[firstPinyinEnd] != ','.code.toByte() &&
+                    bytes[firstPinyinEnd] != '\r'.code.toByte()
+                ) {
+                    firstPinyinEnd++
+                }
+                pinyinByChar[char.code] = bytes
+                    .decodeToString(firstPinyinStart, firstPinyinEnd)
+                    .removePinyinTone()
+                missingChars.remove(char)
+            }
+
+            lineStart = lineEnd + 1
+        }
+        requiredChars.forEach { char -> loadedPinyinChars[char.code] = true }
+    }
+
+    private fun decodeUtf8Char(bytes: ByteArray, startIndex: Int, endIndex: Int): Char? {
+        if (startIndex >= endIndex) return null
+        val first = bytes[startIndex].toInt() and 0xFF
+        val codePoint = when {
+            first and 0x80 == 0 -> first
+            first and 0xE0 == 0xC0 && startIndex + 1 < endIndex -> {
+                ((first and 0x1F) shl 6) or (bytes[startIndex + 1].toInt() and 0x3F)
+            }
+            first and 0xF0 == 0xE0 && startIndex + 2 < endIndex -> {
+                ((first and 0x0F) shl 12) or
+                    ((bytes[startIndex + 1].toInt() and 0x3F) shl 6) or
+                    (bytes[startIndex + 2].toInt() and 0x3F)
+            }
+            else -> return null
+        }
+        return codePoint.takeIf { it <= Char.MAX_VALUE.code }?.toChar()
+    }
+
+    private fun String.removePinyinTone(): String = buildString(length) {
+        this@removePinyinTone.forEach { char ->
+            val markedIndex = MARKED_VOWELS.indexOf(char)
+            append(
+                when {
+                    markedIndex >= 0 -> UNMARKED_VOWELS[markedIndex / 4]
+                    char == 'ü' -> 'v'
+                    else -> char
+                }
+            )
+        }
     }
 
     private fun Char.toHalfWidth(): Char {
@@ -386,7 +766,10 @@ private object DanmakuTextAnalyzer {
     }
 
     private fun Char.isChinese(): Boolean {
-        return isHan()
+        return this == '\u3007' ||
+            this in '\u3400'..'\u4DBF' ||
+            this in '\u4E00'..'\u9FFF' ||
+            this in '\uF900'..'\uFAFF'
     }
 
     private fun Char.isHan(): Boolean {
@@ -400,15 +783,22 @@ private data class NormalizedText(
 )
 
 private object DanmakuSimilarity {
-    fun isSimilar(
+    fun isTextSimilar(
         existing: DanmakuTextAnalysis,
         candidate: DanmakuTextAnalysis
     ): Boolean {
         if (existing.normalized.isBlank() || candidate.normalized.isBlank()) return false
         if (existing.normalized == candidate.normalized) return true
         if (existing.isPureNoise || candidate.isPureNoise) return false
-        if (isTextEditDistanceSimilar(existing.normalized, candidate.normalized)) return true
-        return isPinyinSimilar(existing.pinyinTokens, candidate.pinyinTokens)
+        return isTextEditDistanceSimilar(existing.normalized, candidate.normalized)
+    }
+
+    fun isPinyinSimilar(
+        existing: DanmakuTextAnalysis,
+        candidate: DanmakuTextAnalysis
+    ): Boolean {
+        if (existing.isPureNoise || candidate.isPureNoise) return false
+        return arePinyinTokensSimilar(existing.pinyinTokens, candidate.pinyinTokens)
     }
 
     private fun isTextEditDistanceSimilar(left: String, right: String): Boolean {
@@ -422,7 +812,7 @@ private object DanmakuSimilarity {
         return boundedEditDistance(left, right, threshold) <= threshold
     }
 
-    private fun isPinyinSimilar(left: List<String>, right: List<String>): Boolean {
+    private fun arePinyinTokensSimilar(left: List<String>, right: List<String>): Boolean {
         if (left.size < 2 || right.size < 2) return false
         if (left == right) return true
 

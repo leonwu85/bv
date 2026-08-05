@@ -403,6 +403,8 @@ fun VideoPlayerV3Screen(
         ),
         LocalVideoPlayerHistoryData provides VideoPlayerHistoryData(
             lastPlayed = playerViewModel.lastPlayed,
+            initialPlaybackPositionMs = playerViewModel.resolvedVodStartPositionMs,
+            isInitialPlaybackPositionResolved = playerViewModel.hasResolvedVodStartPosition,
         ),
         LocalVideoPlayerPaymentData provides VideoPlayerPaymentData(
             needPay = playerViewModel.needPay,
@@ -859,8 +861,14 @@ fun VideoPlayerV3Screen(
                     }
                 },
                 onDanmakuMergeChange = { enabled ->
-                    Prefs.defaultDanmakuMergeEnabled = enabled
-                    playerViewModel.updateDanmakuMergeEnabled(enabled)
+                    if (enabled && !playerViewModel.danmakuSmartFilterSupported) {
+                        Prefs.defaultDanmakuMergeEnabled = false
+                        playerViewModel.updateDanmakuMergeEnabled(false)
+                        R.string.danmaku_smart_filter_unsupported_legacy_android.toast(context)
+                    } else {
+                        Prefs.defaultDanmakuMergeEnabled = enabled
+                        playerViewModel.updateDanmakuMergeEnabled(enabled)
+                    }
                 },
                 onDanmakuFilterLevelChange = { filterLevel ->
                     if (playerViewModel.isLive) {

@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.mobile.component.preferences.items.radioPreference
 import dev.aaa1115910.bv.mobile.component.preferences.items.switchPreference
 import dev.aaa1115910.bv.mobile.component.preferences.preferenceGroups
@@ -20,12 +21,15 @@ import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.PlayMode
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
+import dev.aaa1115910.bv.util.DanmakuSmartFilterPolicy
+import dev.aaa1115910.bv.util.toast
 
 @Composable
 fun PlayContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val danmakuSmartFilterSupported = DanmakuSmartFilterPolicy.isSupported()
 
     LazyColumn(
         modifier = modifier,
@@ -111,8 +115,16 @@ fun PlayContent(
                 switchPreference(
                     title = "智能过滤",
                     summary = "合并重复和相似弹幕",
+                    checkedOverride = if (danmakuSmartFilterSupported) null else false,
                     prefReq = MobilePrefKeys.defaultDanmakuMergeEnabledRequest,
-                    onCheckedChange = { true }
+                    onCheckedChange = { enabled ->
+                        if (enabled && !danmakuSmartFilterSupported) {
+                            R.string.danmaku_smart_filter_unsupported_legacy_android.toast(context)
+                            false
+                        } else {
+                            true
+                        }
+                    }
                 )
                 radioPreference(
                     title = "弹幕过滤等级",

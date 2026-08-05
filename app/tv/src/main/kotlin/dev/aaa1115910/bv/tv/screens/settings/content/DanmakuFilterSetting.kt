@@ -24,13 +24,16 @@ import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.tv.component.settings.SettingNumberListItem
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
+import dev.aaa1115910.bv.util.DanmakuSmartFilterPolicy
 import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.bv.util.toast
 
 @Composable
 fun DanmakuFilterSetting(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val danmakuSmartFilterSupported = remember { DanmakuSmartFilterPolicy.isSupported() }
     var defaultDanmakuFilterLevel by remember { mutableStateOf(Prefs.defaultDanmakuFilterLevel) }
     var defaultDanmakuMergeEnabled by remember { mutableStateOf(Prefs.defaultDanmakuMergeEnabled) }
     var defaultLiveDanmakuFilterLevel by remember { mutableStateOf(Prefs.defaultLiveDanmakuFilterLevel) }
@@ -72,9 +75,13 @@ fun DanmakuFilterSetting(
                     title = stringResource(R.string.settings_player_danmaku_merge_title),
                     supportText = stringResource(R.string.settings_player_danmaku_merge_text),
                     checked = defaultDanmakuMergeEnabled,
-                    onCheckedChange = {
-                        defaultDanmakuMergeEnabled = it
-                        Prefs.defaultDanmakuMergeEnabled = it
+                    onCheckedChange = { enabled ->
+                        if (enabled && !danmakuSmartFilterSupported) {
+                            R.string.danmaku_smart_filter_unsupported_legacy_android.toast(context)
+                        } else {
+                            defaultDanmakuMergeEnabled = enabled
+                            Prefs.defaultDanmakuMergeEnabled = enabled
+                        }
                     }
                 )
             }

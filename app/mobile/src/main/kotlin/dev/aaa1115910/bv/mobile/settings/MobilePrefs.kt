@@ -30,6 +30,7 @@ import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.player.entity.SuperResolutionType
 import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.player.util.DanmakuSpeedPolicy
+import dev.aaa1115910.bv.util.DanmakuSmartFilterPolicy
 import dev.aaa1115910.bv.util.MobileThemeModeManager
 import dev.aaa1115910.bv.util.PlaybackPreferenceSelector
 import kotlinx.coroutines.flow.Flow
@@ -291,8 +292,12 @@ object MobilePrefs {
         set(value) = write(MobilePrefKeys.defaultDanmakuFilterLevelKey, sanitizeDanmakuFilterLevel(value))
 
     var defaultDanmakuMergeEnabled: Boolean
-        get() = read(MobilePrefKeys.defaultDanmakuMergeEnabledRequest)
-        set(value) = write(MobilePrefKeys.defaultDanmakuMergeEnabledKey, value)
+        get() = DanmakuSmartFilterPolicy.isSupported() &&
+            read(MobilePrefKeys.defaultDanmakuMergeEnabledRequest)
+        set(value) = write(
+            MobilePrefKeys.defaultDanmakuMergeEnabledKey,
+            DanmakuSmartFilterPolicy.coerceEnabled(value),
+        )
 
     var defaultLiveDanmakuFilterLevel: Int
         get() = sanitizeLiveDanmakuFilterLevel(read(MobilePrefKeys.defaultLiveDanmakuFilterLevelRequest))

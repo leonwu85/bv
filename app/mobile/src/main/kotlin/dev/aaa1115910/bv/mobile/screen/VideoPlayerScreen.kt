@@ -834,6 +834,8 @@ fun VideoPlayerScreen(
                         ),
                         LocalVideoPlayerHistoryData provides VideoPlayerHistoryData(
                             lastPlayed = playerViewModel.lastPlayed,
+                            initialPlaybackPositionMs = playerViewModel.resolvedVodStartPositionMs,
+                            isInitialPlaybackPositionResolved = playerViewModel.hasResolvedVodStartPosition,
                         ),
                         LocalVideoPlayerPaymentData provides VideoPlayerPaymentData(
                             needPay = playerViewModel.needPay,
@@ -919,6 +921,7 @@ fun VideoPlayerScreen(
                             danmakuPlayer = playerViewModel.danmakuPlayer,
                             onClearBackToHistoryData = { playerViewModel.lastPlayed = 0 },
                             onReloadDanmakuAfterSeek = playerViewModel::reloadDanmakuAfterSeek,
+                            onEnsureDanmakuCoverage = playerViewModel::ensureDanmakuCoverage,
                             onRequestManualPlayback = playerViewModel::requestManualVodPlayback,
                             onEnterFullScreen = {
                                 autoRotateSuppressed = false
@@ -995,8 +998,14 @@ fun VideoPlayerScreen(
                                 playerSettings.defaultDanmakuPresentationSpeedMutable = speed
                             },
                             onDanmakuMergeChange = { enabled ->
-                                playerSettings.defaultDanmakuMergeEnabledMutable = enabled
-                                playerViewModel.updateDanmakuMergeEnabled(enabled)
+                                if (enabled && !playerViewModel.danmakuSmartFilterSupported) {
+                                    playerSettings.defaultDanmakuMergeEnabledMutable = false
+                                    playerViewModel.updateDanmakuMergeEnabled(false)
+                                    R.string.danmaku_smart_filter_unsupported_legacy_android.toast(context)
+                                } else {
+                                    playerSettings.defaultDanmakuMergeEnabledMutable = enabled
+                                    playerViewModel.updateDanmakuMergeEnabled(enabled)
+                                }
                             },
                             onDanmakuFilterLevelChange = { filterLevel ->
                                 if (playerViewModel.isLive) {

@@ -81,6 +81,8 @@ data class VideoPlayerLogsData(
 
 data class VideoPlayerHistoryData(
     val lastPlayed: Int = 0,
+    val initialPlaybackPositionMs: Long = 0L,
+    val isInitialPlaybackPositionResolved: Boolean = false,
     val showBackToHistory: Boolean = false,
 )
 

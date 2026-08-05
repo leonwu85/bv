@@ -38,6 +38,7 @@ import dev.aaa1115910.bv.player.VideoPlayerListener
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.DanmakuType
+import dev.aaa1115910.bv.player.entity.DefaultStartPosition
 import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerClockData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
@@ -124,6 +125,7 @@ fun BvPlayer(
     onBack: () -> Unit,
     onClearBackToHistoryData: () -> Unit,
     onReloadDanmakuAfterSeek: (Long, Boolean) -> Unit = { _, _ -> },
+    onEnsureDanmakuCoverage: (Long) -> Unit = {},
     onRequestManualPlayback: () -> Boolean = { false },
     onChangeResolution: (Resolution, afterChange: suspend () -> Unit) -> Unit,
     onChangeVideoCodec: (VideoCodec, afterChange: suspend () -> Unit) -> Unit,
@@ -192,6 +194,20 @@ fun BvPlayer(
     var currentPlaySpeed by remember { mutableFloatStateOf(videoPlayerConfigData.currentVideoSpeed) }
     var aspectRatio by remember { mutableFloatStateOf(16f / 9f) }
     var lastPlayed by remember { mutableLongStateOf(0L) }
+    var initialPlaybackPositionMs by remember(videoPlayerConfigData.currentVideoCid) {
+        mutableLongStateOf(
+            if (videoPlayerHistoryData.isInitialPlaybackPositionResolved) {
+                videoPlayerHistoryData.initialPlaybackPositionMs.coerceAtLeast(0L)
+            } else {
+                videoPlayerHistoryData.lastPlayed
+                    .takeIf {
+                        videoPlayerConfigData.defaultStartPosition == DefaultStartPosition.History
+                    }
+                    ?.toLong()
+                    ?: 0L
+            }
+        )
+    }
     var lastHeartbeatPosition by remember { mutableLongStateOf(0L) }
     var playbackStateCid by remember { mutableLongStateOf(videoPlayerConfigData.currentVideoCid) }
     var hasStartedPlaybackOnce by remember { mutableStateOf(false) }
@@ -482,7 +498,11 @@ fun BvPlayer(
             logger.info { "onPlay" }
             val syncPosition = pendingDanmakuPlaySyncPosition.takeIf { it >= 0L }
                 ?: if (!hasStartedPlaybackOnce) {
-                    if (lastPlayed > 0) lastPlayed else videoPlayer.currentPosition
+                    if (initialPlaybackPositionMs > 0L) {
+                        initialPlaybackPositionMs
+                    } else {
+                        videoPlayer.currentPosition
+                    }
                 } else {
                     null
                 }
@@ -524,6 +544,14 @@ fun BvPlayer(
 
         override fun onProgress(position: Long, duration: Long, buffered: Int) {
             updatePlaybackProgress(position, duration, buffered)
+            if (
+                !isLive &&
+                videoPlayerConfigData.currentDanmakuEnabled &&
+                isPlaying &&
+                !isBuffering
+            ) {
+                onEnsureDanmakuCoverage(position)
+            }
         }
 
         override fun onEnd() {
@@ -579,6 +607,16 @@ fun BvPlayer(
     // 同步 videoPlayerHistoryData.lastPlayed 到本地变量
     LaunchedEffect(videoPlayerHistoryData.lastPlayed) {
         lastPlayed = videoPlayerHistoryData.lastPlayed.toLong()
+    }
+
+    LaunchedEffect(
+        videoPlayerHistoryData.initialPlaybackPositionMs,
+        videoPlayerHistoryData.isInitialPlaybackPositionResolved
+    ) {
+        if (videoPlayerHistoryData.isInitialPlaybackPositionResolved) {
+            initialPlaybackPositionMs =
+                videoPlayerHistoryData.initialPlaybackPositionMs.coerceAtLeast(0L)
+        }
     }
 
     LaunchedEffect(danmakuPlayer) {
@@ -709,8 +747,8 @@ fun BvPlayer(
                 val shouldRequestManualPlayback =
                     !videoPlayerConfigData.autoPlay && !isLive && !hasStartedPlaybackOnce
                 if (!hasStartedPlaybackOnce) {
-                    pendingDanmakuPlaySyncPosition = if (lastPlayed > 0) {
-                        lastPlayed
+                    pendingDanmakuPlaySyncPosition = if (initialPlaybackPositionMs > 0L) {
+                        initialPlaybackPositionMs
                     } else {
                         videoPlayer.currentPosition
                     }

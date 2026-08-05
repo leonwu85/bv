@@ -112,6 +112,7 @@ fun PreferenceGroupScope.switchPreference(
     onClick: (() -> Unit)? = null,
     onSelected: Boolean = false,
     enabled: Boolean = true,
+    checkedOverride: Boolean? = null,
     prefReq: PreferenceRequest<Boolean>,
     onCheckedChange: (Boolean) -> Boolean
 ) {
@@ -136,7 +137,7 @@ fun PreferenceGroupScope.switchPreference(
             selected = onSelected,
             shape = shape,
             enabled = enabled,
-            checked = checked,
+            checked = checkedOverride ?: checked,
             onCheckedChange = {
                 if (onCheckedChange(it)) setChecked(it)
             }

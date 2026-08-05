@@ -989,8 +989,15 @@ object Prefs {
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDefaultDanmakuFilterLevelKey, value) }
 
     var defaultDanmakuMergeEnabled: Boolean
-        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDefaultDanmakuMergeEnabledRequest).first() }
-        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDefaultDanmakuMergeEnabledKey, value) }
+        get() = DanmakuSmartFilterPolicy.isSupported() && runBlocking {
+            dsm.getPreferenceFlow(PrefKeys.prefDefaultDanmakuMergeEnabledRequest).first()
+        }
+        set(value) = runBlocking {
+            dsm.editPreference(
+                PrefKeys.prefDefaultDanmakuMergeEnabledKey,
+                DanmakuSmartFilterPolicy.coerceEnabled(value),
+            )
+        }
 
     var defaultLiveDanmakuFilterLevel: Int
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDefaultLiveDanmakuFilterLevelRequest).first() }

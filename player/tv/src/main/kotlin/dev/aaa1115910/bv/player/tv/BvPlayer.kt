@@ -83,6 +83,7 @@ import dev.aaa1115910.bv.player.tv.controller.VideoPlayerController
 import dev.aaa1115910.bv.util.countDownTimer
 import dev.aaa1115910.bv.player.util.DanmakuMaskFinder
 import dev.aaa1115910.bv.player.util.DanmakuSpeedPolicy
+import dev.aaa1115910.bv.player.util.isInitialPlaybackSeek
 import dev.aaa1115910.bv.player.util.TvDanmakuCompatibilityPolicy
 import dev.aaa1115910.bv.player.util.renderMaskFrameToBitmap
 import dev.aaa1115910.bv.util.fInfo
@@ -354,14 +355,21 @@ fun BvPlayer(
     var pendingReloadDanmakuShouldPlay by remember { mutableStateOf(false) }
     var hasStartedPlaybackOnce by remember(videoPlayerConfigData.currentVideoCid) { mutableStateOf(false) }
     var handledNaturalVideoEnd by remember(videoPlayerConfigData.currentVideoCid) { mutableStateOf(false) }
-    val initialHistoryPositionSnapshot = remember(videoPlayerConfigData.currentVideoCid) {
-        videoPlayerHistoryData.lastPlayed.toLong().coerceAtLeast(0L)
+    val initialPlaybackPositionSnapshot = remember(videoPlayerConfigData.currentVideoCid) {
+        if (videoPlayerHistoryData.isInitialPlaybackPositionResolved) {
+            videoPlayerHistoryData.initialPlaybackPositionMs.coerceAtLeast(0L)
+        } else {
+            videoPlayerHistoryData.lastPlayed
+                .takeIf { videoPlayerConfigData.defaultStartPosition == DefaultStartPosition.History }
+                ?.toLong()
+                ?: 0L
+        }
     }
-    var pendingInitialHistoryDanmakuReload by remember(videoPlayerConfigData.currentVideoCid) {
-        mutableStateOf(false)
+    var pendingInitialPlaybackSeek by remember(videoPlayerConfigData.currentVideoCid) {
+        mutableStateOf(initialPlaybackPositionSnapshot > 0L)
     }
-    var initialHistoryDanmakuPosition by remember(videoPlayerConfigData.currentVideoCid) {
-        mutableLongStateOf(initialHistoryPositionSnapshot)
+    var initialPlaybackDanmakuPosition by remember(videoPlayerConfigData.currentVideoCid) {
+        mutableLongStateOf(initialPlaybackPositionSnapshot)
     }
     
     var lastDanmakuSeekTime by remember { mutableLongStateOf(0L) }
@@ -556,6 +564,7 @@ fun BvPlayer(
     }
 
     val scheduleDanmakuSeekSync: (Long, Boolean) -> Unit = { targetPosition, shouldPlayAfterSeek ->
+        pendingInitialPlaybackSeek = false
         pendingSeekDanmakuPosition = targetPosition
         pendingSeekDanmakuShouldPlay = shouldPlayAfterSeek
         mDanmakuPlayer?.pause()
@@ -900,10 +909,15 @@ fun BvPlayer(
         lastPlayed = videoPlayerHistoryData.lastPlayed.toLong()
     }
 
-    LaunchedEffect(videoPlayerConfigData.currentVideoCid, videoPlayerHistoryData.lastPlayed) {
-        val historyPosition = videoPlayerHistoryData.lastPlayed.toLong().coerceAtLeast(0L)
-        if (historyPosition > 0L && initialHistoryDanmakuPosition <= 0L) {
-            initialHistoryDanmakuPosition = historyPosition
+    LaunchedEffect(
+        videoPlayerConfigData.currentVideoCid,
+        videoPlayerHistoryData.initialPlaybackPositionMs,
+        videoPlayerHistoryData.isInitialPlaybackPositionResolved
+    ) {
+        if (videoPlayerHistoryData.isInitialPlaybackPositionResolved) {
+            val initialPositionMs = videoPlayerHistoryData.initialPlaybackPositionMs.coerceAtLeast(0L)
+            initialPlaybackDanmakuPosition = initialPositionMs
+            pendingInitialPlaybackSeek = !hasStartedPlaybackOnce && initialPositionMs > 0L
         }
     }
 
@@ -999,14 +1013,6 @@ fun BvPlayer(
                     return@launch
                 }
 
-                if (pendingInitialHistoryDanmakuReload && initialHistoryDanmakuPosition > 0L) {
-                    logger.info {
-                        "onPlay: defer initial history danmaku rebuild until progress reaches ${initialHistoryDanmakuPosition.formatHourMinSec()}"
-                    }
-                    updateBackToHistory()
-                    return@launch
-                }
-
                 if (danmakuNeedsResume && pendingDanmakuPosition >= 0) {
                     val pos = pendingDanmakuPosition
                     danmakuNeedsResume = false
@@ -1019,7 +1025,11 @@ fun BvPlayer(
                     updateBackToHistory()
                 } else if (!wasPlaying) {
                     if (!hasPlayedBefore) {
-                        val danmakuPosition = if (lastPlayed > 0) lastPlayed else videoPlayer.currentPosition
+                        val danmakuPosition = if (initialPlaybackDanmakuPosition > 0L) {
+                            initialPlaybackDanmakuPosition
+                        } else {
+                            videoPlayer.currentPosition
+                        }
                         logger.info {
                             "onPlay: initial danmaku sync to ${danmakuPosition.formatHourMinSec()}, currentPosition=${videoPlayer.currentPosition.formatHourMinSec()}"
                         }
@@ -1075,8 +1085,9 @@ fun BvPlayer(
 
         override fun onSeeked(position: Long) {
             logger.info { "onSeeked: ${position.formatHourMinSec()}" }
-            val syncPosition = pendingSeekDanmakuPosition.takeIf { it >= 0 } ?: position
-            val shouldPlayAfterSeek = if (pendingSeekDanmakuPosition >= 0) {
+            val hasExplicitUserSeek = pendingSeekDanmakuPosition >= 0L
+            val syncPosition = pendingSeekDanmakuPosition.takeIf { it >= 0L } ?: position
+            val shouldPlayAfterSeek = if (hasExplicitUserSeek) {
                 pendingSeekDanmakuShouldPlay
             } else {
                 isPlaying
@@ -1084,31 +1095,23 @@ fun BvPlayer(
             pendingSeekDanmakuPosition = -1L
             pendingSeekDanmakuShouldPlay = false
 
-            val isInitialHistorySeek =
-                pendingInitialHistoryDanmakuReload &&
-                    initialHistoryDanmakuPosition > 0L &&
-                    kotlin.math.abs(syncPosition - initialHistoryDanmakuPosition) <= 1_500L
-            val isStartupSeekBeforePlay =
-                !hasStartedPlaybackOnce &&
-                    syncPosition > 0L &&
-                    pendingSeekDanmakuPosition < 0L
-            if (isStartupSeekBeforePlay) {
-                initialHistoryDanmakuPosition = syncPosition
+            if (
+                isInitialPlaybackSeek(
+                    pendingInitialSeek = pendingInitialPlaybackSeek,
+                    hasExplicitUserSeek = hasExplicitUserSeek,
+                    expectedPositionMs = initialPlaybackDanmakuPosition,
+                    actualPositionMs = syncPosition
+                )
+            ) {
+                pendingInitialPlaybackSeek = false
                 logger.info {
                     "onSeeked: startup seek already covered by initial danmaku load, skip deferred rebuild at ${syncPosition.formatHourMinSec()}"
                 }
                 lastHeartbeatPosition = syncPosition
                 return
             }
-            if (isInitialHistorySeek) {
-                logger.info {
-                    "onSeeked: detected initial history seek, defer danmaku rebuild until playback progresses to ${initialHistoryDanmakuPosition.formatHourMinSec()}"
-                }
-                lastDanmakuSeekTime = System.currentTimeMillis()
-                lastHeartbeatPosition = syncPosition
-                return
-            }
 
+            pendingInitialPlaybackSeek = false
             scheduleDanmakuReload(syncPosition, shouldPlayAfterSeek)
             lastDanmakuSeekTime = System.currentTimeMillis()
             lastHeartbeatPosition = syncPosition
@@ -1148,22 +1151,9 @@ fun BvPlayer(
                     videoPlayerConfigData.showDanmaku &&
                     isPlaying &&
                     !isBuffering &&
-                    pendingSeekDanmakuPosition < 0L &&
-                    !pendingInitialHistoryDanmakuReload
+                    pendingSeekDanmakuPosition < 0L
                 ) {
                     onEnsureDanmakuCoverage(pos)
-                }
-
-                if (pendingInitialHistoryDanmakuReload && isPlaying && initialHistoryDanmakuPosition > 0L) {
-                    val triggerPosition = (initialHistoryDanmakuPosition - 1_500L).coerceAtLeast(0L)
-                    if (pos >= triggerPosition) {
-                        pendingInitialHistoryDanmakuReload = false
-                        logger.info {
-                            "onProgress: rebuild danmaku after initial history seek, current=${pos.formatHourMinSec()}, target=${initialHistoryDanmakuPosition.formatHourMinSec()}"
-                        }
-                        scheduleDanmakuReload(initialHistoryDanmakuPosition, true)
-                        return@launch
-                    }
                 }
 
                 if (currentSkipPgcIntroOutro && currentClipInfoList.isNotEmpty() && isPlaying) {
@@ -1501,6 +1491,7 @@ fun BvPlayer(
                 onLoadNewVideo(it)
             },
             onResolutionChange = { resolution ->
+                pendingInitialPlaybackSeek = false
                 videoPlayer.pause()
                 val current = videoPlayer.currentPosition
                 pendingDanmakuPosition = current
@@ -1518,6 +1509,7 @@ fun BvPlayer(
                 //playerViewModel.currentQuality = qualityId
             },
             onCodecChange = { videoCodec ->
+                pendingInitialPlaybackSeek = false
                 videoPlayer.pause()
                 val current = videoPlayer.currentPosition
                 pendingDanmakuPosition = current
@@ -1566,8 +1558,9 @@ fun BvPlayer(
 	                onPlaySpeedChange(speed)
 	                videoPlayer.speed = speed
 	                applyDanmakuSpeedPolicy()
-	            },
+            },
             onAudioChange = { audio ->
+                pendingInitialPlaybackSeek = false
                 videoPlayer.pause()
                 val current = videoPlayer.currentPosition
                 onAudioChange(audio) {
@@ -1578,6 +1571,7 @@ fun BvPlayer(
                 }
             },
             onPlaybackMediaModeChange = { mediaMode ->
+                pendingInitialPlaybackSeek = false
                 videoPlayer.pause()
                 val current = seekState.position.takeIf { it > 0L } ?: videoPlayer.currentPosition
                 pendingDanmakuPosition = current
