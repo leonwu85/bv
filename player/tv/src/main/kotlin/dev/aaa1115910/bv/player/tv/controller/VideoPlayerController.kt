@@ -775,7 +775,10 @@ fun VideoPlayerController(
                 }
                 onPlaybackMediaModeChange(nextMode)
             },
-            onOpenUpSpace = onOpenUpSpace,
+            onOpenUpSpace = {
+                hideInfoController()
+                onOpenUpSpace()
+            },
             onRefreshVideo = {
                 if (videoPlayer.duration > 0 && videoPlayer.currentPosition >= videoPlayer.duration) {
                     goTime = 0

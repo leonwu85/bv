@@ -88,7 +88,7 @@ fun PictureMenuList(
                     )
         }
     }
-    var selectedPictureMenuItem by remember(pictureMenuItems) {
+    var selectedPictureMenuItem by remember {
         mutableStateOf(pictureMenuItems.first())
     }
     val resolutionList = remember(videoPlayerConfigData.availableResolutions) {
