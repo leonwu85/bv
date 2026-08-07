@@ -41,7 +41,11 @@ data class VideoListUgcEpisode(
 
 data class VideoListUgcEpisodeTitle(
     val index: Int,
-    val title: String
+    val title: String,
+    val cover: String? = null,
+    val duration: Int = 0,
+    val viewCount: Long = 0,
+    val danmakuCount: Int = 0,
 ) : VideoListItem
 
 data class VideoListInteractiveNode(

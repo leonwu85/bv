@@ -467,6 +467,10 @@ fun VideoInfoScreen(
                     VideoListUgcEpisodeTitle(
                         title = episode.title,
                         index = epIndex,
+                        cover = episode.cover,
+                        duration = episode.duration,
+                        viewCount = episode.viewCount,
+                        danmakuCount = episode.danmakuCount,
                     )
                 )
                 episode.pages.mapIndexed { pageIndex, videoPage ->

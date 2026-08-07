@@ -244,7 +244,11 @@ class VideoDetailViewModel(
                             cid = videoPage.cid,
                             title = episode.title,
                             partTitle = "",
-                            index = epIndex
+                            index = epIndex,
+                            cover = episode.cover,
+                            duration = videoPage.duration,
+                            viewCount = episode.viewCount,
+                            danmakuCount = episode.danmakuCount,
                         )
                     )
                 }
@@ -253,6 +257,10 @@ class VideoDetailViewModel(
                     VideoListUgcEpisodeTitle(
                         title = episode.title,
                         index = epIndex,
+                        cover = episode.cover,
+                        duration = episode.duration,
+                        viewCount = episode.viewCount,
+                        danmakuCount = episode.danmakuCount,
                     )
                 )
                 episode.pages.mapIndexed { pageIndex, videoPage ->
@@ -263,6 +271,7 @@ class VideoDetailViewModel(
                             title = episode.title,
                             partTitle = videoPage.title,
                             index = pageIndex,
+                            duration = videoPage.duration,
                         )
                     )
                 }

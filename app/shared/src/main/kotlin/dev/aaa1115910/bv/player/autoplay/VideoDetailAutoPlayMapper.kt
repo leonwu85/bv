@@ -138,6 +138,10 @@ private fun VideoDetail.buildUgcSeasonVideoList(sectionIndex: Int): List<VideoLi
                 VideoListUgcEpisodeTitle(
                     title = episode.title,
                     index = episodeIndex,
+                    cover = episode.cover,
+                    duration = episode.duration,
+                    viewCount = episode.viewCount,
+                    danmakuCount = episode.danmakuCount,
                 )
             )
             episode.pages.forEachIndexed { pageIndex, page ->
