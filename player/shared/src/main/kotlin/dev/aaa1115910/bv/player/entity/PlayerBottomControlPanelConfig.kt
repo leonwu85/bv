@@ -3,6 +3,7 @@ package dev.aaa1115910.bv.player.entity
 object PlayerBottomControlPanelButtonIds {
     const val Like = "like"
     const val Favorite = "fav"
+    const val Cache = "cache"
     const val Coin = "coin"
     const val TripleLike = "tripleLike"
     const val Description = "description"
@@ -61,6 +62,7 @@ data class PlayerBottomControlPanelConfig(
         val DefaultActionButtonOrder = listOf(
             PlayerBottomControlPanelButtonIds.Like,
             PlayerBottomControlPanelButtonIds.Favorite,
+            PlayerBottomControlPanelButtonIds.Cache,
             PlayerBottomControlPanelButtonIds.Coin,
             PlayerBottomControlPanelButtonIds.TripleLike,
             PlayerBottomControlPanelButtonIds.Description,
@@ -97,7 +99,22 @@ data class PlayerBottomControlPanelConfig(
             val allowed = defaultOrder.toSet()
             val seen = mutableSetOf<String>()
             val configured = order.filter { id -> id in allowed && seen.add(id) }
-            return configured + defaultOrder.filterNot { it in seen }
+            val result = (configured + defaultOrder.filterNot { it in seen }).toMutableList()
+
+            // Existing installations already persist the previous default action order.
+            // Insert newly introduced cache control at its intended semantic position.
+            if (
+                PlayerBottomControlPanelButtonIds.Cache in defaultOrder &&
+                PlayerBottomControlPanelButtonIds.Cache !in configured
+            ) {
+                result.remove(PlayerBottomControlPanelButtonIds.Cache)
+                val coinIndex = result.indexOf(PlayerBottomControlPanelButtonIds.Coin)
+                result.add(
+                    index = coinIndex.takeIf { it >= 0 } ?: result.size,
+                    element = PlayerBottomControlPanelButtonIds.Cache
+                )
+            }
+            return result
         }
 
         private fun orderedButtons(

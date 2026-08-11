@@ -40,7 +40,8 @@ fun LikeButton(
         border = border,
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp), // 减小间距
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally), // 减小间距
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(

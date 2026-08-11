@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -899,6 +900,7 @@ fun ControllerBottomBar(
                 horizontal = 8.dp.scaledBy(panelConfig.actionRowScale),
                 vertical = 0.dp
             )
+            val primaryActionWidth = 72.dp.scaledBy(actionScale)
             val pauseAutoHide: (Boolean) -> Unit = { pause ->
                 autoHideState.pauseAutoHide = pause
                 if (pause) cancelHideJob() else scheduleHideJob()
@@ -906,6 +908,21 @@ fun ControllerBottomBar(
             fun actionModifier(id: String): Modifier {
                 return Modifier
                     .height(actionHeight)
+                    .then(
+                        when (id) {
+                            PlayerBottomControlPanelButtonIds.Like,
+                            PlayerBottomControlPanelButtonIds.Favorite,
+                            PlayerBottomControlPanelButtonIds.Coin -> Modifier.width(primaryActionWidth)
+
+                            // Keep the idle cache action aligned with the other primary actions,
+                            // while allowing progress and state labels to grow when needed.
+                            PlayerBottomControlPanelButtonIds.Cache -> Modifier.widthIn(
+                                min = primaryActionWidth
+                            )
+
+                            else -> Modifier
+                        }
+                    )
                     .onFocusChanged { if (it.isFocused) scheduleHideJob() }
                     .then(
                         userActionFocusRequesters.value[id]?.let { Modifier.focusRequester(it) }
@@ -926,6 +943,7 @@ fun ControllerBottomBar(
                 when (buttonId) {
                     PlayerBottomControlPanelButtonIds.Like,
                     PlayerBottomControlPanelButtonIds.Favorite,
+                    PlayerBottomControlPanelButtonIds.Cache,
                     PlayerBottomControlPanelButtonIds.Coin -> {
                         userActionButtonContent(
                             buttonId,

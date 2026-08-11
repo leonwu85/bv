@@ -40,7 +40,8 @@ fun CoinButton(
         onClick = {onAddCoin()}
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp), // 减小间距
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(

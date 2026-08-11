@@ -85,6 +85,7 @@ fun VideoPlayerController(
     showBottomProgressBar: Boolean = false,
     bottomProgressBarColor: Color = Color(0xFFBD26B8).copy(alpha = 0.5f),
     bottomControlPanelConfig: PlayerBottomControlPanelConfig = PlayerBottomControlPanelConfig.Default,
+    offlinePlaybackMode: Boolean = false,
 
     showRelatedVideos: Boolean = false,
     showRelatedButton: Boolean = true,
@@ -235,6 +236,11 @@ fun VideoPlayerController(
     }
 
     fun openRelatedVideosFromDoubleDown() {
+        if (offlinePlaybackMode) {
+            clearDownDoublePressState()
+            showInfo = true
+            return
+        }
         clearDownDoublePressState()
         if (!showRelatedVideos) {
             hideInfoController()
@@ -264,6 +270,9 @@ fun VideoPlayerController(
             shortcutKeyBindings.entries
                 .firstOrNull { (_, boundKeyCode) -> boundKeyCode == keyCode }
                 ?.key
+                ?.takeIf { action ->
+                    !offlinePlaybackMode || action == PlayerShortcutAction.ToggleDanmaku
+                }
         }
     }
 
@@ -526,7 +535,9 @@ fun VideoPlayerController(
                                 justTriggeredLongPress = false
                             }
                             scope.launch(Dispatchers.Main) {
-                                if (useTripleLikeOnLongPress) {
+                                if (offlinePlaybackMode) {
+                                    showInfo = true
+                                } else if (useTripleLikeOnLongPress) {
                                     onTripleLike()
                                 } else {
                                     showMenuController = true
@@ -568,7 +579,9 @@ fun VideoPlayerController(
                             justTriggeredLongPress = false
                         }
                         scope.launch(Dispatchers.Main) {
-                            if (useTripleLikeOnLongPress) {
+                            if (offlinePlaybackMode) {
+                                showInfo = true
+                            } else if (useTripleLikeOnLongPress) {
                                 onTripleLike()
                             } else {
                                 showMenuController = true
@@ -595,6 +608,12 @@ fun VideoPlayerController(
                             return@onPreviewKeyEvent true
                         }
                         logger.info { "[${it.key} press]" }
+
+                        if (offlinePlaybackMode) {
+                            clearDownDoublePressState()
+                            showInfo = true
+                            return@onPreviewKeyEvent true
+                        }
 
                         showInfo = true
                         // 检查是否为连按两次（间隔小于300ms且上次按键时间不为0）
@@ -625,8 +644,14 @@ fun VideoPlayerController(
                     Key.Menu -> {
                         if (it.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
                         logger.info { "[${it.key} press]" }
-                        showMenuController = !showMenuController
-                        if(!showMenuController) onRequestFocus()
+                        if (offlinePlaybackMode) {
+                            showInfo = true
+                            showMenuController = false
+                            showListController = false
+                        } else {
+                            showMenuController = !showMenuController
+                            if (!showMenuController) onRequestFocus()
+                        }
                         return@onPreviewKeyEvent true
                     }
 
@@ -749,94 +774,159 @@ fun VideoPlayerController(
         PlayStateTips(
             canShowPause = !showInfo && !showSeekController
         )
-        ControllerVideoInfo(
-            show = showInfo,
-            playSpeed = videoPlayer.speed,
-            bottomProgressBarColor = bottomProgressBarColor,
-            bottomControlPanelConfig = bottomControlPanelConfig,
-            onInteraction = { markControllerInteraction(CONTROLLER_INTERACTION_COOLDOWN_MS) },
-            onHideInfo = { hideInfoController() },
-            onPlay = {
-                if (videoPlayer.currentPosition >= videoPlayer.duration) {
-                    goTime = 0
-                    onGoTime(0)
-                } else {
-                    onPlay()
-                }
-            },
-            onPause = onPause,
-            onPlaySpeedChange = onPlaySpeedChange,
-            isAudioOnly = videoPlayerConfigData.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly,
-            onTogglePlaybackMediaMode = {
-                val nextMode = if (videoPlayerConfigData.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly) {
-                    PlaybackMediaMode.Normal
-                } else {
-                    PlaybackMediaMode.AudioOnly
-                }
-                onPlaybackMediaModeChange(nextMode)
-            },
-            onOpenUpSpace = {
-                hideInfoController()
-                onOpenUpSpace()
-            },
-            onRefreshVideo = {
-                if (videoPlayer.duration > 0 && videoPlayer.currentPosition >= videoPlayer.duration) {
-                    goTime = 0
-                    onGoTime(0)
-                } else {
-                    onRefreshVideo()
-                }
-            },
-            onOpenDanmaku = onOpenDanmaku,
-            onHideDanmaku = onHideDanmaku,
-            onLiveLineChange = onLiveLineChange,
-            onOpenPlayList = {
-                showInfo = false
-                showListController = true
-            },
-            showRelatedButton = showRelatedButton,
-            onOpenRelatedVideo = {
-                onToggleRelatedVideos(true)
-
-                scope.launch(Dispatchers.Main) {
-                    delay(50)
+        if (offlinePlaybackMode) {
+            OfflineControllerBottomBar(
+                show = showInfo,
+                title = videoPlayerVideoInfoData.title,
+                partTitle = videoPlayerVideoInfoData.partTitle,
+                upName = videoPlayerVideoInfoData.upName,
+                upAvatar = videoPlayerVideoInfoData.upAvatar,
+                danmaku = videoPlayerVideoInfoData.danmaku,
+                currentCid = videoPlayerConfigData.currentVideoCid,
+                videoList = videoPlayerConfigData.availableVideoList,
+                seekState = videoPlayerSeekState,
+                playerState = videoPlayerStateData,
+                playSpeed = videoPlayer.speed,
+                showDanmaku = videoPlayerConfigData.showDanmaku,
+                isLoop = videoPlayerConfigData.isLoop,
+                bottomProgressBarColor = bottomProgressBarColor,
+                bottomControlPanelConfig = bottomControlPanelConfig,
+                onHide = {
+                    hideInfoController()
+                    onRequestFocus()
+                },
+                onPlay = {
+                    if (videoPlayer.currentPosition >= videoPlayer.duration) {
+                        goTime = 0
+                        onGoTime(0)
+                    } else {
+                        onPlay()
+                    }
+                },
+                onPause = onPause,
+                onSeekBack = {
+                    scope.launch(Dispatchers.Main) {
+                        delay(100)
+                        openSeekController()
+                        onTimeBack()
+                    }
+                },
+                onSeekForward = {
+                    scope.launch(Dispatchers.Main) {
+                        delay(100)
+                        openSeekController()
+                        onTimeForward()
+                    }
+                },
+                onRefreshVideo = {
+                    if (videoPlayer.duration > 0 && videoPlayer.currentPosition >= videoPlayer.duration) {
+                        goTime = 0
+                        onGoTime(0)
+                    } else {
+                        onRefreshVideo()
+                    }
+                },
+                onOpenPlayList = {
                     showInfo = false
-                }
-            },
-            onOpenSetting = {
-                showInfo = false
-                showMenuController = true
-            },
-            onLoopPlayModeChange = onLoopPlayModeChange,
-            onRotationChange = onRotationChange,
-            userActionContent = userActionContent,
-            userActionButtonIds = userActionButtonIds,
-            userActionButtonContent = userActionButtonContent,
-            onSeekBack = {
-                scope.launch(Dispatchers.Main) {
-                    delay(100)
-                    openSeekController()
-                    onTimeBack()
-                }
-            },
-            onSeekForward = {
-                scope.launch(Dispatchers.Main) {
-                    delay(100)
-                    openSeekController()
-                    onTimeForward()
-                }
-            },
-            onSubtitleChange = onSubtitleChange,
-            onLoadNextVideo = onLoadNextVideo,
-            onLoadPrevVideo = onLoadPrevVideo,
-            commentPanelVisible = commentPanelVisible,
-            onShowComment = handleShowComment,
-            onShowDescription = onShowDescription,
-            onTripleLike = onTripleLike,
-            onToggleFollow = onToggleFollow,
-            onReportLiveHistory = onReportLiveHistory,
-            liveIncognitoMode = liveIncognitoMode
-        )
+                    showListController = true
+                },
+                onLoadPrevVideo = onLoadPrevVideo,
+                onLoadNextVideo = onLoadNextVideo,
+                onPlaySpeedChange = onPlaySpeedChange,
+                onOpenDanmaku = onOpenDanmaku,
+                onHideDanmaku = onHideDanmaku,
+                onLoopPlayModeChange = onLoopPlayModeChange
+            )
+        } else {
+            ControllerVideoInfo(
+                show = showInfo,
+                playSpeed = videoPlayer.speed,
+                bottomProgressBarColor = bottomProgressBarColor,
+                bottomControlPanelConfig = bottomControlPanelConfig,
+                onInteraction = { markControllerInteraction(CONTROLLER_INTERACTION_COOLDOWN_MS) },
+                onHideInfo = { hideInfoController() },
+                onPlay = {
+                    if (videoPlayer.currentPosition >= videoPlayer.duration) {
+                        goTime = 0
+                        onGoTime(0)
+                    } else {
+                        onPlay()
+                    }
+                },
+                onPause = onPause,
+                onPlaySpeedChange = onPlaySpeedChange,
+                isAudioOnly = videoPlayerConfigData.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly,
+                onTogglePlaybackMediaMode = {
+                    val nextMode = if (videoPlayerConfigData.currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly) {
+                        PlaybackMediaMode.Normal
+                    } else {
+                        PlaybackMediaMode.AudioOnly
+                    }
+                    onPlaybackMediaModeChange(nextMode)
+                },
+                onOpenUpSpace = {
+                    hideInfoController()
+                    onOpenUpSpace()
+                },
+                onRefreshVideo = {
+                    if (videoPlayer.duration > 0 && videoPlayer.currentPosition >= videoPlayer.duration) {
+                        goTime = 0
+                        onGoTime(0)
+                    } else {
+                        onRefreshVideo()
+                    }
+                },
+                onOpenDanmaku = onOpenDanmaku,
+                onHideDanmaku = onHideDanmaku,
+                onLiveLineChange = onLiveLineChange,
+                onOpenPlayList = {
+                    showInfo = false
+                    showListController = true
+                },
+                showRelatedButton = showRelatedButton,
+                onOpenRelatedVideo = {
+                    onToggleRelatedVideos(true)
+
+                    scope.launch(Dispatchers.Main) {
+                        delay(50)
+                        showInfo = false
+                    }
+                },
+                onOpenSetting = {
+                    showInfo = false
+                    showMenuController = true
+                },
+                onLoopPlayModeChange = onLoopPlayModeChange,
+                onRotationChange = onRotationChange,
+                userActionContent = userActionContent,
+                userActionButtonIds = userActionButtonIds,
+                userActionButtonContent = userActionButtonContent,
+                onSeekBack = {
+                    scope.launch(Dispatchers.Main) {
+                        delay(100)
+                        openSeekController()
+                        onTimeBack()
+                    }
+                },
+                onSeekForward = {
+                    scope.launch(Dispatchers.Main) {
+                        delay(100)
+                        openSeekController()
+                        onTimeForward()
+                    }
+                },
+                onSubtitleChange = onSubtitleChange,
+                onLoadNextVideo = onLoadNextVideo,
+                onLoadPrevVideo = onLoadPrevVideo,
+                commentPanelVisible = commentPanelVisible,
+                onShowComment = handleShowComment,
+                onShowDescription = onShowDescription,
+                onTripleLike = onTripleLike,
+                onToggleFollow = onToggleFollow,
+                onReportLiveHistory = onReportLiveHistory,
+                liveIncognitoMode = liveIncognitoMode
+            )
+        }
         SeekController(
             show = showSeekController,
             goTime = goTime,
@@ -847,8 +937,9 @@ fun VideoPlayerController(
             show = showListController,
             onPlayNewVideo = onPlayNewVideo
         )
-        MenuController(
-            show = showMenuController,
+        if (!offlinePlaybackMode) {
+            MenuController(
+                show = showMenuController,
             onInteraction = { markControllerInteraction(CONTROLLER_INTERACTION_COOLDOWN_MS) },
             onResolutionChange = onResolutionChange,
             onCodecChange = onCodecChange,
@@ -877,8 +968,9 @@ fun VideoPlayerController(
             onSecondarySubtitleSizeChange = onSecondarySubtitleSizeChange,
             onSecondarySubtitleBackgroundOpacityChange = onSecondarySubtitleBackgroundOpacityChange,
             onSecondarySubtitleBottomPadding = onSecondarySubtitleBottomPadding,
-            onPlayModeChange = onPlayModeChange
-        )
+                onPlayModeChange = onPlayModeChange
+            )
+        }
         // 缓存底部进度条显示条件，避免频繁计算
         val shouldShowBottomProgressBar by remember { 
             derivedStateOf { 

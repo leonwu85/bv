@@ -21,6 +21,7 @@ class PlayerBottomControlPanelConfigTest {
                 PlayerBottomControlPanelButtonIds.Related,
                 PlayerBottomControlPanelButtonIds.Like,
                 PlayerBottomControlPanelButtonIds.Favorite,
+                PlayerBottomControlPanelButtonIds.Cache,
                 PlayerBottomControlPanelButtonIds.Coin,
                 PlayerBottomControlPanelButtonIds.TripleLike,
                 PlayerBottomControlPanelButtonIds.Description,
@@ -56,6 +57,37 @@ class PlayerBottomControlPanelConfigTest {
                 PlayerBottomControlPanelButtonIds.Rotation
             ),
             config.functionButtonOrder
+        )
+    }
+
+    @Test
+    fun `inserts cache before coin for persisted legacy action order`() {
+        val legacyOrder = listOf(
+            PlayerBottomControlPanelButtonIds.Like,
+            PlayerBottomControlPanelButtonIds.Favorite,
+            PlayerBottomControlPanelButtonIds.Coin,
+            PlayerBottomControlPanelButtonIds.TripleLike,
+            PlayerBottomControlPanelButtonIds.Description,
+            PlayerBottomControlPanelButtonIds.Playlist,
+            PlayerBottomControlPanelButtonIds.Related
+        )
+
+        val normalized = PlayerBottomControlPanelConfig(
+            actionButtonOrder = legacyOrder
+        ).normalized()
+
+        assertEquals(
+            listOf(
+                PlayerBottomControlPanelButtonIds.Like,
+                PlayerBottomControlPanelButtonIds.Favorite,
+                PlayerBottomControlPanelButtonIds.Cache,
+                PlayerBottomControlPanelButtonIds.Coin,
+                PlayerBottomControlPanelButtonIds.TripleLike,
+                PlayerBottomControlPanelButtonIds.Description,
+                PlayerBottomControlPanelButtonIds.Playlist,
+                PlayerBottomControlPanelButtonIds.Related
+            ),
+            normalized.actionButtonOrder
         )
     }
 

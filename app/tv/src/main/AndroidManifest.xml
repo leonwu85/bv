@@ -84,6 +84,12 @@
             android:label="@string/title_activity_video_player_v3"
             android:theme="@style/Theme.BV.TV" />
         <activity
+            android:name=".activities.video.OfflineVideoPlayerActivity"
+            android:enableOnBackInvokedCallback="false"
+            android:exported="false"
+            android:label="离线播放"
+            android:theme="@style/Theme.BV.TV" />
+        <activity
             android:name=".activities.video.TagActivity"
             android:enableOnBackInvokedCallback="false"
             android:exported="false"
@@ -172,6 +178,12 @@
             android:enableOnBackInvokedCallback="false"
             android:exported="false"
             android:label="@string/title_activity_toview"
+            android:theme="@style/Theme.BV.TV" />
+        <activity
+            android:name=".activities.user.OfflineCacheActivity"
+            android:enableOnBackInvokedCallback="false"
+            android:exported="false"
+            android:label="离线缓存"
             android:theme="@style/Theme.BV.TV" />
         <activity
             android:name=".activities.user.UserInfoActivity"

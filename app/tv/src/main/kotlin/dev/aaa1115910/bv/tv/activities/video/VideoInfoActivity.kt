@@ -86,9 +86,7 @@ class VideoInfoActivity : TvComponentActivity() {
         }
 
         setContent {
-            BVTheme(
-                forceDark = true
-            ) {
+            BVTheme {
                 VideoInfoScreen()
             }
         }

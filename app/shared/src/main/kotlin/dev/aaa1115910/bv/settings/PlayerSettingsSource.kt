@@ -22,6 +22,8 @@ interface PlayerSettingsSource {
     val apiType: ApiType
     val playerType: PlayerType
     val defaultQuality: Resolution
+    val defaultOfflineCacheQuality: Resolution
+        get() = Prefs.defaultOfflineCacheQuality
     val defaultCellularQuality: Resolution
     val defaultVideoCodec: VideoCodec
     val secondVideoCodec: VideoCodec

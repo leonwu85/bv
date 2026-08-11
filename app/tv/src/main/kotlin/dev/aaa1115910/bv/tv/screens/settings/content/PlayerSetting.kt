@@ -53,6 +53,9 @@ fun PlayerSetting(
     val context = LocalContext.current
 
     var selectedResolution by remember { mutableStateOf(Prefs.defaultQuality) }
+    var selectedOfflineCacheResolution by remember {
+        mutableStateOf(Prefs.defaultOfflineCacheQuality)
+    }
     var selectedVideoCodec by remember { mutableStateOf(Prefs.defaultVideoCodec) }
     var selectedH265CodecPriority by remember { mutableStateOf(Prefs.h265CodecPriority) }
     var selectedAudio by remember { mutableStateOf(Prefs.defaultAudio) }
@@ -155,6 +158,19 @@ fun PlayerSetting(
                     onValueChange = {
                         Prefs.defaultAudio = it
                         selectedAudio = it
+                    }
+                )
+            }
+            item {
+                SettingListItemWithDialog(
+                    title = "默认缓存画质",
+                    supportText = "缓存时优先选择此画质；不可用时自动向下匹配",
+                    options = Resolution.entries.reversed(),
+                    getDisplayName = { item, ctx -> item.getDisplayName(ctx) },
+                    value = selectedOfflineCacheResolution,
+                    onValueChange = {
+                        Prefs.defaultOfflineCacheQuality = it
+                        selectedOfflineCacheResolution = it
                     }
                 )
             }

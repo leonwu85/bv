@@ -87,7 +87,7 @@ fun OfflineCacheScreen(
         }
     }
 
-    fun runCacheAction(action: () -> Result<String>) {
+    fun runCacheAction(action: suspend () -> Result<String>) {
         scope.launch(Dispatchers.IO) {
             val result = action()
             withContext(Dispatchers.Main) {

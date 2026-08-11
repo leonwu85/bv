@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -91,7 +92,8 @@ fun FavoriteButton(
         }
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp), // 减小间距
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally), // 减小间距
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(

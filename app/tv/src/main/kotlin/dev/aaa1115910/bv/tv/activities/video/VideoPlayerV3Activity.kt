@@ -112,7 +112,8 @@ class VideoPlayerV3Activity : TvComponentActivity() {
             upId: Long = 0L,
             upFace: String = "",
             pubTime: String = "",
-            audioOnlyMode: Boolean = false
+            audioOnlyMode: Boolean = false,
+            preferOfflineCache: Boolean = false
         ) {
             // 获取当前内存信息并打印到控制台
             val runtime = Runtime.getRuntime()
@@ -155,6 +156,7 @@ class VideoPlayerV3Activity : TvComponentActivity() {
                     putExtra("upFace", upFace)
                     putExtra("pubTime", pubTime)
                     putExtra("audioOnlyMode", audioOnlyMode)
+                    putExtra("preferOfflineCache", preferOfflineCache)
                 }
             )
         }
@@ -324,7 +326,8 @@ class VideoPlayerV3Activity : TvComponentActivity() {
         upId: Long = 0L,
         upFace: String = "",
         pubTime: String = "",
-        audioOnlyMode: Boolean = false
+        audioOnlyMode: Boolean = false,
+        preferOfflineCache: Boolean = false
     ) {
         playerViewModel.apply {
             lastPlayed = played
@@ -352,7 +355,8 @@ class VideoPlayerV3Activity : TvComponentActivity() {
                 avid = aid,
                 cid = cid,
                 epid = epid,
-                seasonId = seasonId
+                seasonId = seasonId,
+                preferOfflineCache = preferOfflineCache
             )
         }
     }
@@ -528,6 +532,7 @@ class VideoPlayerV3Activity : TvComponentActivity() {
             val upFace = intent.getStringExtra("upFace") ?: ""
             val pubTime = intent.getStringExtra("pubTime") ?: ""
             val audioOnlyMode = intent.getBooleanExtra("audioOnlyMode", false)
+            val preferOfflineCache = intent.getBooleanExtra("preferOfflineCache", false)
             dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity.Companion.logger.fInfo { "Launch parameter: [aid=$aid, cid=$cid]" }
             startVodPlayback(
                 aid = aid,
@@ -552,7 +557,8 @@ class VideoPlayerV3Activity : TvComponentActivity() {
                 upId = upId,
                 upFace = upFace,
                 pubTime = pubTime,
-                audioOnlyMode = audioOnlyMode
+                audioOnlyMode = audioOnlyMode,
+                preferOfflineCache = preferOfflineCache
             )
         } else {
             dev.aaa1115910.bv.tv.activities.video.VideoPlayerV3Activity.Companion.logger.fInfo { "Null launch parameter" }

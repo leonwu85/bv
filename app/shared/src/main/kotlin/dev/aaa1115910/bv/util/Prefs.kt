@@ -229,6 +229,16 @@ object Prefs {
             dsm.editPreference(PrefKeys.prefDefaultQualityKey, value.code)
         }
 
+    var defaultOfflineCacheQuality: Resolution
+        get() = runBlocking {
+            Resolution.fromCode(
+                dsm.getPreferenceFlow(PrefKeys.prefDefaultOfflineCacheQualityRequest).first()
+            ) ?: Resolution.R1080P
+        }
+        set(value) = runBlocking {
+            dsm.editPreference(PrefKeys.prefDefaultOfflineCacheQualityKey, value.code)
+        }
+
     var defaultPlaySpeed: Float
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDefaultPlaySpeedRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDefaultPlaySpeedKey, value) }
@@ -1056,6 +1066,7 @@ object PrefKeys {
     val prefUidCkMd5Key = stringPreferencesKey("ucm")
     val prefTokenExpiredDateKey = longPreferencesKey("ted")
     val prefDefaultQualityKey = intPreferencesKey("dq")
+    val prefDefaultOfflineCacheQualityKey = intPreferencesKey("default_offline_cache_quality")
     val prefDefaultAudioKey = intPreferencesKey("da")
     val prefDefaultPlaySpeedKey = floatPreferencesKey("dps")
     val prefCurrentPlaySpeedKey = floatPreferencesKey("cps")
@@ -1182,6 +1193,10 @@ object PrefKeys {
     val prefDefaultPlaySpeedRequest = PreferenceRequest(prefDefaultPlaySpeedKey, 1f)
     val prefCurrentPlaySpeedRequest = PreferenceRequest(prefCurrentPlaySpeedKey, 1f)
     val prefDefaultQualityRequest = PreferenceRequest(prefDefaultQualityKey, Resolution.R1080P.code)
+    val prefDefaultOfflineCacheQualityRequest = PreferenceRequest(
+        prefDefaultOfflineCacheQualityKey,
+        Resolution.R1080P.code
+    )
     val prefDefaultAudioRequest = PreferenceRequest(prefDefaultAudioKey, Audio.A192K.code)
     val prefDefaultDanmakuSizeRequest = PreferenceRequest(prefDefaultDanmakuSizeKey, 6)
     val prefDefaultDanmakuScaleRequest = PreferenceRequest(prefDefaultDanmakuScaleKey, 1.25f)

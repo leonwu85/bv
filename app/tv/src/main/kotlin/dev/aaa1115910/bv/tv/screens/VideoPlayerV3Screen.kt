@@ -13,13 +13,21 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -44,9 +52,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
+import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.offline.OfflineVideoCacheStatus
+import dev.aaa1115910.bv.tv.activities.video.OfflineVideoPlayerActivity
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
@@ -1013,16 +1026,111 @@ fun VideoPlayerV3Screen(
                     playerViewModel.dismissSponsorBlockTip()
                 },
 
-                userActionButtonIds = if (Prefs.isLogin && !playerViewModel.fromSeason) {
-                    setOf(
-                        PlayerBottomControlPanelButtonIds.Like,
-                        PlayerBottomControlPanelButtonIds.Favorite,
-                        PlayerBottomControlPanelButtonIds.Coin
-                    )
-                } else {
-                    emptySet()
+                userActionButtonIds = buildSet {
+                    if (!playerViewModel.isLive) {
+                        add(PlayerBottomControlPanelButtonIds.Cache)
+                    }
+                    if (Prefs.isLogin && !playerViewModel.fromSeason) {
+                        add(PlayerBottomControlPanelButtonIds.Like)
+                        add(PlayerBottomControlPanelButtonIds.Favorite)
+                        add(PlayerBottomControlPanelButtonIds.Coin)
+                    }
                 },
                 userActionButtonContent = { buttonId, modifier, contentPadding, onPauseAutoHide ->
+                    if (buttonId == PlayerBottomControlPanelButtonIds.Cache) {
+                        val cacheState = playerViewModel.offlineCacheState
+                        val cacheButtonColors = ButtonDefaults.colors(
+                            containerColor = Color.Transparent,
+                            focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                            focusedContentColor = MaterialTheme.colorScheme.onSurface
+                        )
+                        val cacheButtonBorder = ButtonDefaults.border(
+                            border = Border(BorderStroke(1.dp, Color.Transparent)),
+                            focusedBorder = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)))
+                        )
+                        Button(
+                            modifier = modifier,
+                            contentPadding = contentPadding,
+                            colors = cacheButtonColors,
+                            border = cacheButtonBorder,
+                            onClick = {
+                                when {
+                                    cacheState.status == OfflineVideoCacheStatus.Completed -> {
+                                        OfflineVideoPlayerActivity.actionStart(
+                                            context = context,
+                                            aid = playerViewModel.currentAid,
+                                            cid = playerViewModel.currentCid
+                                        )
+                                    }
+                                    cacheState.status == OfflineVideoCacheStatus.Paused -> {
+                                        playerViewModel.resumeOfflineCache().fold(
+                                            onSuccess = { it.toast(context) },
+                                            onFailure = { (it.localizedMessage ?: "继续缓存失败").toast(context) }
+                                        )
+                                    }
+                                    cacheState.isActive -> {
+                                        playerViewModel.pauseOfflineCache().fold(
+                                            onSuccess = { it.toast(context) },
+                                            onFailure = { (it.localizedMessage ?: "暂停缓存失败").toast(context) }
+                                        )
+                                    }
+                                    else -> {
+                                        onPauseAutoHide(true)
+                                        scope.launch(Dispatchers.IO) {
+                                            if (cacheState.status == OfflineVideoCacheStatus.Failed) {
+                                                val clearResult = playerViewModel.clearOfflineCacheTask()
+                                                if (clearResult.isFailure) {
+                                                    withContext(Dispatchers.Main) {
+                                                        onPauseAutoHide(false)
+                                                        (clearResult.exceptionOrNull()?.localizedMessage
+                                                            ?: "清除失败任务失败").toast(context)
+                                                    }
+                                                    return@launch
+                                                }
+                                            }
+                                            val result = playerViewModel.cacheCurrentVideo()
+                                            withContext(Dispatchers.Main) {
+                                                onPauseAutoHide(false)
+                                                result.fold(
+                                                    onSuccess = { it.toast(context) },
+                                                    onFailure = { (it.localizedMessage ?: "缓存失败").toast(context) }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = when {
+                                        playerViewModel.currentPlaybackOffline || cacheState.status == OfflineVideoCacheStatus.Completed -> Icons.Rounded.CheckCircle
+                                        cacheState.status == OfflineVideoCacheStatus.Paused -> Icons.Rounded.PlayArrow
+                                        cacheState.status == OfflineVideoCacheStatus.Failed -> Icons.Rounded.Refresh
+                                        cacheState.isActive -> Icons.Rounded.Pause
+                                        else -> Icons.Rounded.Download
+                                    },
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = when {
+                                        playerViewModel.currentPlaybackOffline -> "离线播放"
+                                        cacheState.status == OfflineVideoCacheStatus.Completed -> "已缓存"
+                                        cacheState.status == OfflineVideoCacheStatus.Paused -> "继续缓存"
+                                        cacheState.status == OfflineVideoCacheStatus.Failed -> "重试"
+                                        cacheState.status == OfflineVideoCacheStatus.Queued -> "排队中"
+                                        cacheState.status == OfflineVideoCacheStatus.Fetching -> "准备中"
+                                        cacheState.isActive -> "缓存 ${(cacheState.progress * 100).toInt()}%"
+                                        else -> "缓存"
+                                    }
+                                )
+                            }
+                        }
+                    }
                     if (Prefs.isLogin && !playerViewModel.fromSeason) {
                         when (buttonId) {
                             PlayerBottomControlPanelButtonIds.Like -> {

@@ -646,6 +646,7 @@ private fun actionButtonLabel(id: String): String {
     return when (id) {
         PlayerBottomControlPanelButtonIds.Like -> "点赞"
         PlayerBottomControlPanelButtonIds.Favorite -> "收藏"
+        PlayerBottomControlPanelButtonIds.Cache -> "缓存"
         PlayerBottomControlPanelButtonIds.Coin -> "投币"
         PlayerBottomControlPanelButtonIds.TripleLike -> "三连"
         PlayerBottomControlPanelButtonIds.Description -> "简介"

@@ -165,6 +165,7 @@ fun BvPlayer(
     showBottomProgressBar: Boolean = false,
     bottomProgressBarColor: Color = Color(0xFFBD26B8).copy(alpha = 0.5f),
     bottomControlPanelConfig: PlayerBottomControlPanelConfig = PlayerBottomControlPanelConfig.Default,
+    offlinePlaybackMode: Boolean = false,
     useTextureViewFixPortraitVideo: Boolean = false,
     onSendHeartbeat: suspend (Int) -> Unit,
     onClearBackToHistoryData: () -> Unit,
@@ -1429,6 +1430,7 @@ fun BvPlayer(
             showBottomProgressBar = showBottomProgressBar,
             bottomProgressBarColor = bottomProgressBarColor,
             bottomControlPanelConfig = bottomControlPanelConfig,
+            offlinePlaybackMode = offlinePlaybackMode,
             showRelatedVideos = videoPlayerConfigData.showRelatedVideos,
             showRelatedButton = showRelatedButton,
             onToggleRelatedVideos = onToggleRelatedVideos,
@@ -1697,6 +1699,7 @@ fun BvPlayer(
             onOpenDanmaku = {
                 onShowDanmakuChange(true)
                 videoPlayerConfigData.showDanmaku = true
+                danmakuLayerHandle.update(visible = true)
                 applyDanmakuConfig(
                     "Update danmaku visibility",
                     false,
@@ -1707,6 +1710,7 @@ fun BvPlayer(
             onHideDanmaku = {
                 onShowDanmakuChange(false)
                 videoPlayerConfigData.showDanmaku = false
+                danmakuLayerHandle.update(visible = false)
                 applyDanmakuConfig(
                     "Update danmaku visibility",
                     false,

@@ -23,8 +23,6 @@ import com.kuaishou.akdanmaku.ext.RETAINER_BILIBILI
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer
 import dev.aaa1115910.biliapi.entity.ApiType
-import dev.aaa1115910.biliapi.entity.DashAudio
-import dev.aaa1115910.biliapi.entity.DashVideo
 import dev.aaa1115910.biliapi.entity.PlayData
 import dev.aaa1115910.biliapi.entity.PlayDataUnavailableException
 import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskSegment
@@ -61,9 +59,9 @@ import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.entity.LiveQualityPreference
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.offline.OfflineVideoCacheEntry
-import dev.aaa1115910.bv.offline.OfflineVideoCacheRequest
 import dev.aaa1115910.bv.offline.OfflineVideoCacheService
 import dev.aaa1115910.bv.offline.OfflineVideoCacheStatus
+import dev.aaa1115910.bv.offline.OfflineVideoCacheTaskRequest
 import dev.aaa1115910.bv.offline.OfflineVideoCacheTaskState
 import dev.aaa1115910.bv.offline.OfflineVideoCacheTarget
 import dev.aaa1115910.bv.offline.OfflineVideoPlaybackSource
@@ -89,6 +87,7 @@ import dev.aaa1115910.bv.player.entity.LiveCodec
 import dev.aaa1115910.bv.player.entity.LiveStreamLine
 import dev.aaa1115910.bv.player.entity.VideoListInteractiveNode
 import dev.aaa1115910.bv.player.entity.VideoListItemData
+import dev.aaa1115910.bv.player.entity.VideoListUgcEpisode
 import dev.aaa1115910.bv.player.entity.VideoPlayerViewPoint
 import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
@@ -425,20 +424,6 @@ class VideoPlayerV3ViewModel(
         val deferred: Deferred<GeetestChallengeRefreshOutcome>,
     )
 
-    private data class OfflineCacheSnapshot(
-        val aid: Long,
-        val cid: Long,
-        val bvid: String,
-        val title: String,
-        val partTitle: String,
-        val cover: String,
-        val upName: String,
-        val currentQuality: Resolution,
-        val currentVideoCodec: VideoCodec,
-        val currentAudio: Audio,
-        val playData: PlayData,
-    )
-
     private fun isCellularPlaybackNetwork(): Boolean =
         runCatching { NetworkUtil.isCellularNetwork() }.getOrDefault(false)
 
@@ -738,14 +723,6 @@ class VideoPlayerV3ViewModel(
         private const val LIVE_DANMAKU_MESSAGE_LIMIT = 300
         private const val AUTO_PLAY_PREPARE_WAIT_MS = 1_200L
         private const val PREPARED_AUTO_PLAY_PLAY_DATA_TTL_MS = 2 * 60_000L
-        private const val OFFLINE_DOWNLOAD_CDN_HOST = "upos-sz-mirrorali.bilivideo.com"
-        private const val OFFLINE_DOWNLOAD_PROXY_TF_HOST = "proxy-tf-all-ws.bilivideo.com"
-        private val OFFLINE_MIRROR_CDN_REGEX = Regex(
-            """^https?://(?:upos-\w+-(?!302)\w+|(?:upos|proxy)-tf-[^/]+)\.(?:bilivideo|akamaized)\.(?:com|net)/upgcxcode"""
-        )
-        private val OFFLINE_MCDN_TF_REGEX = Regex(
-            """^https?://(?:(?:(?:\d{1,3}\.){3}\d{1,3}|[^/]+\.mcdn\.bilivideo\.(?:com|cn|net))(?::\d{1,5})?/v\d/resource)"""
-        )
     }
 
     // 直播人气值与高能观众
@@ -1222,56 +1199,25 @@ class VideoPlayerV3ViewModel(
             return Result.failure(IllegalStateException("直播暂不支持离线缓存"))
         }
 
-        val snapshot = withContext(Dispatchers.Main.immediate) {
+        val target = withContext(Dispatchers.Main.immediate) {
             val data = playData ?: return@withContext null
-            OfflineCacheSnapshot(
+            OfflineVideoCacheTarget(
                 aid = currentAid,
-                cid = currentCid,
                 bvid = AvBvConverter.av2bv(currentAid),
+                cid = currentCid,
                 title = title,
                 partTitle = partTitle,
                 cover = cover,
                 upName = upName,
-                currentQuality = currentQuality,
-                currentVideoCodec = currentVideoCodec,
-                currentAudio = currentAudio,
-                playData = data
+                durationMs = data.timeLength,
+                width = currentVideoWidth,
+                height = currentVideoHeight,
+                upFace = upFace,
+                danmakuCount = danmaku
             )
         } ?: return Result.failure(IllegalStateException("视频地址尚未加载完成"))
 
-        if (snapshot.aid <= 0L || snapshot.cid <= 0L) {
-            return Result.failure(IllegalStateException("视频信息不完整"))
-        }
-
-        val videoItem = snapshot.playData.selectVideoForOfflineCache(
-            qn = snapshot.currentQuality.code,
-            codecs = offlineCacheCodecCandidates(snapshot.currentVideoCodec)
-        ) ?: return Result.failure(IllegalStateException("未找到可缓存的视频流"))
-
-        val audioItem = snapshot.playData.selectAudioForOfflineCache(snapshot.currentAudio)
-            ?: return Result.failure(IllegalStateException("未找到可缓存的音频流"))
-
-        val request = OfflineVideoCacheRequest(
-            aid = snapshot.aid,
-            cid = snapshot.cid,
-            bvid = snapshot.bvid,
-            title = snapshot.title,
-            partTitle = snapshot.partTitle,
-            cover = snapshot.cover,
-            upName = snapshot.upName,
-            quality = videoItem.quality,
-            qualityText = videoItem.quality.toOfflineQualityText(snapshot.currentQuality),
-            videoCodecId = videoItem.codecId.takeIf { it > 0 } ?: snapshot.currentVideoCodec.codecId,
-            videoCodec = videoItem.codecs ?: snapshot.currentVideoCodec.prefix,
-            audioCodecId = audioItem.codecId,
-            durationMs = snapshot.playData.timeLength,
-            width = videoItem.width,
-            height = videoItem.height,
-            videoUrls = (listOf(videoItem.baseUrl) + videoItem.backUrl).toOfflineDownloadUrls(),
-            audioUrls = (listOf(audioItem.baseUrl) + audioItem.backUrl).toOfflineDownloadUrls()
-        )
-
-        return offlineVideoCacheService.enqueue(request)
+        return cacheVideoTarget(target, settings.defaultOfflineCacheQuality)
     }
 
     suspend fun cacheVideoPage(
@@ -1289,7 +1235,9 @@ class VideoPlayerV3ViewModel(
                 upName = upName,
                 durationMs = page.duration * 1000L,
                 width = page.dimension.width,
-                height = page.dimension.height
+                height = page.dimension.height,
+                upFace = upFace,
+                danmakuCount = danmaku
             )
         }
         return cacheVideoTarget(target, preferredQuality)
@@ -1315,26 +1263,34 @@ class VideoPlayerV3ViewModel(
             return Result.success("已在缓存队列中")
         }
 
+        return offlineVideoCacheService.enqueue(
+            buildOfflineCacheTaskRequest(target, preferredQuality)
+        )
+    }
+
+    suspend fun getAvailableOfflineCacheQualities(
+        target: OfflineVideoCacheTarget,
+    ): Result<List<Resolution>> {
+        if (isLive) {
+            return Result.failure(IllegalStateException("直播暂不支持离线缓存"))
+        }
+        if (target.aid <= 0L || target.cid <= 0L) {
+            return Result.failure(IllegalStateException("视频信息不完整"))
+        }
+
         return runCatching {
-            val pagePlayData = videoPlayRepository.getDownloadPlayData(
+            videoPlayRepository.getDownloadPlayData(
                 aid = target.aid,
                 bvid = target.bvid,
                 cid = target.cid,
-                qn = preferredQuality.code,
+                qn = Resolution.R8K.code,
                 tryLook1080P = settings.tryLook1080P,
-            ).requireOfflineCacheStreams("WBI").also { playData ->
-                logger.fInfo {
-                    "Offline cache play data: [aid=${target.aid}, cid=${target.cid}, qualities=${playData.dashVideos.map { it.quality }.distinct()}, audios=${playData.dashAudios.map { it.codecId }.distinct()}, dolby=${playData.dolby?.codecId}, flac=${playData.flac?.codecId}]"
-                }
-            }
-            if (pagePlayData.needPay) {
-                throw IllegalStateException("该分P需要购买或会员权限，无法缓存")
-            }
-            val request = pagePlayData.buildOfflineCacheRequest(
-                target = target,
-                preferredQuality = preferredQuality
-            )
-            offlineVideoCacheService.enqueue(request).getOrThrow()
+            ).requireOfflineCacheStreams("WBI")
+                .dashVideos
+                .mapNotNull { video -> Resolution.entries.find { it.code == video.quality } }
+                .distinct()
+                .sortedByDescending { it.code }
+                .ifEmpty { throw IllegalStateException("该视频没有可缓存画质") }
         }
     }
 
@@ -1356,14 +1312,32 @@ class VideoPlayerV3ViewModel(
             return Result.failure(IllegalStateException("没有可添加的缓存任务"))
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
-            uniqueTargets.forEach { target ->
-                cacheVideoTarget(target, preferredQuality)
-                    .onFailure { logger.fException(it) { "Add offline cache target failed: [aid=${target.aid}, cid=${target.cid}]" } }
+        uniqueTargets.forEach { target ->
+            offlineVideoCacheService.enqueue(
+                buildOfflineCacheTaskRequest(target, preferredQuality)
+            ).onFailure {
+                logger.fException(it) {
+                    "Add offline cache target failed: [aid=${target.aid}, cid=${target.cid}]"
+                }
             }
         }
-        return Result.success("已开始添加 ${uniqueTargets.size} 个缓存任务")
+        return Result.success("已加入 ${uniqueTargets.size} 个缓存任务")
     }
+
+    private fun buildOfflineCacheTaskRequest(
+        target: OfflineVideoCacheTarget,
+        preferredQuality: Resolution,
+    ) = OfflineVideoCacheTaskRequest(
+        target = target,
+        preferredQuality = preferredQuality,
+        tryLook1080P = settings.tryLook1080P,
+        videoCodecPreferences = offlineCacheCodecCandidates(currentVideoCodec),
+        preferredAudio = PlaybackPreferenceSelector.selectAudio(
+            isCellular = isCellularPlaybackNetwork(),
+            defaultAudio = settings.defaultAudio,
+            cellularAudio = settings.defaultCellularAudio
+        )
+    )
 
     fun offlineCacheStateOf(aid: Long, cid: Long): OfflineVideoCacheTaskState =
         offlineVideoCacheService.stateOf(aid, cid)
@@ -1374,13 +1348,92 @@ class VideoPlayerV3ViewModel(
     fun completedOfflineCacheEntries(aid: Long): List<OfflineVideoCacheEntry> =
         offlineVideoCacheService.getCompletedEntries(aid)
 
+    fun prepareOfflinePlayback(aid: Long, cid: Long): Result<String> {
+        val entries = offlineVideoCacheService.getAllCompletedEntries()
+        val currentEntry = entries.firstOrNull { it.aid == aid && it.cid == cid }
+            ?: return Result.failure(IllegalStateException("离线缓存文件不存在或不完整"))
+
+        videoInfoRepository.replacePlaybackContext(
+            videoList = entries.mapIndexed { index, entry ->
+                VideoListUgcEpisode(
+                    aid = entry.aid,
+                    cid = entry.cid,
+                    title = entry.title.ifBlank { entry.displayTitle },
+                    partTitle = entry.displayTitle,
+                    index = index,
+                    cover = offlineVideoCacheService.getCachedCoverUri(entry),
+                    duration = (entry.durationMs / 1000L)
+                        .coerceAtMost(Int.MAX_VALUE.toLong())
+                        .toInt(),
+                    viewCount = 0L,
+                    danmakuCount = entry.danmakuCount
+                )
+            },
+            relatedVideos = emptyList(),
+            interactivePlaybackContext = null
+        )
+        return playOfflineEntry(currentEntry, continuePlayNext = false)
+    }
+
+    fun playOfflinePlaylistItem(aid: Long, cid: Long): Result<String> {
+        val entry = offlineVideoCacheService.getCompletedEntry(aid, cid)
+            ?: return Result.failure(IllegalStateException("该视频的离线缓存不可用"))
+        return playOfflineEntry(entry, continuePlayNext = true)
+    }
+
+    fun reloadCurrentOfflinePlayback(positionMs: Long): Result<String> {
+        val entry = offlineVideoCacheService.getCompletedEntry(currentAid, currentCid)
+            ?: return Result.failure(IllegalStateException("当前离线缓存不可用"))
+        return playOfflineEntry(
+            entry = entry,
+            continuePlayNext = false,
+            initialPositionMs = positionMs.coerceAtLeast(0L)
+        )
+    }
+
+    private fun playOfflineEntry(
+        entry: OfflineVideoCacheEntry,
+        continuePlayNext: Boolean,
+        initialPositionMs: Long? = null
+    ): Result<String> {
+        title = entry.title.ifBlank { entry.displayTitle }
+        partTitle = entry.displayTitle
+        cover = offlineVideoCacheService.getCachedCoverUri(entry).orEmpty()
+        upName = entry.upName
+        upFace = offlineVideoCacheService.getCachedUpFaceUri(entry).orEmpty()
+        upId = 0L
+        play = 0L
+        danmaku = entry.danmakuCount
+        like = 0
+        coin = 0
+        favorite = 0
+        pubTime = ""
+        fromSeason = false
+        epid = 0
+        seasonId = 0
+        lastPlayed = 0
+        isVerticalVideo = entry.height > entry.width && entry.width > 0
+        currentPlaybackMediaMode = PlaybackMediaMode.Normal
+        showRelatedVideos = false
+
+        loadPlayUrl(
+            avid = entry.aid,
+            cid = entry.cid,
+            continuePlayNext = continuePlayNext,
+            initialSeekPositionMs = initialPositionMs,
+            forceStartPlayback = true,
+            preferOfflineCache = true
+        )
+        return Result.success("正在播放离线缓存")
+    }
+
     fun pauseOfflineCache(): Result<String> =
         offlineVideoCacheService.pause(currentAid, currentCid)
 
     fun resumeOfflineCache(): Result<String> =
         offlineVideoCacheService.resume(currentAid, currentCid)
 
-    fun clearOfflineCacheTask(): Result<String> =
+    suspend fun clearOfflineCacheTask(): Result<String> =
         offlineVideoCacheService.clearTask(currentAid, currentCid)
 
     fun playOfflineCache(): Result<String> {
@@ -2270,78 +2323,8 @@ class VideoPlayerV3ViewModel(
         return true
     }
 
-    private fun PlayData.buildOfflineCacheRequest(
-        target: OfflineVideoCacheTarget,
-        preferredQuality: Resolution
-    ): OfflineVideoCacheRequest {
-        val selectedQualityCode = selectQualityCodeForOfflineCache(preferredQuality)
-            ?: throw IllegalStateException("未找到可缓存的视频画质（接口未返回视频流）")
-        val videoItem = selectVideoForOfflineCache(
-            qn = selectedQualityCode,
-            codecs = offlineCacheCodecCandidates(currentVideoCodec)
-        ) ?: throw IllegalStateException("未找到可缓存的视频流")
-        val audioItem = selectAudioForOfflineCache(
-            PlaybackPreferenceSelector.selectAudio(
-                isCellular = isCellularPlaybackNetwork(),
-                defaultAudio = settings.defaultAudio,
-                cellularAudio = settings.defaultCellularAudio
-            )
-        ) ?: throw IllegalStateException("未找到可缓存的音频流")
-
-        return OfflineVideoCacheRequest(
-            aid = target.aid,
-            cid = target.cid,
-            bvid = target.bvid.ifBlank { AvBvConverter.av2bv(target.aid) },
-            title = target.title,
-            partTitle = target.partTitle,
-            cover = target.cover,
-            upName = target.upName,
-            quality = videoItem.quality,
-            qualityText = videoItem.quality.toOfflineQualityText(preferredQuality),
-            videoCodecId = videoItem.codecId,
-            videoCodec = videoItem.codecs ?: VideoCodec.fromCodecId(videoItem.codecId).prefix,
-            audioCodecId = audioItem.codecId,
-            durationMs = target.durationMs,
-            width = videoItem.width.takeIf { it > 0 } ?: target.width,
-            height = videoItem.height.takeIf { it > 0 } ?: target.height,
-            videoUrls = (listOf(videoItem.baseUrl) + videoItem.backUrl).toOfflineDownloadUrls(),
-            audioUrls = (listOf(audioItem.baseUrl) + audioItem.backUrl).toOfflineDownloadUrls()
-        )
-    }
-
-    private fun PlayData.selectQualityCodeForOfflineCache(preferredQuality: Resolution): Int? {
-        val availableQualityCodes = dashVideos
-            .map { it.quality }
-            .distinct()
-            .sortedDescending()
-        return availableQualityCodes.firstOrNull { it == preferredQuality.code }
-            ?: availableQualityCodes.firstOrNull { it < preferredQuality.code }
-            ?: availableQualityCodes.lastOrNull()
-    }
-
-    private fun PlayData.selectVideoForOfflineCache(
-        qn: Int,
-        codecs: List<VideoCodec>,
-    ): DashVideo? {
-        val sameQualityVideos = dashVideos.filter { it.quality == qn }
-        val candidates = sameQualityVideos.ifEmpty { dashVideos }
-        codecs.forEach { codec ->
-            candidates.find { codec.matchesCodecString(it.codecs) }?.let { return it }
-        }
-        return candidates.firstOrNull()
-    }
-
     private fun offlineCacheCodecCandidates(currentCodec: VideoCodec): List<VideoCodec> =
         listOf(VideoCodec.AVC, settings.defaultVideoCodec, settings.secondVideoCodec, currentCodec).distinct()
-
-    private fun PlayData.selectAudioForOfflineCache(audio: Audio): DashAudio? {
-        return dashAudios.find { it.codecId == audio.code }
-            ?: dolby.takeIf { it?.codecId == audio.code }
-            ?: flac.takeIf { it?.codecId == audio.code }
-            ?: dashAudios.minByOrNull { it.codecId }
-            ?: dolby
-            ?: flac
-    }
 
     private fun PlayData.requireOfflineCacheStreams(source: String): PlayData {
         val audioCount = playableAudioCount()
@@ -2351,12 +2334,6 @@ class VideoPlayerV3ViewModel(
             )
         }
         return this
-    }
-
-    private fun Int.toOfflineQualityText(preferredQuality: Resolution? = null): String {
-        val resolution = Resolution.entries.find { it.code == this }
-            ?: preferredQuality?.takeIf { it.code == this }
-        return resolution?.getDisplayName(BVApp.context) ?: "清晰度 $this"
     }
 
     private suspend fun updateAvailableCodec(preferredCodec: VideoCodec? = null) {
@@ -4313,87 +4290,6 @@ class VideoPlayerV3ViewModel(
         return Uri.parse(this)
             .buildUpon()
             .authority("upos-sz-mirrorali.bilivideo.com")
-            .build()
-            .toString()
-    }
-
-    private fun Iterable<String>.toOfflineDownloadUrls(): List<String> {
-        val rawUrls = map { it.trim() }
-            .filter { it.isNotBlank() }
-            .distinct()
-        val sourceUrls = rawUrls
-            .map { it.toHttpsDownloadUrl() }
-            .distinct()
-        if (sourceUrls.isEmpty()) return emptyList()
-
-        val primaryUrl = sourceUrls.selectPiliPlusOfflineCdnUrl()
-        return (listOf(primaryUrl) + sourceUrls + rawUrls)
-            .filter { it.isNotBlank() }
-            .distinct()
-    }
-
-    private fun List<String>.selectPiliPlusOfflineCdnUrl(): String {
-        var mcdnTf: String? = null
-        var mcdnUpgcxcode: String? = null
-        var last = first()
-
-        for (url in this) {
-            last = url
-
-            if (OFFLINE_MIRROR_CDN_REGEX.containsMatchIn(url)) {
-                val uri = Uri.parse(url)
-                if (uri.getQueryParameter("os") == "mcdn") {
-                    mcdnUpgcxcode = url
-                } else {
-                    return uri.toOfflineAliCdnUrl()
-                }
-            }
-
-            if (OFFLINE_MCDN_TF_REGEX.containsMatchIn(url)) {
-                mcdnTf = url
-                continue
-            }
-
-            if (url.contains("/upgcxcode/")) {
-                mcdnUpgcxcode = url
-                continue
-            }
-
-            if (url.contains("szbdyd.com")) {
-                val uri = Uri.parse(url)
-                val host = uri.getQueryParameter("xy_usource") ?: OFFLINE_DOWNLOAD_CDN_HOST
-                return uri.buildUpon()
-                    .scheme("https")
-                    .authority(host)
-                    .build()
-                    .toString()
-            }
-        }
-
-        return when {
-            mcdnUpgcxcode != null -> Uri.parse(mcdnUpgcxcode).toOfflineAliCdnUrl()
-            mcdnTf != null -> Uri.Builder()
-                .scheme("https")
-                .authority(OFFLINE_DOWNLOAD_PROXY_TF_HOST)
-                .appendQueryParameter("url", mcdnTf)
-                .build()
-                .toString()
-            else -> last
-        }
-    }
-
-    private fun String.toHttpsDownloadUrl(): String {
-        return if (startsWith("http://")) {
-            "https://${removePrefix("http://")}"
-        } else {
-            this
-        }
-    }
-
-    private fun Uri.toOfflineAliCdnUrl(): String {
-        return buildUpon()
-            .scheme("https")
-            .authority(OFFLINE_DOWNLOAD_CDN_HOST)
             .build()
             .toString()
     }

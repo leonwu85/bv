@@ -43,11 +43,16 @@ import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Done
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.ViewModule
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -77,10 +82,12 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -101,6 +108,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.tv.material3.Border
+import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.IconButton
@@ -127,12 +136,19 @@ import dev.aaa1115910.biliapi.repositories.UserRepository
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.component.QrImage
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
+import dev.aaa1115910.bv.offline.OfflineCacheQualitySelector
+import dev.aaa1115910.bv.offline.OfflineVideoCacheService
+import dev.aaa1115910.bv.offline.OfflineVideoCacheStatus
+import dev.aaa1115910.bv.offline.OfflineVideoCacheTarget
+import dev.aaa1115910.bv.offline.OfflineVideoCacheTaskState
+import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoListItem
 import dev.aaa1115910.bv.player.entity.VideoListPart
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisode
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisodeTitle
 import dev.aaa1115910.bv.repository.VideoInfoRepository
 import dev.aaa1115910.bv.tv.activities.search.SearchResultActivity
+import dev.aaa1115910.bv.tv.activities.user.OfflineCacheActivity
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
 import dev.aaa1115910.bv.tv.activities.video.TagActivity
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
@@ -169,6 +185,7 @@ import dev.aaa1115910.bv.util.swapListWithMainContext
 import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.viewmodel.video.VideoDetailViewModel
 import dev.aaa1115910.bv.viewmodel.video.VideoInfoState
+import dev.aaa1115910.bv.viewmodel.VideoPlayerV3ViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -182,6 +199,13 @@ import kotlin.math.max
 private val InteractiveBadgeColor = Color(0xFFFFD54F)
 private val ChargingBadgeColor = Color(0xFF00FFFF)
 private val UgcPartBadgeColor = Color(0xFF8BD8FF)
+private val NoScrollBringIntoViewSpec = object : BringIntoViewSpec {
+    override fun calculateScrollDistance(
+        offset: Float,
+        size: Float,
+        containerSize: Float,
+    ): Float = 0f
+}
 private const val ChargingBadgeDefaultText = "充电专属"
 private const val ChargingUrlPrefix = "https://www.bilibili.com/h5/upower/index?mid="
 private const val SupportedClickableTagType = "old_channel"
@@ -202,10 +226,15 @@ fun VideoInfoScreen(
     lifecycleOwner: LifecycleOwner = LocalLifecycleOwner.current,
     videoInfoRepository: VideoInfoRepository = getKoin().get(),
     videoDetailViewModel: VideoDetailViewModel = koinViewModel(),
+    offlineCacheViewModel: VideoPlayerV3ViewModel = koinViewModel(),
+    offlineCacheService: OfflineVideoCacheService = getKoin().get(),
     userRepository: UserRepository = getKoin().get(),
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val heroContentColor = MaterialTheme.colorScheme.onSurface
+    val heroSecondaryContentColor = MaterialTheme.colorScheme.onSurfaceVariant
     val intent = (context as Activity).intent
     val logger = KotlinLogging.logger { }
     val playButtonFocusRequester = remember { FocusRequester() }
@@ -241,6 +270,7 @@ fun VideoInfoScreen(
     var showDescriptionDialog by remember { mutableStateOf(false) }
     var showChargingQrDialog by remember { mutableStateOf(false) }
     val chargeButtonFocusRequester = remember { FocusRequester() }
+    val cacheButtonFocusRequester = remember { FocusRequester() }
 
     // 添加用于管理评论浮层的状态
     var showCommentPanel by remember { mutableStateOf(false) }
@@ -269,6 +299,10 @@ fun VideoInfoScreen(
     var paused by remember { mutableStateOf(false) }
     var proxyArea by remember { mutableStateOf(ProxyArea.MainLand) }
     var intentAid by remember { mutableLongStateOf(0L) }
+    var showOfflineCachePanel by remember { mutableStateOf(false) }
+    var offlineCacheLoading by remember { mutableStateOf(false) }
+    var shouldRestoreCacheButtonFocus by remember { mutableStateOf(false) }
+    var intentCid by remember { mutableLongStateOf(0L) }
 
     val currentDetailTargetIsVertical by remember(
         videoDetailViewModel.videoDetail,
@@ -282,6 +316,29 @@ fun VideoInfoScreen(
             ) ?: false
         }
     }
+
+    val currentOfflineCacheAid = intentAid.takeIf { it > 0L }
+        ?: videoDetailViewModel.videoDetail?.aid
+        ?: 0L
+    val preferredOfflineCacheCid = intentCid.takeIf { it > 0L }
+        ?: lastPlayedCid.takeIf { it > 0L }
+        ?: 0L
+    val offlineCacheItems = remember(
+        videoDetailViewModel.videoDetail,
+        currentOfflineCacheAid,
+        preferredOfflineCacheCid
+    ) {
+        buildTvOfflineCacheItems(
+            videoDetail = videoDetailViewModel.videoDetail,
+            currentAid = currentOfflineCacheAid,
+            preferredCid = preferredOfflineCacheCid
+        )
+    }
+    val currentOfflineCacheItem = offlineCacheItems.firstOrNull { it.isCurrent }
+        ?: offlineCacheItems.firstOrNull()
+    val currentOfflineCacheState = currentOfflineCacheItem?.target?.let {
+        offlineCacheService.stateOf(it.aid, it.cid)
+    } ?: OfflineVideoCacheTaskState(aid = 0L, cid = 0L)
 
     val chargingQrContent = remember(videoDetailViewModel.videoDetail?.author?.mid) {
         videoDetailViewModel.videoDetail?.author?.mid
@@ -524,6 +581,7 @@ fun VideoInfoScreen(
             val aid = intent.getLongExtra("aid", 170001)
             intentAid = aid
             var cid = intent.getLongExtra("cid", 0)
+            intentCid = cid
             fromSeason = intent.getBooleanExtra("fromSeason", false)
             fromPlayer = intent.getBooleanExtra("fromPlayer", false)
             audioOnlyMode = intent.getBooleanExtra("audioOnlyMode", false)
@@ -779,9 +837,9 @@ fun VideoInfoScreen(
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color.Black)
+                .background(if (isDarkTheme) Color.Black else MaterialTheme.colorScheme.surface)
         ) {
-            if (showDetailPageBackgroundImage) {
+            if (showDetailPageBackgroundImage && isDarkTheme) {
                 val bgLoaded = remember(videoDetailViewModel.videoDetail?.cover) { mutableStateOf(false) }
                 val bgAnimatedAlpha by animateFloatAsState(
                     targetValue = if (bgLoaded.value) 1f else 0f,
@@ -833,7 +891,10 @@ fun VideoInfoScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(screenBackgroundGradient())
+                        .then(
+                            if (isDarkTheme) Modifier.background(screenBackgroundGradient())
+                            else Modifier.background(MaterialTheme.colorScheme.surface)
+                        )
                 )
             }
 
@@ -913,11 +974,11 @@ fun VideoInfoScreen(
                                             ),
                                             colors = ClickableSurfaceDefaults.colors(
                                                 containerColor = Color.Transparent,
-                                                focusedContainerColor = Color.White.copy(alpha = 0.15f)
+                                                focusedContainerColor = heroContentColor.copy(alpha = 0.12f)
                                             ),
                                             border = ClickableSurfaceDefaults.border(
                                                 focusedBorder = Border(
-                                                    border = BorderStroke(2.dp, Color.White),
+                                                    border = BorderStroke(2.dp, heroContentColor),
                                                     shape = RoundedCornerShape(20.dp)
                                                 )
                                             )
@@ -943,7 +1004,7 @@ fun VideoInfoScreen(
                                                 Text(
                                                     text = videoDetail.author.name,
                                                     style = MaterialTheme.typography.bodyMedium,
-                                                    color = Color.White.copy(alpha = 0.8f)
+                                                    color = heroSecondaryContentColor
                                                 )
                                             }
                                         }
@@ -986,7 +1047,7 @@ fun VideoInfoScreen(
                                     AutoResizeTitleText(
                                         text = videoDetail.title,
                                         style = MaterialTheme.typography.headlineLarge,
-                                        color = Color.White
+                                        color = heroContentColor
                                     )
 
                                     // 元信息行
@@ -1003,7 +1064,7 @@ fun VideoInfoScreen(
                                         style = MaterialTheme.typography.bodyMedium,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
-                                        color = Color.White.copy(alpha = 0.7f)
+                                        color = heroSecondaryContentColor
                                     )
 
                                     if (videoDetail.tags.isNotEmpty()) {
@@ -1038,6 +1099,7 @@ fun VideoInfoScreen(
                                         VideoInfoButtons(
                                             playButtonFocusRequester = playButtonFocusRequester,
                                             chargeButtonFocusRequester = chargeButtonFocusRequester,
+                                            cacheButtonFocusRequester = cacheButtonFocusRequester,
                                     commentButtonFocusRequester = commentButtonFocusRequester,
                                             relatedButtonFocusRequester = relatedButtonFocusRequester,
                                             lastPlayedTime = lastPlayedTime,
@@ -1175,6 +1237,9 @@ fun VideoInfoScreen(
                                                     "已取消收藏".toast(context)
                                                 }
                                             },
+                                            offlineCacheStatus = currentOfflineCacheState.status,
+                                            offlineCacheProgress = currentOfflineCacheState.progress,
+                                            onCache = { showOfflineCachePanel = true },
                                             hasDescription = videoDetail.description.isNotBlank(),
                                             onShowDescription = { showDescriptionDialog = true },
                                             onShowComment = { showCommentPanel = true },
@@ -1401,6 +1466,71 @@ fun VideoInfoScreen(
         }
     }
 
+    TvOfflineCachePanel(
+        show = showOfflineCachePanel,
+        items = offlineCacheItems,
+        loading = offlineCacheLoading,
+        stateOf = { target -> offlineCacheService.stateOf(target.aid, target.cid) },
+        onLoadQualities = { target ->
+            offlineCacheViewModel.getAvailableOfflineCacheQualities(target)
+        },
+        onDismiss = { if (!offlineCacheLoading) showOfflineCachePanel = false },
+        onCacheOne = { target, quality ->
+            if (!offlineCacheLoading) {
+                offlineCacheLoading = true
+                scope.launch(Dispatchers.IO) {
+                    val result = offlineCacheViewModel.cacheVideoTarget(target, quality)
+                    withContext(Dispatchers.Main) {
+                        offlineCacheLoading = false
+                        result.fold(
+                            onSuccess = { it.toast(context) },
+                            onFailure = { (it.localizedMessage ?: "缓存失败").toast(context) }
+                        )
+                    }
+                }
+            }
+        },
+        onCacheAll = { targets, quality ->
+            offlineCacheViewModel.cacheVideoTargets(targets, quality).fold(
+                onSuccess = { it.toast(context) },
+                onFailure = { (it.localizedMessage ?: "添加缓存任务失败").toast(context) }
+            )
+        },
+        onPause = { target ->
+            offlineCacheService.pause(target.aid, target.cid).fold(
+                onSuccess = { it.toast(context) },
+                onFailure = { (it.localizedMessage ?: "暂停失败").toast(context) }
+            )
+        },
+        onResume = { target ->
+            offlineCacheService.resume(target.aid, target.cid).fold(
+                onSuccess = { it.toast(context) },
+                onFailure = { (it.localizedMessage ?: "继续缓存失败").toast(context) }
+            )
+        },
+        onClear = { target ->
+            scope.launch {
+                offlineCacheService.clearTask(target.aid, target.cid).fold(
+                    onSuccess = { it.toast(context) },
+                    onFailure = { (it.localizedMessage ?: "清除失败").toast(context) }
+                )
+            }
+        },
+        onOpenCachePage = {
+            showOfflineCachePanel = false
+            OfflineCacheActivity.actionStart(context)
+        }
+    )
+
+    LaunchedEffect(showOfflineCachePanel) {
+        if (showOfflineCachePanel) {
+            shouldRestoreCacheButtonFocus = true
+        } else if (shouldRestoreCacheButtonFocus) {
+            cacheButtonFocusRequester.requestFocus(scope)
+            shouldRestoreCacheButtonFocus = false
+        }
+    }
+
     if (showChargingQrDialog && chargingQrContent.isNotBlank()) {
         VideoChargingQrDialog(
             qrContent = chargingQrContent,
@@ -1482,6 +1612,564 @@ fun VideoInfoScreen(
             relatedButtonFocusRequester.requestFocus(scope)
             shouldRestoreRelatedButtonFocus = false
         }
+    }
+}
+
+private data class TvOfflineCacheItem(
+    val target: OfflineVideoCacheTarget,
+    val title: String,
+    val subtitle: String,
+    val cover: String,
+    val isCurrent: Boolean,
+)
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun TvOfflineCachePanel(
+    show: Boolean,
+    items: List<TvOfflineCacheItem>,
+    loading: Boolean,
+    stateOf: (OfflineVideoCacheTarget) -> OfflineVideoCacheTaskState,
+    onLoadQualities: suspend (OfflineVideoCacheTarget) -> Result<List<Resolution>>,
+    onDismiss: () -> Unit,
+    onCacheOne: (OfflineVideoCacheTarget, Resolution) -> Unit,
+    onCacheAll: (List<OfflineVideoCacheTarget>, Resolution) -> Unit,
+    onPause: (OfflineVideoCacheTarget) -> Unit,
+    onResume: (OfflineVideoCacheTarget) -> Unit,
+    onClear: (OfflineVideoCacheTarget) -> Unit,
+    onOpenCachePage: () -> Unit,
+) {
+    if (!show) return
+
+    val context = LocalContext.current
+    val preferredQuality = remember(show) { Prefs.defaultOfflineCacheQuality }
+    var selectedQuality by remember(show) { mutableStateOf(preferredQuality) }
+    var qualityOptions by remember(show) { mutableStateOf(emptyList<Resolution>()) }
+    var qualityLoading by remember(show) { mutableStateOf(false) }
+    var qualityLoadError by remember(show) { mutableStateOf<String?>(null) }
+    var qualityReloadKey by remember(show) { mutableIntStateOf(0) }
+    val qualityFocusRequester = remember { FocusRequester() }
+    val qualityListState = rememberLazyListState()
+    val cacheableTargets = items.map { it.target }.filter { target ->
+        stateOf(target).status == OfflineVideoCacheStatus.Idle ||
+            stateOf(target).status == OfflineVideoCacheStatus.Failed
+    }
+    val qualityTarget = items.firstOrNull { it.isCurrent }?.target ?: items.firstOrNull()?.target
+    val currentItemIndex = remember(items) {
+        items.indexOfFirst { it.isCurrent }.coerceAtLeast(0)
+    }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentItemIndex)
+    val switchSelectedQuality: (Int) -> Unit = { direction ->
+        if (qualityOptions.isNotEmpty()) {
+            val selectedIndex = qualityOptions.indexOf(selectedQuality)
+                .takeIf { it >= 0 }
+                ?: 0
+            selectedQuality = qualityOptions[
+                (selectedIndex + direction).coerceIn(0, qualityOptions.lastIndex)
+            ]
+        }
+    }
+
+    LaunchedEffect(show, qualityTarget?.aid, qualityTarget?.cid, qualityReloadKey) {
+        if (!show || qualityTarget == null) return@LaunchedEffect
+
+        qualityLoading = true
+        qualityLoadError = null
+        qualityOptions = emptyList()
+        withContext(Dispatchers.IO) { onLoadQualities(qualityTarget) }
+            .fold(
+                onSuccess = { availableQualities ->
+                    qualityOptions = availableQualities
+                    selectedQuality = OfflineCacheQualitySelector.select(
+                        availableQualities = availableQualities,
+                        preferredQuality = preferredQuality,
+                    ) ?: preferredQuality
+                },
+                onFailure = { error ->
+                    qualityLoadError = error.localizedMessage ?: "读取画质失败"
+                }
+            )
+        qualityLoading = false
+    }
+    LaunchedEffect(show, qualityLoading, qualityOptions) {
+        if (!show || qualityLoading) return@LaunchedEffect
+        val selectedIndex = qualityOptions.indexOf(selectedQuality)
+        withFrameNanos { }
+        qualityFocusRequester.requestFocus()
+        withFrameNanos { }
+        if (selectedIndex >= 0) {
+            qualityListState.scrollToItemIfAvailable(
+                qualityWindowStartIndex(qualityOptions.size, selectedIndex)
+            )
+        }
+    }
+    LaunchedEffect(show, selectedQuality) {
+        if (!show) return@LaunchedEffect
+        val selectedIndex = qualityOptions.indexOf(selectedQuality)
+        if (selectedIndex >= 0) {
+            qualityListState.scrollToItemIfAvailable(
+                qualityWindowStartIndex(qualityOptions.size, selectedIndex)
+            )
+        }
+    }
+    LaunchedEffect(show, currentItemIndex, items.size) {
+        if (show && items.isNotEmpty()) {
+            listState.scrollToItemIfAvailable(currentItemIndex)
+        }
+    }
+
+    TvOverlayDialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(end = 18.dp, top = 34.dp, bottom = 34.dp),
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Surface(
+                modifier = Modifier
+                    .width(300.dp)
+                    .fillMaxHeight(),
+                shape = MaterialTheme.shapes.extraLarge,
+                colors = SurfaceDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
+                )
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text("离线缓存", style = MaterialTheme.typography.headlineSmall)
+                                Text(
+                                    when {
+                                        qualityLoading -> "正在读取当前分P画质"
+                                        qualityOptions.isNotEmpty() -> {
+                                            "当前分P ${qualityOptions.size} 档 · 默认优先 ${preferredQuality.getShortDisplayName(context)}"
+                                        }
+                                        else -> "选择分P和最高画质"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            OutlinedButton(
+                                modifier = if (qualityOptions.isEmpty() && !qualityLoading) {
+                                    Modifier.focusRequester(qualityFocusRequester)
+                                } else Modifier,
+                                onClick = onOpenCachePage
+                            ) { Text("查看缓存") }
+                        }
+                        when {
+                            qualityLoading -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(42.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    Text(
+                                        "正在匹配可缓存画质…",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                            qualityOptions.isNotEmpty() -> {
+                                CompositionLocalProvider(
+                                    LocalBringIntoViewSpec provides NoScrollBringIntoViewSpec
+                                ) {
+                                    LazyRow(
+                                        modifier = Modifier
+                                            .width(256.dp)
+                                            .height(42.dp),
+                                        state = qualityListState,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        items(
+                                            items = qualityOptions,
+                                            key = { it.code }
+                                        ) { quality ->
+                                            Button(
+                                                modifier = Modifier
+                                                    .width(80.dp)
+                                                    .height(42.dp)
+                                                    .onFocusChanged { focusState ->
+                                                        if (focusState.isFocused) {
+                                                            selectedQuality = quality
+                                                        }
+                                                    }
+                                                    .then(
+                                                        if (selectedQuality == quality) {
+                                                            Modifier.focusRequester(qualityFocusRequester)
+                                                        } else Modifier
+                                                    ),
+                                                onClick = { selectedQuality = quality },
+                                                scale = ButtonDefaults.scale(
+                                                    scale = 1f,
+                                                    focusedScale = 1f,
+                                                    pressedScale = 1f,
+                                                ),
+                                                colors = ButtonDefaults.colors(
+                                                    containerColor = if (selectedQuality == quality) MaterialTheme.colorScheme.primary
+                                                    else MaterialTheme.colorScheme.surfaceVariant,
+                                                    contentColor = if (selectedQuality == quality) MaterialTheme.colorScheme.onPrimary
+                                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                                ),
+                                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                                            ) {
+                                                Text(
+                                                    text = quality.getShortDisplayName(context),
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    maxLines = 1,
+                                                    softWrap = false
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            else -> {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(42.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        qualityLoadError ?: "暂无可缓存画质",
+                                        modifier = Modifier.weight(1f),
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    OutlinedButton(onClick = { qualityReloadKey++ }) {
+                                        Text("重试")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                    )
+
+                    if (items.isEmpty()) {
+                        Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            Text("视频列表尚未加载完成", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .onPreviewKeyEvent { event ->
+                                    if (event.key != Key.DirectionLeft && event.key != Key.DirectionRight) {
+                                        return@onPreviewKeyEvent false
+                                    }
+                                    if (event.type == KeyEventType.KeyDown) {
+                                        switchSelectedQuality(
+                                            if (event.key == Key.DirectionLeft) -1 else 1
+                                        )
+                                    }
+                                    true
+                                },
+                            state = listState,
+                            contentPadding = PaddingValues(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(9.dp)
+                        ) {
+                            items(items, key = { "${it.target.aid}:${it.target.cid}" }) { item ->
+                                val state = stateOf(item.target)
+                                TvOfflineCacheRow(
+                                    item = item,
+                                    state = state,
+                                    enabled = !loading,
+                                    onClick = {
+                                        when {
+                                            state.isActive -> onPause(item.target)
+                                            state.status == OfflineVideoCacheStatus.Paused -> onResume(item.target)
+                                            state.status == OfflineVideoCacheStatus.Failed -> onClear(item.target)
+                                            state.status == OfflineVideoCacheStatus.Completed -> onOpenCachePage()
+                                            else -> onCacheOne(item.target, selectedQuality)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = onDismiss
+                        ) { Text("取消") }
+                        Button(
+                            modifier = Modifier.weight(1f),
+                            enabled = !loading && !qualityLoading &&
+                                qualityOptions.isNotEmpty() && cacheableTargets.isNotEmpty(),
+                            onClick = { onCacheAll(cacheableTargets, selectedQuality) }
+                        ) {
+                            Text(if (loading) "正在添加" else "缓存全部 ${cacheableTargets.size}")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TvOfflineCacheRow(
+    item: TvOfflineCacheItem,
+    state: OfflineVideoCacheTaskState,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(92.dp),
+        onClick = { if (enabled) onClick() },
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (item.isCurrent) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f)
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f),
+            focusedContainerColor = MaterialTheme.colorScheme.primaryContainer
+        ),
+        shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.large),
+        border = ClickableSurfaceDefaults.border(
+            focusedBorder = Border(BorderStroke(2.dp, MaterialTheme.colorScheme.primary))
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            AsyncImage(
+                modifier = Modifier
+                    .width(88.dp)
+                    .height(52.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                model = item.cover,
+                contentDescription = null,
+                contentScale = ContentScale.Crop
+            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(
+                    item.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    item.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (state.totalBytes > 0L && state.status != OfflineVideoCacheStatus.Completed) {
+                    LinearProgressIndicator(
+                        progress = { state.progress },
+                        modifier = Modifier.fillMaxWidth(),
+                        gapSize = 0.dp
+                    )
+                }
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(
+                    imageVector = when {
+                        state.status == OfflineVideoCacheStatus.Completed -> Icons.Rounded.Check
+                        state.status == OfflineVideoCacheStatus.Paused -> Icons.Rounded.PlayCircle
+                        state.status == OfflineVideoCacheStatus.Failed -> Icons.Rounded.Refresh
+                        state.isActive -> Icons.Rounded.Pause
+                        else -> Icons.Rounded.Download
+                    },
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = when {
+                        state.status == OfflineVideoCacheStatus.Completed -> "已缓存"
+                        state.status == OfflineVideoCacheStatus.Paused -> "继续"
+                        state.status == OfflineVideoCacheStatus.Failed -> "清除"
+                        state.isActive -> "${(state.progress * 100).toInt()}%"
+                        else -> "缓存"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+private fun qualityWindowStartIndex(
+    itemCount: Int,
+    selectedIndex: Int,
+    visibleItemCount: Int = 3,
+): Int {
+    if (itemCount <= visibleItemCount) return 0
+    return (selectedIndex - visibleItemCount / 2)
+        .coerceIn(0, itemCount - visibleItemCount)
+}
+
+private fun buildTvOfflineCacheItems(
+    videoDetail: VideoDetail?,
+    currentAid: Long,
+    preferredCid: Long,
+): List<TvOfflineCacheItem> {
+    if (videoDetail == null) return emptyList()
+
+    val ugcItems = videoDetail.ugcSeason?.sections
+        ?.flatMap { section ->
+            section.episodes.flatMap { episode ->
+                if (episode.pages.size > 1) {
+                    episode.pages.map { page ->
+                        val target = OfflineVideoCacheTarget(
+                            aid = episode.aid,
+                            bvid = episode.bvid,
+                            cid = page.cid,
+                            title = episode.title,
+                            partTitle = "${episode.title} - ${page.title}",
+                            cover = episode.cover.ifBlank { videoDetail.cover },
+                            upName = videoDetail.author.name,
+                            upFace = videoDetail.author.face,
+                            danmakuCount = videoDetail.stat.danmaku,
+                            durationMs = page.duration * 1000L,
+                            width = page.dimension.width,
+                            height = page.dimension.height
+                        )
+                        TvOfflineCacheItem(
+                            target = target,
+                            title = "${episode.title} · P${page.index} ${page.title}",
+                            subtitle = listOfNotNull(
+                                section.title.takeIf { it.isNotBlank() },
+                                target.durationMs.formatHourMinSec()
+                            ).joinToString(" · "),
+                            cover = target.cover,
+                            isCurrent = false
+                        )
+                    }
+                } else {
+                    val page = episode.pages.firstOrNull()
+                    val targetCid = page?.cid ?: episode.cid
+                    val target = OfflineVideoCacheTarget(
+                        aid = episode.aid,
+                        bvid = episode.bvid,
+                        cid = targetCid,
+                        title = episode.title,
+                        partTitle = "",
+                        cover = episode.cover.ifBlank { videoDetail.cover },
+                        upName = videoDetail.author.name,
+                        upFace = videoDetail.author.face,
+                        danmakuCount = videoDetail.stat.danmaku,
+                        durationMs = (page?.duration ?: episode.duration) * 1000L,
+                        width = page?.dimension?.width ?: episode.dimension?.width ?: 0,
+                        height = page?.dimension?.height ?: episode.dimension?.height ?: 0
+                    )
+                    listOf(
+                        TvOfflineCacheItem(
+                            target = target,
+                            title = episode.title,
+                            subtitle = listOfNotNull(
+                                section.title.takeIf { it.isNotBlank() },
+                                target.durationMs.formatHourMinSec()
+                            ).joinToString(" · "),
+                            cover = target.cover,
+                            isCurrent = false
+                        )
+                    )
+                }
+            }
+        }
+        .orEmpty()
+    if (ugcItems.isNotEmpty()) {
+        return ugcItems.markCurrentCacheItem(currentAid, preferredCid)
+    }
+
+    return videoDetail.pages.map { page ->
+        val target = OfflineVideoCacheTarget(
+            aid = videoDetail.aid,
+            bvid = videoDetail.bvid,
+            cid = page.cid,
+            title = videoDetail.title,
+            partTitle = page.title,
+            cover = videoDetail.cover,
+            upName = videoDetail.author.name,
+            upFace = videoDetail.author.face,
+            danmakuCount = videoDetail.stat.danmaku,
+            durationMs = page.duration * 1000L,
+            width = page.dimension.width,
+            height = page.dimension.height
+        )
+        TvOfflineCacheItem(
+            target = target,
+            title = if (videoDetail.pages.size > 1) "P${page.index} ${page.title}" else videoDetail.title,
+            subtitle = listOfNotNull(
+                target.durationMs.formatHourMinSec()
+            ).joinToString(" · "),
+            cover = target.cover,
+            isCurrent = false
+        )
+    }.markCurrentCacheItem(currentAid, preferredCid)
+}
+
+private fun List<TvOfflineCacheItem>.markCurrentCacheItem(
+    currentAid: Long,
+    preferredCid: Long,
+): List<TvOfflineCacheItem> {
+    if (isEmpty()) return this
+
+    val exactIndex = indexOfFirst {
+        it.target.aid == currentAid && it.target.cid == preferredCid
+    }
+    val currentAidIndex = indexOfFirst { it.target.aid == currentAid }
+    val preferredCidIndex = indexOfFirst { it.target.cid == preferredCid }
+    val currentIndex = listOf(exactIndex, currentAidIndex, preferredCidIndex)
+        .firstOrNull { it >= 0 }
+        ?: 0
+
+    return mapIndexed { index, item ->
+        val isCurrent = index == currentIndex
+        item.copy(
+            isCurrent = isCurrent,
+            subtitle = if (isCurrent) {
+                listOf(item.subtitle, "当前播放")
+                    .filter { it.isNotBlank() }
+                    .joinToString(" · ")
+            } else {
+                item.subtitle
+            }
+        )
     }
 }
 
@@ -1587,6 +2275,8 @@ private fun VideoTagsRow(
 ) {
     val focusRequester = remember { FocusRequester() }
     val currentOnClickTag by rememberUpdatedState(onClickTag)
+    val tagContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
+    val tagFocusedContainerColor = MaterialTheme.colorScheme.onSurface
 
     LazyRow(
         modifier = modifier.focusRestorer(focusRequester),
@@ -1602,9 +2292,9 @@ private fun VideoTagsRow(
                     .ifElse(index == 0, Modifier.focusRequester(focusRequester))
                     .onFocusChanged { hasFocus = it.hasFocus },
                 colors = ClickableSurfaceDefaults.colors(
-                    containerColor = Color.White.copy(alpha = 0.12f),
-                    focusedContainerColor = Color.White,
-                    pressedContainerColor = Color.White
+                    containerColor = tagContainerColor,
+                    focusedContainerColor = tagFocusedContainerColor,
+                    pressedContainerColor = tagFocusedContainerColor
                 ),
                 scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1.05f),
                 shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(4.dp)),
@@ -1619,7 +2309,8 @@ private fun VideoTagsRow(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                     text = displayTagName,
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (hasFocus) Color.Black else Color.White.copy(alpha = 0.7f),
+                    color = if (hasFocus) MaterialTheme.colorScheme.surface
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1875,9 +2566,12 @@ private fun VideoPartButton(
     onClick: () -> Unit
 ) {
     var hasFocus by remember { mutableStateOf(false) }
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val goldColor = Color(0xFFE39B17)
     val lastPlayedColor = Color(0xFFE39B17)
-    val focusedColor = Color(0xFFF1CD8B)
+    val focusedColor = if (isDarkTheme) Color(0xFFF1CD8B) else MaterialTheme.colorScheme.primary
+    val partContentColor = MaterialTheme.colorScheme.onSurface
+    val partSecondaryContentColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     val progressFraction = remember(played, duration) {
         if (duration <= 0) 0f
@@ -1902,9 +2596,9 @@ private fun VideoPartButton(
     Surface(
         modifier = modifier.onFocusChanged { hasFocus = it.hasFocus },
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.White.copy(alpha = 0.25f),
-            focusedContainerColor = Color.White.copy(alpha = 0.45f),
-            pressedContainerColor = Color.White.copy(alpha = 0.45f)
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+            focusedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            pressedContainerColor = MaterialTheme.colorScheme.primaryContainer
         ),
         scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1.05f),
         shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(12.dp)),
@@ -1940,8 +2634,8 @@ private fun VideoPartButton(
                         text = "$prefix$index",
                         style = MaterialTheme.typography.labelLarge,
                         color = if (isLastPlayed) goldColor
-                        else if (hasFocus) Color.White
-                        else Color.White.copy(alpha = 0.45f),
+                        else if (hasFocus) partContentColor
+                        else partSecondaryContentColor.copy(alpha = 0.72f),
                         maxLines = 1
                     )
 
@@ -1953,7 +2647,8 @@ private fun VideoPartButton(
                         Text(
                             text = title,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = if (isLastPlayed) Color.White else Color.White.copy(alpha = 0.85f),
+                            color = if (isLastPlayed) partContentColor
+                            else partContentColor.copy(alpha = 0.88f),
                             minLines = 2,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
@@ -1974,7 +2669,7 @@ private fun VideoPartButton(
                                 Text(
                                     text = durationText,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Color.White.copy(alpha = 0.4f)
+                                    color = partSecondaryContentColor.copy(alpha = 0.72f)
                                 )
                             }
                         }
@@ -1987,7 +2682,7 @@ private fun VideoPartButton(
                         .fillMaxWidth()
                         .height(4.dp)
                         .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
-                        .background(Color.White.copy(alpha = 0.12f))
+                        .background(partContentColor.copy(alpha = 0.12f))
                 ) {
                     if (progressFraction > 0f) {
                         Box(
@@ -2018,14 +2713,14 @@ private fun VideoPartRowButton(
     Surface(
         modifier = modifier.size(buttonSize),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.White.copy(alpha = 0.08f),
-            focusedContainerColor = Color.White.copy(alpha = 0.2f),
-            pressedContainerColor = Color.White.copy(alpha = 0.2f)
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            focusedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            pressedContainerColor = MaterialTheme.colorScheme.primaryContainer
         ),
         shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(8.dp)),
         border = ClickableSurfaceDefaults.border(
             focusedBorder = Border(
-                border = BorderStroke(1.5.dp, Color(0xFFF1CD8B)),
+                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(8.dp)
             )
         ),
@@ -2062,6 +2757,8 @@ fun VideoPartRow(
     val focusRequester = remember { FocusRequester() }
     var hasFocus by remember { mutableStateOf(false) }
     var showPartListDialog by remember { mutableStateOf(false) }
+    val partRowContentColor = MaterialTheme.colorScheme.onSurface
+    val partRowSecondaryContentColor = MaterialTheme.colorScheme.onSurfaceVariant
     val listState = rememberLazyListState()
     val initialFocusIndex = remember(lastPlayedCid, pages) {
         pages.indexOfFirst { it.cid == lastPlayedCid }
@@ -2094,7 +2791,7 @@ fun VideoPartRow(
                 Modifier
                     .padding(horizontal = 48.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = 0.06f))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f))
                     .padding(top = 10.dp, bottom = 8.dp)
             )
             .onFocusChanged { hasFocus = it.hasFocus },
@@ -2112,7 +2809,7 @@ fun VideoPartRow(
                 text = (titleText ?: stringResource(R.string.video_info_part_row_title))
                         + (" - $subtitle".takeIf { subtitle.isNotBlank() } ?: ""),
                 fontSize = titleFontSize.sp,
-                color = if (hasFocus) Color.White else Color.White.copy(alpha = 0.6f),
+                color = if (hasFocus) partRowContentColor else partRowSecondaryContentColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -2126,7 +2823,7 @@ fun VideoPartRow(
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                     text = "共${pages.size}P",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (hasFocus) UgcPartBadgeColor else Color.White.copy(alpha = 0.58f),
+                    color = if (hasFocus) UgcPartBadgeColor else partRowSecondaryContentColor,
                     maxLines = 1
                 )
             }
@@ -2200,7 +2897,11 @@ fun VideoUgcSeasonRow(
             else -> -1
         }.takeIf { it >= 0 } ?: 0
     }
-    val titleColor = if (hasFocus) Color.White else Color.White.copy(alpha = 0.6f)
+    val titleColor = if (hasFocus) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
     val titleFontSize by animateFloatAsState(
         targetValue = if (hasFocus) 30f else 14f,
         label = "title font size",
@@ -2613,7 +3314,7 @@ private fun UgcEpisodeButton(
                 Text(
                     text = title,
                     fontSize = 13.sp,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     minLines = 2,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis

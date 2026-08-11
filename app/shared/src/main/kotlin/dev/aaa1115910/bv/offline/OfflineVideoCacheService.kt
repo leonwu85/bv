@@ -10,13 +10,18 @@ import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
 import dev.aaa1115910.biliapi.repositories.AuthRepository
 import dev.aaa1115910.biliapi.repositories.VideoPlayRepository
+import dev.aaa1115910.biliapi.util.AvBvConverter
 import dev.aaa1115910.bv.BVApp
+import dev.aaa1115910.bv.player.entity.Audio
+import dev.aaa1115910.bv.player.entity.Resolution
+import dev.aaa1115910.bv.player.entity.VideoCodec
 import dev.aaa1115910.bv.util.Prefs
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -53,10 +58,16 @@ data class OfflineVideoCacheTaskState(
     val cid: Long,
     val title: String = "",
     val partTitle: String = "",
+    val cover: String = "",
+    val qualityText: String = "",
     val status: OfflineVideoCacheStatus = OfflineVideoCacheStatus.Idle,
     val downloadedBytes: Long = 0L,
     val totalBytes: Long = 0L,
-    val message: String = ""
+    val message: String = "",
+    val upName: String = "",
+    val upFace: String = "",
+    val danmakuCount: Int = 0,
+    val durationMs: Long = 0L
 ) {
     val progress: Float
         get() = if (totalBytes > 0L) {
@@ -98,7 +109,11 @@ data class OfflineVideoCacheEntry(
     val createdAt: Long,
     val updatedAt: Long,
     val completed: Boolean,
-    val danmakuCached: Boolean = false
+    val danmakuCached: Boolean = false,
+    val upFace: String = "",
+    val danmakuCount: Int = 0,
+    val coverFileName: String = "",
+    val upFaceFileName: String = ""
 ) {
     val displayTitle: String
         get() = partTitle.ifBlank { title }
@@ -121,7 +136,9 @@ data class OfflineVideoCacheRequest(
     val width: Int,
     val height: Int,
     val videoUrls: List<String>,
-    val audioUrls: List<String>
+    val audioUrls: List<String>,
+    val upFace: String = "",
+    val danmakuCount: Int = 0
 )
 
 data class OfflineVideoCacheTarget(
@@ -134,7 +151,17 @@ data class OfflineVideoCacheTarget(
     val upName: String,
     val durationMs: Long,
     val width: Int,
-    val height: Int
+    val height: Int,
+    val upFace: String = "",
+    val danmakuCount: Int = 0
+)
+
+data class OfflineVideoCacheTaskRequest(
+    val target: OfflineVideoCacheTarget,
+    val preferredQuality: Resolution,
+    val tryLook1080P: Boolean,
+    val videoCodecPreferences: List<VideoCodec>,
+    val preferredAudio: Audio,
 )
 
 data class OfflineVideoPlaybackSource(
@@ -158,6 +185,11 @@ private data class OfflineDanmakuSegment(
     val items: List<OfflineDanmakuItem>
 )
 
+private data class OfflineDanmakuCacheResult(
+    val bytes: Long,
+    val itemCount: Int
+)
+
 @Serializable
 private data class OfflineDanmakuItem(
     val time: Float,
@@ -179,11 +211,14 @@ class OfflineVideoCacheService(
 ) {
     private val logger = KotlinLogging.logger { }
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val queue = ArrayDeque<OfflineVideoCacheRequest>()
-    private val pausedRequests = mutableMapOf<String, OfflineVideoCacheRequest>()
+    private val queue = ArrayDeque<OfflineVideoCacheTaskRequest>()
+    private val pausedRequests = mutableMapOf<String, OfflineVideoCacheTaskRequest>()
     private var currentJob: Job? = null
-    private var currentRequest: OfflineVideoCacheRequest? = null
+    private var currentRequest: OfflineVideoCacheTaskRequest? = null
     private val danmakuCacheByKey = mutableMapOf<String, OfflineDanmakuCacheFile>()
+    private val discardedTaskKeys = mutableSetOf<String>()
+    private val removingTaskKeys = mutableSetOf<String>()
+    private val latestTaskStates = mutableMapOf<String, OfflineVideoCacheTaskState>()
 
     val taskStates = mutableStateMapOf<String, OfflineVideoCacheTaskState>()
     val entries = mutableStateListOf<OfflineVideoCacheEntry>()
@@ -216,30 +251,57 @@ class OfflineVideoCacheService(
                 cid = cid,
                 title = entry.title,
                 partTitle = entry.partTitle,
+                cover = entry.cover,
+                qualityText = entry.qualityText,
                 status = OfflineVideoCacheStatus.Completed,
                 downloadedBytes = entry.totalBytes,
-                totalBytes = entry.totalBytes
+                totalBytes = entry.totalBytes,
+                upName = entry.upName,
+                upFace = entry.upFace,
+                danmakuCount = entry.danmakuCount,
+                durationMs = entry.durationMs
             )
         } else {
             OfflineVideoCacheTaskState(aid = aid, cid = cid)
         }
     }
 
-    fun enqueue(request: OfflineVideoCacheRequest): Result<String> {
-        if (getCompletedEntry(request.aid, request.cid) != null) {
+    fun enqueue(request: OfflineVideoCacheTaskRequest): Result<String> =
+        enqueue(request = request, resetFailedCache = true)
+
+    private fun enqueue(
+        request: OfflineVideoCacheTaskRequest,
+        resetFailedCache: Boolean,
+        initialProgress: OfflineVideoCacheTaskState? = null,
+    ): Result<String> {
+        val target = request.target
+        if (getCompletedEntry(target.aid, target.cid) != null) {
             return Result.success("已缓存，可离线播放")
         }
 
-        val key = key(request.aid, request.cid)
+        val key = key(target.aid, target.cid)
         synchronized(this) {
-            if (currentRequest?.let { key(it.aid, it.cid) } == key || queue.any { key(it.aid, it.cid) == key }) {
+            if (key in removingTaskKeys) {
+                return Result.failure(IllegalStateException("正在取消缓存，请稍后重试"))
+            }
+            if (
+                currentRequest?.let { key(it.target.aid, it.target.cid) } == key ||
+                queue.any { key(it.target.aid, it.target.cid) == key }
+            ) {
                 return Result.success("已在缓存队列中")
             }
+            discardedTaskKeys.remove(key)
+            latestTaskStates.remove(key)
             pausedRequests.remove(key)
+            if (resetFailedCache && shouldResetFailedCache(target)) {
+                entryDir(target.aid, target.cid).deleteRecursively()
+            }
             queue.add(request)
             updateState(
                 request.toState(
                     status = OfflineVideoCacheStatus.Queued,
+                    downloadedBytes = initialProgress?.downloadedBytes ?: 0L,
+                    totalBytes = initialProgress?.totalBytes ?: 0L,
                     message = "等待缓存"
                 )
             )
@@ -252,12 +314,15 @@ class OfflineVideoCacheService(
         val targetKey = key(aid, cid)
         synchronized(this) {
             val active = currentRequest
-            if (active != null && key(active.aid, active.cid) == targetKey) {
+            if (active != null && key(active.target.aid, active.target.cid) == targetKey) {
+                val currentState = latestTaskStates[targetKey] ?: taskStates[targetKey]
                 pausedRequests[targetKey] = active
                 currentJob?.cancel(CancellationException("Paused by user"))
                 updateState(
                     active.toState(
                         status = OfflineVideoCacheStatus.Paused,
+                        downloadedBytes = currentState?.downloadedBytes ?: 0L,
+                        totalBytes = currentState?.totalBytes ?: 0L,
                         message = "已暂停"
                     )
                 )
@@ -267,12 +332,15 @@ class OfflineVideoCacheService(
             val iterator = queue.iterator()
             while (iterator.hasNext()) {
                 val request = iterator.next()
-                if (key(request.aid, request.cid) == targetKey) {
+                if (key(request.target.aid, request.target.cid) == targetKey) {
                     iterator.remove()
                     pausedRequests[targetKey] = request
+                    val currentState = latestTaskStates[targetKey] ?: taskStates[targetKey]
                     updateState(
                         request.toState(
                             status = OfflineVideoCacheStatus.Paused,
+                            downloadedBytes = currentState?.downloadedBytes ?: 0L,
+                            totalBytes = currentState?.totalBytes ?: 0L,
                             message = "已暂停"
                         )
                     )
@@ -288,13 +356,16 @@ class OfflineVideoCacheService(
         synchronized(this) {
             val request = pausedRequests.remove(targetKey)
                 ?: return Result.failure(IllegalStateException("缓存地址已过期，请回到视频页重新缓存"))
+            val currentState = latestTaskStates[targetKey] ?: taskStates[targetKey]
 
-            if (currentRequest?.let { key(it.aid, it.cid) } == targetKey) {
-                if (queue.none { key(it.aid, it.cid) == targetKey }) {
+            if (currentRequest?.let { key(it.target.aid, it.target.cid) } == targetKey) {
+                if (queue.none { key(it.target.aid, it.target.cid) == targetKey }) {
                     queue.add(request)
                     updateState(
                         request.toState(
                             status = OfflineVideoCacheStatus.Queued,
+                            downloadedBytes = currentState?.downloadedBytes ?: 0L,
+                            totalBytes = currentState?.totalBytes ?: 0L,
                             message = "等待继续缓存"
                         )
                     )
@@ -302,56 +373,108 @@ class OfflineVideoCacheService(
                 return Result.success("已加入缓存队列")
             }
 
-            return enqueue(request)
+            return enqueue(
+                request = request,
+                resetFailedCache = false,
+                initialProgress = currentState
+            )
         }
     }
 
-    fun delete(aid: Long, cid: Long): Result<String> {
-        val targetKey = key(aid, cid)
-        synchronized(this) {
-            if (currentRequest?.let { key(it.aid, it.cid) } == targetKey) {
-                currentJob?.cancel(CancellationException("Deleted by user"))
-                currentRequest = null
-            }
-            queue.removeAll { key(it.aid, it.cid) == targetKey }
-            pausedRequests.remove(targetKey)
-        }
+    suspend fun delete(aid: Long, cid: Long): Result<String> =
+        removeCacheFiles(
+            aid = aid,
+            cid = cid,
+            cancellationReason = "Deleted by user",
+            successMessage = "已删除缓存"
+        )
 
-        return runCatching {
-            entryDir(aid, cid).deleteRecursively()
-            clearState(aid, cid)
-            serviceScope.launch { refreshEntries() }
-            "已删除缓存"
-        }
-    }
-
-    fun clearTask(aid: Long, cid: Long): Result<String> {
+    suspend fun clearTask(aid: Long, cid: Long): Result<String> {
         if (getCompletedEntry(aid, cid) != null) {
             return Result.failure(IllegalStateException("已完成的缓存请使用删除缓存"))
         }
+        return removeCacheFiles(
+            aid = aid,
+            cid = cid,
+            cancellationReason = "Cleared by user",
+            successMessage = "已取消缓存并删除文件"
+        )
+    }
 
+    private suspend fun removeCacheFiles(
+        aid: Long,
+        cid: Long,
+        cancellationReason: String,
+        successMessage: String,
+    ): Result<String> {
         val targetKey = key(aid, cid)
-        var taskRemoved = false
-        synchronized(this) {
-            if (currentRequest?.let { key(it.aid, it.cid) } == targetKey) {
-                currentJob?.cancel(CancellationException("Cleared by user"))
-                currentRequest = null
-                taskRemoved = true
+        val activeJob = synchronized(this) {
+            discardedTaskKeys.add(targetKey)
+            removingTaskKeys.add(targetKey)
+            val jobToWaitFor = if (
+                currentRequest?.let { key(it.target.aid, it.target.cid) } == targetKey
+            ) {
+                currentJob?.also { it.cancel(CancellationException(cancellationReason)) }
+            } else {
+                null
             }
-            if (queue.removeAll { key(it.aid, it.cid) == targetKey }) {
-                taskRemoved = true
-            }
-            if (pausedRequests.remove(targetKey) != null) {
-                taskRemoved = true
-            }
+            queue.removeAll { key(it.target.aid, it.target.cid) == targetKey }
+            pausedRequests.remove(targetKey)
+            jobToWaitFor
         }
 
-        return runCatching {
-            val dir = entryDir(aid, cid)
-            dir.deleteRecursively()
-            clearState(aid, cid)
-            serviceScope.launch { refreshEntries() }
-            "已清除缓存任务"
+        val result = runCatching {
+            // Deleting only before the writer exits leaves a race in which the download
+            // coroutine can recreate a file or metadata after the directory was removed.
+            // Finish the cancellation first, then perform and verify the final deletion.
+            withContext(NonCancellable) {
+                activeJob?.join()
+                withContext(Dispatchers.IO) {
+                    deleteEntryDirectory(aid, cid)
+                }
+                clearStateNow(aid, cid)
+                refreshEntries()
+            }
+            successMessage
+        }
+        synchronized(this) {
+            removingTaskKeys.remove(targetKey)
+        }
+        return result
+    }
+
+    private fun deleteEntryDirectory(aid: Long, cid: Long) {
+        val dir = entryDir(aid, cid)
+        if (dir.exists() && !dir.deleteRecursively()) {
+            throw IOException("缓存文件删除失败")
+        }
+        if (dir.exists()) {
+            throw IOException("缓存文件仍然存在")
+        }
+        dir.parentFile
+            ?.takeIf { parent -> parent.listFiles()?.isEmpty() == true }
+            ?.delete()
+    }
+
+    private suspend fun clearStateNow(aid: Long, cid: Long) {
+        val targetKey = key(aid, cid)
+        synchronized(danmakuCacheByKey) {
+            danmakuCacheByKey.remove(targetKey)
+        }
+        withContext(Dispatchers.Main.immediate) {
+            taskStates.remove(targetKey)
+            entries.removeAll { it.aid == aid && it.cid == cid }
+        }
+    }
+
+    private fun shouldAcceptStateLocked(state: OfflineVideoCacheTaskState): Boolean {
+        val targetKey = key(state.aid, state.cid)
+        return if (targetKey in discardedTaskKeys) {
+            false
+        } else if (state.status == OfflineVideoCacheStatus.Paused) {
+            targetKey in pausedRequests
+        } else {
+            targetKey !in pausedRequests
         }
     }
 
@@ -367,8 +490,8 @@ class OfflineVideoCacheService(
             .map { it.toInterruptedState() }
         val activeKeys = synchronized(this) {
             buildSet {
-                currentRequest?.let { add(key(it.aid, it.cid)) }
-                queue.forEach { add(key(it.aid, it.cid)) }
+                currentRequest?.target?.let { add(key(it.aid, it.cid)) }
+                queue.forEach { add(key(it.target.aid, it.target.cid)) }
                 pausedRequests.keys.forEach { add(it) }
             }
         }
@@ -388,9 +511,15 @@ class OfflineVideoCacheService(
                     cid = entry.cid,
                     title = entry.title,
                     partTitle = entry.partTitle,
+                    cover = entry.cover,
+                    qualityText = entry.qualityText,
                     status = OfflineVideoCacheStatus.Completed,
                     downloadedBytes = entry.totalBytes,
-                    totalBytes = entry.totalBytes
+                    totalBytes = entry.totalBytes,
+                    upName = entry.upName,
+                    upFace = entry.upFace,
+                    danmakuCount = entry.danmakuCount,
+                    durationMs = entry.durationMs
                 )
             }
             interruptedStates
@@ -417,9 +546,21 @@ class OfflineVideoCacheService(
         return entry.takeIf { it.completed && cacheFilesReady(it) }
     }
 
+    fun getCachedCoverUri(entry: OfflineVideoCacheEntry): String? =
+        getCachedImageUri(entry, entry.coverFileName)
+
+    fun getCachedUpFaceUri(entry: OfflineVideoCacheEntry): String? =
+        getCachedImageUri(entry, entry.upFaceFileName)
+
     fun getCompletedEntries(aid: Long): List<OfflineVideoCacheEntry> =
         scanEntries()
             .filter { it.aid == aid && it.completed && cacheFilesReady(it) }
+            .sortedByDescending { it.updatedAt }
+
+    fun getAllCompletedEntries(): List<OfflineVideoCacheEntry> =
+        scanEntries()
+            .filter { it.completed && cacheFilesReady(it) }
+            .distinctBy { key(it.aid, it.cid) }
             .sortedByDescending { it.updatedAt }
 
     fun getCachedDanmakuSegment(
@@ -457,17 +598,131 @@ class OfflineVideoCacheService(
         }
     }
 
-    private suspend fun download(request: OfflineVideoCacheRequest) {
+    private suspend fun resolveRequest(taskRequest: OfflineVideoCacheTaskRequest): OfflineVideoCacheRequest {
+        val target = taskRequest.target
+        val playData = videoPlayRepository.getDownloadPlayData(
+            aid = target.aid,
+            bvid = target.bvid.ifBlank { AvBvConverter.av2bv(target.aid) },
+            cid = target.cid,
+            qn = taskRequest.preferredQuality.code,
+            tryLook1080P = taskRequest.tryLook1080P,
+        ).requireOfflineCacheStreams().also { data ->
+            logger.info {
+                "Resolved offline cache play data: [aid=${target.aid}, cid=${target.cid}, qualities=${data.dashVideos.map { it.quality }.distinct()}, audios=${data.dashAudios.map { it.codecId }.distinct()}, dolby=${data.dolby?.codecId}, flac=${data.flac?.codecId}]"
+            }
+        }
+        if (playData.needPay) {
+            throw IllegalStateException("该分P需要购买或会员权限，无法缓存")
+        }
+
+        val selectedQuality = OfflineCacheQualitySelector.select(
+            availableQualities = playData.dashVideos.mapNotNull { video ->
+                Resolution.entries.find { it.code == video.quality }
+            },
+            preferredQuality = taskRequest.preferredQuality,
+        ) ?: throw IllegalStateException("未找到可缓存的视频画质")
+        val sameQualityVideos = playData.dashVideos.filter { it.quality == selectedQuality.code }
+        val videoCandidates = sameQualityVideos.ifEmpty { playData.dashVideos }
+        val videoItem = taskRequest.videoCodecPreferences.firstNotNullOfOrNull { codec ->
+            videoCandidates.find { codec.matchesCodecString(it.codecs) }
+        } ?: videoCandidates.firstOrNull()
+        ?: throw IllegalStateException("未找到可缓存的视频流")
+        val audioItem = playData.selectAudioForOfflineCache(taskRequest.preferredAudio)
+            ?: throw IllegalStateException("未找到可缓存的音频流")
+
+        return OfflineVideoCacheRequest(
+            aid = target.aid,
+            cid = target.cid,
+            bvid = target.bvid.ifBlank { AvBvConverter.av2bv(target.aid) },
+            title = target.title,
+            partTitle = target.partTitle,
+            cover = target.cover,
+            upName = target.upName,
+            quality = videoItem.quality,
+            qualityText = Resolution.entries
+                .find { it.code == videoItem.quality }
+                ?.getDisplayName(BVApp.context)
+                ?: "清晰度 ${videoItem.quality}",
+            videoCodecId = videoItem.codecId,
+            videoCodec = videoItem.codecs ?: VideoCodec.fromCodecId(videoItem.codecId).prefix,
+            audioCodecId = audioItem.codecId,
+            durationMs = target.durationMs.takeIf { it > 0L } ?: playData.timeLength,
+            width = videoItem.width.takeIf { it > 0 } ?: target.width,
+            height = videoItem.height.takeIf { it > 0 } ?: target.height,
+            videoUrls = (listOf(videoItem.baseUrl) + videoItem.backUrl).toOfflineDownloadUrls(),
+            audioUrls = (listOf(audioItem.baseUrl) + audioItem.backUrl).toOfflineDownloadUrls(),
+            upFace = target.upFace,
+            danmakuCount = target.danmakuCount
+        )
+    }
+
+    private fun PlayData.requireOfflineCacheStreams(): PlayData {
+        val audioCount = playableAudioCount()
+        if (dashVideos.isEmpty() || audioCount == 0) {
+            throw IllegalStateException(
+                "WBI 未返回可缓存音视频流：video=${dashVideos.size}, audio=$audioCount, qualities=${dashVideos.map { it.quality }.distinct()}"
+            )
+        }
+        return this
+    }
+
+    private fun PlayData.selectAudioForOfflineCache(preferredAudio: Audio): DashAudio? {
+        return dashAudios.find { it.codecId == preferredAudio.code }
+            ?: dolby.takeIf { it?.codecId == preferredAudio.code }
+            ?: flac.takeIf { it?.codecId == preferredAudio.code }
+            ?: dashAudios.minByOrNull { it.codecId }
+            ?: dolby
+            ?: flac
+    }
+
+    private suspend fun download(taskRequest: OfflineVideoCacheTaskRequest) {
+        updateState(
+            taskRequest.toState(
+                status = OfflineVideoCacheStatus.Fetching,
+                message = "正在获取缓存地址"
+            )
+        )
+        val request = try {
+            resolveRequest(taskRequest)
+        } catch (_: CancellationException) {
+            return
+        } catch (error: Throwable) {
+            val target = taskRequest.target
+            logger.warn(error) {
+                "Resolve offline cache request failed: [aid=${target.aid}, cid=${target.cid}]"
+            }
+            updateState(
+                taskRequest.toState(
+                    status = OfflineVideoCacheStatus.Failed,
+                    message = error.localizedMessage ?: "获取缓存地址失败"
+                )
+            )
+            return
+        }
+
+        downloadResolvedRequest(request)
+    }
+
+    private suspend fun downloadResolvedRequest(request: OfflineVideoCacheRequest) {
         val dir = entryDir(request.aid, request.cid)
         val videoFile = File(dir, VIDEO_FILE_NAME)
         val audioFile = File(dir, AUDIO_FILE_NAME)
         val danmakuFile = File(dir, DANMAKU_FILE_NAME)
-        val createdAt = readEntry(dir)?.createdAt ?: System.currentTimeMillis()
+        val coverFile = File(dir, COVER_FILE_NAME)
+        val upFaceFile = File(dir, UP_FACE_FILE_NAME)
+        val existingEntry = readEntry(dir)
+        val createdAt = existingEntry?.createdAt ?: System.currentTimeMillis()
 
         runCatching {
             logger.info { "Start offline cache: [aid=${request.aid}, cid=${request.cid}, quality=${request.quality}, videoUrls=${request.videoUrls.size}, audioUrls=${request.audioUrls.size}]" }
             dir.mkdirs()
+            if (existingEntry != null && !existingEntry.matchesMediaSelection(request)) {
+                videoFile.delete()
+                audioFile.delete()
+            }
             danmakuFile.delete()
+            coverFile.delete()
+            upFaceFile.delete()
             synchronized(danmakuCacheByKey) {
                 danmakuCacheByKey.remove(key(request.aid, request.cid))
             }
@@ -497,21 +752,24 @@ class OfflineVideoCacheService(
             )
             validateMediaFile(videoFile, "视频")
             validateMediaFile(audioFile, "音频")
-            val danmakuBytes = cacheDanmaku(
+            val danmakuResult = cacheDanmaku(
                 request = request,
                 target = danmakuFile
             )
-            val totalBytes = videoBytes + audioBytes + danmakuBytes
+            val coverBytes = cacheMetadataImage(request.cover, coverFile, "封面")
+            val upFaceBytes = cacheMetadataImage(request.upFace, upFaceFile, "UP 主头像")
+            val completedRequest = request.copy(danmakuCount = danmakuResult.itemCount)
+            val totalBytes = videoBytes + audioBytes + danmakuResult.bytes + coverBytes + upFaceBytes
             writeEntry(
                 dir = dir,
-                request = request,
+                request = completedRequest,
                 totalBytes = totalBytes,
                 createdAt = createdAt,
                 completed = true,
                 danmakuCached = true
             )
             updateState(
-                request.toState(
+                completedRequest.toState(
                     status = OfflineVideoCacheStatus.Completed,
                     downloadedBytes = totalBytes,
                     totalBytes = totalBytes,
@@ -536,7 +794,7 @@ class OfflineVideoCacheService(
     private suspend fun cacheDanmaku(
         request: OfflineVideoCacheRequest,
         target: File
-    ): Long {
+    ): OfflineDanmakuCacheResult {
         val maxSegments = calculateDanmakuMaxSegments(request.durationMs)
         val segments = ArrayList<OfflineDanmakuSegment>(maxSegments)
         var totalItems = 0
@@ -598,7 +856,61 @@ class OfflineVideoCacheService(
         logger.info {
             "Offline danmaku cached: [aid=${request.aid}, cid=${request.cid}, segments=${segments.size}, totalItems=$totalItems, bytes=${target.length()}]"
         }
-        return target.length()
+        return OfflineDanmakuCacheResult(
+            bytes = target.length(),
+            itemCount = totalItems
+        )
+    }
+
+    private suspend fun cacheMetadataImage(
+        sourceUrl: String,
+        target: File,
+        label: String
+    ): Long {
+        if (sourceUrl.isBlank()) return 0L
+        val normalizedUrl = sourceUrl.replaceFirst("http://", "https://")
+        val connection = (URL(normalizedUrl).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10_000
+            readTimeout = 15_000
+            instanceFollowRedirects = true
+            requestMethod = "GET"
+            setRequestProperty("User-Agent", DOWNLOAD_USER_AGENT)
+            setRequestProperty("Referer", REFERER)
+            downloadCookie().takeIf { it.isNotBlank() }?.let { setRequestProperty("Cookie", it) }
+        }
+        return try {
+            connection.connect()
+            if (connection.responseCode !in 200..299) {
+                throw IOException("$label HTTP ${connection.responseCode}")
+            }
+            if (connection.contentType.orEmpty().isTextResponse()) {
+                throw IOException("$label 返回了非图片内容")
+            }
+            target.parentFile?.mkdirs()
+            FileOutputStream(target, false).buffered().use { output ->
+                connection.inputStream.use { input ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val read = input.read(buffer)
+                        if (read == -1) break
+                        output.write(buffer, 0, read)
+                    }
+                }
+            }
+            target.length().takeIf { it > 0L } ?: throw IOException("$label 文件为空")
+        } catch (error: CancellationException) {
+            target.delete()
+            throw error
+        } catch (error: Exception) {
+            target.delete()
+            logger.debug(error) {
+                "Cache offline metadata image failed: [label=$label, url=$normalizedUrl]"
+            }
+            0L
+        } finally {
+            connection.disconnect()
+        }
     }
 
     private suspend fun fetchDanmakuSegmentForOffline(
@@ -859,7 +1171,11 @@ class OfflineVideoCacheService(
             createdAt = createdAt,
             updatedAt = now,
             completed = completed,
-            danmakuCached = danmakuCached
+            danmakuCached = danmakuCached,
+            upFace = request.upFace,
+            danmakuCount = request.danmakuCount,
+            coverFileName = COVER_FILE_NAME.takeIf { File(dir, COVER_FILE_NAME).length() > 0L }.orEmpty(),
+            upFaceFileName = UP_FACE_FILE_NAME.takeIf { File(dir, UP_FACE_FILE_NAME).length() > 0L }.orEmpty()
         )
         File(dir, ENTRY_FILE_NAME).writeText(json.encodeToString(entry))
     }
@@ -895,9 +1211,15 @@ class OfflineVideoCacheService(
             cid = cid,
             title = title,
             partTitle = partTitle,
+            cover = cover,
+            qualityText = qualityText,
             status = OfflineVideoCacheStatus.Failed,
             downloadedBytes = downloadedBytes,
             totalBytes = totalBytes.takeIf { it > 0L } ?: downloadedBytes,
+            upName = upName,
+            upFace = upFace,
+            danmakuCount = danmakuCount,
+            durationMs = durationMs,
             message = if (completed) {
                 "缓存文件缺失，请删除后重新缓存"
             } else {
@@ -905,6 +1227,21 @@ class OfflineVideoCacheService(
             }
         )
     }
+
+    private fun shouldResetFailedCache(target: OfflineVideoCacheTarget): Boolean {
+        if (taskStates[key(target.aid, target.cid)]?.status == OfflineVideoCacheStatus.Failed) {
+            return true
+        }
+        val entry = readEntry(entryDir(target.aid, target.cid)) ?: return false
+        return !entry.completed || !cacheFilesReady(entry)
+    }
+
+    private fun OfflineVideoCacheEntry.matchesMediaSelection(request: OfflineVideoCacheRequest): Boolean =
+        aid == request.aid &&
+            cid == request.cid &&
+            quality == request.quality &&
+            videoCodecId == request.videoCodecId &&
+            audioCodecId == request.audioCodecId
 
     private fun cacheFilesReady(entry: OfflineVideoCacheEntry): Boolean {
         return mediaFilesReady(entry) && (!entry.danmakuCached || danmakuFileReady(entry))
@@ -1027,31 +1364,87 @@ class OfflineVideoCacheService(
         cid = cid,
         title = title,
         partTitle = partTitle,
+        cover = cover,
+        qualityText = qualityText,
         status = status,
         downloadedBytes = downloadedBytes,
         totalBytes = totalBytes,
-        message = message
+        message = message,
+        upName = upName,
+        upFace = upFace,
+        danmakuCount = danmakuCount,
+        durationMs = durationMs
     )
 
+    private fun OfflineVideoCacheTaskRequest.toState(
+        status: OfflineVideoCacheStatus,
+        downloadedBytes: Long = 0L,
+        totalBytes: Long = 0L,
+        message: String = ""
+    ): OfflineVideoCacheTaskState {
+        val cacheTarget = target
+        return OfflineVideoCacheTaskState(
+            aid = cacheTarget.aid,
+            cid = cacheTarget.cid,
+            title = cacheTarget.title,
+            partTitle = cacheTarget.partTitle,
+            cover = cacheTarget.cover,
+            qualityText = preferredQuality.getDisplayName(BVApp.context),
+            status = status,
+            downloadedBytes = downloadedBytes,
+            totalBytes = totalBytes,
+            message = message,
+            upName = cacheTarget.upName,
+            upFace = cacheTarget.upFace,
+            danmakuCount = cacheTarget.danmakuCount,
+            durationMs = cacheTarget.durationMs
+        )
+    }
+
     private fun updateState(state: OfflineVideoCacheTaskState) {
+        val acceptedState = synchronized(this) {
+            if (!shouldAcceptStateLocked(state)) {
+                null
+            } else {
+                val targetKey = key(state.aid, state.cid)
+                state.withNonRegressingProgress(latestTaskStates[targetKey]).also {
+                    latestTaskStates[targetKey] = it
+                }
+            }
+        } ?: return
         serviceScope.launch(Dispatchers.Main.immediate) {
-            taskStates[key(state.aid, state.cid)] = state
+            val targetKey = key(acceptedState.aid, acceptedState.cid)
+            if (synchronized(this@OfflineVideoCacheService) { shouldAcceptStateLocked(acceptedState) }) {
+                taskStates[targetKey] = acceptedState
+            }
         }
     }
 
-    private fun clearState(aid: Long, cid: Long) {
-        synchronized(danmakuCacheByKey) {
-            danmakuCacheByKey.remove(key(aid, cid))
-        }
-        serviceScope.launch(Dispatchers.Main.immediate) {
-            taskStates.remove(key(aid, cid))
-        }
+    private fun OfflineVideoCacheTaskState.withNonRegressingProgress(
+        previous: OfflineVideoCacheTaskState?,
+    ): OfflineVideoCacheTaskState {
+        if (previous == null || previous.status == OfflineVideoCacheStatus.Completed) return this
+        val sameDownloadStage = status == previous.status ||
+            status == OfflineVideoCacheStatus.Paused ||
+            status == OfflineVideoCacheStatus.Queued
+        if (!sameDownloadStage || previous.downloadedBytes <= downloadedBytes) return this
+        return copy(
+            downloadedBytes = previous.downloadedBytes,
+            totalBytes = previous.totalBytes.takeIf { it > 0L } ?: totalBytes
+        )
     }
 
     private fun rootDir(): File = File(BVApp.context.filesDir, ROOT_DIR_NAME)
 
     private fun entryDir(aid: Long, cid: Long): File =
         File(rootDir(), "av_$aid/c_$cid")
+
+    private fun getCachedImageUri(entry: OfflineVideoCacheEntry, fileName: String): String? {
+        if (fileName.isBlank()) return null
+        return File(entryDir(entry.aid, entry.cid), fileName)
+            .takeIf { it.isFile && it.length() > 0L }
+            ?.let { Uri.fromFile(it).toString() }
+    }
 
     private fun downloadCookie(): String {
         val cookieParts = mutableListOf<String>()
@@ -1094,6 +1487,76 @@ class OfflineVideoCacheService(
         }.getOrDefault(false)
     }
 
+    private fun Iterable<String>.toOfflineDownloadUrls(): List<String> {
+        val rawUrls = map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+        val sourceUrls = rawUrls
+            .map { it.toHttpsDownloadUrl() }
+            .distinct()
+        if (sourceUrls.isEmpty()) return emptyList()
+
+        val primaryUrl = sourceUrls.selectOfflineCdnUrl()
+        return (listOf(primaryUrl) + sourceUrls + rawUrls)
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
+    private fun List<String>.selectOfflineCdnUrl(): String {
+        var mcdnTf: String? = null
+        var mcdnUpgcxcode: String? = null
+        var last = first()
+
+        for (url in this) {
+            last = url
+            if (OFFLINE_MIRROR_CDN_REGEX.containsMatchIn(url)) {
+                val uri = Uri.parse(url)
+                if (uri.getQueryParameter("os") == "mcdn") {
+                    mcdnUpgcxcode = url
+                } else {
+                    return uri.toOfflineAliCdnUrl()
+                }
+            }
+            if (OFFLINE_MCDN_TF_REGEX.containsMatchIn(url)) {
+                mcdnTf = url
+                continue
+            }
+            if (url.contains("/upgcxcode/")) {
+                mcdnUpgcxcode = url
+                continue
+            }
+            if (url.contains("szbdyd.com")) {
+                val uri = Uri.parse(url)
+                val host = uri.getQueryParameter("xy_usource") ?: OFFLINE_DOWNLOAD_CDN_HOST
+                return uri.buildUpon()
+                    .scheme("https")
+                    .authority(host)
+                    .build()
+                    .toString()
+            }
+        }
+
+        return when {
+            mcdnUpgcxcode != null -> Uri.parse(mcdnUpgcxcode).toOfflineAliCdnUrl()
+            mcdnTf != null -> Uri.Builder()
+                .scheme("https")
+                .authority(OFFLINE_DOWNLOAD_PROXY_TF_HOST)
+                .appendQueryParameter("url", mcdnTf)
+                .build()
+                .toString()
+            else -> last
+        }
+    }
+
+    private fun String.toHttpsDownloadUrl(): String =
+        if (startsWith("http://")) "https://${removePrefix("http://")}" else this
+
+    private fun Uri.toOfflineAliCdnUrl(): String = buildUpon()
+        .scheme("https")
+        .authority(OFFLINE_DOWNLOAD_CDN_HOST)
+        .build()
+        .toString()
+
     private fun String.isTextResponse(): Boolean {
         val normalized = lowercase()
         return normalized.contains("text/html") ||
@@ -1108,6 +1571,10 @@ class OfflineVideoCacheService(
         private const val VIDEO_FILE_NAME = "video.m4s"
         private const val AUDIO_FILE_NAME = "audio.m4s"
         private const val DANMAKU_FILE_NAME = "danmaku.json"
+        private const val COVER_FILE_NAME = "cover.img"
+        private const val UP_FACE_FILE_NAME = "up_face.img"
+        private const val OFFLINE_DOWNLOAD_CDN_HOST = "upos-sz-mirrorali.bilivideo.com"
+        private const val OFFLINE_DOWNLOAD_PROXY_TF_HOST = "proxy-tf-all-ws.bilivideo.com"
         private const val DOWNLOAD_USER_AGENT = "Dart/3.6 (dart:io)"
         private const val REFERER = "https://www.bilibili.com/"
         private const val PROGRESS_UPDATE_INTERVAL_MS = 500L
@@ -1119,5 +1586,11 @@ class OfflineVideoCacheService(
         private const val MIN_MEDIA_FILE_BYTES = 1024L
         private const val MP4_BOX_HEADER_SIZE = 8
         private val VALID_MP4_BOX_TYPES = setOf("ftyp", "styp", "sidx", "moof")
+        private val OFFLINE_MIRROR_CDN_REGEX = Regex(
+            """^https?://(?:upos-\w+-(?!302)\w+|(?:upos|proxy)-tf-[^/]+)\.(?:bilivideo|akamaized)\.(?:com|net)/upgcxcode"""
+        )
+        private val OFFLINE_MCDN_TF_REGEX = Regex(
+            """^https?://(?:(?:(?:\d{1,3}\.){3}\d{1,3}|[^/]+\.mcdn\.bilivideo\.(?:com|cn|net))(?::\d{1,5})?/v\d/resource)"""
+        )
     }
 }
