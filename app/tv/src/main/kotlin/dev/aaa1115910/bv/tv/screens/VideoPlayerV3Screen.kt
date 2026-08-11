@@ -789,9 +789,12 @@ fun VideoPlayerV3Screen(
                         showDescriptionDialog = true
                     }
                 },
-                onResolutionChange = { resolutionCode, afterChange ->
+                onResolutionChange = { resolutionCode, resumePositionMs, afterChange ->
                     scope.launch(Dispatchers.Default) {
-                        playerViewModel.playQuality(resolutionCode)
+                        playerViewModel.playQuality(
+                            qn = resolutionCode,
+                            initialSeekPositionMs = resumePositionMs
+                        )
                         afterChange()
                         playerViewModel.currentQuality = resolutionCode
                     }

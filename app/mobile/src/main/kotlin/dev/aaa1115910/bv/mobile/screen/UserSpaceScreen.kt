@@ -1,6 +1,7 @@
 package dev.aaa1115910.bv.mobile.screen
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -1292,7 +1293,29 @@ private fun shareUserSpace(context: Context, mid: Long, username: String) {
 }
 
 private fun openUrl(context: Context, url: String) {
-    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    val rawUrl = url.trim()
+    val normalizedUrl = when {
+        rawUrl.isBlank() -> {
+            "链接无效".toast(context)
+            return
+        }
+
+        rawUrl.startsWith("//") -> "https:$rawUrl"
+        else -> rawUrl
+    }
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(normalizedUrl)))
+    }.onFailure { error ->
+        if (error is ActivityNotFoundException) {
+            if (normalizedUrl.startsWith("bilibili://", ignoreCase = true)) {
+                "当前设备未安装 Bilibili App".toast(context)
+            } else {
+                "当前设备无法打开此链接".toast(context)
+            }
+        } else {
+            "打开链接失败".toast(context)
+        }
+    }
 }
 
 private fun copyText(context: Context, label: String, text: String) {

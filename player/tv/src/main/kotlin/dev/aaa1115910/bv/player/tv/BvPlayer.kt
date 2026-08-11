@@ -177,7 +177,7 @@ fun BvPlayer(
     onLoadPrevVideo: () -> Unit = {},
     onExit: () -> Unit,
     onLoadNewVideo: (VideoListItem) -> Unit,
-    onResolutionChange: (Resolution, afterChange: suspend () -> Unit) -> Unit,
+    onResolutionChange: (Resolution, resumePositionMs: Long, afterChange: suspend () -> Unit) -> Unit,
     onCodecChange: (VideoCodec, afterChange: suspend () -> Unit) -> Unit,
     onAspectRatioChange: (VideoAspectRatio) -> Unit,
     onRotationChange: (VideoRotation) -> Unit,
@@ -1494,11 +1494,11 @@ fun BvPlayer(
             },
             onResolutionChange = { resolution ->
                 pendingInitialPlaybackSeek = false
+                val current = videoPlayer.currentPosition.coerceAtLeast(0L)
                 videoPlayer.pause()
-                val current = videoPlayer.currentPosition
                 pendingDanmakuPosition = current
                 danmakuNeedsResume = true
-                onResolutionChange(resolution) {
+                onResolutionChange(resolution, current) {
                     //scope.launch(Dispatchers.Default) {
                     //    playerViewModel.updateAvailableCodec()
                     //    playerViewModel.playQuality(qualityId)

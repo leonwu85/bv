@@ -69,6 +69,9 @@ fun DanmakuMenuList(
     val parentMenuFocusRequester = remember { FocusRequester() }
     val parentMenuPositionFocusRequester = remember { FocusRequester() }
     var selectedDanmakuMenuItem by remember { mutableStateOf(VideoPlayerDanmakuMenuItem.Switch) }
+    val displayedDanmakuSpeedModes = remember {
+        DanmakuSpeedMode.entries.filterNot { it == DanmakuSpeedMode.Custom }
+    }
     val displayedDanmakuMenuItems = VideoPlayerDanmakuMenuItem.entries.filterNot { item ->
         (isLive && item in listOf(
             VideoPlayerDanmakuMenuItem.Merge,
@@ -179,10 +182,11 @@ fun DanmakuMenuList(
 
                 VideoPlayerDanmakuMenuItem.SpeedMode -> RadioMenuList(
                     modifier = menuItemsModifier,
-                    items = DanmakuSpeedMode.entries.map { it.getDisplayName(context) },
-                    selected = videoPlayerConfigData.currentDanmakuSpeedMode.ordinal,
+                    items = displayedDanmakuSpeedModes.map { it.getDisplayName(context) },
+                    selected = displayedDanmakuSpeedModes
+                        .indexOf(videoPlayerConfigData.currentDanmakuSpeedMode),
                     onSelectedChanged = { index ->
-                        onDanmakuSpeedModeChange(DanmakuSpeedMode.fromOrdinal(index))
+                        onDanmakuSpeedModeChange(displayedDanmakuSpeedModes[index])
                     },
                     onFocusBackToParent = {
                         onFocusStateChange(MenuFocusState.Menu)

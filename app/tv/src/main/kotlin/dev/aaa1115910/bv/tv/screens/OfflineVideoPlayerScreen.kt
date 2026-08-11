@@ -147,7 +147,7 @@ fun OfflineVideoPlayerScreen(
                     playerViewModel.playOfflinePlaylistItem(video.aid, cid)
                         .onFailure { (it.localizedMessage ?: "离线视频不可用").toast(context) }
                 },
-                onResolutionChange = { _, afterChange -> scope.launch { afterChange() } },
+                onResolutionChange = { _, _, afterChange -> scope.launch { afterChange() } },
                 onCodecChange = { _, afterChange -> scope.launch { afterChange() } },
                 onAspectRatioChange = { playerViewModel.currentVideoAspectRatio = it },
                 onRotationChange = { playerViewModel.currentVideoRotation = it },
