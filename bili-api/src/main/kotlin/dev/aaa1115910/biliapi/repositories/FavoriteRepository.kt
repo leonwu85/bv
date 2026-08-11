@@ -5,6 +5,7 @@ import dev.aaa1115910.biliapi.entity.FavoriteFolderData
 import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
 import dev.aaa1115910.biliapi.entity.FavoriteItemType
 import dev.aaa1115910.biliapi.http.BiliHttpApi
+import dev.aaa1115910.biliapi.http.entity.user.favorite.FavoriteFolderInfo
 import dev.aaa1115910.biliapi.http.entity.user.favorite.SpaceFavoriteData
 import dev.aaa1115910.biliapi.http.entity.user.favorite.SpaceFavoriteFolderListData
 import org.koin.core.annotation.Single
@@ -162,6 +163,8 @@ class FavoriteRepository(
         mediaId: Long,
         pageSize: Int = 20,
         pageNumber: Int = 1,
+        keyword: String? = null,
+        order: String? = null,
         preferApiType: ApiType = ApiType.Web
     ): FavoriteFolderData {
         val favoriteFolderListData = when (preferApiType) {
@@ -169,6 +172,9 @@ class FavoriteRepository(
                 mediaId = mediaId,
                 pageSize = pageSize,
                 pageNumber = pageNumber,
+                keyword = keyword,
+                order = order,
+                platform = "web",
                 sessData = authRepository.sessionData ?: ""
             )
 
@@ -176,9 +182,65 @@ class FavoriteRepository(
                 mediaId = mediaId,
                 pageSize = pageSize,
                 pageNumber = pageNumber,
+                keyword = keyword,
+                order = order,
                 accessKey = authRepository.accessToken ?: ""
             )
         }.getResponseData()
         return FavoriteFolderData.fromHttpFavoriteFolderInfoListData(favoriteFolderListData)
+    }
+
+    suspend fun getFavoriteFolderInfo(mediaId: Long): FavoriteFolderInfo =
+        BiliHttpApi.getFavoriteFolderInfo(
+            mediaId = mediaId,
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        ).getResponseData()
+
+    suspend fun addFavoriteFolder(
+        title: String,
+        intro: String = "",
+        isPublic: Boolean = true
+    ) {
+        BiliHttpApi.addFavoriteFolder(
+            title = title,
+            intro = intro,
+            privacy = if (isPublic) 0 else 1,
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        ).requireSuccess()
+    }
+
+    suspend fun editFavoriteFolder(
+        mediaId: Long,
+        title: String,
+        intro: String = "",
+        cover: String = "",
+        isPublic: Boolean = true
+    ) {
+        BiliHttpApi.editFavoriteFolder(
+            mediaId = mediaId,
+            title = title,
+            intro = intro,
+            cover = cover,
+            privacy = if (isPublic) 0 else 1,
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        ).requireSuccess()
+    }
+
+    suspend fun deleteFavoriteFolder(mediaId: Long) {
+        BiliHttpApi.deleteFavoriteFolders(
+            mediaIds = listOf(mediaId),
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        ).requireSuccess()
+    }
+
+    suspend fun cleanFavoriteFolder(mediaId: Long) {
+        BiliHttpApi.cleanFavoriteFolder(
+            mediaId = mediaId,
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        ).requireSuccess()
     }
 }

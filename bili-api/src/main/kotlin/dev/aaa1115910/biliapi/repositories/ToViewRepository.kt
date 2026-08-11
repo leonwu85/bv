@@ -80,4 +80,18 @@ class ToViewRepository(
             throw Exception("移出稍后再看失败: ${response.message}")
         }
     }
+
+    suspend fun clearToView(type: ToViewCleanType = ToViewCleanType.All) {
+        BiliHttpApi.clearToView(
+            cleanType = type.apiValue,
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        ).requireSuccess()
+    }
+}
+
+enum class ToViewCleanType(val apiValue: Int?) {
+    All(null),
+    Invalid(1),
+    Viewed(2)
 }

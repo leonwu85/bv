@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -35,14 +37,17 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExpandedDockedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBar
@@ -50,11 +55,16 @@ import androidx.compose.material3.SearchBarState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +75,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import dev.aaa1115910.biliapi.entity.ugc.toSmartDate
+import dev.aaa1115910.biliapi.repositories.SearchFilterDuration
+import dev.aaa1115910.biliapi.repositories.SearchFilterOrderType
 import dev.aaa1115910.biliapi.repositories.SearchType
 import dev.aaa1115910.biliapi.repositories.SearchTypeResult
 import dev.aaa1115910.bv.R
@@ -77,6 +89,8 @@ import dev.aaa1115910.bv.mobile.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.mobile.screen.home.SearchBarResultContent
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.OnBottomReached
+import dev.aaa1115910.bv.util.Partition
+import dev.aaa1115910.bv.util.PartitionUtil
 import dev.aaa1115910.bv.util.removeHtmlTags
 import dev.aaa1115910.bv.util.resizedImageUrl
 
@@ -101,20 +115,30 @@ fun SearchResultContent(
     mediaFtSearchResult: List<SearchTypeResult.Pgc>,
     biliUserSearchResult: List<SearchTypeResult.User>,
     liveRoomSearchResult: List<SearchTypeResult.LiveRoom>,
+    articleSearchResult: List<SearchTypeResult.Article>,
     onSearch: (String) -> Unit,
     onDeleteHistory: (String) -> Unit = {},
     onBackToSearchInput: () -> Unit,
     searchType: SearchType,
     isLoading: Boolean,
     onSearchTypeChange: (SearchType) -> Unit,
+    canFilterVideo: Boolean,
+    selectedOrder: SearchFilterOrderType,
+    selectedDuration: SearchFilterDuration,
+    selectedPartition: Partition?,
+    selectedChildPartition: Partition?,
+    onApplyVideoFilters: (SearchFilterOrderType, SearchFilterDuration, Partition?, Partition?) -> Unit,
     onLoadMore: (SearchType) -> Unit,
     onOpenUgc: (Long) -> Unit,
     onOpenPgc: (Int) -> Unit,
     onOpenUser: (SearchTypeResult.User) -> Unit,
-    onOpenLiveRoom: (SearchTypeResult.LiveRoom) -> Unit
+    onOpenLiveRoom: (SearchTypeResult.LiveRoom) -> Unit,
+    onOpenArticle: (SearchTypeResult.Article) -> Unit
 ) {
     val context = LocalContext.current
     val windowSize = calculateWindowSizeClass(context as Activity).widthSizeClass
+    var showVideoFilter by remember { mutableStateOf(false) }
+    val videoFilterAvailable = canFilterVideo && searchType == SearchType.Video
 
     BackHandler(onBack = onBackToSearchInput)
 
@@ -156,62 +180,79 @@ fun SearchResultContent(
                             searchType = searchType,
                             onSearchTypeChange = onSearchTypeChange
                         )
+                        if (videoFilterAvailable) {
+                            VideoFilterButton(
+                                selectedOrder = selectedOrder,
+                                selectedDuration = selectedDuration,
+                                selectedPartition = selectedPartition,
+                                selectedChildPartition = selectedChildPartition,
+                                onClick = { showVideoFilter = true }
+                            )
+                        }
                     }
                 }
 
                 else -> {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(MaterialTheme.colorScheme.surfaceContainer)
                             .statusBarsPadding()
                     ) {
-                        IconButton(
-                            modifier = Modifier
-                                .align(Alignment.CenterVertically)
-                                .padding(start = 16.dp),
-                            onClick = onBackToSearchInput
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = null
-                            )
-                        }
-                        with(sharedTransitionScope) {
-                            Box(
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            IconButton(
                                 modifier = Modifier
-                                    .padding(vertical = 4.dp, horizontal = 16.dp)
-                                    .sharedElement(
-                                        sharedContentState = rememberSharedContentState("dockedSearchBar"),
-                                        animatedVisibilityScope = animatedVisibilityScope
-                                    )
+                                    .align(Alignment.CenterVertically)
+                                    .padding(start = 16.dp),
+                                onClick = onBackToSearchInput
                             ) {
-                                SearchBar(
-                                    state = searchBarState,
-                                    inputField = inputField
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = null
                                 )
-                                ExpandedDockedSearchBar(
-                                    state = searchBarState,
-                                    inputField = inputField
+                            }
+                            with(sharedTransitionScope) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(vertical = 4.dp, horizontal = 16.dp)
+                                        .sharedElement(
+                                            sharedContentState = rememberSharedContentState("dockedSearchBar"),
+                                            animatedVisibilityScope = animatedVisibilityScope
+                                        )
                                 ) {
-                                    SearchBarResultContent(
-                                        keyword = textFieldState.text.toString(),
-                                        recentHistory = historyKeywords,
-                                        matchedHistory = matchedHistory,
-                                        suggestions = keywordSuggestions,
-                                        onSearch = onSearch,
-                                        onDeleteHistory = onDeleteHistory
-                                    )
+                                    SearchBar(state = searchBarState, inputField = inputField)
+                                    ExpandedDockedSearchBar(
+                                        state = searchBarState,
+                                        inputField = inputField
+                                    ) {
+                                        SearchBarResultContent(
+                                            keyword = textFieldState.text.toString(),
+                                            recentHistory = historyKeywords,
+                                            matchedHistory = matchedHistory,
+                                            suggestions = keywordSuggestions,
+                                            onSearch = onSearch,
+                                            onDeleteHistory = onDeleteHistory
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        SearchTypeTabRow(
-                            modifier = Modifier.align(Alignment.Bottom),
-                            searchType = searchType,
-                            onSearchTypeChange = onSearchTypeChange,
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer
-                        )
+                            SearchTypeTabRow(
+                                modifier = Modifier.align(Alignment.Bottom),
+                                searchType = searchType,
+                                onSearchTypeChange = onSearchTypeChange,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                            )
+                        }
+                        if (videoFilterAvailable) {
+                            VideoFilterButton(
+                                selectedOrder = selectedOrder,
+                                selectedDuration = selectedDuration,
+                                selectedPartition = selectedPartition,
+                                selectedChildPartition = selectedChildPartition,
+                                onClick = { showVideoFilter = true }
+                            )
+                        }
                     }
                 }
             }
@@ -264,8 +305,270 @@ fun SearchResultContent(
                     onLoadMore = { onLoadMore(SearchType.LiveRoom) },
                     onClickLiveRoom = onOpenLiveRoom
                 )
+
+                SearchType.Article -> ArticleSearchResult(
+                    articles = articleSearchResult,
+                    isLoading = isLoading,
+                    onLoadMore = { onLoadMore(SearchType.Article) },
+                    onClickArticle = onOpenArticle
+                )
             }
         }
+    }
+
+    if (showVideoFilter) {
+        VideoFilterSheet(
+            selectedOrder = selectedOrder,
+            selectedDuration = selectedDuration,
+            selectedPartition = selectedPartition,
+            selectedChildPartition = selectedChildPartition,
+            onApply = { order, duration, partition, child ->
+                showVideoFilter = false
+                onApplyVideoFilters(order, duration, partition, child)
+            },
+            onDismiss = { showVideoFilter = false }
+        )
+    }
+}
+
+@Composable
+private fun ArticleSearchResult(
+    modifier: Modifier = Modifier,
+    articles: List<SearchTypeResult.Article>,
+    isLoading: Boolean,
+    onLoadMore: () -> Unit,
+    onClickArticle: (SearchTypeResult.Article) -> Unit
+) {
+    if (articles.isEmpty()) {
+        SearchResultEmptyContent(modifier = modifier, isLoading = isLoading)
+        return
+    }
+    val listState = rememberLazyListState()
+    listState.OnBottomReached(loading = isLoading, loadMore = onLoadMore)
+    LazyColumn(
+        modifier = modifier,
+        state = listState,
+        contentPadding = PaddingValues(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(articles, key = { it.id }) { article ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { onClickArticle(article) },
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    article.cover?.let { cover ->
+                        AsyncImage(
+                            modifier = Modifier
+                                .width(120.dp)
+                                .aspectRatio(16f / 10f)
+                                .clip(MaterialTheme.shapes.small),
+                            model = cover.resizedImageUrl(ImageSize.SmallVideoCardCover),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = article.title.removeHtmlTags(),
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (article.description.isNotBlank()) {
+                            Text(
+                                text = article.description.removeHtmlTags(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Text(
+                            text = listOf(
+                                article.categoryName,
+                                "${formatLongCount(article.view)}阅读",
+                                "${formatCount(article.like)}点赞",
+                                article.pubTime.toLong().toSmartDate()
+                            ).filterNotNull().filter { it.isNotBlank() }.joinToString(" · "),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoFilterButton(
+    selectedOrder: SearchFilterOrderType,
+    selectedDuration: SearchFilterDuration,
+    selectedPartition: Partition?,
+    selectedChildPartition: Partition?,
+    onClick: () -> Unit
+) {
+    TextButton(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        onClick = onClick
+    ) {
+        Icon(Icons.Default.FilterList, contentDescription = null)
+        Text(
+            modifier = Modifier.padding(start = 8.dp),
+            text = listOf(
+                selectedOrder.displayName(),
+                selectedDuration.displayName(),
+                selectedChildPartition?.strRes ?: selectedPartition?.strRes ?: "全部分区"
+            ).joinToString(" · "),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VideoFilterSheet(
+    selectedOrder: SearchFilterOrderType,
+    selectedDuration: SearchFilterDuration,
+    selectedPartition: Partition?,
+    selectedChildPartition: Partition?,
+    onApply: (SearchFilterOrderType, SearchFilterDuration, Partition?, Partition?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var order by remember(selectedOrder) { mutableStateOf(selectedOrder) }
+    var duration by remember(selectedDuration) { mutableStateOf(selectedDuration) }
+    var partition by remember(selectedPartition) { mutableStateOf(selectedPartition) }
+    var childPartition by remember(selectedChildPartition) { mutableStateOf(selectedChildPartition) }
+    val chipSpacing = 8.dp
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                modifier = Modifier.padding(horizontal = 20.dp),
+                text = stringResource(R.string.filter_dialog_title),
+                style = MaterialTheme.typography.titleLarge
+            )
+            FilterSection(title = "排序方式") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(chipSpacing)) {
+                    items(SearchFilterOrderType.webFilters) { item ->
+                        FilterChip(
+                            selected = order == item,
+                            onClick = { order = item },
+                            label = { Text(item.displayName()) }
+                        )
+                    }
+                }
+            }
+            FilterSection(title = "视频时长") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(chipSpacing)) {
+                    items(SearchFilterDuration.entries) { item ->
+                        FilterChip(
+                            selected = duration == item,
+                            onClick = { duration = item },
+                            label = { Text(item.displayName()) }
+                        )
+                    }
+                }
+            }
+            FilterSection(title = "分区") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(chipSpacing)) {
+                    item {
+                        FilterChip(
+                            selected = partition == null,
+                            onClick = {
+                                partition = null
+                                childPartition = null
+                            },
+                            label = { Text("全部分区") }
+                        )
+                    }
+                    items(PartitionUtil.partitions) { item ->
+                        FilterChip(
+                            selected = partition == item,
+                            onClick = {
+                                partition = item
+                                childPartition = null
+                            },
+                            label = { Text(item.strRes) }
+                        )
+                    }
+                }
+            }
+            if (partition?.children?.isNotEmpty() == true) {
+                FilterSection(title = "子分区") {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(chipSpacing)) {
+                        item {
+                            FilterChip(
+                                selected = childPartition == null,
+                                onClick = { childPartition = null },
+                                label = { Text("全部") }
+                            )
+                        }
+                        items(partition?.children.orEmpty()) { item ->
+                            FilterChip(
+                                selected = childPartition == item,
+                                onClick = { childPartition = item },
+                                label = { Text(item.strRes) }
+                            )
+                        }
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(
+                    onClick = {
+                        order = SearchFilterOrderType.ComprehensiveSort
+                        duration = SearchFilterDuration.All
+                        partition = null
+                        childPartition = null
+                    }
+                ) { Text(stringResource(R.string.filter_dialog_reset)) }
+                TextButton(onClick = { onApply(order, duration, partition, childPartition) }) {
+                    Text("应用")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterSection(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        content()
     }
 }
 
@@ -810,10 +1113,37 @@ private fun SearchType.displayName(): String = when (this) {
     SearchType.MediaFt -> stringResource(R.string.search_result_type_name_media_ft)
     SearchType.BiliUser -> stringResource(R.string.search_result_type_name_bili_user)
     SearchType.LiveRoom -> stringResource(R.string.search_result_type_name_live_room)
+    SearchType.Article -> stringResource(R.string.search_result_type_name_article)
+}
+
+@Composable
+private fun SearchFilterOrderType.displayName(): String = when (this) {
+    SearchFilterOrderType.ComprehensiveSort -> stringResource(R.string.search_result_filter_order_type_comprehensive_sort)
+    SearchFilterOrderType.MostClicks -> stringResource(R.string.search_result_filter_order_type_most_clicks)
+    SearchFilterOrderType.LatestPublish -> stringResource(R.string.search_result_filter_order_type_latest_publish)
+    SearchFilterOrderType.MostDanmaku -> stringResource(R.string.search_result_filter_order_type_most_danmaku)
+    SearchFilterOrderType.MostFavorites -> stringResource(R.string.search_result_filter_order_type_most_favorites)
+    SearchFilterOrderType.MostComment -> "最多评论"
+    SearchFilterOrderType.MostLikes -> "最多点赞"
+}
+
+@Composable
+private fun SearchFilterDuration.displayName(): String = when (this) {
+    SearchFilterDuration.All -> stringResource(R.string.search_result_filter_duration_all)
+    SearchFilterDuration.LessThan10Minutes -> stringResource(R.string.search_result_filter_duration_less_than_10)
+    SearchFilterDuration.Between10And30Minutes -> stringResource(R.string.search_result_filter_duration_10_to_30)
+    SearchFilterDuration.Between30And60Minutes -> stringResource(R.string.search_result_filter_duration_30_to_60)
+    SearchFilterDuration.MoreThan60Minutes -> stringResource(R.string.search_result_filter_duration_more_than_60)
 }
 
 private fun formatCount(count: Int): String = when {
     count >= 100_000_000 -> String.format("%.1f亿", count / 100_000_000.0)
     count >= 10_000 -> String.format("%.1f万", count / 10_000.0)
+    else -> count.toString()
+}
+
+private fun formatLongCount(count: Long): String = when {
+    count >= 100_000_000L -> String.format("%.1f亿", count / 100_000_000.0)
+    count >= 10_000L -> String.format("%.1f万", count / 10_000.0)
     else -> count.toString()
 }

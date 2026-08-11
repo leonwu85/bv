@@ -1,7 +1,9 @@
 package dev.aaa1115910.bv.mobile.screen.home
 
 import android.app.Activity
+import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.background
@@ -58,6 +60,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import dev.aaa1115910.biliapi.entity.search.SearchKeyword
+import dev.aaa1115910.biliapi.entity.ApiType
+import dev.aaa1115910.biliapi.repositories.SearchFilterDuration
+import dev.aaa1115910.biliapi.repositories.SearchFilterOrderType
 import dev.aaa1115910.biliapi.repositories.SearchType
 import dev.aaa1115910.biliapi.repositories.SearchTypeResult
 import dev.aaa1115910.bv.mobile.activities.SeasonInfoActivity
@@ -69,6 +74,8 @@ import dev.aaa1115910.bv.mobile.screen.home.search.SearchInputContent
 import dev.aaa1115910.bv.mobile.screen.home.search.SearchResultContent
 import dev.aaa1115910.bv.mobile.screen.home.search.SearchTrendingRankingContent
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
+import dev.aaa1115910.bv.util.Partition
+import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.viewmodel.search.SearchInputViewModel
 import dev.aaa1115910.bv.viewmodel.search.SearchResultViewModel
 import kotlinx.coroutines.delay
@@ -123,6 +130,14 @@ fun SearchScreen(
             watchedNum = room.online
         )
     }
+    val onOpenArticle: (SearchTypeResult.Article) -> Unit = { article ->
+        context.startActivity(
+            Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://www.bilibili.com/read/cv${article.id}")
+            )
+        )
+    }
     val onSearchTypeChange: (SearchType) -> Unit = { type ->
         if (searchResultViewModel.searchType != type) {
             searchResultViewModel.searchType = type
@@ -157,16 +172,24 @@ fun SearchScreen(
         searchType = searchResultViewModel.searchType,
         isLoading = searchResultViewModel.isLoading(searchResultViewModel.searchType),
         onSearchTypeChange = onSearchTypeChange,
+        canFilterVideo = Prefs.apiType == ApiType.Web,
+        selectedOrder = searchResultViewModel.selectedOrder,
+        selectedDuration = searchResultViewModel.selectedDuration,
+        selectedPartition = searchResultViewModel.selectedPartition,
+        selectedChildPartition = searchResultViewModel.selectedChildPartition,
+        onApplyVideoFilters = searchResultViewModel::applyVideoFilters,
         onLoadMore = searchResultViewModel::loadMore,
         onOpenUgc = onOpenUgc,
         onOpenPgc = onOpenPgc,
         onOpenUser = onOpenUser,
         onOpenLiveRoom = onOpenLiveRoom,
+        onOpenArticle = onOpenArticle,
         videoSearchResult = searchResultViewModel.videoSearchResult.videos,
         mediaBangumiSearchResult = searchResultViewModel.mediaBangumiSearchResult.mediaBangumis,
         mediaFtSearchResult = searchResultViewModel.mediaFtSearchResult.mediaFts,
         biliUserSearchResult = searchResultViewModel.biliUserSearchResult.biliUsers,
-        liveRoomSearchResult = searchResultViewModel.liveRoomSearchResult.liveRooms
+        liveRoomSearchResult = searchResultViewModel.liveRoomSearchResult.liveRooms,
+        articleSearchResult = searchResultViewModel.articleSearchResult.articles
     )
 }
 
@@ -197,16 +220,24 @@ fun SearchContent(
     searchType: SearchType = SearchType.Video,
     isLoading: Boolean = false,
     onSearchTypeChange: (SearchType) -> Unit = {},
+    canFilterVideo: Boolean = false,
+    selectedOrder: SearchFilterOrderType = SearchFilterOrderType.ComprehensiveSort,
+    selectedDuration: SearchFilterDuration = SearchFilterDuration.All,
+    selectedPartition: Partition? = null,
+    selectedChildPartition: Partition? = null,
+    onApplyVideoFilters: (SearchFilterOrderType, SearchFilterDuration, Partition?, Partition?) -> Unit = { _, _, _, _ -> },
     onLoadMore: (SearchType) -> Unit = {},
     onOpenUgc: (Long) -> Unit = {},
     onOpenPgc: (Int) -> Unit = {},
     onOpenUser: (SearchTypeResult.User) -> Unit = {},
     onOpenLiveRoom: (SearchTypeResult.LiveRoom) -> Unit = {},
+    onOpenArticle: (SearchTypeResult.Article) -> Unit = {},
     videoSearchResult: List<SearchTypeResult.Video>,
     mediaBangumiSearchResult: List<SearchTypeResult.Pgc>,
     mediaFtSearchResult: List<SearchTypeResult.Pgc>,
     biliUserSearchResult: List<SearchTypeResult.User>,
-    liveRoomSearchResult: List<SearchTypeResult.LiveRoom>
+    liveRoomSearchResult: List<SearchTypeResult.LiveRoom>,
+    articleSearchResult: List<SearchTypeResult.Article> = emptyList()
 ) {
     val scope = rememberCoroutineScope()
     val searchBarState = rememberSearchBarState()
@@ -374,17 +405,25 @@ fun SearchContent(
                     mediaFtSearchResult = mediaFtSearchResult,
                     biliUserSearchResult = biliUserSearchResult,
                     liveRoomSearchResult = liveRoomSearchResult,
+                    articleSearchResult = articleSearchResult,
                     onSearch = onSearchKeyword,
                     onDeleteHistory = onDeleteHistory,
                     onBackToSearchInput = onBackFromSearchResult,
                     searchType = searchType,
                     isLoading = isLoading,
                     onSearchTypeChange = onSearchTypeChange,
+                    canFilterVideo = canFilterVideo,
+                    selectedOrder = selectedOrder,
+                    selectedDuration = selectedDuration,
+                    selectedPartition = selectedPartition,
+                    selectedChildPartition = selectedChildPartition,
+                    onApplyVideoFilters = onApplyVideoFilters,
                     onLoadMore = onLoadMore,
                     onOpenUgc = onOpenUgc,
                     onOpenPgc = onOpenPgc,
                     onOpenUser = onOpenUser,
-                    onOpenLiveRoom = onOpenLiveRoom
+                    onOpenLiveRoom = onOpenLiveRoom,
+                    onOpenArticle = onOpenArticle
                 )
             }
         }

@@ -40,11 +40,25 @@ class SearchResultViewModel(
     var mediaFtSearchResult by mutableStateOf(SearchResult(SearchType.MediaFt))
     var biliUserSearchResult by mutableStateOf(SearchResult(SearchType.BiliUser))
     var liveRoomSearchResult by mutableStateOf(SearchResult(SearchType.LiveRoom))
+    var articleSearchResult by mutableStateOf(SearchResult(SearchType.Article))
 
     var selectedOrder by mutableStateOf(SearchFilterOrderType.ComprehensiveSort)
     var selectedDuration by mutableStateOf(SearchFilterDuration.All)
     var selectedPartition: Partition? by mutableStateOf(null)
     var selectedChildPartition: Partition? by mutableStateOf(null)
+
+    fun applyVideoFilters(
+        order: SearchFilterOrderType,
+        duration: SearchFilterDuration,
+        partition: Partition?,
+        childPartition: Partition?
+    ) {
+        selectedOrder = order
+        selectedDuration = duration
+        selectedPartition = partition
+        selectedChildPartition = childPartition?.takeIf { it in (partition?.children ?: emptyList()) }
+        if (searchType == SearchType.Video && keyword.isNotBlank()) update()
+    }
 
     private val updating = mutableStateMapOf<SearchType, Boolean>().apply {
         SearchType.entries.forEach { put(it, false) }
@@ -97,6 +111,7 @@ class SearchResultViewModel(
             SearchType.MediaFt -> mediaFtSearchResult = SearchResult(SearchType.MediaFt)
             SearchType.BiliUser -> biliUserSearchResult = SearchResult(SearchType.BiliUser)
             SearchType.LiveRoom -> liveRoomSearchResult = SearchResult(SearchType.LiveRoom)
+            SearchType.Article -> articleSearchResult = SearchResult(SearchType.Article)
         }
     }
 
@@ -147,6 +162,9 @@ class SearchResultViewModel(
 
                          SearchType.LiveRoom -> liveRoomSearchResult =
                              liveRoomSearchResult.appendSearchResultData(searchResultResponse)
+
+                         SearchType.Article -> articleSearchResult =
+                             articleSearchResult.appendSearchResultData(searchResultResponse)
                     }
 
                     // 检查返回的数据数量，如果少于请求的分页数量则设置 hasMore 为 false
@@ -156,8 +174,11 @@ class SearchResultViewModel(
                         SearchType.MediaFt -> searchResultResponse.pgcs.size
                         SearchType.BiliUser -> searchResultResponse.users.size
                         SearchType.LiveRoom -> searchResultResponse.liveRooms.size
+                        SearchType.Article -> searchResultResponse.articles.size
                     }
-                    val requestedPageSize = 20
+                    val requestedPageSize = searchResultResponse.pageSize
+                        ?.takeIf { it > 0 }
+                        ?: 20
                     if (returnedCount < requestedPageSize) {
                         hasMore[searchType] = false
                     }
@@ -180,9 +201,12 @@ class SearchResultViewModel(
         var mediaFts: List<SearchTypeResult.Pgc> = emptyList(),
         var biliUsers: List<SearchTypeResult.User> = emptyList(),
         var liveRooms: List<SearchTypeResult.LiveRoom> = emptyList(),
+        var articles: List<SearchTypeResult.Article> = emptyList(),
         var page: SearchTypePage = SearchTypePage()
     ) {
-        val count get() = videos.size + mediaBangumis.size + mediaFts.size + biliUsers.size + liveRooms.size
+        val count
+            get() = videos.size + mediaBangumis.size + mediaFts.size + biliUsers.size +
+                liveRooms.size + articles.size
 
         fun appendSearchResultData(searchTypeResult: SearchTypeResult): SearchResult {
             return when (type) {
@@ -215,6 +239,12 @@ class SearchResultViewModel(
                         this.liveRooms = this@SearchResult.liveRooms + searchTypeResult.liveRooms
                     }
                 }
+
+                SearchType.Article -> {
+                    SearchResult(type).apply {
+                        this.articles = this@SearchResult.articles + searchTypeResult.articles
+                    }
+                }
             }
         }
     }
@@ -228,7 +258,8 @@ enum class SearchResultType(
     MediaBangumi(type = "media_bangumi", R.string.search_result_type_name_media_bangumi),
     MediaFt(type = "media_ft", strRes = R.string.search_result_type_name_media_ft),
     BiliUser(type = "bili_user", strRes = R.string.search_result_type_name_bili_user),
-    LiveRoom(type = "live_room", strRes = R.string.search_result_type_name_live_room);
+    LiveRoom(type = "live_room", strRes = R.string.search_result_type_name_live_room),
+    Article(type = "article", strRes = R.string.search_result_type_name_article);
 
     fun getDisplayName(context: Context) = context.getString(strRes)
 }

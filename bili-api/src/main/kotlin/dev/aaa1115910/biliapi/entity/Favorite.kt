@@ -21,13 +21,14 @@ data class FavoriteFolderItemId(
 }
 
 enum class FavoriteItemType(val value: Int) {
+    Unknown(-1),
     All(0),
     Video(2),
     Audio(12),
     VideoCollection(21);
 
     companion object {
-        fun fromValue(typeId: Int) = entries.first { it.value == typeId }
+        fun fromValue(typeId: Int) = entries.firstOrNull { it.value == typeId } ?: Unknown
     }
 }
 
@@ -49,8 +50,13 @@ data class FavoriteFolderMetadata(
     val title: String,
     val cover: String?,
     var videoInThisFav: Boolean,
-    val mediaCount: Int
+    val mediaCount: Int,
+    val attr: Int = 0,
+    val intro: String = ""
 ) {
+    val isDefault: Boolean get() = (attr and 2) == 0
+    val isPublic: Boolean get() = (attr and 1) == 0
+
     companion object {
         fun fromHttpFavoriteFolderInfo(httpFavoriteFolderInfo: dev.aaa1115910.biliapi.http.entity.user.favorite.FavoriteFolderInfo): FavoriteFolderMetadata {
             return FavoriteFolderMetadata(
@@ -60,7 +66,9 @@ data class FavoriteFolderMetadata(
                 title = httpFavoriteFolderInfo.title,
                 cover = httpFavoriteFolderInfo.cover,
                 videoInThisFav = httpFavoriteFolderInfo.favState == 1,
-                mediaCount = httpFavoriteFolderInfo.mediaCount
+                mediaCount = httpFavoriteFolderInfo.mediaCount,
+                attr = httpFavoriteFolderInfo.attr,
+                intro = httpFavoriteFolderInfo.intro
             )
         }
 
@@ -72,7 +80,8 @@ data class FavoriteFolderMetadata(
                 title = httpUserFavoriteFoldersData.title,
                 cover = null,
                 videoInThisFav = httpUserFavoriteFoldersData.favState == 1,
-                mediaCount = httpUserFavoriteFoldersData.mediaCount
+                mediaCount = httpUserFavoriteFoldersData.mediaCount,
+                attr = httpUserFavoriteFoldersData.attr
             )
         }
     }

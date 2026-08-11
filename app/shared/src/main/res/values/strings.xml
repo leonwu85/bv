@@ -185,6 +185,7 @@
     <string name="search_result_filter_order_type_most_favorites">最多收藏</string>
     <string name="search_result_type_name_bili_user">用户</string>
     <string name="search_result_type_name_live_room">直播</string>
+    <string name="search_result_type_name_article">专栏</string>
     <string name="search_result_type_name_media_bangumi">番剧</string>
     <string name="search_result_type_name_media_ft">影视</string>
     <string name="search_result_type_name_video">视频</string>

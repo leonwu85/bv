@@ -136,16 +136,23 @@ class SearchRepository(
         preferApiType: ApiType = ApiType.App,
         enableProxy: Boolean = false
     ): SearchTypeResult {
-        return when (preferApiType) {
+        // 专栏的 gRPC 卡片尚未在本项目协议模型中实现，固定使用稳定的 Web 结果。
+        val effectiveApiType = if (type == SearchType.Article) ApiType.Web else preferApiType
+        val effectiveTid = tid.takeIf { type == SearchType.Video }
+        val effectiveOrder = order.takeIf { type == SearchType.Video }
+            ?: SearchFilterOrderType.ComprehensiveSort
+        val effectiveDuration = duration.takeIf { type == SearchType.Video }
+            ?: SearchFilterDuration.All
+        return when (effectiveApiType) {
             ApiType.Web -> {
                 val response = if (enableProxy) {
                     BiliHttpProxyApi.searchType(
                         keyword = keyword,
                         type = type.httpTypeParam,
                         page = page.nextPageForWeb,
-                        tid = tid,
-                        order = order.httpOrderParam,
-                        duration = duration.httpDurationParam,
+                        tid = effectiveTid,
+                        order = effectiveOrder.httpOrderParam,
+                        duration = effectiveDuration.httpDurationParam,
                         sessData = authRepository.sessionData,
                         dedeUserID = authRepository.mid,
                         buvid3 = authRepository.buvid3,
@@ -155,9 +162,9 @@ class SearchRepository(
                         keyword = keyword,
                         type = type.httpTypeParam,
                         page = page.nextPageForWeb,
-                        tid = tid,
-                        order = order.httpOrderParam,
-                        duration = duration.httpDurationParam,
+                        tid = effectiveTid,
+                        order = effectiveOrder.httpOrderParam,
+                        duration = effectiveDuration.httpDurationParam,
                         sessData = authRepository.sessionData,
                         dedeUserID = authRepository.mid,
                         buvid3 = authRepository.buvid3,
@@ -171,7 +178,7 @@ class SearchRepository(
                     val searchTypeRequest = searchByTypeRequest {
                         this.keyword = keyword
                         this.type = type.grpcTypeParam
-                        categorySort = order.grpcOrderParam
+                        categorySort = effectiveOrder.grpcOrderParam
                         userType = SearchByTypeRequest.UserType.ALL
                         userSort = SearchByTypeRequest.UserSort.USER_SORT_DEFAULT
                         pagination = pagination {
@@ -206,7 +213,7 @@ enum class SearchType(
     MediaFt(httpTypeParam = "media_ft", grpcTypeParam = 8),
     BiliUser(httpTypeParam = "bili_user", grpcTypeParam = 2),
     LiveRoom(httpTypeParam = "live_room", grpcTypeParam = 4),
-    //Article grpcTypeParam = 6
+    Article(httpTypeParam = "article", grpcTypeParam = 6)
 }
 
 enum class SearchFilterOrderType(
@@ -266,12 +273,13 @@ data class SearchTypeResult(
     val pgcs: List<Pgc> = emptyList(),
     val users: List<User> = emptyList(),
     val liveRooms: List<LiveRoom> = emptyList(),
+    val articles: List<Article> = emptyList(),
     val page: SearchTypePage,
     val pageSize: Int? = 20
 ) {
     companion object {
         fun fromSearchTypeResult(result: dev.aaa1115910.biliapi.http.entity.search.SearchResultData): SearchTypeResult {
-            return when (result.searchTypeResults.first()) {
+            return when (result.searchTypeResults.firstOrNull()) {
                 is dev.aaa1115910.biliapi.http.entity.search.SearchVideoResult -> {
                     SearchTypeResult(
                         videos = result.searchTypeResults.map { Video.fromSearchVideoResult(it as dev.aaa1115910.biliapi.http.entity.search.SearchVideoResult) },
@@ -299,6 +307,18 @@ data class SearchTypeResult(
                 is dev.aaa1115910.biliapi.http.entity.search.SearchLiveRoomResult -> {
                     SearchTypeResult(
                         liveRooms = result.searchTypeResults.map { LiveRoom.fromSearchLiveRoomResult(it as dev.aaa1115910.biliapi.http.entity.search.SearchLiveRoomResult) },
+                        page = SearchTypePage(nextPageForWeb = result.page + 1),
+                        pageSize = result.pageSize
+                    )
+                }
+
+                is dev.aaa1115910.biliapi.http.entity.search.SearchArticleResult -> {
+                    SearchTypeResult(
+                        articles = result.searchTypeResults.map {
+                            Article.fromSearchArticleResult(
+                                it as dev.aaa1115910.biliapi.http.entity.search.SearchArticleResult
+                            )
+                        },
                         page = SearchTypePage(nextPageForWeb = result.page + 1),
                         pageSize = result.pageSize
                     )
@@ -463,6 +483,38 @@ data class SearchTypeResult(
                     uid = liveRoom.uid,
                     uface = if (liveRoom.uFace.startsWith("//")) "https:${liveRoom.uFace}" else liveRoom.uFace
                 )
+        }
+    }
+
+    data class Article(
+        val id: Int,
+        val title: String,
+        val description: String,
+        val cover: String?,
+        val authorId: Long,
+        val categoryName: String,
+        val view: Long,
+        val like: Int,
+        val reply: Int,
+        val pubTime: Int
+    ) : SearchTypeResultItem {
+        companion object {
+            fun fromSearchArticleResult(
+                article: dev.aaa1115910.biliapi.http.entity.search.SearchArticleResult
+            ) = Article(
+                id = article.id,
+                title = article.title,
+                description = article.desc,
+                cover = article.imageUrls.firstOrNull()?.let {
+                    if (it.startsWith("//")) "https:$it" else it
+                },
+                authorId = article.mid,
+                categoryName = article.categoryName,
+                view = article.view,
+                like = article.like,
+                reply = article.reply,
+                pubTime = article.pubTime
+            )
         }
     }
 }

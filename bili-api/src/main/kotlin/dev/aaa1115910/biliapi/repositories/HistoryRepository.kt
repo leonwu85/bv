@@ -47,13 +47,47 @@ class HistoryRepository(
     suspend fun deleteHistory(
         business: String,
         kid: Long
-    ): Boolean {
+    ): Boolean = deleteHistories(listOf(business to kid))
+
+    suspend fun deleteHistories(items: List<Pair<String, Long>>): Boolean {
+        if (items.isEmpty()) return true
         return runCatching {
             BiliHttpApi.deleteHistory(
-                kid = "${business}_$kid",
+                kid = items.joinToString(",") { (business, kid) -> "${business}_$kid" },
                 csrf = authRepository.biliJct!!,
                 sessData = authRepository.sessionData!!
             ).code == 0
         }.getOrElse { false }
+    }
+
+    suspend fun searchHistories(
+        keyword: String,
+        pageNumber: Int = 1
+    ): HistoryData {
+        val data = BiliHttpApi.searchHistory(
+            keyword = keyword,
+            pageNum = pageNumber,
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        ).getResponseData()
+        return HistoryData.fromHistoryResponse(data)
+    }
+
+    suspend fun getHistoryPaused(): Boolean = BiliHttpApi.getHistoryPaused(
+        sessData = authRepository.sessionData ?: error("账号未登录")
+    ).getResponseData()
+
+    suspend fun setHistoryPaused(paused: Boolean) {
+        BiliHttpApi.setHistoryPaused(
+            paused = paused,
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        ).requireSuccess()
+    }
+
+    suspend fun clearHistory() {
+        BiliHttpApi.clearHistory(
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        ).requireSuccess()
     }
 }

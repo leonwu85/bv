@@ -113,6 +113,7 @@ fun SearchResultScreen(
         SearchType.MediaFt -> searchResultViewModel.mediaFtSearchResult
         SearchType.BiliUser -> searchResultViewModel.biliUserSearchResult
         SearchType.LiveRoom -> searchResultViewModel.liveRoomSearchResult
+        SearchType.Article -> searchResultViewModel.articleSearchResult
     }
 
     var showFilter by remember { mutableStateOf(false) }
@@ -195,6 +196,7 @@ fun SearchResultScreen(
             SearchType.MediaBangumi, SearchType.MediaFt -> gridColumns + 2
             SearchType.BiliUser -> gridColumns - 1
             SearchType.LiveRoom -> gridColumns
+            SearchType.Article -> gridColumns
         }
     }
 
@@ -279,8 +281,10 @@ fun SearchResultScreen(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                val searchTypes = remember { SearchType.entries.filter { it != SearchType.LiveRoom } }
-                val allSearchTypes = remember { SearchType.entries.toList() }
+                val searchTypes = remember {
+                    SearchType.entries.filter { it != SearchType.LiveRoom && it != SearchType.Article }
+                }
+                val allSearchTypes = remember { SearchType.entries.filter { it != SearchType.Article } }
                 val visibleSearchTypes = if (Prefs.showLiveInSidebar) allSearchTypes else searchTypes
 
                 LaunchedEffect(visibleSearchTypes) {
@@ -401,6 +405,7 @@ fun SearchResultScreen(
                             SearchType.MediaFt -> searchResult.mediaFts
                             SearchType.BiliUser -> searchResult.biliUsers
                             SearchType.LiveRoom -> searchResult.liveRooms
+                            SearchType.Article -> searchResult.articles
                         }
 
                         if (items.isEmpty()) {
@@ -551,6 +556,7 @@ fun SearchType.getDisplayName(context: Context) = when (this) {
     SearchType.MediaFt -> context.getString(R.string.search_result_type_name_media_ft)
     SearchType.BiliUser -> context.getString(R.string.search_result_type_name_bili_user)
     SearchType.LiveRoom -> context.getString(R.string.search_result_type_name_live_room)
+    SearchType.Article -> context.getString(R.string.search_result_type_name_article)
 }
 
 @Composable

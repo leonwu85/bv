@@ -44,6 +44,8 @@ fun SmallVideoCard(
     modifier: Modifier = Modifier,
     data: VideoCardData,
     onClick: () -> Unit = {},
+    managementActionLabel: String? = null,
+    onManagementAction: (() -> Unit)? = null,
 ) {
     Card(
         modifier = modifier,
@@ -168,7 +170,11 @@ fun SmallVideoCard(
                         minLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    VideoCardMoreMenu(data = data)
+                    VideoCardMoreMenu(
+                        data = data,
+                        managementActionLabel = managementActionLabel,
+                        onManagementAction = onManagementAction
+                    )
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically

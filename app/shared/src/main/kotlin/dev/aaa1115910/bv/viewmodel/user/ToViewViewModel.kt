@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import dev.aaa1115910.biliapi.entity.ugc.toSmartDate
 import dev.aaa1115910.biliapi.http.entity.AuthFailureException
 import dev.aaa1115910.biliapi.repositories.ToViewRepository
+import dev.aaa1115910.biliapi.repositories.ToViewCleanType
 import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
@@ -39,6 +40,35 @@ class ToViewViewModel(
 
     var histories = mutableStateListOf<VideoCardData>()
     var noMore by mutableStateOf(false)
+
+    var searchQuery by mutableStateOf("")
+        private set
+    var selectedSort by mutableStateOf(ToViewSort.Default)
+        private set
+
+    val visibleHistories: List<VideoCardData>
+        get() {
+            val query = searchQuery.trim()
+            val filtered = if (query.isEmpty()) histories else histories.filter {
+                it.title.contains(query, ignoreCase = true) ||
+                    it.upName.contains(query, ignoreCase = true) ||
+                    it.bvid.contains(query, ignoreCase = true)
+            }
+            return when (selectedSort) {
+                ToViewSort.Default -> filtered
+                ToViewSort.LatestPublish -> filtered.sortedByDescending { it.pubTimeTimestamp ?: 0L }
+                ToViewSort.MostPlayed -> filtered.sortedByDescending { it.play ?: -1L }
+                ToViewSort.Title -> filtered.sortedBy { it.title.lowercase() }
+            }
+        }
+
+    fun updateSearchQuery(value: String) {
+        searchQuery = value
+    }
+
+    fun selectSort(value: ToViewSort) {
+        selectedSort = value
+    }
 
     private var cursor = 0L
     var updating by mutableStateOf(false)
@@ -86,6 +116,7 @@ class ToViewViewModel(
                             cover = toViewItem.cover,
                             play = toViewItem.play,
                             pubTime = toViewItem.pubdate.toSmartDate(),
+                            pubTimeTimestamp = toViewItem.pubdate,
                             upName = toViewItem.author,
                             upId = toViewItem.authorId,
                             upFace = toViewItem.authorFace,
@@ -133,7 +164,7 @@ class ToViewViewModel(
 
     fun deleteToView(avid: Long, targetIndex: Int) {
         viewModelScope.launch(Dispatchers.IO) {
-            deleting = true
+            withContext(Dispatchers.Main) { deleting = true }
             runCatching {
                 val success = ToViewRepository.deleteToView(avid)
                 if (success) {
@@ -179,12 +210,51 @@ class ToViewViewModel(
         pendingFocusIndex = -1
     }
 
+    var cleaning by mutableStateOf(false)
+        private set
+
+    fun clearToView(type: ToViewCleanType) {
+        if (cleaning) return
+        cleaning = true
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { ToViewRepository.clearToView(type) }
+                .onSuccess {
+                    withContext(Dispatchers.Main) {
+                        clearData()
+                        update()
+                        val message = when (type) {
+                            ToViewCleanType.All -> "稍后再看已清空"
+                            ToViewCleanType.Invalid -> "失效内容已清理"
+                            ToViewCleanType.Viewed -> "已观看内容已清理"
+                        }
+                        message.toast(BVApp.context)
+                    }
+                }
+                .onFailure {
+                    logger.fWarn { "Clear toview failed: ${it.stackTraceToString()}" }
+                    withContext(Dispatchers.Main) {
+                        (it.localizedMessage ?: "清理失败").toast(BVApp.context)
+                    }
+                }
+            withContext(Dispatchers.Main) { cleaning = false }
+        }
+    }
+
     fun clearData() {
         loadGeneration++
         histories.clear()
+        searchQuery = ""
+        selectedSort = ToViewSort.Default
         cursor = 0L
         noMore = false
         updating = false
         logger.fInfo { "ToView data cleared" }
     }
+}
+
+enum class ToViewSort {
+    Default,
+    LatestPublish,
+    MostPlayed,
+    Title
 }

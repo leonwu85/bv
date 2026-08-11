@@ -14,6 +14,7 @@ import androidx.compose.material.icons.outlined.ThumbDown
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
@@ -54,6 +55,8 @@ import org.koin.compose.koinInject
 fun VideoCardMoreMenu(
     modifier: Modifier = Modifier,
     data: VideoCardData,
+    managementActionLabel: String? = null,
+    onManagementAction: (() -> Unit)? = null,
     toViewRepository: ToViewRepository = koinInject(),
     likeRepository: LikeRepository = koinInject(),
     userRepository: UserRepository = koinInject(),
@@ -108,6 +111,16 @@ fun VideoCardMoreMenu(
         expanded = expanded,
         onDismissRequest = { expanded = false }
     ) {
+        if (managementActionLabel != null && onManagementAction != null) {
+            DropdownMenuItem(
+                text = { Text(text = managementActionLabel) },
+                leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onManagementAction()
+                }
+            )
+        }
         DropdownMenuItem(
             text = { Text(text = bvid.ifBlank { "未获取到 BV 号" }) },
             leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },

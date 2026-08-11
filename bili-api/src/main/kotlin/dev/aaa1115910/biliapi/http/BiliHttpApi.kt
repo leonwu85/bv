@@ -1490,6 +1490,52 @@ object BiliHttpApi {
         header("Cookie", "SESSDATA=$sessData;")
     }.body()
 
+    /** 获取观看历史是否已暂停记录。 */
+    suspend fun getHistoryPaused(
+        sessData: String
+    ): BiliResponse<Boolean> {
+        val response = client.get("/x/v2/history/shadow") {
+            parameter("jsonp", "jsonp")
+            header("Cookie", "SESSDATA=$sessData;")
+        }
+        // Ktor 无法稳定推导 BiliResponse<原始类型> 的序列化器，显式使用 Json 解码。
+        return json.decodeFromString(response.bodyAsText())
+    }
+
+    /** 暂停或恢复记录观看历史。 */
+    suspend fun setHistoryPaused(
+        paused: Boolean,
+        csrf: String,
+        sessData: String
+    ): BiliResponseWithoutData = client.post("/x/v2/history/shadow/set") {
+        header("Cookie", "SESSDATA=$sessData;")
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("switch", paused.toString())
+                    append("jsonp", "jsonp")
+                    append("csrf", csrf)
+                }
+            )
+        )
+    }.body()
+
+    /** 清空全部观看历史。 */
+    suspend fun clearHistory(
+        csrf: String,
+        sessData: String
+    ): BiliResponseWithoutData = client.post("/x/v2/history/clear") {
+        header("Cookie", "SESSDATA=$sessData;")
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("jsonp", "jsonp")
+                    append("csrf", csrf)
+                }
+            )
+        )
+    }.body()
+
     /**
      * 获取稍后再看列表
      */
@@ -1546,6 +1592,27 @@ object BiliHttpApi {
             FormDataContent(
                 Parameters.build {
                     append("resources", "$avid")
+                    append("csrf", csrf)
+                }
+            )
+        )
+    }.body()
+
+    /**
+     * 清理稍后再看。
+     *
+     * @param cleanType null：全部，1：失效内容，2：已观看内容
+     */
+    suspend fun clearToView(
+        cleanType: Int? = null,
+        csrf: String,
+        sessData: String
+    ): BiliResponseWithoutData = client.post("/x/v2/history/toview/clear") {
+        header("Cookie", "SESSDATA=$sessData;")
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    cleanType?.let { append("clean_type", it.toString()) }
                     append("csrf", csrf)
                 }
             )
@@ -1703,6 +1770,91 @@ object BiliHttpApi {
         parameter("platform", platform)
         accessKey?.let { parameter("access_key", it) }
         sessData?.let { header("Cookie", "SESSDATA=$it;") }
+    }.body()
+
+    /** 新建收藏夹。 */
+    suspend fun addFavoriteFolder(
+        title: String,
+        intro: String = "",
+        privacy: Int = 0,
+        cover: String = "",
+        csrf: String,
+        sessData: String
+    ): BiliResponseWithoutData = client.post("/x/v3/fav/folder/add") {
+        header("Cookie", "SESSDATA=$sessData;")
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("title", title)
+                    append("intro", intro)
+                    append("privacy", privacy.toString())
+                    append("cover", cover)
+                    append("csrf", csrf)
+                }
+            )
+        )
+    }.body()
+
+    /** 编辑收藏夹。 */
+    suspend fun editFavoriteFolder(
+        mediaId: Long,
+        title: String,
+        intro: String = "",
+        privacy: Int = 0,
+        cover: String = "",
+        csrf: String,
+        sessData: String
+    ): BiliResponseWithoutData = client.post("/x/v3/fav/folder/edit") {
+        header("Cookie", "SESSDATA=$sessData;")
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("media_id", mediaId.toString())
+                    append("title", title)
+                    append("intro", intro)
+                    append("privacy", privacy.toString())
+                    append("cover", cover)
+                    append("csrf", csrf)
+                }
+            )
+        )
+    }.body()
+
+    /** 删除一个或多个收藏夹。 */
+    suspend fun deleteFavoriteFolders(
+        mediaIds: List<Long>,
+        csrf: String,
+        sessData: String
+    ): BiliResponseWithoutData = client.post("/x/v3/fav/folder/del") {
+        require(mediaIds.isNotEmpty()) { "mediaIds cannot be empty" }
+        header("Cookie", "SESSDATA=$sessData;")
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("media_ids", mediaIds.joinToString(","))
+                    append("platform", "web")
+                    append("csrf", csrf)
+                }
+            )
+        )
+    }.body()
+
+    /** 清理收藏夹内已经失效的内容。 */
+    suspend fun cleanFavoriteFolder(
+        mediaId: Long,
+        csrf: String,
+        sessData: String
+    ): BiliResponseWithoutData = client.post("/x/v3/fav/resource/clean") {
+        header("Cookie", "SESSDATA=$sessData;")
+        setBody(
+            FormDataContent(
+                Parameters.build {
+                    append("media_id", mediaId.toString())
+                    append("platform", "web")
+                    append("csrf", csrf)
+                }
+            )
+        )
     }.body()
 
     /**
