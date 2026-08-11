@@ -1,6 +1,7 @@
 package dev.aaa1115910.bv.offline
 
 import android.net.Uri
+import android.os.Build
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import dev.aaa1115910.biliapi.entity.DashAudio
@@ -1094,7 +1095,12 @@ class OfflineVideoCacheService(
             val append = existingBytes > 0L && responseCode == HttpURLConnection.HTTP_PARTIAL
             if (!append) existingBytes = 0L
 
-            val contentLength = connection.contentLengthLong.takeIf { it > 0L } ?: 0L
+            val contentLength = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                connection.contentLengthLong
+            } else {
+                connection.getHeaderField("Content-Length")?.toLongOrNull()
+                    ?: connection.contentLength.toLong()
+            }.takeIf { it > 0L } ?: 0L
             val totalBytes = (contentLength + existingBytes).takeIf { it > 0L } ?: 0L
             var downloadedBytes = existingBytes
             updateState(
