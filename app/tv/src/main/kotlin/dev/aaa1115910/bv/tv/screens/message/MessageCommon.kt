@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens.message
 
-import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -30,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,6 +52,7 @@ internal fun TvMessageTopBar(
     actions: @Composable () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -61,7 +62,7 @@ internal fun TvMessageTopBar(
     ) {
         Button(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            onClick = { onBack?.invoke() ?: (context as? Activity)?.finish() }
+            onClick = { onBack?.invoke() ?: activity.finish() }
         ) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
             Spacer(modifier = Modifier.size(8.dp))

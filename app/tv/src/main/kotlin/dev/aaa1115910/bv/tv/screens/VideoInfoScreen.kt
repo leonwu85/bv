@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens
 
-import android.app.Activity
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -92,6 +91,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
@@ -231,11 +231,12 @@ fun VideoInfoScreen(
     userRepository: UserRepository = getKoin().get(),
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     val scope = rememberCoroutineScope()
     val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val heroContentColor = MaterialTheme.colorScheme.onSurface
     val heroSecondaryContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val intent = (context as Activity).intent
+    val intent = activity.intent
     val logger = KotlinLogging.logger { }
     val playButtonFocusRequester = remember { FocusRequester() }
     val lazyListState = rememberLazyListState()
@@ -599,7 +600,7 @@ fun VideoInfoScreen(
                                 seasonId = seasonId,
                                 proxyArea = proxyArea
                             )
-                            context.finish()
+                            activity.finish()
                         }
                     }.onFailure {
                         logger.fWarn { "Redirect failed: ${it.stackTraceToString()}" }
@@ -637,7 +638,7 @@ fun VideoInfoScreen(
                         }
 
                         // 检查Activity是否已经finish，如果已关闭则不启动播放器
-                        if (!context.isFinishing && !context.isDestroyed) {
+                        if (!activity.isFinishing && !activity.isDestroyed) {
                             launchPlayerActivity(
                                 context = context,
                                 avid = videoDetailViewModel.videoDetail!!.aid,
@@ -673,12 +674,12 @@ fun VideoInfoScreen(
                                 fromPlayer = false
                                 intent.removeExtra("fromPlayer")
                                 if (!showUGCVideoInfo) {
-                                    context.finish()
+                                    activity.finish()
                                 }
                             }
                         }
                         if (!fromPlayer) {
-                            context.finish()
+                            activity.finish()
                         }
                     }
                 }.onFailure {
@@ -710,7 +711,7 @@ fun VideoInfoScreen(
                                 seasonId = seasonId,
                                 proxyArea = ProxyArea.HongKong
                             )
-                            context.finish()
+                            activity.finish()
                         } ?: let {
                             withContext(Dispatchers.Main) {
                                 tip = "视频不存在"
@@ -742,7 +743,7 @@ fun VideoInfoScreen(
                         epId = it.epid,
                         proxyArea = proxyArea
                     )
-                    context.finish()
+                    activity.finish()
                 }.onFailure {
                     logger.fWarn { "Redirect failed: ${it.stackTraceToString()}" }
                 }

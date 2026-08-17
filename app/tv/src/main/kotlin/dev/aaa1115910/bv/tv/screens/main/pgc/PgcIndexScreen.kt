@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens.main.pgc
 
-import android.app.Activity
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -39,6 +38,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,6 +71,7 @@ fun PgcIndexScreen(
     pgcIndexViewModel: PgcIndexViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger { }
 
@@ -117,7 +118,7 @@ fun PgcIndexScreen(
     }
 
     LaunchedEffect(Unit) {
-        val intent = (context as Activity).intent
+        val intent = activity.intent
         val pgcType = runCatching {
             PgcType.entries[intent.getIntExtra("pgcType", 0)]
         }.onFailure {

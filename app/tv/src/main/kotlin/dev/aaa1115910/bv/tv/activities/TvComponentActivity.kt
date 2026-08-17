@@ -8,6 +8,7 @@ import android.view.SurfaceView
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent as setComposeContent
 import androidx.activity.setViewTreeOnBackPressedDispatcherOwner
 import androidx.annotation.RequiresApi
@@ -46,14 +47,22 @@ abstract class TvComponentActivity : ComponentActivity() {
             Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
             pipeline.renderPath == TvUiRenderPath.Native
         ) {
-            setComposeContent(content = content)
+            setNativeComposeContent(content)
             return
         }
 
         uiSurfaceHost = TvUiSurfaceHost(
             activity = this,
-            onFallback = { setComposeContent(content = content) },
+            onFallback = { setNativeComposeContent(content) },
         ).also { it.attach(content) }
+    }
+
+    private fun setNativeComposeContent(content: @Composable () -> Unit) {
+        setComposeContent {
+            CompositionLocalProvider(LocalActivity provides this@TvComponentActivity) {
+                content()
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -103,7 +112,10 @@ private class TvUiSurfaceHost(
                     isFocusable = true
                     isFocusableInTouchMode = true
                     setContent {
-                        CompositionLocalProvider(LocalTvUiSurfaceEmbedded provides true) {
+                        CompositionLocalProvider(
+                            LocalActivity provides activity,
+                            LocalTvUiSurfaceEmbedded provides true,
+                        ) {
                             content()
                         }
                     }

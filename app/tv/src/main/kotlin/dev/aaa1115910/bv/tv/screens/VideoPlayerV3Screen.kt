@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens
 
-import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
@@ -49,6 +48,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
@@ -137,6 +137,7 @@ fun VideoPlayerV3Screen(
     liveRepository: LiveRepository = getKoin().get(),
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger { }
 
@@ -273,7 +274,7 @@ fun VideoPlayerV3Screen(
         playerViewModel.dismissInteractiveOptionDialog()
         Prefs.currentPlaySpeed = Prefs.defaultPlaySpeed
         PlayedAidsCache.clear()
-        (context as Activity).finish()
+        activity.finish()
     }
 
     fun findNextEpisode(): VideoListItemData? {
@@ -685,7 +686,7 @@ fun VideoPlayerV3Screen(
                                     playerViewModel.saveSubtitleSmartDisplayPreferenceIfNeeded()
                                     // 自动退出时也清空缓存
                                     PlayedAidsCache.clear()
-                                    (context as Activity).finish()
+                                    activity.finish()
                                 }
                             } catch (_: Exception) {
                                 autoActionTipVisible = false
@@ -700,7 +701,7 @@ fun VideoPlayerV3Screen(
                     Prefs.currentPlaySpeed = Prefs.defaultPlaySpeed
                     // 退出时清空播放缓存
                     PlayedAidsCache.clear()
-                    (context as Activity).finish()
+                    activity.finish()
                 },
                 onLoadNewVideo = { videoListItem ->
                     when (videoListItem) {

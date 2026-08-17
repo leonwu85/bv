@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens.message
 
-import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -69,6 +69,7 @@ fun InboxScreen(
     viewModel: InboxViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     val listState = rememberLazyListState()
     var showClearDialog by remember { mutableStateOf(false) }
     var showDeleteListDialog by remember { mutableStateOf(false) }
@@ -80,7 +81,7 @@ fun InboxScreen(
     }
 
     BackHandler {
-        (context as? Activity)?.finish()
+        activity.finish()
     }
 
     if (showClearDialog) {

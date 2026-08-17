@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens.search
 
-import android.app.Activity
 import android.content.Context
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -50,6 +49,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -98,6 +98,7 @@ fun SearchResultScreen(
     searchResultViewModel: SearchResultViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger { }
     val tabRowFocusRequester = remember { FocusRequester() }
@@ -177,15 +178,15 @@ fun SearchResultScreen(
     }
 
     LaunchedEffect(Unit) {
-        val intent = (context as Activity).intent
+        val intent = activity.intent
         if (intent.hasExtra("keyword")) {
             searchKeyword = intent.getStringExtra("keyword") ?: ""
             val enableProxy = intent.getBooleanExtra("enableProxy", false)
-            if (searchKeyword == "") context.finish()
+            if (searchKeyword == "") activity.finish()
             searchResultViewModel.enableProxySearchResult = enableProxy
             searchResultViewModel.keyword = searchKeyword
         } else {
-            context.finish()
+            activity.finish()
         }
     }
 

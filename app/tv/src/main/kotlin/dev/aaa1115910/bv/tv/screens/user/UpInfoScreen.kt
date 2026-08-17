@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens.user
 
-import android.app.Activity
 import android.content.res.Configuration
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -71,6 +70,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -142,6 +142,7 @@ fun UpSpaceScreen(
     userRepository: UserRepository = getKoin().get(),
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger { }
     var selectedTab by remember { mutableStateOf(TvUpSpaceTab.Home) }
@@ -180,7 +181,7 @@ fun UpSpaceScreen(
     val followStateMap by FollowStateManager.followStateMap.collectAsState()
 
     LaunchedEffect(Unit) {
-        val intent = (context as Activity).intent
+        val intent = activity.intent
         if (intent.hasExtra("mid")) {
             val mid = intent.getLongExtra("mid", 0)
             val name = intent.getStringExtra("name").orEmpty()
@@ -191,7 +192,7 @@ fun UpSpaceScreen(
             userSpaceViewModel.selectTab(UserSpaceTab.Home)
             focusHomeTabWithoutScrolling()
         } else {
-            context.finish()
+            activity.finish()
         }
     }
 

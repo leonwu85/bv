@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens
 
-import android.app.Activity
 import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
 import android.os.Build
@@ -74,6 +73,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -224,8 +224,9 @@ fun SeasonInfoScreen(
     seasonViewModel: SeasonViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     val scope = rememberCoroutineScope()
-    val intent = (context as Activity).intent
+    val intent = activity.intent
     val logger = KotlinLogging.logger { }
 
     var paused by remember { mutableStateOf(false) }
@@ -338,7 +339,7 @@ fun SeasonInfoScreen(
                 seasonViewModel.updateSeasonData()
             }
         } else {
-            context.finish()
+            activity.finish()
         }
     }
 

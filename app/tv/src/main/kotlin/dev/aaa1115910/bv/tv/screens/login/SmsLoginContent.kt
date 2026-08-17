@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens.login
 
-import android.app.Activity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -49,6 +49,7 @@ fun SmsLoginContent(
     smsLoginViewModel: SmsLoginViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     val scope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -100,7 +101,7 @@ fun SmsLoginContent(
         scope.launch(Dispatchers.IO) {
             try {
                 smsLoginViewModel.loginWithSms(code) {
-                    (context as Activity).finish()
+                    activity.finish()
                 }
             } finally {
                 withContext(Dispatchers.Main) { loggingIn = false }

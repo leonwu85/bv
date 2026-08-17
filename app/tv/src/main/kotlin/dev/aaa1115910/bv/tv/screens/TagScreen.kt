@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens
 
-import android.app.Activity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,6 +42,7 @@ fun TagScreen(
     tagViewModel: TagViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     var currentIndex by remember { mutableIntStateOf(0) }
     val showLargeTitle by remember { derivedStateOf { currentIndex < 4 } }
     val titleFontSize by animateFloatAsState(
@@ -50,7 +51,7 @@ fun TagScreen(
     )
 
     LaunchedEffect(Unit) {
-        val intent = (context as Activity).intent
+        val intent = activity.intent
         if (intent.hasExtra("tagId")) {
             val tagId = intent.getIntExtra("tagId", 0)
             val tagName = intent.getStringExtra("tagName") ?: ""
@@ -58,7 +59,7 @@ fun TagScreen(
             tagViewModel.tagName = tagName
             tagViewModel.update()
         } else {
-            context.finish()
+            activity.finish()
         }
     }
 

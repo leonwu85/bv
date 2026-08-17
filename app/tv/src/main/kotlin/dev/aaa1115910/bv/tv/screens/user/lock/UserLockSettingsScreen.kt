@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens.user.lock
 
-import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +26,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
@@ -47,6 +47,7 @@ fun UserLockSettingsScreen(
     userRepository: UserRepository = getKoin().get()
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger("UserLockSettingsScreen")
 
@@ -62,15 +63,15 @@ fun UserLockSettingsScreen(
     }
 
     LaunchedEffect(Unit) {
-        val intent = (context as Activity).intent
+        val intent = activity.intent
         if (intent.hasExtra("uid")) {
             val uid = intent.getLongExtra("uid", 0)
             userRepository.findUserByUid(uid)
                 ?.let { user = it }
-                ?: let { context.finish() }
+                ?: let { activity.finish() }
             logger.debug { "user $uid lock: ${user.lock}" }
         } else {
-            context.finish()
+            activity.finish()
         }
     }
 
@@ -80,11 +81,11 @@ fun UserLockSettingsScreen(
         onUpdateUser = {
             scope.launch {
                 userRepository.updateUser(it)
-                (context as Activity).finish()
+                activity.finish()
             }
         },
         onExit = {
-            (context as Activity).finish()
+            activity.finish()
         }
     )
 }

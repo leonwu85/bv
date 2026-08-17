@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens
 
-import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
@@ -51,6 +50,7 @@ import dev.aaa1115910.bv.tv.util.TvPreloadCoordinator
 import dev.aaa1115910.bv.tv.util.drawerNavItemsFlow
 import dev.aaa1115910.bv.tv.util.parseDrawerItemsOrder
 import dev.aaa1115910.bv.tv.util.rememberTvUiPerformanceProfile
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import dev.aaa1115910.bv.update.AutoUpdateChecker
 import dev.aaa1115910.bv.update.AutoUpdateInfo
 import dev.aaa1115910.bv.util.Prefs
@@ -73,6 +73,7 @@ fun MainScreen(
     userViewModel: UserViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     val logger = KotlinLogging.logger("MainScreen")
     val performanceProfile = rememberTvUiPerformanceProfile()
     val preloadCoordinator = remember { TvPreloadCoordinator() }
@@ -161,7 +162,7 @@ fun MainScreen(
         val now = System.currentTimeMillis()
         if (now - lastPressBack < 1500) {
             logger.fInfo { "Exiting Bv Video" }
-            (context as Activity).finish()
+            activity.finish()
         } else {
             lastPressBack = now
             R.string.home_press_back_again_to_exit.toast(context)

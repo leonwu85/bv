@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens
 
-import android.app.Activity
 import android.content.res.Configuration
 import android.graphics.BitmapFactory
 import androidx.compose.animation.core.animateIntAsState
@@ -33,6 +32,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -52,6 +52,7 @@ fun RegionBlockScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     var qrImage by remember { mutableStateOf(ImageBitmap(1, 1, ImageBitmapConfig.Argb8888)) }
     val primaryColorHex =
         "#" + MaterialTheme.colorScheme.surface.toArgb().toHexString().substring(2)
@@ -84,7 +85,7 @@ fun RegionBlockScreen(
 
     DisposableEffect(key1 = Unit) {
         onDispose {
-            (context as Activity).finish()
+            activity.finish()
             exitProcess(0)
         }
     }
@@ -93,7 +94,7 @@ fun RegionBlockScreen(
         modifier = modifier
             .focusable()
             .onKeyEvent {
-                (context as Activity).finish()
+                activity.finish()
                 exitProcess(0)
             },
         shape = RoundedCornerShape(0.dp)

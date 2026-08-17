@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens.message
 
-import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -48,6 +48,7 @@ fun ContactScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     val remoteUserRepository: RemoteUserRepository = koinInject()
     val accountRepository: AccountRepository = koinInject()
     val viewModel: ContactViewModel = viewModel(
@@ -66,7 +67,7 @@ fun ContactScreen(
     val refresh = if (isFollowingTab) viewModel::refreshFollowing else viewModel::refreshFans
 
     BackHandler {
-        (context as? Activity)?.finish()
+        activity.finish()
     }
 
     androidx.compose.material3.Scaffold(

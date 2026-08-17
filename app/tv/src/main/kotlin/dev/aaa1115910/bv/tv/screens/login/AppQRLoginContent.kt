@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens.login
 
-import android.app.Activity
 import android.view.KeyEvent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.focusable
@@ -23,6 +22,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -48,6 +48,7 @@ fun AppQRLoginContent(
     appQrLoginViewModel: AppQrLoginViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     var refreshCountdown by remember { mutableIntStateOf(TvQrRefreshCountdownSeconds) }
     val qrVisible = listOf(QrLoginState.WaitingForScan, QrLoginState.WaitingForConfirm)
         .contains(appQrLoginViewModel.state) && appQrLoginViewModel.loginUrl.isNotBlank()
@@ -82,7 +83,7 @@ fun AppQRLoginContent(
         when (appQrLoginViewModel.state) {
             QrLoginState.Success -> {
                 R.string.login_success.toast(context)
-                (context as Activity).finish()
+                activity.finish()
             }
 
             QrLoginState.Expired -> {

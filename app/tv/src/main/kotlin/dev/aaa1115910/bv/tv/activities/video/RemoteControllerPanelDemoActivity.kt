@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.activities.video
 
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -10,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import dev.aaa1115910.bv.tv.component.RemoteControlPanelDemo
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.ui.theme.BVTheme
@@ -108,7 +108,8 @@ fun RemoteControllerPanelDemoScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val intent = (context as Activity).intent
+    val activity = requireTvActivity()
+    val intent = activity.intent
 
     val continueToPlayerV3 = {
         Prefs.showedRemoteControllerPanelDemo = true
@@ -139,7 +140,7 @@ fun RemoteControllerPanelDemoScreen(
                 audioOnlyMode = intent.getBooleanExtra("audioOnlyMode", false)
             )
         }
-        context.finish()
+        activity.finish()
     }
 
     RemoteControlPanelDemo(

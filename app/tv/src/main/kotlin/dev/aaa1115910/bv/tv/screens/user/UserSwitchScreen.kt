@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens.user
 
-import android.app.Activity
 import android.content.Intent
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
@@ -46,6 +45,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -91,6 +91,7 @@ fun UserSwitchScreen(
     userRepository: UserRepository = getKoin().get()
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -137,7 +138,7 @@ fun UserSwitchScreen(
                 onDeleteUser = { user ->
                     scope.launch(Dispatchers.IO) {
                         userSwitchViewModel.deleteUser(user)
-                        if (userList.isEmpty()) (context as Activity).finish()
+                        if (userList.isEmpty()) activity.finish()
                     }
                 },
                 onSwitchUser = { user ->
@@ -147,7 +148,7 @@ fun UserSwitchScreen(
                     } else {
                         scope.launch(Dispatchers.IO) {
                             userSwitchViewModel.switchUser(user)
-                            (context as Activity).finish()
+                            activity.finish()
                         }
                     }
                 },
@@ -164,7 +165,7 @@ fun UserSwitchScreen(
                     onUnlockSuccess = { user ->
                         scope.launch(Dispatchers.IO) {
                             userSwitchViewModel.switchUser(user)
-                            (context as Activity).finish()
+                            activity.finish()
                         }
                     },
                     onCancel = {

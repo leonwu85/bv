@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens.message
 
-import android.app.Activity
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -56,6 +55,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.buildAnnotatedString
@@ -90,6 +90,7 @@ fun ConversationScreen(
     viewModel: ConversationViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     val listState = rememberLazyListState()
     var input by remember { mutableStateOf("") }
     var showEmotePicker by remember { mutableStateOf(false) }
@@ -125,7 +126,7 @@ fun ConversationScreen(
     }
 
     BackHandler {
-        (context as? Activity)?.finish()
+        activity.finish()
     }
 
     if (showEmotePicker) {

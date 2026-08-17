@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens
 
-import android.app.Activity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -8,6 +7,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import dev.aaa1115910.bv.player.entity.DefaultStartPosition
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerDanmakuMasksData
@@ -42,6 +42,7 @@ fun OfflineVideoPlayerScreen(
     playerViewModel: VideoPlayerV3ViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     val scope = rememberCoroutineScope()
     val videoPlayer = playerViewModel.videoPlayer ?: return
 
@@ -140,7 +141,7 @@ fun OfflineVideoPlayerScreen(
                 onNearEnd = {},
                 onLoadNextVideo = { playPlaylistOffset(1) },
                 onLoadPrevVideo = { playPlaylistOffset(-1) },
-                onExit = { (context as Activity).finish() },
+                onExit = { activity.finish() },
                 onLoadNewVideo = { item ->
                     val video = item as? VideoListItemData ?: return@BvPlayer
                     val cid = video.cid ?: return@BvPlayer

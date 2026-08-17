@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens.message
 
-import android.app.Activity
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -38,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -70,6 +70,7 @@ fun MessageFeedScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val activity = requireTvActivity()
     val listState = rememberLazyListState()
     val messageRepository: MessageRepository = koinInject()
     val userRepository: UserRepository = koinInject()
@@ -90,7 +91,7 @@ fun MessageFeedScreen(
     }
 
     BackHandler {
-        (context as? Activity)?.finish()
+        activity.finish()
     }
 
     pendingDelete?.let { item ->
