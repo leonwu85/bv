@@ -2,6 +2,7 @@ package dev.aaa1115910.bv.network
 
 import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.network.entity.Release
+import dev.aaa1115910.bv.util.NonReportableException
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
 import io.ktor.client.content.ProgressListener
@@ -23,13 +24,19 @@ import io.ktor.util.cio.writeChannel
 import io.ktor.utils.io.copyAndClose
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.TimeUnit
 
+class GithubRateLimitException(message: String) :
+    IllegalStateException(message),
+    NonReportableException
+
 object GithubApi {
+    const val RELEASES_URL = "https://github.com/leonwu85/bv/releases"
+
     private var endPoint = "api.github.com"
     private const val OWNER = "leonwu85"
     private const val REPO = "bv"
@@ -118,11 +125,18 @@ object GithubApi {
     suspend fun getLatestBuild(): Release =
         if (isAlpha) getLatestPreReleaseBuild() else getLatestReleaseBuild()
 
-    private fun checkErrorMessage(data: String) {
+    internal fun checkErrorMessage(data: String) {
         val responseElement = json.parseToJsonElement(data)
         if (responseElement !is JsonObject) return
-        val responseObject = responseElement.jsonObject
-        check(responseObject.size != 2 && responseObject["message"] == null) { responseObject["message"]!!.jsonPrimitive.content }
+        val message = responseElement["message"]
+            ?.jsonPrimitive
+            ?.contentOrNull
+            ?: return
+
+        if (message.contains("rate limit", ignoreCase = true)) {
+            throw GithubRateLimitException(message)
+        }
+        throw IllegalStateException(message)
     }
 
     /**

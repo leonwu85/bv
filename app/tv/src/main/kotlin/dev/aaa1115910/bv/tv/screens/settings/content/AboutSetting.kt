@@ -31,7 +31,9 @@ import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.BuildConfig
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.component.settings.GithubRateLimitContent
 import dev.aaa1115910.bv.network.GithubApi
+import dev.aaa1115910.bv.network.GithubRateLimitException
 import dev.aaa1115910.bv.network.entity.Release
 import dev.aaa1115910.bv.tv.component.settings.ChangelogDialog
 import dev.aaa1115910.bv.tv.component.settings.UpdateDialog
@@ -39,6 +41,8 @@ import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.toast
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlin.runCatching
 
@@ -68,8 +72,10 @@ fun AboutSetting(
     var isManualCheck by remember { mutableStateOf(false) }
     var showChangelogDialog by remember { mutableStateOf(false) }
     var showTestResultDialog by remember { mutableStateOf(false) }
+    var showGithubRateLimitDialog by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf("") }
+    val githubRateLimitDialogFocusRequester = remember { FocusRequester() }
 
     val checkUpdate: (Boolean) -> Unit = { manual ->
         isManualCheck = manual
@@ -99,8 +105,15 @@ fun AboutSetting(
                     updateState = UpdateCheckState.HasUpdate
                 }
             }.onFailure {
+                if (it is CancellationException) throw it
                 updateState = UpdateCheckState.CheckError
-                errorMessage = it.message ?: "检查更新失败"
+                if (it is GithubRateLimitException) {
+                    errorMessage = context.getString(R.string.github_rate_limit_toast)
+                    R.string.github_rate_limit_toast.toast(context)
+                    showGithubRateLimitDialog = true
+                } else {
+                    errorMessage = it.message ?: "检查更新失败"
+                }
             }
         }
     }
@@ -117,6 +130,12 @@ fun AboutSetting(
             // HasUpdate 状态会切换到 Button，需要重新请求焦点
             kotlinx.coroutines.delay(100)
             buttonFocusRequester.requestFocus(scope)
+        }
+    }
+
+    LaunchedEffect(showGithubRateLimitDialog) {
+        if (showGithubRateLimitDialog) {
+            githubRateLimitDialogFocusRequester.requestFocus(scope)
         }
     }
 
@@ -282,6 +301,29 @@ fun AboutSetting(
         release = latestRelease,
         onHideDialog = { showChangelogDialog = false }
     )
+
+    if (showGithubRateLimitDialog) {
+        TvAlertDialog(
+            title = {
+                Text(stringResource(R.string.github_rate_limit_dialog_title))
+            },
+            text = {
+                GithubRateLimitContent(
+                    text = { Text(it) },
+                    qrSize = 240.dp,
+                )
+            },
+            onDismissRequest = { showGithubRateLimitDialog = false },
+            confirmButton = {
+                OutlinedButton(
+                    modifier = Modifier.focusRequester(githubRateLimitDialogFocusRequester),
+                    onClick = { showGithubRateLimitDialog = false },
+                ) {
+                    Text(stringResource(R.string.github_rate_limit_dialog_close))
+                }
+            },
+        )
+    }
 
     // 测试结果对话框（调试模式）
     if (BuildConfig.DEBUG && showTestResultDialog) {

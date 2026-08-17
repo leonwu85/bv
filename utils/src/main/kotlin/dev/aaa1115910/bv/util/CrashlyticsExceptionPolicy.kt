@@ -8,6 +8,9 @@ import java.util.concurrent.CancellationException
 
 private const val MAX_CAUSE_CHAIN_DEPTH = 32
 
+/** Marker for expected failures that should stay in local logs and out of Crashlytics. */
+interface NonReportableException
+
 /** Returns whether this failure, or one of its causes, is a recoverable connectivity error. */
 fun Throwable.isExpectedNetworkFailure(): Boolean = anyCause { error ->
     error is UnknownHostException ||
@@ -20,8 +23,14 @@ internal fun Throwable.isCancellationFailure(): Boolean = anyCause { error ->
     error is CancellationException
 }
 
+fun Throwable.isNonReportableFailure(): Boolean = anyCause { error ->
+    error is NonReportableException
+}
+
 internal fun Throwable.shouldRecordAsNonFatal(): Boolean =
-    !isCancellationFailure() && !isExpectedNetworkFailure()
+    !isCancellationFailure() &&
+        !isExpectedNetworkFailure() &&
+        !isNonReportableFailure()
 
 private inline fun Throwable.anyCause(predicate: (Throwable) -> Boolean): Boolean {
     var current: Throwable? = this

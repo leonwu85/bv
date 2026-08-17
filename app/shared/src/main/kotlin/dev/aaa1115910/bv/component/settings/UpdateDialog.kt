@@ -39,6 +39,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
@@ -48,17 +49,22 @@ import androidx.core.content.FileProvider
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.ProvideTextStyle
 import dev.aaa1115910.bv.BuildConfig
+import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.network.GithubApi
+import dev.aaa1115910.bv.network.GithubRateLimitException
 import dev.aaa1115910.bv.network.entity.Release
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.fException
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.toMBString
+import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 import kotlin.runCatching
@@ -113,8 +119,16 @@ fun UpdateDialog(
                 }
             }.onFailure {
                 if (it is CancellationException) throw it
-                logger.fException(it) { "Failed to get latest version" }
-                updateStatus = UpdateStatus.CheckError
+                if (it is GithubRateLimitException) {
+                    logger.warn { "GitHub API rate limit reached while checking for updates" }
+                    withContext(Dispatchers.Main) {
+                        R.string.github_rate_limit_toast.toast(context)
+                        updateStatus = UpdateStatus.RateLimited
+                    }
+                } else {
+                    logger.fException(it) { "Failed to get latest version" }
+                    updateStatus = UpdateStatus.CheckError
+                }
             }.onSuccess {
                 logger.fInfo { "Find latest version ${latestReleaseBuild!!.name}" }
                 updateStatus = UpdateStatus.Ready
@@ -212,9 +226,17 @@ private fun UpdateDialogContent(
     val configuration = LocalConfiguration.current
     val maxHeight = (configuration.screenHeightDp * 0.8).dp
     val weight = (configuration.screenWidthDp * 0.67).dp
+    val qrSize = (configuration.screenWidthDp * 0.4f).coerceIn(160f, 240f).dp
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
     val confirmButtonFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(updateStatus) {
+        if (updateStatus == UpdateStatus.RateLimited) {
+            delay(100)
+            confirmButtonFocusRequester.requestFocus()
+        }
+    }
 
     AlertDialog(
         modifier = modifier
@@ -233,6 +255,7 @@ private fun UpdateDialogContent(
                         UpdateStatus.Installing -> "安装中"
                         UpdateStatus.NoAvailableUpdate -> "无可用更新${if(latestReleaseBuild?.name.isNullOrEmpty()) "" else " | 线上最新 ${latestReleaseBuild.name}"}"
                         UpdateStatus.CheckError -> "检查更新失败"
+                        UpdateStatus.RateLimited -> stringResource(R.string.github_rate_limit_dialog_title)
                         UpdateStatus.DownloadError -> "下载失败"
                         UpdateStatus.InstallError -> "安装失败"
                     }
@@ -291,13 +314,17 @@ private fun UpdateDialogContent(
                     UpdateStatus.DownloadError -> text("下载失败")
                     UpdateStatus.InstallError -> text("安装失败")
                     UpdateStatus.CheckError -> text("获取更新信息失败")
+                    UpdateStatus.RateLimited -> GithubRateLimitContent(
+                        text = text,
+                        qrSize = qrSize,
+                    )
                     UpdateStatus.NoAvailableUpdate -> text(latestReleaseBuild?.body ?: "真没更新，骗你是小狗！")
                 }
             }
         },
         confirmButton = {
             when (updateStatus) {
-                UpdateStatus.UpdatingInfo, UpdateStatus.NoAvailableUpdate, UpdateStatus.Downloading, UpdateStatus.Installing -> {}
+                UpdateStatus.UpdatingInfo, UpdateStatus.NoAvailableUpdate, UpdateStatus.Downloading, UpdateStatus.Installing, UpdateStatus.RateLimited -> {}
 
                 UpdateStatus.Ready -> {
                     Box(modifier = Modifier.focusRequester(confirmButtonFocusRequester)) {
@@ -328,6 +355,7 @@ private fun UpdateDialogContent(
                             UpdateStatus.Ready -> "打死不更"
                             UpdateStatus.NoAvailableUpdate -> "走了走了"
                             UpdateStatus.CheckError, UpdateStatus.DownloadError, UpdateStatus.InstallError -> "算了算了"
+                            UpdateStatus.RateLimited -> stringResource(R.string.github_rate_limit_dialog_close)
                             UpdateStatus.Downloading, UpdateStatus.Installing -> "你已经无路可逃！"
                         }
                     )
@@ -340,7 +368,7 @@ private fun UpdateDialogContent(
 
 enum class UpdateStatus {
     UpdatingInfo, Ready, Downloading, Installing,
-    NoAvailableUpdate, CheckError, DownloadError, InstallError
+    NoAvailableUpdate, CheckError, RateLimited, DownloadError, InstallError
 }
 
 private class UpdateStatusProvider : PreviewParameterProvider<UpdateStatus> {

@@ -356,6 +356,12 @@
     <string name="settings_version_check_update_button">爷要更新</string>
     <string name="settings_version_current_version">当前版本: %1$s</string>
     <string name="settings_version_latest_version">最新版本: %1$s</string>
+    <string name="github_rate_limit_toast">GitHub API 请求受限，请前往 GitHub 下载</string>
+    <string name="github_rate_limit_dialog_title">GitHub 请求受限</string>
+    <string name="github_rate_limit_dialog_message">当前设备的 GitHub API 未认证请求已达限额。请使用手机扫描二维码，前往 GitHub Releases 页面下载最新版。</string>
+    <string name="github_rate_limit_dialog_url">github.com/leonwu85/bv/releases</string>
+    <string name="github_rate_limit_qr_content_description">前往 BV GitHub Releases 页面的二维码</string>
+    <string name="github_rate_limit_dialog_close">关闭</string>
 
     <string name="sms_login_button_login">登录</string>
     <string name="sms_login_button_send_sms">发送短信</string>

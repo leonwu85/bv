@@ -46,6 +46,7 @@ import java.io.ByteArrayOutputStream
 fun QrImage(
     modifier: Modifier = Modifier,
     content: String,
+    contentDescription: String? = null,
     borderWidth: Dp = 24.dp,
     shape: Shape = MaterialTheme.shapes.large,
     showLoadingWhenContentChanged: Boolean = true
@@ -85,7 +86,7 @@ fun QrImage(
                     .fillMaxSize()
                     .padding(borderWidth),
                 bitmap = qrImage,
-                contentDescription = null
+                contentDescription = contentDescription
             )
         } else {
             LoadingIndicator(
