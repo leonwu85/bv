@@ -59,6 +59,7 @@ import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.viewmodel.UserViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -210,6 +211,7 @@ fun MainScreen(
         }.onSuccess { updateInfo ->
             autoUpdateInfo = updateInfo
         }.onFailure {
+            if (it is CancellationException) throw it
             logger.warn(it) { "Auto update check failed" }
         }
     }
@@ -221,6 +223,7 @@ fun MainScreen(
                 requestDrawerFocus(displayedDrawerItem)
             }
         }.onFailure {
+            if (it is CancellationException) throw it
             logger.fException(it) { "request default focus requester failed" }
         }
     }

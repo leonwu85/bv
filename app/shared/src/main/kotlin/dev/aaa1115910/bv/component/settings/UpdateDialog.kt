@@ -55,6 +55,7 @@ import dev.aaa1115910.bv.util.fException
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.toMBString
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -111,6 +112,7 @@ fun UpdateDialog(
                     return@launch
                 }
             }.onFailure {
+                if (it is CancellationException) throw it
                 logger.fException(it) { "Failed to get latest version" }
                 updateStatus = UpdateStatus.CheckError
             }.onSuccess {
@@ -158,6 +160,7 @@ fun UpdateDialog(
                 }
                 if (show) installUpdate(tempFile)
             }.onFailure {
+                if (it is CancellationException) throw it
                 logger.fException(it) { "Failed to download update" }
                 updateStatus = UpdateStatus.DownloadError
             }

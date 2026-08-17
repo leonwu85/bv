@@ -19,7 +19,7 @@ object FirebaseUtil {
     }
 
     fun recordException(throwable: Throwable) {
-        if (!initialized) return
+        if (!initialized || !throwable.shouldRecordAsNonFatal()) return
         Firebase.crashlytics.recordException(throwable)
     }
 
