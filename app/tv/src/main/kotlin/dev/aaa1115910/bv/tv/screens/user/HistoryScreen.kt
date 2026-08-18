@@ -70,6 +70,7 @@ import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.viewmodel.user.HistoryViewModel
 import org.koin.androidx.compose.koinViewModel
@@ -82,7 +83,6 @@ fun HistoryScreen(
     lazyGridState: LazyGridState = rememberLazyGridState()
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     var currentIndex by remember { mutableIntStateOf(0) }
     val showLargeTitle by remember { derivedStateOf { currentIndex < 4 } }
     val titleFontSize by animateFloatAsState(
@@ -171,7 +171,7 @@ fun HistoryScreen(
         withFrameNanos { }
         withFrameNanos { }
         // 必须与 itemsIndexed / DisposableEffect 注册的 key 完全一致
-        focusRequesters[historyItemKey(targetHistory, targetIndex)]?.requestFocus(scope)
+        focusRequesters[historyItemKey(targetHistory, targetIndex)]?.requestFocusWithRetry()
         shouldFocusEmptyState = false
         pendingRestoreFocusIndex = -1
     }
@@ -189,7 +189,7 @@ fun HistoryScreen(
         if (!shouldFocusEmptyState || historyViewModel.histories.isNotEmpty()) return@LaunchedEffect
         withFrameNanos { }
         withFrameNanos { }
-        emptyFocusRequester.requestFocus(scope)
+        emptyFocusRequester.requestFocusWithRetry()
     }
 
     LaunchedEffect(
@@ -487,7 +487,7 @@ private fun HistoryMenuDialog(
     LaunchedEffect(show) {
         if (show) {
             hasFocused = false
-            dummyFocusRequester.requestFocus(scope)
+            dummyFocusRequester.requestFocusWithRetry()
         }
     }
 

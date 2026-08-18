@@ -36,13 +36,13 @@ import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -92,12 +92,7 @@ import coil.compose.AsyncImage
 import dev.aaa1115910.bv.player.tv.theme.PlayerColors
 import dev.aaa1115910.bv.util.formatHourMinSec
 import dev.aaa1115910.bv.util.ifElse
-import dev.aaa1115910.bv.util.requestFocus
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -130,11 +125,6 @@ private val ControllerActionButtonHeight = 26.dp
 private val ControllerFunctionButtonSize = 36.dp
 private val ControllerMinInfoButtonHeight = 24.dp
 private val ControllerMinActionButtonHeight = 22.dp
-
-private class ControllerBottomBarAutoHideState {
-    var hideVideoInfoJob: Job? = null
-    var pauseAutoHide: Boolean = false
-}
 
 private fun Modifier.controllerButtonIconSize(
     scale: Float = 1f,
@@ -278,9 +268,9 @@ fun ControllerBottomBar(
     onReportLiveHistory: () -> Unit = {},
     liveIncognitoMode: Boolean = false,
 ) {
-    val scope = rememberCoroutineScope()
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
     val isLive = videoPlayerConfigData.isLive
+    val currentOnHideInfo by rememberUpdatedState(onHideInfo)
 
     // 根据播放列表位置决定上/下一集按钮可见性
     val videoList = videoPlayerConfigData.availableVideoList
@@ -289,7 +279,8 @@ fun ControllerBottomBar(
     val showPrevVideoBtn = currentIndex > 0
     val showNextVideoBtn = currentIndex in 0 until videoList.size - 1
 
-    val autoHideState = remember { ControllerBottomBarAutoHideState() }
+    var autoHidePaused by remember { mutableStateOf(false) }
+    var autoHideRestartToken by remember { mutableLongStateOf(0L) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showRotationDialog by remember { mutableStateOf(false) }
     var showLiveLineDialog by remember { mutableStateOf(false) }
@@ -500,32 +491,28 @@ fun ControllerBottomBar(
         }
     }
 
-    fun cancelHideJob() {
-        autoHideState.hideVideoInfoJob?.cancel()
-        autoHideState.hideVideoInfoJob = null
+    fun restartAutoHide() {
+        autoHideRestartToken++
     }
 
-    fun scheduleHideJob() {
-        cancelHideJob()
+    LaunchedEffect(
+        show,
+        showSpeedDialog,
+        showRotationDialog,
+        showLiveLineDialog,
+        autoHidePaused,
+        autoHideRestartToken,
+    ) {
         if (
             show &&
             !showSpeedDialog &&
             !showRotationDialog &&
             !showLiveLineDialog &&
-            !autoHideState.pauseAutoHide
+            !autoHidePaused
         ) {
-            autoHideState.hideVideoInfoJob = scope.launch {
-                delay(5000)
-                withContext(Dispatchers.Main) { onHideInfo() }
-            }
+            delay(5_000)
+            currentOnHideInfo()
         }
-    }
-
-    LaunchedEffect(show, showSpeedDialog, showRotationDialog, showLiveLineDialog) {
-        scheduleHideJob()
-    }
-    DisposableEffect(Unit) {
-        onDispose { cancelHideJob() }
     }
 
     val currentDensity = LocalDensity.current
@@ -568,7 +555,7 @@ fun ControllerBottomBar(
             modifier = modifier
                 .onPreviewKeyEvent { event ->
                     if (event.type == KeyEventType.KeyDown) {
-                        scheduleHideJob()
+                        restartAutoHide()
                     }
                     false
                 }
@@ -619,7 +606,7 @@ fun ControllerBottomBar(
                                     ControllerMinInfoButtonHeight
                                 )
                             )
-                            .onFocusChanged { if (it.isFocused) scheduleHideJob() },
+                            .onFocusChanged { if (it.isFocused) restartAutoHide() },
                         onClick = onOpenUpSpace,
                         shape = ButtonDefaults.shape(shape = RoundedCornerShape(15.dp)),
                         scale = ButtonDefaults.scale(focusedScale = 1.05f),
@@ -665,7 +652,7 @@ fun ControllerBottomBar(
                                     ControllerMinInfoButtonHeight
                                 )
                             )
-                            .onFocusChanged { if (it.isFocused) scheduleHideJob() },
+                            .onFocusChanged { if (it.isFocused) restartAutoHide() },
                         onClick = onToggleFollow,
                         shape = ButtonDefaults.shape(shape = RoundedCornerShape(15.dp)),
                         scale = ButtonDefaults.scale(focusedScale = 1.05f),
@@ -724,7 +711,7 @@ fun ControllerBottomBar(
                                     .scaledBy(controllerPanelScale)
                             )
                             .focusRequester(liveFocusRequesters[button.id] ?: FocusRequester())
-                            .onFocusChanged { if (it.isFocused) scheduleHideJob() },
+                            .onFocusChanged { if (it.isFocused) restartAutoHide() },
                         onClick = button.onClick,
                         shape = ButtonDefaults.shape(shape = RoundedCornerShape(12.dp)),
                         scale = ButtonDefaults.scale(focusedScale = 1.1f),
@@ -823,7 +810,7 @@ fun ControllerBottomBar(
                                 ControllerMinInfoButtonHeight
                             )
                         )
-                        .onFocusChanged { if (it.isFocused) scheduleHideJob() },
+                        .onFocusChanged { if (it.isFocused) restartAutoHide() },
                     onClick = onOpenUpSpace,
                     shape = ButtonDefaults.shape(shape = RoundedCornerShape(15.dp)),
                     scale = ButtonDefaults.scale(focusedScale = 1.05f),
@@ -902,8 +889,7 @@ fun ControllerBottomBar(
             )
             val primaryActionWidth = 72.dp.scaledBy(actionScale)
             val pauseAutoHide: (Boolean) -> Unit = { pause ->
-                autoHideState.pauseAutoHide = pause
-                if (pause) cancelHideJob() else scheduleHideJob()
+                autoHidePaused = pause
             }
             fun actionModifier(id: String): Modifier {
                 return Modifier
@@ -923,7 +909,7 @@ fun ControllerBottomBar(
                             else -> Modifier
                         }
                     )
-                    .onFocusChanged { if (it.isFocused) scheduleHideJob() }
+                    .onFocusChanged { if (it.isFocused) restartAutoHide() }
                     .then(
                         userActionFocusRequesters.value[id]?.let { Modifier.focusRequester(it) }
                             ?: Modifier
@@ -934,7 +920,7 @@ fun ControllerBottomBar(
                 userActionContent(
                     Modifier,
                     userActionFocusRequesters.value,
-                    { scheduleHideJob() },
+                    { restartAutoHide() },
                     pauseAutoHide
                 )
             }
@@ -1012,7 +998,7 @@ fun ControllerBottomBar(
                 )
                 .focusRequester(seekbarFocusRequester)
                 .onFocusChanged {
-                    scheduleHideJob()
+                    restartAutoHide()
                     seekbarHasFocus = it.isFocused
                 }
                 .focusProperties {

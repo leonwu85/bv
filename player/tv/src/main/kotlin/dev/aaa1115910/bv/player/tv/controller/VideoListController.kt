@@ -32,7 +32,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,7 +69,7 @@ import dev.aaa1115910.bv.player.entity.findCurrentVideoListItem
 import dev.aaa1115910.bv.player.entity.matchesCurrentVideoCid
 import dev.aaa1115910.bv.player.shared.R
 import dev.aaa1115910.bv.player.tv.theme.PlayerColors
-import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import java.util.Locale
 
 private val PlaylistPanelWidth = 520.dp
@@ -100,7 +99,6 @@ fun VideoListController(
     show: Boolean,
     onPlayNewVideo: (VideoListItem) -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
     val videoInfoData = LocalVideoPlayerVideoInfoData.current
@@ -151,7 +149,7 @@ fun VideoListController(
                     // The target can be outside the previously composed lazy-list window.
                     // Wait for the scroll layout before requesting focus on its Surface.
                     withFrameNanos { }
-                    focusRequester.requestFocus(scope)
+                    focusRequester.requestFocusWithRetry()
                 }
             }
 

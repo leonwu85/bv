@@ -61,9 +61,13 @@ import dev.aaa1115910.bv.util.focusedBorder
 import dev.aaa1115910.bv.util.isDpadDown
 import dev.aaa1115910.bv.util.isKeyDown
 import dev.aaa1115910.bv.util.onBackPressed
-import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.util.toast
+import dev.aaa1115910.bv.tv.util.LatestRequestOwner
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import org.koin.compose.getKoin
 
@@ -105,6 +109,8 @@ fun SubCommentPanel(
     var previewPictures by remember { mutableStateOf<List<Picture>>(emptyList()) }
     var previewPictureIndex by remember { mutableIntStateOf(0) }
     var showImagePreview by remember { mutableStateOf(false) }
+    var loadedReplyKey by remember { mutableStateOf<Pair<Long, Long>?>(null) }
+    val replyLoadOwner = remember { LatestRequestOwner() }
 
     val showCommentImagePreview: (List<Picture>, Int) -> Unit = { pictures, index ->
         if (pictures.isNotEmpty()) {
@@ -137,6 +143,8 @@ fun SubCommentPanel(
                         } else {
                             "翻译结果为空".toast(context)
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         "翻译失败: ${e.message ?: "未知错误"}".toast(context)
                     } finally {
@@ -151,54 +159,81 @@ fun SubCommentPanel(
         onHide()
     }
 
-    // 加载子评论
-    val loadReplies: (Boolean) -> Unit = { reset ->
-        scope.launch {
-            if (loading) return@launch
-            loading = true
-            error = null
+    // 加载子评论。由调用方 LaunchedEffect 直接持有，root/oid 变化会取消旧请求。
+    suspend fun loadReplies(
+        reset: Boolean,
+        targetRootId: Long,
+        targetOid: Long,
+    ) {
+        if (!reset && loading) return
 
-            try {
-                val page = if (reset) CommentReplyPage() else currentPage
-                val data = commentRepository.getCommentReplies(
-                    rpid = rootId,
-                    type = 1L,
-                    commentId = oid,
-                    page = page,
-                    preferApiType = Prefs.apiType
-                )
+        val requestGeneration = replyLoadOwner.claim()
+        loading = true
+        error = null
+        if (reset) {
+            replies.clear()
+            translatingReplyIds.clear()
+            focusedCommentIndex = 0
+            currentPage = CommentReplyPage()
+            hasNext = true
+        }
 
-                if (reset) {
-                    replies.clear()
-                    replies.addAll(data.replies)
-                } else {
-                    replies.addAll(data.replies)
-                }
+        try {
+            val page = if (reset) CommentReplyPage() else currentPage
+            val data = commentRepository.getCommentReplies(
+                rpid = targetRootId,
+                type = 1L,
+                commentId = targetOid,
+                page = page,
+                preferApiType = Prefs.apiType
+            )
 
-                currentPage = data.nextPage
-                hasNext = data.hasNext
-            } catch (e: Exception) {
+            currentCoroutineContext().ensureActive()
+            if (!replyLoadOwner.owns(requestGeneration)) return
+
+            if (reset) {
+                replies.clear()
+            }
+            replies.addAll(data.replies)
+            currentPage = data.nextPage
+            hasNext = data.hasNext
+            loadedReplyKey = targetRootId to targetOid
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (replyLoadOwner.owns(requestGeneration)) {
                 error = e.message ?: "加载失败"
-            } finally {
+            }
+        } finally {
+            if (replyLoadOwner.owns(requestGeneration)) {
                 loading = false
             }
         }
     }
 
     // 显示时加载第一页
-    LaunchedEffect(show, rootId) {
-        if (show && replies.isEmpty()) {
-            loadReplies(true)
+    LaunchedEffect(show, rootId, oid) {
+        val targetKey = rootId to oid
+        if (show && loadedReplyKey != targetKey) {
+            loadReplies(
+                reset = true,
+                targetRootId = rootId,
+                targetOid = oid,
+            )
+        }
+        if (!show) {
+            replyLoadOwner.invalidate()
+            loading = false
         }
     }
 
     // 显示后请求焦点
-    LaunchedEffect(show) {
+    LaunchedEffect(show, rootId) {
         if (show) {
             delay(300)
-            focusRequester.requestFocus(scope)
+            focusRequester.requestFocusWithRetry()
             delay(80)
-            focusRequester.requestFocus(scope)
+            focusRequester.requestFocusWithRetry()
         }
     }
 
@@ -208,9 +243,13 @@ fun SubCommentPanel(
             listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index == replies.size - 1
         }
     }
-    LaunchedEffect(isAtBottom, hasNext, loading) {
-        if (isAtBottom && hasNext && !loading && replies.isNotEmpty()) {
-            loadReplies(false)
+    LaunchedEffect(show, rootId, oid, isAtBottom, hasNext, replies.size) {
+        if (show && isAtBottom && hasNext && replies.isNotEmpty()) {
+            loadReplies(
+                reset = false,
+                targetRootId = rootId,
+                targetOid = oid,
+            )
         }
     }
 
@@ -315,7 +354,7 @@ fun SubCommentPanel(
                                             scope.launch {
                                                 listState.scrollToItem(0)
                                                 delay(100)
-                                                focusRequester.requestFocus(scope)
+                                                focusRequester.requestFocusWithRetry()
                                             }
                                             true
                                         }

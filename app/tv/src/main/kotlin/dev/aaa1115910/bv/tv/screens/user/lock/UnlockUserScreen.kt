@@ -39,7 +39,7 @@ import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.entity.db.UserDB
 import dev.aaa1115910.bv.tv.screens.user.UserItem
-import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.viewmodel.UserSwitchViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -111,10 +111,8 @@ private fun UnlockUserContent(
     )
 
     LaunchedEffect(userList) {
-        scope.launch {
-            delay(200)
-            defaultFocusRequester.requestFocus(scope)
-        }
+        delay(200)
+        defaultFocusRequester.requestFocusWithRetry()
     }
 
     LaunchedEffect(unlockState) {

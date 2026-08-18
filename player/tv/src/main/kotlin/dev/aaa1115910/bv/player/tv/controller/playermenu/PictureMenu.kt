@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,21 +90,17 @@ fun PictureMenuList(
                     )
         }
     }
-    var selectedPictureMenuItem by remember {
+    var preferredPictureMenuItem by remember {
         mutableStateOf(pictureMenuItems.first())
     }
+    val selectedPictureMenuItem = preferredPictureMenuItem.takeIf { it in pictureMenuItems }
+        ?: pictureMenuItems.firstOrNull()
+        ?: VideoPlayerPictureMenuItem.Resolution
     val resolutionList = remember(videoPlayerConfigData.availableResolutions) {
         videoPlayerConfigData.availableResolutions.sortedByDescending { it.code }
     }
     val audioList = remember(videoPlayerConfigData.availableAudio) {
         videoPlayerConfigData.availableAudio.sortedBy { it.ordinal }
-    }
-
-    LaunchedEffect(pictureMenuItems) {
-        if (selectedPictureMenuItem !in pictureMenuItems) {
-            selectedPictureMenuItem = pictureMenuItems.firstOrNull()
-                ?: VideoPlayerPictureMenuItem.Resolution
-        }
     }
 
     Row(
@@ -316,7 +311,7 @@ fun PictureMenuList(
                     text = item.getDisplayName(context),
                     selected = selectedPictureMenuItem == item,
                     onClick = {},
-                    onFocus = { selectedPictureMenuItem = item },
+                    onFocus = { preferredPictureMenuItem = item },
                 )
             }
         }

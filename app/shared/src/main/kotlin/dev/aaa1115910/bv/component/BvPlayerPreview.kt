@@ -81,7 +81,7 @@ fun BvVideoPlayerExoPreview() {
 fun BvVideoPlayerPreview(
     player: AbstractVideoPlayer
 ) {
-    LaunchedEffect(Unit) {
+    LaunchedEffect(player) {
         player.setOptions()
         player.playUrl(videoUrl, audioUrl)
         player.prepare()

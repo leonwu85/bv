@@ -26,7 +26,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,7 +70,7 @@ import dev.aaa1115910.bv.tv.render.TvUiRenderMode
 import dev.aaa1115910.bv.tv.render.TvUiRenderSettings
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.Prefs
-import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.util.toast
 import kotlin.math.roundToInt
 
@@ -383,12 +382,11 @@ fun UIDensityDialog(
     onDensityChange: (Float) -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
     val defaultDensity by remember { mutableFloatStateOf(context.resources.displayMetrics.widthPixels / 960f) }
 
     LaunchedEffect(show) {
-        if (show) focusRequester.requestFocus(scope)
+        if (show) focusRequester.requestFocusWithRetry()
     }
 
     // 这里得采用固定的 Density，否则会导致更改 Density 时，对话框反复重新加载
@@ -557,7 +555,6 @@ fun HomeNavItemsEditDialog(
     if (!show) return
 
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
 
     // 解析初始配置（按显示顺序）
@@ -579,7 +576,7 @@ fun HomeNavItemsEditDialog(
 
     LaunchedEffect(show) {
         if (show) {
-            focusRequester.requestFocus(scope)
+            focusRequester.requestFocusWithRetry()
             // 延迟请求焦点到第一个列表项
             focusRequesters.firstOrNull()?.requestFocus()
         }
@@ -705,7 +702,6 @@ fun DrawerNavItemsEditDialog(
 ) {
     if (!show) return
 
-    val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
 
     val initialConfigs = remember(initialOrderString) {
@@ -721,7 +717,7 @@ fun DrawerNavItemsEditDialog(
 
     LaunchedEffect(show) {
         if (show) {
-            focusRequester.requestFocus(scope)
+            focusRequester.requestFocusWithRetry()
             focusRequesters.firstOrNull()?.requestFocus()
         }
     }
@@ -836,7 +832,6 @@ fun UgcNavItemsEditDialog(
     if (!show) return
 
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
 
     val initialConfigs = remember(initialOrderString) {
@@ -852,7 +847,7 @@ fun UgcNavItemsEditDialog(
 
     LaunchedEffect(show) {
         if (show) {
-            focusRequester.requestFocus(scope)
+            focusRequester.requestFocusWithRetry()
             focusRequesters.firstOrNull()?.requestFocus()
         }
     }

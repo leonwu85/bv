@@ -95,7 +95,7 @@ android {
                 "proguard-rules.pro"
             )
             applicationIdSuffix = ".r8test"
-            if (signingProp.exists()) signingConfig = signingConfigs.getByName("key")
+            signingConfig = signingConfigs.getByName(if (signingProp.exists()) "key" else "debug")
             configure<CrashlyticsExtension> {
                 mappingFileUploadEnabled = false
             }

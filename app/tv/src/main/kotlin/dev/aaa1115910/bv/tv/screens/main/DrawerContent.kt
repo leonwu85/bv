@@ -30,6 +30,7 @@ import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -169,7 +170,7 @@ fun DrawerContent(
         }
     }
 
-    LaunchedEffect(currentDrawerItem, isNavigationFocused) {
+    SideEffect(currentDrawerItem, isNavigationFocused) {
         if (!isNavigationFocused) {
             navigationState.focusedItem = currentDrawerItem
         }

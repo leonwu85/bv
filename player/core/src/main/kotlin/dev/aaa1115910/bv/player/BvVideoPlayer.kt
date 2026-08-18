@@ -8,10 +8,12 @@ import androidx.annotation.OptIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -25,6 +27,31 @@ import dev.aaa1115910.bv.player.impl.vlc.VlcMediaPlayer
 import org.videolan.libvlc.util.VLCVideoLayout
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 
+private class DelegatingVideoPlayerListener(
+    private val delegate: () -> VideoPlayerListener,
+) : VideoPlayerListener {
+    override fun onError(error: Exception) = delegate().onError(error)
+    override fun onReady() = delegate().onReady()
+    override fun onPlay() = delegate().onPlay()
+    override fun onPause() = delegate().onPause()
+    override fun onBuffering() = delegate().onBuffering()
+    override fun onProgress(position: Long, duration: Long, buffered: Int) =
+        delegate().onProgress(position, duration, buffered)
+
+    override fun onEnd() = delegate().onEnd()
+    override fun onIdle() = delegate().onIdle()
+    override fun onSeekBack(seekBackIncrementMs: Long) = delegate().onSeekBack(seekBackIncrementMs)
+    override fun onSeekForward(seekForwardIncrementMs: Long) = delegate().onSeekForward(seekForwardIncrementMs)
+    override fun onSeeked(position: Long) = delegate().onSeeked(position)
+    override fun onSeekableChanged(seekable: Boolean) = delegate().onSeekableChanged(seekable)
+    override fun onVideoSizeChanged(width: Int, height: Int) = delegate().onVideoSizeChanged(width, height)
+    override fun onVideoFrameRateChanged(frameRate: Float?) = delegate().onVideoFrameRateChanged(frameRate)
+}
+
+/**
+ * @param releasePlayerOnDispose whether this renderer owns and releases [videoPlayer]. Callers that
+ * perform ordered shutdown themselves must pass `false`.
+ */
 @OptIn(UnstableApi::class)
 @Composable
 fun BvVideoPlayer(
@@ -35,19 +62,34 @@ fun BvVideoPlayer(
     danmakuPlayer: DanmakuPlayer? = null,
     forceUseTextureView: Boolean = false,
     preferSurfaceViewForHdr: Boolean = false,
+    releasePlayerOnDispose: Boolean = true,
 ) {
     val logger = logger("BvVideoPlayer")
     val context = LocalContext.current
     val density = LocalDensity.current
     val screenHeight = with(density) { context.resources.displayMetrics.heightPixels.toFloat() }
     val screenWidth = with(density) { context.resources.displayMetrics.widthPixels.toFloat() }
+    val currentPlayerListener = rememberUpdatedState(playerListener)
+    val delegatingPlayerListener = remember {
+        DelegatingVideoPlayerListener { currentPlayerListener.value }
+    }
 
+    SideEffect(videoPlayer) {
+        videoPlayer.setPlayerEventListener(delegatingPlayerListener)
+        // The player can already be prepared before this Compose renderer is attached. Replay the
+        // current size so portrait layout and danmaku-mask geometry do not stay at their fallback.
+        val currentVideoWidth = videoPlayer.videoWidth
+        val currentVideoHeight = videoPlayer.videoHeight
+        if (currentVideoWidth > 0 && currentVideoHeight > 0) {
+            delegatingPlayerListener.onVideoSizeChanged(currentVideoWidth, currentVideoHeight)
+        }
+    }
 
-    DisposableEffect(Unit) {
-        videoPlayer.setPlayerEventListener(playerListener)
-
+    DisposableEffect(videoPlayer, releasePlayerOnDispose) {
         onDispose {
-            videoPlayer.release()
+            if (releasePlayerOnDispose) {
+                videoPlayer.release()
+            }
         }
     }
 

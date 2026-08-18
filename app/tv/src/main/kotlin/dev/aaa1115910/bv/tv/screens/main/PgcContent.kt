@@ -8,12 +8,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -58,6 +60,7 @@ fun PgcContent(
     onRequestDrawerFocus: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
+    val currentOnSelectedTabChanged by rememberUpdatedState(onSelectedTabChanged)
     val logger = KotlinLogging.logger("PgcContent")
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
     val performanceProfile = LocalTvUiPerformanceProfile.current
@@ -91,9 +94,9 @@ fun PgcContent(
         PgcTopNavItem.Variety -> varietyButtonFocusRequester
     }
 
-    LaunchedEffect(selectedTab) {
+    SideEffect(selectedTab) {
         if (selectedTab.ordinal != selectedTabOrdinal) {
-            onSelectedTabChanged(selectedTab.ordinal)
+            currentOnSelectedTabChanged(selectedTab.ordinal)
         }
     }
 

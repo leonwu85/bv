@@ -57,27 +57,36 @@ fun StorageSetting(
     var content by remember { mutableStateOf("") }
     var size by remember { mutableLongStateOf(0L) }
 
-    val calSize = {
-        scope.launch(Dispatchers.IO) {
+    suspend fun calculateSizes() {
+        val (newImageCacheSize, newUpdateCacheSize, newCrashLogsSize) = withContext(Dispatchers.IO) {
             val imageCacheDir = File(context.cacheDir, "image_cache")
             val updateCacheDir = File(context.cacheDir, "update_downloader")
             val crashLogsDir = File(context.filesDir, LogCatcherUtil.LOG_DIR)
             //val libVLCCacheDir = File(context.cacheDir, "libvlc_downloader")
             //val libVLCFileDir = File(context.filesDir, "vlc_libs")
 
-            val newImageCacheSize = getFolderSize(imageCacheDir)
-            val newUpdateCacheSize = getFolderSize(updateCacheDir)
-            val newCrashLogsSize = getFolderSize(crashLogsDir)
+            Triple(
+                getFolderSize(imageCacheDir),
+                getFolderSize(updateCacheDir),
+                getFolderSize(crashLogsDir),
+            )
             //val newLibVLCCacheSize = getFolderSize(libVLCCacheDir)
             //val newLibVLCFileSize = getFolderSize(libVLCFileDir)
+        }
 
-            withContext(Dispatchers.Main) {
-                imageCacheSize = newImageCacheSize
-                updateCacheSize = newUpdateCacheSize
-                crashLogsSize = newCrashLogsSize
-                //libVLCCacheSize = newLibVLCCacheSize
-                //libVLCFileSize = newLibVLCFileSize
-            }
+        imageCacheSize = newImageCacheSize
+        updateCacheSize = newUpdateCacheSize
+        crashLogsSize = newCrashLogsSize
+        //libVLCCacheSize = newLibVLCCacheSize
+        //libVLCFileSize = newLibVLCFileSize
+    }
+
+    suspend fun refreshSizes() {
+        loading = true
+        try {
+            calculateSizes()
+        } finally {
+            loading = false
         }
     }
 
@@ -108,9 +117,7 @@ fun StorageSetting(
     //}
 
     LaunchedEffect(Unit) {
-        loading = true
-        calSize()
-        loading = false
+        refreshSizes()
     }
 
     Box(modifier = modifier) {
@@ -194,7 +201,7 @@ fun StorageSetting(
         size = size,
         clearFiles = {
             clearFun?.invoke()
-            calSize()
+            scope.launch { refreshSizes() }
         }
     )
 }
@@ -202,7 +209,7 @@ fun StorageSetting(
 private fun getFolderSize(f: File): Long {
     var size: Long = 0
     if (f.isDirectory) {
-        for (file in f.listFiles()!!) {
+        for (file in f.listFiles().orEmpty()) {
             size += getFolderSize(file)
         }
     } else {

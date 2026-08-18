@@ -3,6 +3,7 @@ package dev.aaa1115910.bv.viewmodel.search
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -16,7 +17,12 @@ import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.swapListWithMainContext
 import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.core.annotation.KoinViewModel
@@ -28,8 +34,16 @@ class SearchInputViewModel(
     private val db: AppDatabase = BVApp.getAppDatabase()
 ) : ViewModel() {
     private val logger = KotlinLogging.logger { }
+    private val keywordState = mutableStateOf("")
+    private val keywordChanges = MutableStateFlow("")
 
-    var keyword by mutableStateOf("")
+    var keyword: String
+        get() = keywordState.value
+        set(value) {
+            if (keywordState.value == value) return
+            keywordState.value = value
+            keywordChanges.value = value
+        }
     val hotwords = mutableStateListOf<SearchKeyword>()
     val recommendKeywords = mutableStateListOf<SearchKeyword>()
     val trendingRankingKeywords = mutableStateListOf<SearchKeyword>()
@@ -55,6 +69,7 @@ class SearchInputViewModel(
         refreshHotwords()
         refreshRecommendKeywords()
         loadSearchHistories()
+        observeKeywordChanges()
     }
 
     fun refreshHotwords() {
@@ -132,24 +147,43 @@ class SearchInputViewModel(
         }
     }
 
-    fun updateSuggests() {
-        logger.fInfo { "Update search suggests with '$keyword'" }
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                val keywordSuggest = searchRepository.getSearchSuggest(
-                    keyword = keyword,
-                    preferApiType = Prefs.apiType
-                )
-                logger.debug { "Find suggests: $keywordSuggest" }
-                suggests.swapListWithMainContext(keywordSuggest)
-            }.onFailure {
-                withContext(Dispatchers.Main) {
-                    "bilibili 搜索建议加载失败".toast(BVApp.context)
-                }
-                logger.info { it.stackTraceToString() }
+    private fun observeKeywordChanges() {
+        viewModelScope.launch {
+            keywordChanges.collectLatest { query ->
+                delay(250)
+                updateSuggests(query)
             }
         }
-        updateMatchedSearchHistories()
+    }
+
+    private suspend fun updateSuggests(query: String) = coroutineScope {
+        logger.fInfo { "Update search suggests with '$query'" }
+        if (query.isBlank()) {
+            suggests.clear()
+            matchedSearchHistories.clear()
+            return@coroutineScope
+        }
+
+        launch(Dispatchers.IO) { loadSuggestions(query) }
+        launch(Dispatchers.IO) { loadMatchedSearchHistories(query) }
+    }
+
+    private suspend fun loadSuggestions(query: String) {
+        try {
+            val keywordSuggest = searchRepository.getSearchSuggest(
+                keyword = query,
+                preferApiType = Prefs.apiType
+            )
+            logger.debug { "Find suggests: $keywordSuggest" }
+            updateListIfQueryIsCurrent(query, suggests, keywordSuggest)
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Throwable) {
+            withContext(Dispatchers.Main) {
+                "bilibili 搜索建议加载失败".toast(BVApp.context)
+            }
+            logger.info { exception.stackTraceToString() }
+        }
     }
 
     private fun loadSearchHistories() {
@@ -162,19 +196,37 @@ class SearchInputViewModel(
         }
     }
 
-    private fun updateMatchedSearchHistories() {
-        logger.fInfo { "Update matched search histories with '$keyword'" }
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                if (keyword.isEmpty()) {
-                    matchedSearchHistories.clear()
-                } else {
-                    val matchedHistories = db.searchHistoryDao().findHistories(keyword, 20)
-                    matchedSearchHistories.swapListWithMainContext(matchedHistories)
-                }
-                logger.fInfo { "Update matched search histories finish, size: ${matchedSearchHistories.size}" }
+    private suspend fun updateMatchedSearchHistories() {
+        val query = withContext(Dispatchers.Main.immediate) { keyword }
+        loadMatchedSearchHistories(query)
+    }
+
+    private suspend fun loadMatchedSearchHistories(query: String) {
+        logger.fInfo { "Update matched search histories with '$query'" }
+        try {
+            if (query.isEmpty()) {
+                updateListIfQueryIsCurrent(query, matchedSearchHistories, emptyList())
+            } else {
+                val matchedHistories = db.searchHistoryDao().findHistories(query, 20)
+                updateListIfQueryIsCurrent(query, matchedSearchHistories, matchedHistories)
             }
+            logger.fInfo { "Update matched search histories finish, size: ${matchedSearchHistories.size}" }
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Throwable) {
+            logger.info { exception.stackTraceToString() }
         }
+    }
+
+    private suspend fun <T> updateListIfQueryIsCurrent(
+        query: String,
+        target: SnapshotStateList<T>,
+        values: List<T>
+    ) = withContext(Dispatchers.Main.immediate) {
+        // 删除历史记录触发的独立刷新可能与输入流并发；旧查询不得覆盖新关键字的结果。
+        if (keywordState.value != query) return@withContext
+        target.clear()
+        target.addAll(values)
     }
 
     fun addSearchHistory(keyword: String) {

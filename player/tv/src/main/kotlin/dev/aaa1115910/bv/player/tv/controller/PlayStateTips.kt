@@ -25,7 +25,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,7 +44,6 @@ import dev.aaa1115910.bv.player.entity.LocalVideoPlayerPaymentData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
 import dev.aaa1115910.bv.player.tv.theme.PlayerColors
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import qrcode.QRCode
 import qrcode.color.DefaultColorFunction
@@ -189,10 +187,9 @@ fun PaidRequireTip(
     modifier: Modifier = Modifier,
     epid: Int,
 ) {
-    val scope = rememberCoroutineScope()
     var qrImage by remember { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(Unit) {
-        scope.launch(Dispatchers.IO) {
+    LaunchedEffect(epid) {
+        val newQrImage = withContext(Dispatchers.IO) {
             val output = ByteArrayOutputStream()
             val url = "https://b23.tv/ep$epid"
             QRCode(
@@ -205,11 +202,9 @@ fun PaidRequireTip(
                 .render()
                 .writeImage(output)
             val input = ByteArrayInputStream(output.toByteArray())
-            val newQrImage = BitmapFactory.decodeStream(input).asImageBitmap()
-            withContext(Dispatchers.Main) {
-                qrImage = newQrImage
-            }
+            BitmapFactory.decodeStream(input).asImageBitmap()
         }
+        qrImage = newQrImage
     }
     Surface(
         modifier = modifier,

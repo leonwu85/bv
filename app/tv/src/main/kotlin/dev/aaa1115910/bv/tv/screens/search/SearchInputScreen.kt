@@ -96,10 +96,6 @@ fun SearchInputScreen(
         searchInputViewModel.addSearchHistory(keyword)
     }
 
-    LaunchedEffect(searchKeyword) {
-        searchInputViewModel.updateSuggests()
-    }
-
     BackHandler(enabled = focusLayer != null) {
         onRequestDrawerFocus()
     }

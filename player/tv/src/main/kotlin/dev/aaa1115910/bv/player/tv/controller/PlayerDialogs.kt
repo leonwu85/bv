@@ -19,7 +19,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,7 +47,7 @@ import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.player.shared.R
 import dev.aaa1115910.bv.player.tv.theme.PlayerColors
 import dev.aaa1115910.bv.player.tv.LocalTvUiSurfaceEmbedded
-import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import kotlinx.coroutines.delay
 
 @Composable
@@ -61,7 +60,6 @@ internal fun SpeedDialog(
     max: Float = 3f,
     onSpeedChange: (Float) -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
     var lastInteractionTime by remember { mutableStateOf(System.currentTimeMillis()) }
 
@@ -70,7 +68,7 @@ internal fun SpeedDialog(
     }
 
     LaunchedEffect(Unit) {
-        focusRequester.requestFocus(scope)
+        focusRequester.requestFocusWithRetry()
     }
 
     LaunchedEffect(lastInteractionTime) {
@@ -141,7 +139,6 @@ internal fun LiveLineDialog(
     onHideDialog: () -> Unit,
     onLineChange: (Int) -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
     val focusRequesters = remember(lines) {
         lines.associate { it.index to FocusRequester() }
     }
@@ -154,7 +151,7 @@ internal fun LiveLineDialog(
     LaunchedEffect(lines, currentLineIndex) {
         val requester = focusRequesters[currentLineIndex]
             ?: lines.firstOrNull()?.let { focusRequesters[it.index] }
-        requester?.requestFocus(scope)
+        requester?.requestFocusWithRetry()
     }
 
     LaunchedEffect(lastInteractionTime) {
@@ -222,7 +219,6 @@ internal fun RotationDialog(
     onHideDialog: () -> Unit,
     onRotationChange: (VideoRotation) -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
     val options = remember { VideoRotation.entries }
     val context = LocalContext.current
     val focusRequesters = remember { options.associateWith { FocusRequester() } }
@@ -233,7 +229,7 @@ internal fun RotationDialog(
     }
 
     LaunchedEffect(rotation) {
-        focusRequesters[rotation]?.requestFocus(scope)
+        focusRequesters[rotation]?.requestFocusWithRetry()
     }
 
     LaunchedEffect(lastInteractionTime) {
@@ -298,7 +294,6 @@ internal fun SubtitleDialog(
     onHideDialog: () -> Unit,
     onSubtitleChange: (Subtitle) -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
     val focusRequesters =
         remember { availableSubtitleTracks.map { it.id }.associateWith { FocusRequester() } }
     var lastInteractionTime by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -308,7 +303,7 @@ internal fun SubtitleDialog(
     }
 
     LaunchedEffect(subtitle) {
-        focusRequesters[subtitle.id]?.requestFocus(scope)
+        focusRequesters[subtitle.id]?.requestFocusWithRetry()
     }
 
     LaunchedEffect(lastInteractionTime) {

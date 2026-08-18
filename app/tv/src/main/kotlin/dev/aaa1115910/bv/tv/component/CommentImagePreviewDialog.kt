@@ -51,6 +51,7 @@ import coil.request.ImageRequest
 import coil.size.Precision
 import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.bv.tv.util.tvImageMemoryPolicy
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import kotlinx.coroutines.delay
 import kotlin.math.max
 
@@ -67,24 +68,23 @@ fun CommentImagePreviewDialog(
     var currentIndex by remember(show, pictures, initialIndex) {
         mutableIntStateOf(initialIndex.coerceIn(0, pictures.lastIndex))
     }
-    var scale by remember(show, pictures, initialIndex) { mutableFloatStateOf(1f) }
-    var rotation by remember(show, pictures, initialIndex) { mutableFloatStateOf(0f) }
-    var offsetX by remember(show, pictures, initialIndex) { mutableFloatStateOf(0f) }
-    var offsetY by remember(show, pictures, initialIndex) { mutableFloatStateOf(0f) }
+    val currentPictureKey = pictures[currentIndex].key
+    var scale by remember(currentPictureKey) { mutableFloatStateOf(1f) }
+    var rotation by remember(currentPictureKey) { mutableFloatStateOf(0f) }
+    var offsetX by remember(currentPictureKey) { mutableFloatStateOf(0f) }
+    var offsetY by remember(currentPictureKey) { mutableFloatStateOf(0f) }
     var previewAreaSize by remember { mutableStateOf(IntSize.Zero) }
     val imageFocusRequester = remember { FocusRequester() }
     val prefetchedIndexes = remember(show, pictures) { mutableSetOf<Int>() }
-    val requestWidth = previewAreaSize.width.takeIf { it > 0 } ?: 1920
-    val requestHeight = previewAreaSize.height.takeIf { it > 0 } ?: 1080
     val imageLoader = context.imageLoader
     val imageMemoryPolicy = remember(context) { context.tvImageMemoryPolicy() }
 
-    fun buildImageRequest(index: Int): ImageRequest {
+    fun buildImageRequest(index: Int, viewportSize: IntSize): ImageRequest {
         val picture = pictures[index]
         val (targetWidth, targetHeight) = imageMemoryPolicy.previewRequestSize(
             picture = picture,
-            viewportWidth = requestWidth,
-            viewportHeight = requestHeight
+            viewportWidth = viewportSize.width,
+            viewportHeight = viewportSize.height
         )
         return ImageRequest.Builder(context)
             .data(picture.url)
@@ -94,13 +94,26 @@ fun CommentImagePreviewDialog(
             .build()
     }
 
-    val previewImageRequest = remember(context, pictures, currentIndex, requestWidth, requestHeight) {
-        buildImageRequest(currentIndex)
+    val previewImageRequest = remember(context, pictures, currentIndex, previewAreaSize, imageMemoryPolicy) {
+        previewAreaSize.takeUnless { it == IntSize.Zero }?.let { viewportSize ->
+            buildImageRequest(currentIndex, viewportSize)
+        }
     }
 
-    fun maxTranslation(): Float {
-        val baseSize = max(previewAreaSize.width, previewAreaSize.height).toFloat()
-        return ((scale - 1f) * baseSize / 2f).coerceAtLeast(0f)
+    fun maxTranslation(targetScale: Float = scale, areaSize: IntSize = previewAreaSize): Float {
+        val baseSize = max(areaSize.width, areaSize.height).toFloat()
+        return ((targetScale - 1f) * baseSize / 2f).coerceAtLeast(0f)
+    }
+
+    fun clampOffsets(targetScale: Float = scale, areaSize: IntSize = previewAreaSize) {
+        val maxTranslation = maxTranslation(targetScale, areaSize)
+        offsetX = offsetX.coerceIn(-maxTranslation, maxTranslation)
+        offsetY = offsetY.coerceIn(-maxTranslation, maxTranslation)
+    }
+
+    fun updateScale(targetScale: Float) {
+        scale = targetScale
+        clampOffsets(targetScale)
     }
 
     fun updateOffset(deltaX: Float = 0f, deltaY: Float = 0f) {
@@ -109,25 +122,14 @@ fun CommentImagePreviewDialog(
         offsetY = (offsetY + deltaY).coerceIn(-maxTranslation, maxTranslation)
     }
 
-    LaunchedEffect(currentIndex) {
+    fun resetTransform() {
         scale = 1f
         rotation = 0f
         offsetX = 0f
         offsetY = 0f
     }
 
-    LaunchedEffect(scale) {
-        if (scale <= 1f) {
-            offsetX = 0f
-            offsetY = 0f
-        } else {
-            val maxTranslation = maxTranslation()
-            offsetX = offsetX.coerceIn(-maxTranslation, maxTranslation)
-            offsetY = offsetY.coerceIn(-maxTranslation, maxTranslation)
-        }
-    }
-
-    LaunchedEffect(show, currentIndex, pictures, requestWidth, requestHeight, imageMemoryPolicy) {
+    LaunchedEffect(show, currentIndex, pictures, previewAreaSize, imageMemoryPolicy) {
         if (!show || pictures.size <= 1 || previewAreaSize == IntSize.Zero) return@LaunchedEffect
 
         val preloadIndexes = if (imageMemoryPolicy.previewPrefetchCount <= 0) {
@@ -141,7 +143,7 @@ fun CommentImagePreviewDialog(
 
         preloadIndexes.forEach { index ->
             prefetchedIndexes += index
-            imageLoader.enqueue(buildImageRequest(index))
+            imageLoader.enqueue(buildImageRequest(index, previewAreaSize))
         }
     }
 
@@ -193,7 +195,10 @@ fun CommentImagePreviewDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .onSizeChanged { previewAreaSize = it }
+                        .onSizeChanged { newSize ->
+                            previewAreaSize = newSize
+                            clampOffsets(areaSize = newSize)
+                        }
                         .focusRequester(imageFocusRequester)
                         .focusable()
                         .onPreviewKeyEvent { event ->
@@ -256,14 +261,14 @@ fun CommentImagePreviewDialog(
                 ) {
                     Button(
                         onClick = {
-                            scale = (scale + 0.25f).coerceAtMost(3f)
+                            updateScale((scale + 0.25f).coerceAtMost(3f))
                         }
                     ) {
                         Text(text = "放大")
                     }
                     OutlinedButton(
                         onClick = {
-                            scale = (scale - 0.25f).coerceAtLeast(1f)
+                            updateScale((scale - 0.25f).coerceAtLeast(1f))
                         }
                     ) {
                         Text(text = "缩小")
@@ -309,10 +314,7 @@ fun CommentImagePreviewDialog(
                     }
                     OutlinedButton(
                         onClick = {
-                            scale = 1f
-                            rotation = 0f
-                            offsetX = 0f
-                            offsetY = 0f
+                            resetTransform()
                         }
                     ) {
                         Text(text = "重置")
@@ -325,9 +327,7 @@ fun CommentImagePreviewDialog(
     LaunchedEffect(show) {
         if (show) {
             delay(120)
-            imageFocusRequester.requestFocus()
-            delay(80)
-            imageFocusRequester.requestFocus()
+            imageFocusRequester.requestFocusWithRetry()
         }
     }
 }

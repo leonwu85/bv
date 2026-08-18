@@ -551,7 +551,7 @@ fun VideoPlayerV3Screen(
                     playerViewModel.showRelatedVideos = if (playerViewModel.relatedVideos.isNotEmpty()) state else false
                 },
                 autoOpenPlayListOnVideoEnd = false,
-                onSendHeartbeat = playerViewModel::uploadHistory,
+                onSendHeartbeat = playerViewModel::enqueueUploadHistory,
                 onClearBackToHistoryData = { playerViewModel.lastPlayed = 0 },
                 onReloadDanmakuAfterSeek = playerViewModel::reloadDanmakuAfterSeek,
                 onDanmakuPlayerBound = playerViewModel::resyncDanmakuAfterPlayerBound,

@@ -125,6 +125,7 @@ import dev.aaa1115910.bv.util.ifElse
 import dev.aaa1115910.bv.util.onBackPressed
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.util.resizedImageUrl
 import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.util.swapList
@@ -255,7 +256,7 @@ fun SeasonInfoScreen(
         suppressPlayButtonBringIntoView = true
         try {
             withFrameNanos { }
-            playButtonFocusRequester.requestFocus(scope)
+            playButtonFocusRequester.requestFocusWithRetry()
             delay(80)
         } finally {
             suppressPlayButtonBringIntoView = false
@@ -1257,8 +1258,8 @@ fun SeasonEpisodesDialog(
     }
 
     LaunchedEffect(show) {
-        if (show && tabCount > 1) tabFocusRequester.requestFocus(scope)
-        if (show && tabCount == 1) videoListFocusRequester.requestFocus(scope)
+        if (show && tabCount > 1) tabFocusRequester.requestFocusWithRetry()
+        if (show && tabCount == 1) videoListFocusRequester.requestFocusWithRetry()
     }
 
     if (show) {

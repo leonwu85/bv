@@ -23,7 +23,6 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,7 +65,7 @@ import dev.aaa1115910.bv.player.tv.controller.playermenu.DanmakuMenuList
 import dev.aaa1115910.bv.player.tv.controller.playermenu.MenuNavList
 import dev.aaa1115910.bv.player.tv.controller.playermenu.OthersMenuList
 import dev.aaa1115910.bv.player.tv.controller.playermenu.PictureMenuList
-import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.util.swapList
 
 @Composable
@@ -103,7 +102,6 @@ fun MenuController(
     onSecondarySubtitleBottomPadding: (Dp) -> Unit,
     onPlayModeChange: (PlayMode) -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val defaultFocusRequester = remember { FocusRequester() }
 
     Box(
@@ -124,7 +122,7 @@ fun MenuController(
         ) {
             // 在动画内容中处理焦点请求
             LaunchedEffect(Unit) {
-                defaultFocusRequester.requestFocus(scope)
+                defaultFocusRequester.requestFocusWithRetry()
             }
             MenuController(
                 defaultFocusRequester = defaultFocusRequester,

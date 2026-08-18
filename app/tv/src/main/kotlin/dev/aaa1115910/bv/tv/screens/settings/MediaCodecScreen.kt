@@ -24,7 +24,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,7 +51,7 @@ import dev.aaa1115910.bv.util.CodecMedia
 import dev.aaa1115910.bv.util.CodecMode
 import dev.aaa1115910.bv.util.CodecType
 import dev.aaa1115910.bv.util.CodecUtil
-import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.util.swapList
 import java.util.Locale
 
@@ -137,15 +136,14 @@ fun MediaCodecListItems(
     onCodecInfoDataChanged: (CodecInfoData) -> Unit,
     isFocusing: Boolean
 ) {
-    val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(isFocusing) {
-        if (isFocusing && codecInfoDataList.isNotEmpty()) focusRequester.requestFocus(scope)
+        if (isFocusing && codecInfoDataList.isNotEmpty()) focusRequester.requestFocusWithRetry()
     }
 
     LaunchedEffect(codecInfoDataList) {
-        if (codecInfoDataList.isNotEmpty()) focusRequester.requestFocus(scope)
+        if (codecInfoDataList.isNotEmpty()) focusRequester.requestFocusWithRetry()
     }
 
     LazyColumn(

@@ -46,6 +46,7 @@ import dev.aaa1115910.bv.tv.component.live.LiveRoomCard
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.tv.util.LocalTvUiPerformanceProfile
 import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.viewmodel.live.LiveViewModel
 import dev.aaa1115910.bv.viewmodel.live.LiveTabType
@@ -258,7 +259,7 @@ fun LiveContent(
     fun requestFirstContentFocusAfterFrame() {
         scope.launch {
             delay(16)
-            firstContentFocusRequester.requestFocus(scope)
+            firstContentFocusRequester.requestFocusWithRetry()
         }
     }
 
@@ -266,9 +267,9 @@ fun LiveContent(
         scope.launch {
             delay(16)
             if (liveViewModel.currentTabType == LiveTabType.Area && liveViewModel.subAreaList.isNotEmpty()) {
-                subNavFocusRequester.requestFocus(scope)
+                subNavFocusRequester.requestFocusWithRetry()
             } else {
-                firstContentFocusRequester.requestFocus(scope)
+                firstContentFocusRequester.requestFocusWithRetry()
             }
         }
     }

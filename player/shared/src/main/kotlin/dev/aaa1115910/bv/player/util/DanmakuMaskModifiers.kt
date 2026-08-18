@@ -32,26 +32,20 @@ fun Modifier.bitmapMask(
             canvas.saveLayer(Rect(Offset.Zero, size), Paint())
             drawContent()
 
-            // 计算视频居中显示时的实际区域
-            val (dstOffset, dstSize) = if (videoAspectRatio > 0f) {
-                val containerAspectRatio = size.width / size.height
-                if (videoAspectRatio > containerAspectRatio) {
-                    // 视频更宽，上下有黑边 (letterbox)
-                    val videoHeight = size.width / videoAspectRatio
-                    val offsetY = (size.height - videoHeight) / 2
-                    androidx.compose.ui.unit.IntOffset(0, offsetY.toInt()) to
-                            androidx.compose.ui.unit.IntSize(size.width.toInt(), videoHeight.toInt())
-                } else {
-                    // 视频更高，左右有黑边 (pillarbox)
-                    val videoWidth = size.height * videoAspectRatio
-                    val offsetX = (size.width - videoWidth) / 2
-                    androidx.compose.ui.unit.IntOffset(offsetX.toInt(), 0) to
-                            androidx.compose.ui.unit.IntSize(videoWidth.toInt(), size.height.toInt())
-                }
-            } else {
-                // 无有效的视频宽高比，使用全尺寸
-                androidx.compose.ui.unit.IntOffset.Zero to size.toIntSize()
-            }
+            // 蒙版坐标属于视频图像，只能映射到居中显示的实际图像区域。
+            val contentBounds = VideoContentGeometry.fitCenter(
+                containerWidth = size.width,
+                containerHeight = size.height,
+                videoAspectRatio = videoAspectRatio,
+            )
+            val dstOffset = androidx.compose.ui.unit.IntOffset(
+                x = contentBounds.left.toInt(),
+                y = contentBounds.top.toInt(),
+            )
+            val dstSize = androidx.compose.ui.unit.IntSize(
+                width = contentBounds.width.toInt(),
+                height = contentBounds.height.toInt(),
+            ).takeIf { it.width > 0 && it.height > 0 } ?: size.toIntSize()
 
             if (!bitmap.isRecycled) {
                 drawImage(

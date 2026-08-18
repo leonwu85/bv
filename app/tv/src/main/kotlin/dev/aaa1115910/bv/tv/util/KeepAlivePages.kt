@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -17,6 +18,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -85,6 +87,7 @@ fun <T : Any> KeepAlivePages(
     content: @Composable (page: T, active: Boolean) -> Unit
 ) {
     val keptPages = remember { mutableStateListOf(current) }
+    val currentOnDisplayedPageChanged by rememberUpdatedState(onDisplayedPageChanged)
     val performanceProfile = LocalTvUiPerformanceProfile.current
     val preloadCoordinator = LocalTvPreloadCoordinator.current
     val parentImageLoadingAllowed = LocalTvImageLoadingAllowed.current
@@ -146,8 +149,8 @@ fun <T : Any> KeepAlivePages(
         }
     }
 
-    LaunchedEffect(displayedCurrent) {
-        onDisplayedPageChanged(displayedCurrent)
+    SideEffect(displayedCurrent) {
+        currentOnDisplayedPageChanged(displayedCurrent)
     }
 
     LaunchedEffect(displayedCurrent, effectiveImageLoadDelay) {

@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -85,10 +86,12 @@ import dev.aaa1115910.bv.player.util.DanmakuMaskFinder
 import dev.aaa1115910.bv.player.util.DanmakuSpeedPolicy
 import dev.aaa1115910.bv.player.util.isInitialPlaybackSeek
 import dev.aaa1115910.bv.player.util.TvDanmakuCompatibilityPolicy
+import dev.aaa1115910.bv.player.util.VideoContentGeometry
 import dev.aaa1115910.bv.player.util.renderMaskFrameToBitmap
 import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.formatHourMinSec
 import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -167,7 +170,7 @@ fun BvPlayer(
     bottomControlPanelConfig: PlayerBottomControlPanelConfig = PlayerBottomControlPanelConfig.Default,
     offlinePlaybackMode: Boolean = false,
     useTextureViewFixPortraitVideo: Boolean = false,
-    onSendHeartbeat: suspend (Int) -> Unit,
+    onSendHeartbeat: (Int) -> Unit,
     onClearBackToHistoryData: () -> Unit,
     onReloadDanmakuAfterSeek: (Long, Boolean) -> Unit = { _, _ -> },
     onDanmakuPlayerBound: (Long, Boolean) -> Unit = { _, _ -> },
@@ -291,10 +294,25 @@ fun BvPlayer(
     var appliedDanmakuDurationScale by remember { mutableFloatStateOf(1f) }
 
     val seekState = remember { VideoPlayerSeekState() }
-    var currentVideoAspectRatio by remember { mutableStateOf(videoPlayerConfigData.currentVideoAspectRatio) }
-    var currentVideoRotation by remember { mutableStateOf(videoPlayerConfigData.currentVideoRotation) }
-    var currentPlaySpeed by remember { mutableFloatStateOf(videoPlayerConfigData.currentVideoSpeed) }
-    var aspectRatioValue by remember { mutableFloatStateOf(16f / 9f) }
+    var defaultAspectRatio by remember(
+        videoPlayerConfigData.currentVideoCid,
+        videoPlayerVideoInfoData.width,
+        videoPlayerVideoInfoData.height,
+        videoPlayerVideoInfoData.isVerticalVideo,
+    ) {
+        mutableFloatStateOf(
+            VideoContentGeometry.resolveAspectRatio(
+                width = videoPlayerVideoInfoData.width,
+                height = videoPlayerVideoInfoData.height,
+                isPortraitVideo = videoPlayerVideoInfoData.isVerticalVideo,
+            )
+        )
+    }
+    val aspectRatioValue = when (videoPlayerConfigData.currentVideoAspectRatio) {
+        VideoAspectRatio.Default -> defaultAspectRatio
+        VideoAspectRatio.FourToThree -> 4f / 3f
+        VideoAspectRatio.SixteenToNine -> 16f / 9f
+    }
 
     fun refreshDanmakuDurationBaseline(config: DanmakuConfig) {
         val expectedDuration = DanmakuSpeedPolicy.scaleDuration(
@@ -313,12 +331,14 @@ fun BvPlayer(
         }
     }
 
-    fun applyDanmakuSpeedPolicy() {
+    fun applyDanmakuSpeedPolicy(
+        playbackSpeed: Float = videoPlayerConfigData.currentVideoSpeed,
+    ) {
         if (videoPlayerConfigData.isLive) return
         val player = mDanmakuPlayer ?: return
         refreshDanmakuDurationBaseline(danmakuConfig)
         val timing = DanmakuSpeedPolicy.resolve(
-            playbackSpeed = currentPlaySpeed,
+            playbackSpeed = playbackSpeed,
             mode = videoPlayerConfigData.currentDanmakuSpeedMode,
             customPresentationSpeed = videoPlayerConfigData.currentDanmakuPresentationSpeed
         )
@@ -342,7 +362,6 @@ fun BvPlayer(
         }
         mLiveDanmakuPlayer?.updateConfig(config)
     }
-    var lastPlayed by remember { mutableLongStateOf(0L) }
     var openPlayListRequestToken by remember { mutableLongStateOf(0L) }
     
     var pendingDanmakuPosition by remember { mutableLongStateOf(-1L) }
@@ -374,14 +393,12 @@ fun BvPlayer(
     }
     
     var lastDanmakuSeekTime by remember { mutableLongStateOf(0L) }
-    var defaultAspectRatio by remember { mutableFloatStateOf(16 / 9f) }
     var lastHeartbeatPosition by remember { mutableLongStateOf(0L) }
     var showInfoProvider: () -> Boolean by remember { mutableStateOf({ false }) }
     var controllerInteractionProvider: () -> Boolean by remember { mutableStateOf({ false }) }
 
     val clockState = remember { VideoPlayerClockState() }
 
-    var hideLogsTimer: CountDownTimer? by remember { mutableStateOf(null) }
     var clockRefreshTimer: CountDownTimer? by remember { mutableStateOf(null) }
     var hideBackToHistoryTimer: CountDownTimer? by remember { mutableStateOf(null) }
 
@@ -421,8 +438,18 @@ fun BvPlayer(
     var showAutoSkipSponsorTip by remember { mutableStateOf(false) }
     var autoSkipSponsorSeconds by remember { mutableIntStateOf(0) }
     var autoSkipSponsorTipToken by remember { mutableLongStateOf(0L) }
-    var processedClipIndices by remember { mutableStateOf(setOf<Int>()) }
-    var processedSponsorSegments by remember { mutableStateOf(setOf<SponsorSegment>()) }
+    var processedClipIndices by remember(
+        videoPlayerConfigData.currentVideoCid,
+        videoPlayerConfigData.clipInfoList,
+    ) {
+        mutableStateOf(emptySet<Int>())
+    }
+    var processedSponsorSegments by remember(
+        videoPlayerConfigData.currentVideoCid,
+        sponsorSegments,
+    ) {
+        mutableStateOf(emptySet<SponsorSegment>())
+    }
 
     // 使用 rememberUpdatedState 来跟踪 clipInfoList 和 skipPgcIntroOutro 的最新值
     // 这样可以在非 Composable 上下文（定时器回调）中读取到最新值
@@ -436,6 +463,10 @@ fun BvPlayer(
     val currentOnShowSponsorBlockTip by rememberUpdatedState(onShowSponsorBlockTip)
     val currentOnSkipSponsorSegment by rememberUpdatedState(onSkipSponsorSegment)
     val currentOnDismissSponsorBlockTip by rememberUpdatedState(onDismissSponsorBlockTip)
+    val currentOnSendHeartbeat by rememberUpdatedState(onSendHeartbeat)
+    val currentOnLiveDanmakuPlayerReady by rememberUpdatedState(onLiveDanmakuPlayerReady)
+    val currentDanmakuConfig by rememberUpdatedState(danmakuConfig)
+    val currentLastPlayed by rememberUpdatedState(videoPlayerHistoryData.lastPlayed.toLong())
     val danmakuCapabilities = remember {
         TvDanmakuCompatibilityPolicy.resolve(
             sdkInt = Build.VERSION.SDK_INT,
@@ -542,16 +573,6 @@ fun BvPlayer(
         }
     }
 
-    // 当 clipInfoList 变化时，重置已处理的 clip 索引
-    // 这确保了切换到新视频时，跳过片头/片尾功能能够正常工作
-    LaunchedEffect(videoPlayerConfigData.clipInfoList) {
-        processedClipIndices = emptySet()
-    }
-
-    LaunchedEffect(sponsorSegments) {
-        processedSponsorSegments = emptySet()
-    }
-
     LaunchedEffect(autoSkipSponsorTipToken) {
         if (autoSkipSponsorTipToken == 0L) return@LaunchedEffect
         showAutoSkipSponsorTip = true
@@ -634,9 +655,7 @@ fun BvPlayer(
         scope.launch(Dispatchers.Main) {
             isPlaying = false
             if (!videoPlayerConfigData.incognitoMode && !videoPlayerConfigData.isLive) {
-                scope.launch(Dispatchers.IO) {
-                    onSendHeartbeat(-1)
-                }
+                currentOnSendHeartbeat(-1)
             }
             // 当控制信息面板显示时不自动播放下一集
             if (!showInfoProvider()) {
@@ -778,19 +797,26 @@ fun BvPlayer(
                 currentDanmakuMaskBitmap = bitmap
                 danmakuMaskRenderState.currentFrame = maskFrame
                 danmakuMaskRenderState.currentBitmap = bitmap
-                submitDanmakuMaskBitmap(bitmap, aspectRatioValue, currentMaskDownsampleTargetShortSide)
+                // The 30 fps mask loop is long-lived. Read the updated state instead of the
+                // aspect-ratio snapshot captured when LaunchedEffect first entered composition.
+                submitDanmakuMaskBitmap(
+                    bitmap,
+                    currentAspectRatioValue,
+                    currentMaskDownsampleTargetShortSide,
+                )
             }
         }
         // 如果 maskFrame 为 null（帧空隙），不做任何操作，保持当前蒙版
     }
+    val currentUpdateDanmakuMaskForPosition by rememberUpdatedState(updateDanmakuMaskForPosition)
 
     // 设置直播弹幕回调，保存引用并同步配置
-    LaunchedEffect(onLiveDanmakuPlayerReady) {
+    SideEffect(danmakuLayerHandle) {
         danmakuLayerHandle.updateOnLiveDanmakuPlayerReady { livePlayer ->
             mLiveDanmakuPlayer = livePlayer
             // 初始化时应用当前配置
-            livePlayer.updateConfig(danmakuConfig)
-            onLiveDanmakuPlayerReady?.invoke(livePlayer)
+            livePlayer.updateConfig(currentDanmakuConfig)
+            currentOnLiveDanmakuPlayerReady?.invoke(livePlayer)
         }
     }
 
@@ -875,39 +901,20 @@ fun BvPlayer(
         )
     }
 
-    val updateVideoAspectRatio: () -> Unit = {
-        aspectRatioValue = when (currentVideoAspectRatio) {
-            VideoAspectRatio.Default -> defaultAspectRatio
-            VideoAspectRatio.FourToThree -> 4 / 3f
-            VideoAspectRatio.SixteenToNine -> 16 / 9f
-        }
-        logger.info { "Update video player aspectRatio: $aspectRatioValue" }
-    }
-
     val sendHeartbeat: () -> Unit = sendHeartbeat@{
         if (videoPlayerConfigData.isLive) return@sendHeartbeat
-        scope.launch(Dispatchers.IO) {
-            val time = withContext(Dispatchers.Main) {
-                val currentTime = (videoPlayer.currentPosition.coerceAtLeast(0L) / 1000).toInt()
-                val totalTime = (videoPlayer.duration.coerceAtLeast(0L) / 1000).toInt()
-
-                if (totalTime == 0) {
-                    -2 // 无法正常播放
-                } else if (currentTime >= totalTime - 1) {
-                    -1 // 播放完后上报的时间应为 -1
-                } else {
-                    currentTime // 播放中上报当前时间
-                }
-            }
-            if (time > -2) {
-                onSendHeartbeat(time)
-            }
+        val currentTime = (videoPlayer.currentPosition.coerceAtLeast(0L) / 1000).toInt()
+        val totalTime = (videoPlayer.duration.coerceAtLeast(0L) / 1000).toInt()
+        val time = if (totalTime == 0) {
+            -2 // 无法正常播放
+        } else if (currentTime >= totalTime - 1) {
+            -1 // 播放完后上报的时间应为 -1
+        } else {
+            currentTime // 播放中上报当前时间
         }
-    }
-
-    // updateBackToHistory() 中使用 videoPlayerHistoryData.lastPlayed 无法获取到新值
-    LaunchedEffect(videoPlayerHistoryData.lastPlayed) {
-        lastPlayed = videoPlayerHistoryData.lastPlayed.toLong()
+        if (time > -2) {
+            currentOnSendHeartbeat(time)
+        }
     }
 
     LaunchedEffect(
@@ -922,18 +929,13 @@ fun BvPlayer(
         }
     }
 
-    LaunchedEffect(videoPlayerVideoInfoData.width, videoPlayerVideoInfoData.height) {
-        val newAspectRatio =
-            videoPlayerVideoInfoData.width / videoPlayerVideoInfoData.height.toFloat()
-        defaultAspectRatio = newAspectRatio.takeIf { it > 0 } ?: (16 / 9f)
-        updateVideoAspectRatio()
-    }
-
     val updateBackToHistory: () -> Unit = {
-        // 此处使用 videoPlayerHistoryData.lastPlayed 无法获取到新值
-        //if (videoPlayerHistoryData.lastPlayed > 0 && hideBackToHistoryTimer == null) {
-        if (videoPlayerConfigData.enableStartPositionSwitch && lastPlayed > 0 && hideBackToHistoryTimer == null) {
-            logger.info { "show showBackToHistory: ${videoPlayerHistoryData.lastPlayed}" }
+        if (
+            videoPlayerConfigData.enableStartPositionSwitch &&
+            currentLastPlayed > 0 &&
+            hideBackToHistoryTimer == null
+        ) {
+            logger.info { "show showBackToHistory: $currentLastPlayed" }
             scope.launch(Dispatchers.Main) {
                 showBackToHistory = true
                 hideBackToHistoryTimer = countDownTimer(5000, 1000, "hideBackToHistoryTimer") {
@@ -976,16 +978,17 @@ fun BvPlayer(
                 isError = false
                 exception = null
                 initDanmakuConfig()
-                updateVideoAspectRatio()
 
                 if (videoPlayerConfigData.isLive) {
-                    logger.info { "Live playback ignores currentPlaySpeed=$currentPlaySpeed" }
+                    logger.info {
+                        "Live playback ignores currentPlaySpeed=${videoPlayerConfigData.currentVideoSpeed}"
+                    }
                     videoPlayer.speed = 1f
                 } else {
                     // Apply the current session playback speed to a newly prepared player.
-	                    onPlaySpeedChange(currentPlaySpeed)
-	                    logger.info { "Reset default play speed: $currentPlaySpeed" }
-	                    videoPlayer.speed = currentPlaySpeed
+	                    onPlaySpeedChange(videoPlayerConfigData.currentVideoSpeed)
+	                    logger.info { "Reset default play speed: ${videoPlayerConfigData.currentVideoSpeed}" }
+	                    videoPlayer.speed = videoPlayerConfigData.currentVideoSpeed
 	                    applyDanmakuSpeedPolicy()
 	                }
 
@@ -1122,8 +1125,12 @@ fun BvPlayer(
             logger.info { "onVideoSizeChanged: ${width}x${height}" }
             if (width > 0 && height > 0) {
                 scope.launch(Dispatchers.Main) {
-                    defaultAspectRatio = width / height.toFloat()
-                    updateVideoAspectRatio()
+                    defaultAspectRatio = VideoContentGeometry.resolveAspectRatio(
+                        width = width,
+                        height = height,
+                        isPortraitVideo = videoPlayerVideoInfoData.isVerticalVideo,
+                        fallbackAspectRatio = defaultAspectRatio,
+                    )
                 }
             }
         }
@@ -1206,12 +1213,12 @@ fun BvPlayer(
     }
 
     LaunchedEffect(Unit) {
-        focusRequester.requestFocus(scope)
+        focusRequester.requestFocusWithRetry()
     }
 
     // 独立定时器：高频更新蒙版（每 33ms，约 30fps）
     // 直播模式下不启用蒙版
-    LaunchedEffect(Unit) {
+    LaunchedEffect(videoPlayer) {
         if (!danmakuCapabilities.danmakuMaskSupported) return@LaunchedEffect
 
         while (true) {
@@ -1229,7 +1236,7 @@ fun BvPlayer(
                     -1L
                 }
                 if (position >= 0) {
-                    updateDanmakuMaskForPosition(position)
+                    currentUpdateDanmakuMaskForPosition(position)
                 }
             }
             delay(33)
@@ -1249,7 +1256,7 @@ fun BvPlayer(
         }
     }
 
-    LaunchedEffect(aspectRatioValue, videoPlayerConfigData.debugDanmakuMaskDownsample180p) {
+    SideEffect(aspectRatioValue, videoPlayerConfigData.debugDanmakuMaskDownsample180p) {
         val currentBitmap = danmakuMaskRenderState.currentBitmap
         danmakuMaskRenderState.resetSubmission()
         if (
@@ -1262,12 +1269,7 @@ fun BvPlayer(
         }
     }
 
-    LaunchedEffect(videoPlayerConfigData.isLoop, videoPlayerConfigData.showDanmaku) {
-        videoPlayer.setPlayerEventListener(videoPlayerListener)
-    }
-
     LaunchedEffect(videoPlayerConfigData.currentVideoSpeed) {
-        currentPlaySpeed = videoPlayerConfigData.currentVideoSpeed
         applyDanmakuSpeedPolicy()
     }
 
@@ -1336,14 +1338,13 @@ fun BvPlayer(
     }
 
     LaunchedEffect(videoPlayerLogsData.logs) {
-        hideLogsTimer?.cancel()
         showLogs = true
-        hideLogsTimer = countDownTimer(3000, 1000, "hideLogsTimer") {
-            showLogs = false
-        }
+        delay(3_000)
+        showLogs = false
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(videoPlayer) {
+        isDanmakuMaskDisposed = false
         onDispose {
             isDanmakuMaskDisposed = true
 
@@ -1360,12 +1361,12 @@ fun BvPlayer(
                     currentTime // 播放中上报当前时间
                 }
                 if (time > -2) {
-                    scope.launch(Dispatchers.IO) {
-                        onSendHeartbeat(time)
-                    }
+                    currentOnSendHeartbeat(time)
                 }
             }
 
+            hideBackToHistoryTimer?.cancel()
+            hideBackToHistoryTimer = null
             clearDanmakuMaskState(true)
 
             // 先暂停播放，防止渲染线程继续工作
@@ -1524,9 +1525,7 @@ fun BvPlayer(
                 }
             },
             onAspectRatioChange = { aspectRadio ->
-                currentVideoAspectRatio = aspectRadio
-                onAspectRatioChange(currentVideoAspectRatio)
-                updateVideoAspectRatio()
+                onAspectRatioChange(aspectRadio)
             },
             onRotationChange = { rotation ->
 //                if (videoPlayerConfigData.currentResolution > Resolution.R1080P60) {
@@ -1547,7 +1546,6 @@ fun BvPlayer(
 //                    }
 //                }
 
-                currentVideoRotation = rotation
                 onRotationChange(rotation)
             },
             onPlaySpeedChange = { speed ->
@@ -1556,10 +1554,9 @@ fun BvPlayer(
                     return@VideoPlayerController
                 }
 	                logger.info { "Set default play speed: $speed" }
-	                currentPlaySpeed = speed
 	                onPlaySpeedChange(speed)
 	                videoPlayer.speed = speed
-	                applyDanmakuSpeedPolicy()
+	                applyDanmakuSpeedPolicy(speed)
             },
             onAudioChange = { audio ->
                 pendingInitialPlaybackSeek = false
@@ -1750,7 +1747,7 @@ fun BvPlayer(
             },
             onDismissSponsorBlockTip = onDismissSponsorBlockTip
         ) {
-            LaunchedEffect(Unit) {
+            SideEffect(videoPlayer) {
                 videoPlayer.setOptions()
             }
 
@@ -1785,7 +1782,7 @@ fun BvPlayer(
                     .align(Alignment.Center),
                 videoPlayer = videoPlayer,
                 playerListener = videoPlayerListener,
-                rotationDegrees = currentVideoRotation.degrees,
+                rotationDegrees = videoPlayerConfigData.currentVideoRotation.degrees,
                 danmakuPlayer = danmakuPlayer,
                 forceUseTextureView = useTextureViewFixPortraitVideo,
                 // HDR/杜比视界不经 TextureView，避免视频转为 SDR。
@@ -1793,6 +1790,7 @@ fun BvPlayer(
                     Resolution.RHdr,
                     Resolution.RDolby,
                 ),
+                releasePlayerOnDispose = false,
             )
 
             DanmakuLayer(
@@ -1860,7 +1858,7 @@ private fun DanmakuLayerSideEffects(
     maskBitmap: Bitmap?,
     videoAspectRatio: Float,
 ) {
-    LaunchedEffect(visible, maskFrame, maskBitmap, videoAspectRatio) {
+    SideEffect(visible, maskFrame, maskBitmap, videoAspectRatio) {
         danmakuLayerHandle.update(
             mask = maskFrame,
             bitmap = maskBitmap,

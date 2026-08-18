@@ -69,6 +69,7 @@ import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.util.scrollToItemIfAvailable
 import dev.aaa1115910.bv.viewmodel.user.ToViewViewModel
 import org.koin.androidx.compose.koinViewModel
@@ -82,7 +83,6 @@ fun ToViewScreen(
     onListEmpty: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     var currentIndex by remember { mutableIntStateOf(0) }
     val showLargeTitle by remember { derivedStateOf { currentIndex < 4 } }
     val titleFontSize by animateFloatAsState(
@@ -157,7 +157,7 @@ fun ToViewScreen(
         lazyGridState.scrollToItemIfAvailable(targetIndex)
         withFrameNanos { }
         withFrameNanos { }
-        focusRequesters[targetHistory.avid]?.requestFocus(scope)
+        focusRequesters[targetHistory.avid]?.requestFocusWithRetry()
         pendingRestoreFocusIndex = -1
     }
 
@@ -356,7 +356,7 @@ private fun ToViewMenuDialog(
         if (show) {
             hasFocused = false
             // 初始焦点放在隐藏区块
-            dummyFocusRequester.requestFocus(scope)
+            dummyFocusRequester.requestFocusWithRetry()
         }
     }
 

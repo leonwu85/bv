@@ -7,7 +7,7 @@ import android.os.Build
 import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -76,6 +76,9 @@ fun AkDanmakuPlayer(
     var danmakuView: DanmakuView? by remember { mutableStateOf(null) }
     var liveDanmakuPlayer: LiveDanmakuPlayer? by remember { mutableStateOf(null) }
     val currentOnDanmakuPlayerBound by rememberUpdatedState(onDanmakuPlayerBound)
+    val currentOnLiveDanmakuPlayerReady by rememberUpdatedState(onLiveDanmakuPlayerReady)
+    val currentOnVideoDanmakuSurfaceViewReady by rememberUpdatedState(onVideoDanmakuSurfaceViewReady)
+    val currentOnVideoDanmakuSurfaceViewRelease by rememberUpdatedState(onVideoDanmakuSurfaceViewRelease)
 
     DisposableEffect(danmakuPlayer, isLiveMode) {
         onDispose {
@@ -87,7 +90,7 @@ fun AkDanmakuPlayer(
         }
     }
 
-    LaunchedEffect(danmakuView, danmakuPlayer) {
+    SideEffect(danmakuView, danmakuPlayer, isLiveMode) {
         if (!isLiveMode) {
             danmakuView?.let { view ->
                 danmakuPlayer?.let { player ->
@@ -98,11 +101,10 @@ fun AkDanmakuPlayer(
         }
     }
 
-    LaunchedEffect(liveDanmakuPlayer, onLiveDanmakuPlayerReady) {
-        android.util.Log.d("AkDanmakuPlayer", "LaunchedEffect triggered: liveDanmakuPlayer=$liveDanmakuPlayer, callback=$onLiveDanmakuPlayerReady")
+    SideEffect(liveDanmakuPlayer) {
+        android.util.Log.d("AkDanmakuPlayer", "SideEffect triggered: liveDanmakuPlayer=$liveDanmakuPlayer")
         liveDanmakuPlayer?.let { player ->
-            android.util.Log.d("AkDanmakuPlayer", "Invoking onLiveDanmakuPlayerReady callback with player: $player")
-            onLiveDanmakuPlayerReady?.invoke(player)
+            currentOnLiveDanmakuPlayerReady?.invoke(player)
         }
     }
 
@@ -137,16 +139,16 @@ fun AkDanmakuPlayer(
             danmakuSurfaceView?.let { surfaceView ->
                 DisposableEffect(surfaceView) {
                     onDispose {
-                        if (onVideoDanmakuSurfaceViewRelease != null) {
-                            onVideoDanmakuSurfaceViewRelease(surfaceView)
+                        if (currentOnVideoDanmakuSurfaceViewRelease != null) {
+                            currentOnVideoDanmakuSurfaceViewRelease?.invoke(surfaceView)
                         } else {
-                            onVideoDanmakuSurfaceViewReady?.invoke(null)
+                            currentOnVideoDanmakuSurfaceViewReady?.invoke(null)
                         }
                     }
                 }
             }
 
-            LaunchedEffect(danmakuSurfaceView, danmakuPlayer) {
+            SideEffect(danmakuSurfaceView, danmakuPlayer) {
                 danmakuSurfaceView?.let { surfaceView ->
                     danmakuPlayer?.let { player ->
                         player.bindSurfaceView(surfaceView)
@@ -163,17 +165,17 @@ fun AkDanmakuPlayer(
                         setZOrderOnTop(false)
                         setZOrderMediaOverlay(true)
                         holder?.setFormat(PixelFormat.TRANSLUCENT)
-                        if (onVideoDanmakuSurfaceViewReady == null) {
+                        if (currentOnVideoDanmakuSurfaceViewReady == null) {
                             updateMaskBitmap(maskBitmap, videoAspectRatio)
                         }
                     }.also {
                         danmakuSurfaceView = it
-                        onVideoDanmakuSurfaceViewReady?.invoke(it)
+                        currentOnVideoDanmakuSurfaceViewReady?.invoke(it)
                     }
                 },
                 update = { surfaceView ->
                     surfaceView.visibility = if (visible) View.VISIBLE else View.INVISIBLE
-                    if (onVideoDanmakuSurfaceViewReady == null) {
+                    if (currentOnVideoDanmakuSurfaceViewReady == null) {
                         if (maskBitmap != null && !maskBitmap.isRecycled) {
                             surfaceView.updateMaskBitmap(maskBitmap, videoAspectRatio)
                         } else {

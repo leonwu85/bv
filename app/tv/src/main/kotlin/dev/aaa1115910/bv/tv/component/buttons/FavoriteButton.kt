@@ -19,10 +19,12 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,9 +66,10 @@ fun FavoriteButton(
     dialogContainerColor: Color = AlertDialogDefaults.containerColor
 ) {
     var showFavoriteDialog by remember { mutableStateOf(false) }
+    val currentOnDialogVisibilityChanged by rememberUpdatedState(onDialogVisibilityChanged)
 
-    LaunchedEffect(showFavoriteDialog) {
-        onDialogVisibilityChanged(showFavoriteDialog)
+    SideEffect(showFavoriteDialog) {
+        currentOnDialogVisibilityChanged(showFavoriteDialog)
     }
 
     Button(

@@ -12,7 +12,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,7 +34,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.ui.theme.BVTheme
-import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import kotlin.math.round
 
 private val NumberItemShape = RoundedCornerShape(14.dp)
@@ -114,14 +113,13 @@ private fun NumberDialog(
     isInteger: Boolean = true,
     valueFormat: String? = null,
 ) {
-    val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
     var currentValue by remember { mutableStateOf(initValue) }
 
     LaunchedEffect(show) {
         if (show) {
             kotlinx.coroutines.delay(100)
-            focusRequester.requestFocus(scope)
+            focusRequester.requestFocusWithRetry()
         }
     }
 

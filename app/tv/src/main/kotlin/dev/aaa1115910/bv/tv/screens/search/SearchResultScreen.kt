@@ -103,7 +103,6 @@ fun SearchResultScreen(
     val logger = KotlinLogging.logger { }
     val tabRowFocusRequester = remember { FocusRequester() }
 
-    var rowSize by remember { mutableIntStateOf(4) }
     var currentIndex by remember { mutableIntStateOf(0) }
 
     var searchKeyword by remember { mutableStateOf("") }
@@ -123,6 +122,12 @@ fun SearchResultScreen(
     val selectedDuration = searchResultViewModel.selectedDuration
     val selectedPartition = searchResultViewModel.selectedPartition
     val selectedChildPartition = searchResultViewModel.selectedChildPartition
+    val rowSize = when (searchResultViewModel.searchType) {
+        SearchType.Video -> Prefs.gridColumns
+        SearchType.MediaBangumi, SearchType.MediaFt -> Prefs.gridColumns + 2
+        SearchType.BiliUser -> Prefs.gridColumns - 1
+        SearchType.LiveRoom, SearchType.Article -> Prefs.gridColumns
+    }
 
     val onClickResult: (SearchTypeResult.SearchTypeResultItem) -> Unit = { resultItem ->
         when (resultItem) {
@@ -187,17 +192,6 @@ fun SearchResultScreen(
             searchResultViewModel.keyword = searchKeyword
         } else {
             activity.finish()
-        }
-    }
-
-    LaunchedEffect(searchResultViewModel.searchType) {
-        val gridColumns = Prefs.gridColumns
-        rowSize = when (searchResultViewModel.searchType) {
-            SearchType.Video -> gridColumns
-            SearchType.MediaBangumi, SearchType.MediaFt -> gridColumns + 2
-            SearchType.BiliUser -> gridColumns - 1
-            SearchType.LiveRoom -> gridColumns
-            SearchType.Article -> gridColumns
         }
     }
 

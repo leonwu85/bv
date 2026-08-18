@@ -22,7 +22,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,15 +48,14 @@ import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
 import dev.aaa1115910.bv.tv.component.videocard.SeasonCard
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.Prefs
-import dev.aaa1115910.bv.util.addAllWithMainContext
 import dev.aaa1115910.bv.util.fInfo
-import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.util.resizedImageUrl
 import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.getKoin
 
@@ -80,7 +78,6 @@ fun AnimeTimelineScreen(
     seasonRepository: SeasonRepository = getKoin().get()
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger { }
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
@@ -103,32 +100,30 @@ fun AnimeTimelineScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        scope.launch(Dispatchers.IO) {
-            runCatching {
-                timelines.addAllWithMainContext {
-                    seasonRepository.getTimeline(
-                        filter = filter,
-                        preferApiType = Prefs.apiType
-                    )
-                }
-                // 数据加载完成后，默认选中"今天"
-                val todayIndex = timelines.indexOfFirst { it.isToday }
-                if (todayIndex >= 0) {
-                    withContext(Dispatchers.Main) {
-                        selectedTabIndex = todayIndex
-                    }
-                }
-                runCatching {
-                    delay(200)
-                    defaultFocusRequester.requestFocus(scope)
-                }
-            }.onFailure {
-                logger.fInfo { "Get timeline failed: ${it.stackTraceToString()}" }
-                withContext(Dispatchers.Main) {
-                    "获取放送时间表失败: ${it.message}".toast(context)
-                }
+    LaunchedEffect(filter) {
+        try {
+            val loadedTimelines = withContext(Dispatchers.IO) {
+                seasonRepository.getTimeline(
+                    filter = filter,
+                    preferApiType = Prefs.apiType
+                )
             }
+            timelines.clear()
+            timelines.addAll(loadedTimelines)
+
+            // 数据加载完成后，默认选中"今天"
+            val todayIndex = timelines.indexOfFirst { it.isToday }
+            if (todayIndex >= 0) {
+                selectedTabIndex = todayIndex
+            }
+
+            delay(200)
+            defaultFocusRequester.requestFocusWithRetry()
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Throwable) {
+            logger.fInfo { "Get timeline failed: ${exception.stackTraceToString()}" }
+            "获取放送时间表失败: ${exception.message}".toast(context)
         }
     }
 

@@ -44,11 +44,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -169,6 +171,8 @@ fun NewDynamicsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val currentOnSelectedTabChanged by rememberUpdatedState(onSelectedTabChanged)
+    val currentOnSubTabRowUnavailable by rememberUpdatedState(onSubTabRowUnavailable)
     val performanceProfile = LocalTvUiPerformanceProfile.current
     val preloadCoordinator = LocalTvPreloadCoordinator.current
     val dynamicTabs = remember {
@@ -192,8 +196,8 @@ fun NewDynamicsScreen(
     val articleStaggeredGridState = rememberLazyStaggeredGridState()
 
     // 当子 Tab 切换时通知父组件记住选择
-    LaunchedEffect(selectedTabIndex) {
-        onSelectedTabChanged(selectedTabIndex)
+    SideEffect(selectedTabIndex) {
+        currentOnSelectedTabChanged(selectedTabIndex)
     }
 
     val selectedTabType = dynamicTabs[selectedTabIndex]
@@ -393,7 +397,7 @@ fun NewDynamicsScreen(
     if (dynamicViewModel.isLogin) {
         DisposableEffect(Unit) {
             onDispose {
-                onSubTabRowUnavailable()
+                currentOnSubTabRowUnavailable()
             }
         }
 

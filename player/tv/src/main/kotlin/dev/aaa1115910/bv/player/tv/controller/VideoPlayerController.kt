@@ -14,8 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableIntStateOf
@@ -23,6 +24,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -187,6 +189,7 @@ fun VideoPlayerController(
     val videoPlayerDebugInfoData = LocalVideoPlayerDebugInfoData.current
     val logger = KotlinLogging.logger {}
     val scope = rememberCoroutineScope()
+    val currentOnInfoVisibilityChanged by rememberUpdatedState(onInfoVisibilityChanged)
 
     var showListController by remember { mutableStateOf(false) }
     var showMenuController by remember { mutableStateOf(false) }
@@ -383,8 +386,8 @@ fun VideoPlayerController(
             System.currentTimeMillis() < controllerInteractionDeadline
         }
     }
-    LaunchedEffect(showInfo) {
-        onInfoVisibilityChanged(showInfo)
+    SideEffect(showInfo) {
+        currentOnInfoVisibilityChanged(showInfo)
     }
     LaunchedEffect(hideControllerOnCommentPanelOpen, commentPanelVisible) {
         if (hideControllerOnCommentPanelOpen && commentPanelVisible) {

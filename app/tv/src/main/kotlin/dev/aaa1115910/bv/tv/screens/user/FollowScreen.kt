@@ -35,7 +35,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,7 +61,7 @@ import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
 import dev.aaa1115910.bv.ui.theme.BVTheme
-import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.viewmodel.user.FollowViewModel
 import org.koin.androidx.compose.koinViewModel
 
@@ -72,7 +71,6 @@ fun FollowScreen(
     followViewModel: FollowViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val defaultFocusRequester = remember { FocusRequester() }
 
     var currentIndex by remember { mutableIntStateOf(0) }
@@ -102,7 +100,7 @@ fun FollowScreen(
 
     LaunchedEffect(followViewModel.updating) {
         if (!followViewModel.updating) {
-            defaultFocusRequester.requestFocus(scope)
+            defaultFocusRequester.requestFocusWithRetry()
         }
     }
 

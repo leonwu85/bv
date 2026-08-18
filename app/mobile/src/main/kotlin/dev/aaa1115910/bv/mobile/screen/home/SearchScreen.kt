@@ -96,7 +96,6 @@ fun SearchScreen(
     val updateKeyword: (String) -> Unit = { newKeyword ->
         if (newKeyword != searchInputViewModel.keyword) {
             searchInputViewModel.keyword = newKeyword
-            searchInputViewModel.updateSuggests()
         }
     }
 

@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,20 +60,18 @@ fun ClosedCaptionMenuList(
     val focusState = LocalMenuFocusStateData.current
     val parentMenuFocusRequester = remember { FocusRequester() }
     val parentMenuPositionFocusRequester = remember { FocusRequester() }
-    var selectedClosedCaptionMenuItem by remember { mutableStateOf(VideoPlayerClosedCaptionMenuItem.Switch) }
+    var preferredClosedCaptionMenuItem by remember {
+        mutableStateOf(VideoPlayerClosedCaptionMenuItem.Switch)
+    }
     val secondarySubtitleTracks = videoPlayerConfigData.availableSubtitleTracks.filter {
         it.id == -1L || it.id != videoPlayerConfigData.currentSubtitleId
     }
     val visibleMenuItems = VideoPlayerClosedCaptionMenuItem.entries.filter {
         videoPlayerConfigData.currentSubtitleId != -1L || !it.isSecondary
     }
-
-    LaunchedEffect(visibleMenuItems) {
-        if (selectedClosedCaptionMenuItem !in visibleMenuItems) {
-            selectedClosedCaptionMenuItem = visibleMenuItems.firstOrNull()
-                ?: VideoPlayerClosedCaptionMenuItem.Switch
-        }
-    }
+    val selectedClosedCaptionMenuItem = preferredClosedCaptionMenuItem.takeIf { it in visibleMenuItems }
+        ?: visibleMenuItems.firstOrNull()
+        ?: VideoPlayerClosedCaptionMenuItem.Switch
 
     Row(
         modifier = modifier.fillMaxHeight(),
@@ -221,7 +218,7 @@ fun ClosedCaptionMenuList(
                     text = item.getDisplayName(context),
                     selected = selectedClosedCaptionMenuItem == item,
                     onClick = {},
-                    onFocus = { selectedClosedCaptionMenuItem = item },
+                    onFocus = { preferredClosedCaptionMenuItem = item },
                 )
             }
         }

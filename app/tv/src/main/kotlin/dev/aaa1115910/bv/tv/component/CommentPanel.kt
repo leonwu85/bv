@@ -81,9 +81,13 @@ import dev.aaa1115910.bv.util.isDpadDown
 import dev.aaa1115910.bv.util.isDpadLeft
 import dev.aaa1115910.bv.util.isKeyDown
 import dev.aaa1115910.bv.util.onBackPressed
-import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.util.toast
+import dev.aaa1115910.bv.tv.util.LatestRequestOwner
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import org.koin.compose.getKoin
 import androidx.compose.ui.platform.LocalContext
@@ -151,6 +155,8 @@ fun CommentPanel(
     var focusOnLoadingSentinel by remember { mutableStateOf(false) }
     var scrollToCurrentEpisode by remember { mutableStateOf(false) }
     var pendingFocusToComments by remember { mutableStateOf(false) }
+    var loadedCommentOid by remember { mutableStateOf<Long?>(null) }
+    val commentLoadOwner = remember { LatestRequestOwner() }
 
     // 合并所有剧集（正片 + 章节）
     val allEpisodeItems by remember(episodes, sections) {
@@ -190,20 +196,16 @@ fun CommentPanel(
         }
     }
 
-    val requestCommentContentFocus = {
-        focusRequester.requestFocus(scope)
-        scope.launch {
-            delay(80)
-            focusRequester.requestFocus(scope)
-        }
+    suspend fun requestCommentContentFocus() {
+        focusRequester.requestFocusWithRetry()
+        delay(80)
+        focusRequester.requestFocusWithRetry()
     }
 
-    val requestLoadingSentinelFocus = {
-        loadingFocusRequester.requestFocus(scope)
-        scope.launch {
-            delay(80)
-            loadingFocusRequester.requestFocus(scope)
-        }
+    suspend fun requestLoadingSentinelFocus() {
+        loadingFocusRequester.requestFocusWithRetry()
+        delay(80)
+        loadingFocusRequester.requestFocusWithRetry()
     }
 
     val handleBack = {
@@ -251,6 +253,8 @@ fun CommentPanel(
                         } else {
                             "翻译结果为空".toast(context)
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         "翻译失败: ${e.message ?: "未知错误"}".toast(context)
                     } finally {
@@ -267,12 +271,16 @@ fun CommentPanel(
 
     // 初始化当前选中的剧集
     LaunchedEffect(allEpisodeItems, initialEpisodeId) {
-        if (currentEpisode == null && allEpisodeItems.isNotEmpty()) {
-            currentEpisode = if (initialEpisodeId != -1) {
-                allEpisodeItems.find { it.episode.id == initialEpisodeId }?.episode
-            } else {
-                allEpisodeItems.firstOrNull()?.episode
-            }
+        if (allEpisodeItems.isEmpty()) return@LaunchedEffect
+
+        val currentEpisodeStillAvailable = allEpisodeItems.any {
+            it.episode.id == currentEpisode?.id && it.episode.aid == currentEpisode?.aid
+        }
+        if (!currentEpisodeStillAvailable) {
+            currentEpisode = allEpisodeItems
+                .firstOrNull { it.episode.id == initialEpisodeId }
+                ?.episode
+                ?: allEpisodeItems.first().episode
         }
     }
 
@@ -288,34 +296,47 @@ fun CommentPanel(
         }
     }
 
-    // 加载评论
-    val loadComments: (reset: Boolean) -> Unit = loadComments@ { reset ->
-        if (loading) return@loadComments
+    // 加载评论。由调用方 LaunchedEffect 直接持有，不再额外启动 composition scope job。
+    suspend fun loadComments(reset: Boolean, targetOid: Long) {
+        if (!reset && loading) return
+
+        val requestGeneration = commentLoadOwner.claim()
         loading = true
         error = null
-        scope.launch {
-            try {
-                val page = if (reset) CommentPage() else currentPage
-                val data = commentRepository.getComments(
-                    id = currentOid,
-                    type = type,
-                    sort = CommentSort.Hot,
-                    page = page,
-                    preferApiType = Prefs.apiType
-                )
+        if (reset) {
+            comments.clear()
+            currentPage = CommentPage()
+            hasNext = true
+        }
 
-                if (reset) {
-                    comments.clear()
-                    comments.addAll(data.comments)
-                } else {
-                    comments.addAll(data.comments)
-                }
+        try {
+            val page = if (reset) CommentPage() else currentPage
+            val data = commentRepository.getComments(
+                id = targetOid,
+                type = type,
+                sort = CommentSort.Hot,
+                page = page,
+                preferApiType = Prefs.apiType
+            )
 
-                currentPage = data.nextPage
-                hasNext = data.hasNext
-            } catch (e: Exception) {
+            currentCoroutineContext().ensureActive()
+            if (!commentLoadOwner.owns(requestGeneration)) return
+
+            if (reset) {
+                comments.clear()
+            }
+            comments.addAll(data.comments)
+            currentPage = data.nextPage
+            hasNext = data.hasNext
+            loadedCommentOid = targetOid
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (commentLoadOwner.owns(requestGeneration)) {
                 error = e.message ?: "加载失败"
-            } finally {
+            }
+        } finally {
+            if (commentLoadOwner.owns(requestGeneration)) {
                 loading = false
             }
         }
@@ -323,10 +344,12 @@ fun CommentPanel(
 
     // 显示时加载评论
     LaunchedEffect(show, currentOid) {
-        if (show && comments.isEmpty()) {
-            loadComments(true)
+        if (show && loadedCommentOid != currentOid) {
+            loadComments(reset = true, targetOid = currentOid)
         }
         if (!show) {
+            commentLoadOwner.invalidate()
+            loading = false
             hasRequestedFocus = false
             wasSubCommentPanelShown = false
             focusOnLoadingSentinel = false
@@ -374,9 +397,9 @@ fun CommentPanel(
                     withFrameNanos { }
                     withFrameNanos { }
                     commentFocusRequesters[targetCommentId]?.let { targetFocusRequester ->
-                        targetFocusRequester.requestFocus(scope)
+                        targetFocusRequester.requestFocusWithRetry()
                         delay(80)
-                        targetFocusRequester.requestFocus(scope)
+                        targetFocusRequester.requestFocusWithRetry()
                         restoredFocusToComment = true
                     }
                 }
@@ -431,9 +454,9 @@ fun CommentPanel(
     }
 
     // 懒加载：滚动到底部时加载更多
-    LaunchedEffect(isAtBottom, hasNext, loading) {
-        if (isAtBottom && hasNext && !loading && comments.isNotEmpty()) {
-            loadComments(false)
+    LaunchedEffect(show, currentOid, isAtBottom, hasNext, comments.size) {
+        if (show && isAtBottom && hasNext && comments.isNotEmpty()) {
+            loadComments(reset = false, targetOid = currentOid)
         }
     }
 
@@ -487,10 +510,15 @@ fun CommentPanel(
                             episodes = allEpisodeItems,
                             currentEpisode = currentEpisode,
                             onEpisodeSelected = { episodeItem ->
-                                currentEpisode = episodeItem.episode
-                                onEpisodeChange?.invoke(episodeItem.episode)
-                                comments.clear()
-                                loadComments(true)
+                            currentEpisode = episodeItem.episode
+                            onEpisodeChange?.invoke(episodeItem.episode)
+                            commentLoadOwner.invalidate()
+                            loadedCommentOid = null
+                            loading = false
+                            comments.clear()
+                            currentPage = CommentPage()
+                            hasNext = true
+                            error = null
                                 // 切换剧集后将焦点移回评论列表
                                 focusOnSidebar = false
                                 scrollToCurrentEpisode = false
@@ -506,7 +534,7 @@ fun CommentPanel(
                                 focusOnSidebar = false
                                 scrollToCurrentEpisode = false
                                 scope.launch {
-                                    focusRequester.requestFocus(scope)
+                                    requestCommentContentFocus()
                                 }
                             },
                             scrollToCurrent = scrollToCurrentEpisode
@@ -579,7 +607,7 @@ fun CommentPanel(
 
                                                     event.isKeyDown() && event.isDpadDown() -> {
                                                         if (comments.isNotEmpty() || error != null || !loading) {
-                                                            requestCommentContentFocus()
+                                                            scope.launch { requestCommentContentFocus() }
                                                         }
                                                         true
                                                     }
@@ -642,7 +670,7 @@ fun CommentPanel(
                                                     listState.scrollToItem(0)
                                                     // 滚动后重新请求焦点，使焦点移到第一条评论
                                                     delay(100)
-                                                    focusRequester.requestFocus(scope)
+                                                    focusRequester.requestFocusWithRetry()
                                                 }
                                                 true
                                             }

@@ -46,7 +46,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,7 +85,7 @@ import dev.aaa1115910.bv.tv.screens.settings.content.StorageSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.UISetting
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.Prefs
-import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 
 @Composable
 fun SettingsScreen(
@@ -198,7 +197,6 @@ fun SettingsNav(
     focusRequester: FocusRequester = remember { FocusRequester() }
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val visibleItems = SettingsMenuNavItem.entries.filter { it != SettingsMenuNavItem.Mpv || showMpvSettings }
     val initialMenu = remember { currentMenu }
     val listState = rememberLazyListState(
@@ -206,11 +204,11 @@ fun SettingsNav(
     )
 
     LaunchedEffect(isFocusing) {
-        if (isFocusing) focusRequester.requestFocus(scope)
+        if (isFocusing) focusRequester.requestFocusWithRetry()
     }
 
     LaunchedEffect(Unit) {
-        focusRequester.requestFocus(scope)
+        focusRequester.requestFocusWithRetry()
     }
 
     LazyColumn(

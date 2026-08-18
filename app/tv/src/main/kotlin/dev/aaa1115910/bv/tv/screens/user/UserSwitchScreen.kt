@@ -77,7 +77,7 @@ import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.screens.user.lock.UnlockSwitchUserContent
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.ifElse
-import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.viewmodel.UserSwitchViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -488,11 +488,10 @@ private fun DeleteConfirmDialog(
     userDB: UserDB,
     onConfirm: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(show) {
-        if (show) focusRequester.requestFocus(scope)
+        if (show) focusRequester.requestFocusWithRetry()
     }
 
     if (show) {

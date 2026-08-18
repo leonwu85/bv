@@ -8,12 +8,14 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -80,6 +82,7 @@ fun UgcContent(
     onRequestDrawerFocus: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
+    val currentOnSelectedTabChanged by rememberUpdatedState(onSelectedTabChanged)
     val logger = KotlinLogging.logger("UgcContent")
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
     val performanceProfile = LocalTvUiPerformanceProfile.current
@@ -114,11 +117,13 @@ fun UgcContent(
         )
     }
 
-    LaunchedEffect(selectedTab, currentViewModel) {
+    SideEffect(selectedTab) {
         if (selectedTab.ordinal != selectedTabOrdinal) {
-            onSelectedTabChanged(selectedTab.ordinal)
+            currentOnSelectedTabChanged(selectedTab.ordinal)
         }
+    }
 
+    LaunchedEffect(selectedTab, currentViewModel) {
         instantiatedViewModels[selectedTab] = currentViewModel
 
         // 取消不在预加载窗口内的延迟任务，避免乱切时浪费

@@ -4140,6 +4140,12 @@ class VideoPlayerV3ViewModel(
         }
     }
 
+    fun enqueueUploadHistory(time: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            uploadHistory(time)
+        }
+    }
+
     suspend fun uploadHistory(time: Int) {
         runCatching {
             if (!fromSeason) {

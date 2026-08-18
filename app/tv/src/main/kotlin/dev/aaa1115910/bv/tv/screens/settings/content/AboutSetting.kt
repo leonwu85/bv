@@ -40,7 +40,7 @@ import dev.aaa1115910.bv.tv.component.settings.UpdateDialog
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
 import dev.aaa1115910.bv.ui.theme.BVTheme
-import dev.aaa1115910.bv.util.requestFocus
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.util.toast
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -129,13 +129,13 @@ fun AboutSetting(
         if (isManualCheck && updateState == UpdateCheckState.HasUpdate) {
             // HasUpdate 状态会切换到 Button，需要重新请求焦点
             kotlinx.coroutines.delay(100)
-            buttonFocusRequester.requestFocus(scope)
+            buttonFocusRequester.requestFocusWithRetry()
         }
     }
 
     LaunchedEffect(showGithubRateLimitDialog) {
         if (showGithubRateLimitDialog) {
-            githubRateLimitDialogFocusRequester.requestFocus(scope)
+            githubRateLimitDialogFocusRequester.requestFocusWithRetry()
         }
     }
 

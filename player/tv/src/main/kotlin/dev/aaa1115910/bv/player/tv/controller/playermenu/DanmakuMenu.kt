@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,7 +67,7 @@ fun DanmakuMenuList(
     val focusState = LocalMenuFocusStateData.current
     val parentMenuFocusRequester = remember { FocusRequester() }
     val parentMenuPositionFocusRequester = remember { FocusRequester() }
-    var selectedDanmakuMenuItem by remember { mutableStateOf(VideoPlayerDanmakuMenuItem.Switch) }
+    var preferredDanmakuMenuItem by remember { mutableStateOf(VideoPlayerDanmakuMenuItem.Switch) }
     val displayedDanmakuSpeedModes = remember {
         DanmakuSpeedMode.entries.filterNot { it == DanmakuSpeedMode.Custom }
     }
@@ -81,13 +80,9 @@ fun DanmakuMenuList(
             (item == VideoPlayerDanmakuMenuItem.PresentationSpeed &&
                 videoPlayerConfigData.currentDanmakuSpeedMode != DanmakuSpeedMode.Custom)
     }
-
-    LaunchedEffect(displayedDanmakuMenuItems) {
-        if (selectedDanmakuMenuItem !in displayedDanmakuMenuItems) {
-            selectedDanmakuMenuItem = displayedDanmakuMenuItems.firstOrNull()
-                ?: VideoPlayerDanmakuMenuItem.Switch
-        }
-    }
+    val selectedDanmakuMenuItem = preferredDanmakuMenuItem.takeIf { it in displayedDanmakuMenuItems }
+        ?: displayedDanmakuMenuItems.firstOrNull()
+        ?: VideoPlayerDanmakuMenuItem.Switch
 
     Row(
         modifier = modifier.fillMaxHeight(),
@@ -316,7 +311,7 @@ fun DanmakuMenuList(
                     text = item.getDisplayName(context),
                     selected = selectedDanmakuMenuItem == item,
                     onClick = {},
-                    onFocus = { selectedDanmakuMenuItem = item },
+                    onFocus = { preferredDanmakuMenuItem = item },
                 )
             }
         }

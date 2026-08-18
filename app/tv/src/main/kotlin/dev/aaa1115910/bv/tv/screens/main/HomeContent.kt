@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -18,6 +19,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -97,6 +99,7 @@ fun HomeContent(
     toViewViewModel: ToViewViewModel = koinViewModel(),
     userViewModel: UserViewModel = koinViewModel()
 ) {
+    val currentOnSelectedTabChanged by rememberUpdatedState(onSelectedTabChanged)
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger("HomeContent")
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
@@ -272,9 +275,9 @@ fun HomeContent(
         }
     }
 
-    LaunchedEffect(selectedTab) {
+    SideEffect(selectedTab) {
         if (selectedTab.ordinal != selectedTabOrdinal) {
-            onSelectedTabChanged(selectedTab.ordinal)
+            currentOnSelectedTabChanged(selectedTab.ordinal)
         }
     }
 
