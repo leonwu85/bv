@@ -8,6 +8,9 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -123,8 +126,40 @@ object TvUiPerformancePolicy {
 
 class TvPreloadCoordinator {
     private val mutex = Mutex()
+    private val interactionGeneration = MutableStateFlow(0L)
+
+    /**
+     * Called from TV focus/navigation input. Background composition and non-essential visual
+     * preparation use this signal instead of assuming a fixed launch delay is idle time.
+     */
+    fun notifyUserInteraction() {
+        interactionGeneration.update { it + 1L }
+    }
+
+    /**
+     * Waits for one complete quiet window. If another interaction arrives while waiting, the
+     * window restarts so preload/shader preparation cannot race the next D-pad frame.
+     */
+    suspend fun awaitInteractionIdle(
+        quietPeriodMillis: Long = DEFAULT_INTERACTION_QUIET_PERIOD_MS,
+    ) {
+        require(quietPeriodMillis >= 0L)
+        if (quietPeriodMillis == 0L) return
+
+        var observedGeneration = interactionGeneration.value
+        while (true) {
+            delay(quietPeriodMillis)
+            val latestGeneration = interactionGeneration.value
+            if (latestGeneration == observedGeneration) return
+            observedGeneration = latestGeneration
+        }
+    }
 
     suspend fun <T> runExclusive(block: suspend () -> T): T = mutex.withLock { block() }
+
+    private companion object {
+        const val DEFAULT_INTERACTION_QUIET_PERIOD_MS = 250L
+    }
 }
 
 val LocalTvUiPerformanceProfile = staticCompositionLocalOf { TvUiPerformanceProfile.Default }

@@ -22,9 +22,20 @@ object CoilConfig {
     private const val DISK_CACHE_SIZE = 512L * 1024 * 1024 // 512MB 磁盘缓存
     private const val DISK_CACHE_DIRECTORY = "image_cache"
 
-    private val imageLoadingDispatcher by lazy {
+    private val defaultImageLoadingDispatcher by lazy {
         val parallelism = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(2, 4)
         Dispatchers.IO.limitedParallelism(parallelism)
+    }
+
+    // Keep fetches concurrent: a cache miss must not serialize DNS/HTTP/disk writes for every
+    // visible card. Only decoding is single-lane so large ImageDecoder jobs do not contend and
+    // hardware-bitmap uploads are naturally spaced.
+    private val tvImageFetchDispatcher by lazy {
+        Dispatchers.IO.limitedParallelism(4)
+    }
+
+    private val tvImageDecodeDispatcher by lazy {
+        Dispatchers.IO.limitedParallelism(1)
     }
 
     /**
@@ -38,9 +49,16 @@ object CoilConfig {
      * 5. 开启网络请求优化
      */
     fun createImageLoader(context: Context): ImageLoader {
-        return ImageLoader.Builder(context)
-            // 使用 IO 调度器进行多线程并发加载
-            .dispatcher(imageLoadingDispatcher)
+        val builder = ImageLoader.Builder(context)
+        if (DeviceUtil.isTvDevice(context)) {
+            builder
+                .fetcherDispatcher(tvImageFetchDispatcher)
+                .decoderDispatcher(tvImageDecodeDispatcher)
+        } else {
+            builder.dispatcher(defaultImageLoadingDispatcher)
+        }
+
+        return builder
             // 配置内存缓存
             .memoryCache {
                 MemoryCache.Builder(context)
@@ -79,4 +97,3 @@ object CoilConfig {
             .build()
     }
 }
-

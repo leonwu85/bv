@@ -1,6 +1,8 @@
 plugins {
     alias(gradleLibs.plugins.android.application) apply false
     alias(gradleLibs.plugins.android.library) apply false
+    alias(gradleLibs.plugins.android.test) apply false
+    alias(gradleLibs.plugins.androidx.baselineprofile) apply false
     alias(gradleLibs.plugins.compose.compiler) apply false
     alias(gradleLibs.plugins.google.ksp) apply false
     alias(gradleLibs.plugins.koin.compiler) apply false

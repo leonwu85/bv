@@ -36,6 +36,7 @@ import androidx.tv.material3.Text
 import dev.aaa1115910.biliapi.entity.pgc.PgcType
 import dev.aaa1115910.biliapi.entity.ugc.UgcTypeV2
 import dev.aaa1115910.bv.BVApp
+import dev.aaa1115910.bv.tv.util.LocalTvPreloadCoordinator
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.tv.util.LocalTvUiPerformanceProfile
 import dev.aaa1115910.bv.util.getDisplayName
@@ -64,6 +65,7 @@ fun TopNav(
     val focusRequester = remember { FocusRequester() }
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
     val performanceProfile = LocalTvUiPerformanceProfile.current
+    val preloadCoordinator = LocalTvPreloadCoordinator.current
     val enablePageAnimation =
         enableMainUiAnimation && performanceProfile.allowFullPageAnimation
     // 仅做轻微防抖；焦点解锁与内容就绪绑定为短延迟，避免原先 200+400ms 叠卡顿
@@ -172,6 +174,9 @@ fun TopNav(
                     onFocus = {
                         // 只在切换到不同 tab 时阻止向下移动，等待页面切换完成
                         val isSameTab = tab == highlightedNav
+                        if (!isSameTab) {
+                            preloadCoordinator.notifyUserInteraction()
+                        }
                         highlightedNav = tab
                         onFocusedChanged(tab)
                         if (!isSameTab) {

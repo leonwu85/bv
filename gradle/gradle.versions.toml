@@ -1,5 +1,6 @@
 [versions]
 agp = "9.2.1"
+baselineprofile = "1.5.0-alpha07"
 firebase-crashlytics = "3.0.7"
 gms = "4.5.0"
 koin-compiler = "1.1.0"
@@ -11,6 +12,8 @@ versions = "0.59.0"
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
+android-test = { id = "com.android.test", version.ref = "agp" }
+androidx-baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineprofile" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

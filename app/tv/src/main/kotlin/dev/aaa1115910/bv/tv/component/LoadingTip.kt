@@ -3,10 +3,16 @@ package dev.aaa1115910.bv.tv.component
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -16,24 +22,46 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.tv.util.LocalTvPreloadCoordinator
 import dev.aaa1115910.bv.ui.theme.BVTheme
 
 @Composable
 fun LoadingTip(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    deferIndicatorUntilInteractionIdle: Boolean = false,
 ) {
+    val preloadCoordinator = LocalTvPreloadCoordinator.current
+    var showIndicator by remember(deferIndicatorUntilInteractionIdle) {
+        mutableStateOf(!deferIndicatorUntilInteractionIdle)
+    }
+
+    LaunchedEffect(deferIndicatorUntilInteractionIdle, preloadCoordinator) {
+        if (!deferIndicatorUntilInteractionIdle) {
+            showIndicator = true
+            return@LaunchedEffect
+        }
+        showIndicator = false
+        preloadCoordinator.awaitInteractionIdle()
+        showIndicator = true
+    }
+
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        CircularProgressIndicator(
-            modifier = Modifier
-                .size(28.dp)
-                .padding(4.dp),
-            color = MaterialTheme.colorScheme.onSurface,
-            strokeWidth = 2.dp
-        )
+        if (showIndicator) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .size(28.dp)
+                    .padding(4.dp),
+                color = MaterialTheme.colorScheme.onSurface,
+                strokeWidth = 2.dp
+            )
+        } else {
+            // Keep the row stable while the expensive cold CircleOp shader is deferred.
+            Spacer(modifier = Modifier.size(28.dp))
+        }
         Text(text = stringResource(id = R.string.loading), fontSize = 20.sp)
     }
 }

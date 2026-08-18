@@ -48,6 +48,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import coil.size.Precision
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.tv.component.UpIcon
@@ -74,7 +75,8 @@ fun SmallVideoCard(
     onFocus: () -> Unit = {},
     onFocusStateChanged: (Boolean) -> Unit = {},
     overlay: @Composable BoxScope.(hasFocus: Boolean) -> Unit = {},
-    initialFocus: Boolean = false
+    initialFocus: Boolean = false,
+    loadCoverImage: Boolean = true,
 ) {
     var hasFocus by remember { mutableStateOf(initialFocus) }
     val shape = MaterialTheme.shapes.medium
@@ -127,7 +129,8 @@ fun SmallVideoCard(
                     play = data.playString,
                     danmaku = data.danmakuString,
                     time = data.timeString,
-                    badges = data.coverBadges
+                    badges = data.coverBadges,
+                    loadImage = loadCoverImage,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 CardInfo(
@@ -195,17 +198,20 @@ fun CardCover(
     play: String,
     danmaku: String,
     time: String,
-    badges: List<String> = emptyList()
+    badges: List<String> = emptyList(),
+    loadImage: Boolean = true,
 ) {
     val context = LocalContext.current
     val imageLoadingAllowed = LocalTvImageLoadingAllowed.current
     // TV 网格列宽通常 >160dp，去掉 BoxWithConstraints 避免每张卡多一轮 measure
     val showInfo = play.isNotBlank() || danmaku.isNotBlank()
-    val imageModel = remember(cover, context, imageLoadingAllowed) {
-        if (imageLoadingAllowed) {
+    val shouldLoadImage = imageLoadingAllowed && loadImage
+    val imageModel = remember(cover, context, shouldLoadImage) {
+        if (shouldLoadImage) {
             ImageRequest.Builder(context)
                 .data(cover.resizedImageUrl(ImageSize.SmallVideoCardCover))
                 // AsyncImage uses the measured card bounds as the decode size.
+                .precision(Precision.INEXACT)
                 .crossfade(false)
                 .build()
         } else {

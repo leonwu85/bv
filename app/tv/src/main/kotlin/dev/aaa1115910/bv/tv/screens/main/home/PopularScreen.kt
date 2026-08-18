@@ -30,7 +30,9 @@ import dev.aaa1115910.bv.tv.activities.video.VideoInfoActivity
 import dev.aaa1115910.bv.tv.component.ContentStatusCard
 import dev.aaa1115910.bv.tv.component.LoadingTip
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
+import dev.aaa1115910.bv.tv.util.LocalTvImageLoadingAllowed
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
+import dev.aaa1115910.bv.tv.util.rememberProgressiveImageLoadLimit
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.viewmodel.home.PopularViewModel
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +48,8 @@ private const val VIDEO_GRID_PAGINATION_IDLE_MS = 120L
 fun PopularScreen(
     modifier: Modifier = Modifier,
     lazyGridState: LazyGridState = rememberLazyGridState(),
-    popularViewModel: PopularViewModel = koinViewModel()
+    popularViewModel: PopularViewModel = koinViewModel(),
+    progressiveImageLoading: Boolean = false,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -89,6 +92,13 @@ fun PopularScreen(
     val padding = dimensionResource(R.dimen.grid_padding) / 2
     val spacedBy = dimensionResource(R.dimen.grid_spacedBy) / 2
     val gridColumns = remember { Prefs.gridColumns }
+    val imageLoadLimit = rememberProgressiveImageLoadLimit(
+        enabled = LocalTvImageLoadingAllowed.current,
+        progressive = progressiveImageLoading,
+        itemCount = videoList.size,
+        columns = gridColumns,
+        contentKey = videoList.firstOrNull()?.aid,
+    )
     ProvideListBringIntoViewSpec(usePlatformDefault = true) {
         if (videoList.isEmpty()) {
             Box(
@@ -96,7 +106,7 @@ fun PopularScreen(
                 contentAlignment = Alignment.Center
             ) {
                 if (popularViewModel.loading) {
-                    LoadingTip()
+                    LoadingTip(deferIndicatorUntilInteractionIdle = true)
                 } else {
                     ContentStatusCard(text = stringResource(AppR.string.no_data))
                 }
@@ -133,7 +143,8 @@ fun PopularScreen(
                         },
                         onClick = { onClickVideo(item) },
                         onLongClick = { onLongClickVideo(item) },
-                        onFocus = { focusedIndexState.intValue = index }
+                        onFocus = { focusedIndexState.intValue = index },
+                        loadCoverImage = index < imageLoadLimit,
                     )
                 }
 
@@ -147,7 +158,7 @@ fun PopularScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            LoadingTip()
+                            LoadingTip(deferIndicatorUntilInteractionIdle = true)
                         }
                     }
                 }

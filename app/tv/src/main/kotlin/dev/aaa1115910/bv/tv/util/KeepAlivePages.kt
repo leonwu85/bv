@@ -51,10 +51,10 @@ private const val PAGE_SLIDE_COLD_PREP_FRAMES = 3
 private const val PAGE_SLIDE_WARM_PREP_FRAMES = 1
 
 /**
- * 没有页面动画时也给外层焦点/选中动画留出时间，再在后台展开预加载页。
- * 这对 MainScreen 内嵌的 KeepAlivePages 很重要：否则切换抽屉时会同时创建多个 LazyGrid。
+ * 没有页面动画时也等待一段完整的无交互窗口，再在后台展开预加载页。
+ * 新 D-pad 交互会重启等待，避免固定延迟到点时恰好与可见交互帧重叠。
  */
-private const val PAGE_PRELOAD_IDLE_DELAY_MS = 160L
+private const val PAGE_PRELOAD_INTERACTION_QUIET_MS = 250L
 
 /** 等待容器宽度 / 页面首帧布局的上限 */
 private const val PAGE_LAYOUT_WAIT_MS = 500L
@@ -258,9 +258,10 @@ fun <T : Any> KeepAlivePages(
 
         if (transitionGeneration != generation) return@LaunchedEffect
 
-        // 初次进入或关闭页面动画时，仍需避开外层（例如抽屉指示器）的 150ms 动画。
+        // 初次进入或关闭页面动画时，等待完整的无交互窗口。固定 160ms 延迟无法处理
+        // 用户恰好在计时结束前按键的情况。
         if (!shouldAnimate) {
-            delay(PAGE_PRELOAD_IDLE_DELAY_MS)
+            preloadCoordinator.awaitInteractionIdle(PAGE_PRELOAD_INTERACTION_QUIET_MS)
         }
         if (transitionGeneration != generation) return@LaunchedEffect
 

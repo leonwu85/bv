@@ -8,6 +8,7 @@ import java.util.Properties
 
 plugins {
     alias(gradleLibs.plugins.android.application)
+    alias(gradleLibs.plugins.androidx.baselineprofile)
     alias(gradleLibs.plugins.compose.compiler)
     alias(gradleLibs.plugins.firebase.crashlytics)
     alias(gradleLibs.plugins.google.ksp)
@@ -179,6 +180,28 @@ dependencies {
     implementation(project(":app:shared"))
     implementation(androidx.profileinstaller)
     implementation(libs.vlc.android.all)
+}
+
+baselineProfile {
+    // Only release needs to run the producer. The generated file lives in src/main,
+    // so R8Test and Alpha consume the same committed rules without duplicate captures.
+    variants {
+        create("release") {
+            from(project(":baselineprofile"))
+        }
+    }
+
+    // Keep a single generated profile shared by all release variants and commit it.
+    mergeIntoMain = true
+    saveInSrc = true
+
+    // CI regenerates explicitly. Normal release/R8 builds must not require a device.
+    automaticGenerationDuringBuild = false
+
+    warnings {
+        // Alpha/R8Test consume the committed src/main output but do not run the producer.
+        variantHasNoBaselineProfileDependency = false
+    }
 }
 
 tasks.withType<Test> {

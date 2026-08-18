@@ -110,9 +110,9 @@ fun HomeContent(
 
     val homeVideoGridCacheWindow = remember(performanceProfile.tier) {
         val (aheadFraction, behindFraction) = when (performanceProfile.tier) {
-            TvUiPerformanceTier.Conservative -> 0.35f to 0.10f
-            TvUiPerformanceTier.Balanced -> 0.50f to 0.15f
-            TvUiPerformanceTier.Standard -> 0.75f to 0.25f
+            TvUiPerformanceTier.Conservative -> 0.15f to 0.05f
+            TvUiPerformanceTier.Balanced -> 0.25f to 0.10f
+            TvUiPerformanceTier.Standard -> 0.35f to 0.15f
         }
         LazyLayoutCacheWindow(
             aheadFraction = aheadFraction,
@@ -169,6 +169,7 @@ fun HomeContent(
         }
         .takeIf { it in effectiveNavItems }
         ?: effectiveNavItems.first()
+    val initialHomeTab = remember { selectedTab }
     var focusedTopNavItem by remember { mutableStateOf(selectedTab) }
     var dynamicAutoDrillGeneration by remember { mutableIntStateOf(0) }
     var pendingDynamicAutoDrill by remember { mutableStateOf<DynamicAutoDrillRequest?>(null) }
@@ -526,8 +527,14 @@ fun HomeContent(
                 preloadStep = TOP_NAV_PRELOAD_STEP,
             ) { screen, _ ->
                 when (screen) {
-                    HomeTopNavItem.Recommend -> RecommendScreen(lazyGridState = recommendState)
-                    HomeTopNavItem.Popular -> PopularScreen(lazyGridState = popularState)
+                    HomeTopNavItem.Recommend -> RecommendScreen(
+                        lazyGridState = recommendState,
+                        progressiveImageLoading = screen != initialHomeTab,
+                    )
+                    HomeTopNavItem.Popular -> PopularScreen(
+                        lazyGridState = popularState,
+                        progressiveImageLoading = screen != initialHomeTab,
+                    )
                     HomeTopNavItem.Dynamics -> {
                         if (userViewModel.isLogin) {
                             if (Prefs.dynamicPageStyle == DynamicPageStyle.New) {
