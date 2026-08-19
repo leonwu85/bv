@@ -55,6 +55,7 @@ import dev.aaa1115910.biliapi.websocket.LiveDataWebSocket
 import dev.aaa1115910.bilisubtitle.SubtitleParser
 import dev.aaa1115910.bilisubtitle.entity.SubtitleItem
 import dev.aaa1115910.bv.BVApp
+import dev.aaa1115910.bv.entity.CdnService
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.entity.LiveQualityPreference
 import dev.aaa1115910.bv.entity.proxy.ProxyArea
@@ -692,6 +693,14 @@ class VideoPlayerV3ViewModel(
     var currentPlaybackOffline by mutableStateOf(false)
         private set
 
+    private val vodBufferRecoveryPolicy = VodBufferRecoveryPolicy()
+    private var vodBufferRecoveryJob: Job? = null
+    private var vodSourceTransitionPending = false
+    var vodBufferRecoveryPrompt: VodBufferRecoveryPrompt? by mutableStateOf(null)
+        private set
+    var vodBufferRecoveryNotice: String? by mutableStateOf(null)
+        private set
+
     val offlineCacheState: OfflineVideoCacheTaskState
         get() = offlineVideoCacheService.stateOf(currentAid, currentCid)
 
@@ -995,6 +1004,225 @@ class VideoPlayerV3ViewModel(
         return true
     }
 
+    fun onVodRebufferingStarted(positionMs: Long) {
+        if (
+            isLive ||
+            currentPlaybackOffline ||
+            currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly ||
+            currentAid <= 0L ||
+            currentCid <= 0L ||
+            vodSourceTransitionPending ||
+            vodBufferRecoveryJob?.isActive == true ||
+            vodBufferRecoveryPrompt != null
+        ) {
+            return
+        }
+
+        val resumePositionMs = videoPlayer?.currentPosition
+            ?.takeIf { it > 0L }
+            ?: positionMs.coerceAtLeast(0L)
+
+        when (vodBufferRecoveryPolicy.onRebuffering(SystemClock.elapsedRealtime())) {
+            VodBufferRecoveryDecision.None -> Unit
+
+            VodBufferRecoveryDecision.SuggestCdnSwitch -> {
+                val currentService = Prefs.cdnService
+                val targetService = nextVodRecoveryCdnService(currentService)
+                videoPlayer?.pause()
+                vodBufferRecoveryPrompt = VodBufferRecoveryPrompt.SwitchCdn(
+                    resumePositionMs = resumePositionMs,
+                    fromService = currentService,
+                    toService = targetService,
+                )
+                addVodBufferRecoveryLog("频繁缓冲，建议从${currentService.displayName}切换到${targetService.displayName}")
+            }
+
+            VodBufferRecoveryDecision.SuggestResolutionDowngrade -> {
+                val targetResolution = nextLowerVodResolution(currentQuality, availableQuality)
+                if (targetResolution == null) {
+                    vodBufferRecoveryPolicy.suppress()
+                    vodBufferRecoveryNotice = "当前已是最低清晰度"
+                    addVodBufferRecoveryLog("换源后仍缓冲，当前已是最低清晰度")
+                    return
+                }
+
+                videoPlayer?.pause()
+                vodBufferRecoveryPrompt = VodBufferRecoveryPrompt.LowerResolution(
+                    resumePositionMs = resumePositionMs,
+                    fromResolution = currentQuality,
+                    toResolution = targetResolution,
+                )
+                addVodBufferRecoveryLog("换源后仍缓冲，建议从$currentQuality 降级到$targetResolution")
+            }
+        }
+    }
+
+    fun onVodPlaybackResumed() {
+        vodSourceTransitionPending = false
+    }
+
+    fun dismissVodBufferRecoveryPrompt() {
+        if (vodBufferRecoveryPrompt == null) return
+        vodBufferRecoveryPrompt = null
+        vodBufferRecoveryPolicy.suppress()
+        videoPlayer?.start()
+        addVodBufferRecoveryLog("用户暂不执行播放恢复建议")
+    }
+
+    fun confirmVodBufferRecoveryPrompt() {
+        when (val prompt = vodBufferRecoveryPrompt) {
+            is VodBufferRecoveryPrompt.SwitchCdn -> confirmVodCdnSwitch(prompt)
+            is VodBufferRecoveryPrompt.LowerResolution -> confirmVodResolutionDowngrade(prompt)
+            null -> Unit
+        }
+    }
+
+    fun consumeVodBufferRecoveryNotice() {
+        vodBufferRecoveryNotice = null
+    }
+
+    private fun confirmVodCdnSwitch(prompt: VodBufferRecoveryPrompt.SwitchCdn) {
+        if (!vodBufferRecoveryPolicy.startCdnSwitch()) return
+        vodBufferRecoveryPrompt = null
+        val playbackSessionToken = vodPlaybackSessionToken
+        val aid = currentAid
+        val cid = currentCid
+        val episodeId = currentEpid
+        val currentSeasonId = seasonId.takeIf { it > 0 }
+        val quality = currentQuality
+        val codec = currentVideoCodec
+        val audio = currentAudio
+        val mediaMode = currentPlaybackMediaMode
+        val resumePositionMs = videoPlayer?.currentPosition
+            ?.takeIf { it > 0L }
+            ?: prompt.resumePositionMs
+
+        vodBufferRecoveryJob?.cancel()
+        vodBufferRecoveryJob = viewModelScope.launch(Dispatchers.IO) {
+            val originalService = prompt.fromService
+            try {
+                Prefs.cdnService = prompt.toService
+                addLogs("切换全局播放 CDN：${originalService.displayName} -> ${prompt.toService.displayName}")
+
+                val loaded = loadPlayUrl(
+                    avid = aid,
+                    cid = cid,
+                    epid = episodeId,
+                    seasonId = currentSeasonId,
+                    preferApi = settings.apiType,
+                    proxyArea = proxyArea,
+                    initialSeekPositionMs = resumePositionMs,
+                    targetQuality = quality,
+                    targetVideoCodec = codec,
+                    targetAudio = audio,
+                    targetMediaMode = mediaMode,
+                    playbackSessionToken = playbackSessionToken,
+                )
+
+                withContext(Dispatchers.Main) {
+                    val stillCurrent = isVodPlaybackSessionActive(playbackSessionToken) &&
+                        currentAid == aid && currentCid == cid
+                    if (loaded && stillCurrent) {
+                        vodBufferRecoveryPolicy.finishCdnSwitch(success = true)
+                        videoPlayer?.start()
+                        vodBufferRecoveryNotice = when (prompt.toService) {
+                            CdnService.BaseUrl -> "已切换至主线路"
+                            CdnService.BackupUrl -> "已切换至备选线路"
+                            else -> "已更换播放 CDN"
+                        }
+                    } else if (stillCurrent) {
+                        rollbackVodCdnSwitch(originalService)
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                logger.fWarn { "Switch vod CDN failed: ${error.message}" }
+                withContext(Dispatchers.Main) {
+                    if (isVodPlaybackSessionActive(playbackSessionToken)) {
+                        rollbackVodCdnSwitch(originalService)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun rollbackVodCdnSwitch(originalService: CdnService) {
+        Prefs.cdnService = originalService
+        vodBufferRecoveryPolicy.finishCdnSwitch(success = false)
+        vodSourceTransitionPending = false
+        loadState = RequestState.Success
+        errorMessage = ""
+        videoPlayer?.start()
+        vodBufferRecoveryNotice = "更换 CDN 失败，已继续使用当前线路"
+        addVodBufferRecoveryLog("更换 CDN 失败，已回滚到${originalService.displayName}")
+    }
+
+    private fun confirmVodResolutionDowngrade(
+        prompt: VodBufferRecoveryPrompt.LowerResolution,
+    ) {
+        if (!vodBufferRecoveryPolicy.startResolutionDowngrade()) return
+        vodBufferRecoveryPrompt = null
+        val playbackSessionToken = vodPlaybackSessionToken
+        val resumePositionMs = videoPlayer?.currentPosition
+            ?.takeIf { it > 0L }
+            ?: prompt.resumePositionMs
+
+        vodBufferRecoveryJob?.cancel()
+        vodBufferRecoveryJob = viewModelScope.launch(Dispatchers.Default) {
+            try {
+                withContext(Dispatchers.Main) {
+                    loadState = RequestState.Ready
+                    errorMessage = ""
+                }
+                playQuality(
+                    qn = prompt.toResolution,
+                    initialSeekPositionMs = resumePositionMs,
+                    playbackSessionToken = playbackSessionToken,
+                )
+                withContext(Dispatchers.Main) {
+                    if (loadState == RequestState.Failed) {
+                        throw IllegalStateException(errorMessage.ifBlank { "清晰度切换失败" })
+                    }
+                    vodBufferRecoveryPolicy.finishResolutionDowngrade()
+                    if (isVodPlaybackSessionActive(playbackSessionToken)) {
+                        loadState = RequestState.Success
+                        videoPlayer?.start()
+                        vodBufferRecoveryNotice = "已降低清晰度"
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                logger.fWarn { "Downgrade vod resolution failed: ${error.message}" }
+                withContext(Dispatchers.Main) {
+                    currentQuality = prompt.fromResolution
+                    vodBufferRecoveryPolicy.finishResolutionDowngrade()
+                    vodSourceTransitionPending = false
+                    loadState = RequestState.Success
+                    errorMessage = ""
+                    videoPlayer?.start()
+                    vodBufferRecoveryNotice = "清晰度切换失败，已继续使用当前清晰度"
+                }
+            }
+        }
+    }
+
+    private fun resetVodBufferRecovery() {
+        vodBufferRecoveryJob?.cancel()
+        vodBufferRecoveryJob = null
+        vodBufferRecoveryPrompt = null
+        vodBufferRecoveryNotice = null
+        vodSourceTransitionPending = false
+        vodBufferRecoveryPolicy.reset()
+    }
+
+    private fun addVodBufferRecoveryLog(text: String) {
+        viewModelScope.launch(Dispatchers.Default) {
+            addLogs(text)
+        }
+    }
+
     fun loadPlayUrl(
         avid: Long,
         cid: Long,
@@ -1064,6 +1292,9 @@ class VideoPlayerV3ViewModel(
         hasResolvedVodStartPosition = true
         resolvedVodStartPositionSessionToken = playbackSessionToken
         val videoChanged = currentAid != avid || currentCid != cid
+        if (videoChanged || preferOfflineCache) {
+            resetVodBufferRecovery()
+        }
         pendingVodPlaybackSource = null
         manualVodPlaybackRequested =
             settings.autoPlay || forceStartPlayback || manualPlaybackRequestedBeforeInitialLoad
@@ -1469,6 +1700,7 @@ class VideoPlayerV3ViewModel(
         if (!isVodPlaybackSessionActive(playbackSource.playbackSessionToken)) return
 
         val player = videoPlayer ?: return
+        vodSourceTransitionPending = true
         logger.info { "Video url: ${playbackSource.videoUrl}" }
         logger.info { "Audio url: ${playbackSource.audioUrl}" }
         player.playUrl(playbackSource.videoUrl, playbackSource.audioUrl)
@@ -4830,6 +5062,7 @@ class VideoPlayerV3ViewModel(
      * @param qn 请求的画质编号，默认使用当前网络对应的直播清晰度
      */
     fun loadLiveStreamWithQuality(roomId: Int, qn: Int = defaultLiveQnForCurrentNetwork()) {
+        resetVodBufferRecovery()
         cancelVodPlayUrlAutoRefresh()
         viewPoints = emptyList()
         // 取消之前的重连任务

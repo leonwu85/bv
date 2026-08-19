@@ -216,6 +216,8 @@ fun BvPlayer(
     onLoopPlayModeChange: (Boolean) -> Unit = {},
     onRefreshVideo: (resumePositionMs: Long) -> Unit = {},
     onLiveRetry: () -> Unit = {},
+    onRebufferingStarted: (positionMs: Long) -> Unit = {},
+    onPlaybackResumed: () -> Unit = {},
     onInfoVisibilityChanged: (Boolean) -> Unit = {},
     commentPanelVisible: Boolean = false,
     hideControllerOnCommentPanelOpen: Boolean = false,
@@ -1008,6 +1010,7 @@ fun BvPlayer(
                 val wasPlaying = isPlaying
                 isPlaying = true
                 isBuffering = false
+                onPlaybackResumed()
                 val currentTime = System.currentTimeMillis()
 
                 if (pendingSeekDanmakuPosition >= 0) {
@@ -1065,8 +1068,21 @@ fun BvPlayer(
         override fun onBuffering() {
             logger.info { "onBuffering" }
             scope.launch(Dispatchers.Main) {
+                val shouldReportRebuffering =
+                    hasStartedPlaybackOnce &&
+                        !isBuffering &&
+                        pendingSeekDanmakuPosition < 0L &&
+                        !pendingInitialPlaybackSeek &&
+                        !videoPlayerConfigData.isLive &&
+                        !offlinePlaybackMode
+                val rebufferingPositionMs = seekState.position
+                    .takeIf { it > 0L }
+                    ?: videoPlayer.currentPosition.coerceAtLeast(0L)
                 isBuffering = true
                 isPlaying = false
+                if (shouldReportRebuffering) {
+                    onRebufferingStarted(rebufferingPositionMs)
+                }
             }
             mDanmakuPlayer?.pause()
         }

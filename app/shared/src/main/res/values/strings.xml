@@ -33,6 +33,14 @@
 
     <string name="common_cancel">取消</string>
     <string name="common_confirm">确定</string>
+    <string name="vod_buffer_recovery_cdn_title">播放频繁缓冲</string>
+    <string name="vod_buffer_recovery_cdn_message">当前线路播放不稳定，是否切换至%1$s？该操作会更新全局播放 CDN 设置，并从当前进度继续播放。</string>
+    <string name="vod_buffer_recovery_cdn_dismiss">暂不更换</string>
+    <string name="vod_buffer_recovery_cdn_confirm">更换 CDN</string>
+    <string name="vod_buffer_recovery_resolution_title">播放仍不流畅</string>
+    <string name="vod_buffer_recovery_resolution_message">更换 CDN 后仍然出现缓冲，是否将清晰度从 %1$s 降至 %2$s？</string>
+    <string name="vod_buffer_recovery_resolution_dismiss">暂不降级</string>
+    <string name="vod_buffer_recovery_resolution_confirm">降至 %1$s</string>
 
     <string name="confirm">确认</string>
 

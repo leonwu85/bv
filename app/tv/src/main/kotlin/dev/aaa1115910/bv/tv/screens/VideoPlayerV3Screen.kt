@@ -51,13 +51,16 @@ import androidx.compose.ui.platform.LocalContext
 import dev.aaa1115910.bv.tv.util.requireTvActivity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Border
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.entity.CdnService
 import dev.aaa1115910.bv.offline.OfflineVideoCacheStatus
 import dev.aaa1115910.bv.tv.activities.video.OfflineVideoPlayerActivity
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
@@ -100,6 +103,7 @@ import dev.aaa1115910.bv.player.tv.controller.TripleLikeTip
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
 import dev.aaa1115910.bv.tv.component.GeetestTvVerifyDialog
 import dev.aaa1115910.bv.tv.component.InteractiveOptionDialog
+import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.component.buttons.CoinButton
 import dev.aaa1115910.bv.tv.component.CommentPanel
 import dev.aaa1115910.bv.tv.component.buttons.FavoriteButton
@@ -113,10 +117,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import dev.aaa1115910.bv.tv.component.videocard.VideosRow
 import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.util.formatHourMinSec
 import dev.aaa1115910.bv.util.swapList
 import dev.aaa1115910.bv.viewmodel.VideoPlayerV3ViewModel
+import dev.aaa1115910.bv.viewmodel.VodBufferRecoveryPrompt
 import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.repositories.LiveRepository
 import dev.aaa1115910.biliapi.repositories.UserRepository
@@ -140,6 +146,13 @@ fun VideoPlayerV3Screen(
     val activity = requireTvActivity()
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger { }
+
+    LaunchedEffect(playerViewModel.vodBufferRecoveryNotice) {
+        playerViewModel.vodBufferRecoveryNotice?.let { notice ->
+            notice.toast(context)
+            playerViewModel.consumeVodBufferRecoveryNotice()
+        }
+    }
 
     // subscribe shared action state by aid
     val currentAid = playerViewModel.currentAid
@@ -760,6 +773,8 @@ fun VideoPlayerV3Screen(
                 onLiveRetry = {
                     playerViewModel.retryLiveStream()
                 },
+                onRebufferingStarted = playerViewModel::onVodRebufferingStarted,
+                onPlaybackResumed = playerViewModel::onVodPlaybackResumed,
                 commentPanelVisible = showCommentPanel,
                 hideControllerOnCommentPanelOpen = commentSplitScreenEnabled,
                 onShowComment = {
@@ -1383,6 +1398,14 @@ fun VideoPlayerV3Screen(
             description = videoDescription
         )
 
+        playerViewModel.vodBufferRecoveryPrompt?.let { prompt ->
+            VodBufferRecoveryDialog(
+                prompt = prompt,
+                onDismiss = playerViewModel::dismissVodBufferRecoveryPrompt,
+                onConfirm = playerViewModel::confirmVodBufferRecoveryPrompt,
+            )
+        }
+
         // 风控 Geetest：本机十字光标 / 手机扫码代验证
         if (playerViewModel.showGeetestDialog) {
             GeetestTvVerifyDialog(
@@ -1403,4 +1426,74 @@ fun VideoPlayerV3Screen(
             )
         }
     }
+}
+
+@Composable
+private fun VodBufferRecoveryDialog(
+    prompt: VodBufferRecoveryPrompt,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val context = LocalContext.current
+    val confirmFocusRequester = remember(prompt) { FocusRequester() }
+    val title: String
+    val message: String
+    val dismissText: String
+    val confirmText: String
+
+    when (prompt) {
+        is VodBufferRecoveryPrompt.SwitchCdn -> {
+            val targetLine = when (prompt.toService) {
+                CdnService.BaseUrl -> "主线路"
+                else -> "备选线路"
+            }
+            title = stringResource(R.string.vod_buffer_recovery_cdn_title)
+            message = stringResource(R.string.vod_buffer_recovery_cdn_message, targetLine)
+            dismissText = stringResource(R.string.vod_buffer_recovery_cdn_dismiss)
+            confirmText = stringResource(R.string.vod_buffer_recovery_cdn_confirm)
+        }
+
+        is VodBufferRecoveryPrompt.LowerResolution -> {
+            val fromResolution = prompt.fromResolution.getShortDisplayName(context)
+            val toResolution = prompt.toResolution.getShortDisplayName(context)
+            title = stringResource(R.string.vod_buffer_recovery_resolution_title)
+            message = stringResource(
+                R.string.vod_buffer_recovery_resolution_message,
+                fromResolution,
+                toResolution,
+            )
+            dismissText = stringResource(R.string.vod_buffer_recovery_resolution_dismiss)
+            confirmText = stringResource(
+                R.string.vod_buffer_recovery_resolution_confirm,
+                toResolution,
+            )
+        }
+    }
+
+    LaunchedEffect(prompt) {
+        confirmFocusRequester.requestFocusWithRetry()
+    }
+
+    TvAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(message) },
+        dismissButton = {
+            OutlinedButton(
+                modifier = Modifier.padding(end = 12.dp),
+                onClick = onDismiss,
+            ) {
+                Text(dismissText)
+            }
+        },
+        confirmButton = {
+            Button(
+                modifier = Modifier.focusRequester(confirmFocusRequester),
+                onClick = onConfirm,
+            ) {
+                Text(confirmText)
+            }
+        },
+        properties = DialogProperties(dismissOnClickOutside = false),
+    )
 }
