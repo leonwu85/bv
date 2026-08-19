@@ -17,9 +17,11 @@ import dev.aaa1115910.bv.repository.UserRepository
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import org.koin.core.annotation.KoinViewModel
 
@@ -92,35 +94,53 @@ class PgcHomeViewModel(
     fun loadTimeline() {
         if (timelineLoading || timelines.isNotEmpty()) return
 
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             timelineLoading = true
-            runCatching {
-                val anime = async {
-                    seasonRepository.getTimeline(
-                        filter = TimelineFilter.Anime,
-                        preferApiType = Prefs.apiType
-                    )
+            try {
+                val (anime, guoChuang) = supervisorScope {
+                    val animeRequest = async(Dispatchers.IO) {
+                        fetchTimeline(TimelineFilter.Anime)
+                    }
+                    val guoChuangRequest = async(Dispatchers.IO) {
+                        fetchTimeline(TimelineFilter.GuoChuang)
+                    }
+                    animeRequest.await() to guoChuangRequest.await()
                 }
-                val guoChuang = async {
-                    seasonRepository.getTimeline(
-                        filter = TimelineFilter.GuoChuang,
-                        preferApiType = Prefs.apiType
-                    )
-                }
-                val merged = mergeTimelines(anime.await(), guoChuang.await())
-                withContext(Dispatchers.Main) {
-                    timelines.clear()
-                    timelines.addAll(merged)
-                }
-            }.onFailure {
-                logger.fInfo { "Load timeline failed: ${it.stackTraceToString()}" }
-            }
-            withContext(Dispatchers.Main) {
+
+                timelines.clear()
+                timelines.addAll(mergeTimelineResults(anime, guoChuang))
+            } finally {
                 timelineLoading = false
             }
         }
     }
+
+    private suspend fun fetchTimeline(filter: TimelineFilter): Result<List<Timeline>> {
+        return try {
+            Result.success(
+                seasonRepository.getTimeline(
+                    filter = filter,
+                    preferApiType = Prefs.apiType
+                )
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            logger.fInfo {
+                "Load $filter timeline failed: ${error.stackTraceToString()}"
+            }
+            Result.failure(error)
+        }
+    }
 }
+
+internal fun mergeTimelineResults(
+    first: Result<List<Timeline>>,
+    second: Result<List<Timeline>>
+): List<Timeline> = mergeTimelines(
+    first = first.getOrDefault(emptyList()),
+    second = second.getOrDefault(emptyList())
+)
 
 internal fun mergeTimelines(
     first: List<Timeline>,

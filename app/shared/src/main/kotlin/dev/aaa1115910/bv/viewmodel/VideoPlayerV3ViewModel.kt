@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kuaishou.akdanmaku.DanmakuConfig
+import com.kuaishou.akdanmaku.data.DanmakuItem
 import com.kuaishou.akdanmaku.data.DanmakuItemData
 import com.kuaishou.akdanmaku.ext.RETAINER_BILIBILI
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
@@ -124,6 +125,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
@@ -377,6 +379,12 @@ class VideoPlayerV3ViewModel(
         val title: String,
         val partTitle: String,
         val positionMs: Long,
+    )
+
+    private data class VideoDanmakuSendSnapshot(
+        val aid: Long,
+        val cid: Long,
+        val progress: Int,
     )
 
     private data class GeetestPlaybackRetryRequest(
@@ -647,6 +655,7 @@ class VideoPlayerV3ViewModel(
     var liveEmoticonError by mutableStateOf<String?>(null)
     val liveEmotePackages = mutableStateListOf<LiveEmotePackage>()
     private var liveEmoticonRoomId: Int? = null
+    private var liveDanmakuObjectPoolUsable = true
     var likingLiveRoom by mutableStateOf(false)
 
     // 直播画质管理
@@ -5187,44 +5196,63 @@ class VideoPlayerV3ViewModel(
     ): Result<String> {
         val text = message.trim()
         if (text.isBlank()) return Result.failure(IllegalArgumentException("弹幕内容不能为空"))
-        if (isLive) return Result.failure(IllegalStateException("当前不是点播视频"))
-        if (currentAid <= 0L || currentCid <= 0L) return Result.failure(IllegalStateException("视频不存在"))
-        if (sendingVideoDanmaku) return Result.failure(IllegalStateException("正在发送弹幕"))
 
-        val progress = videoPlayer?.currentPosition?.coerceAtLeast(0L)?.toInt() ?: 0
-        val bvid = AvBvConverter.av2bv(currentAid)
-        return runCatching {
-            withContext(Dispatchers.Main) { sendingVideoDanmaku = true }
-            try {
-                val dmid = videoPlayRepository.sendDanmaku(
+        val snapshot = try {
+            withContext(Dispatchers.Main.immediate) {
+                check(!isLive) { "当前不是点播视频" }
+                check(currentAid > 0L && currentCid > 0L) { "视频不存在" }
+                check(!sendingVideoDanmaku) { "正在发送弹幕" }
+
+                sendingVideoDanmaku = true
+                VideoDanmakuSendSnapshot(
+                    aid = currentAid,
                     cid = currentCid,
-                    bvid = bvid,
-                    message = text,
-                    progress = progress,
-                    mode = mode,
-                    fontSize = fontSize,
-                    color = color
+                    progress = (videoPlayer?.currentPosition ?: 0L)
+                        .coerceIn(0L, Int.MAX_VALUE.toLong())
+                        .toInt(),
                 )
-                val item = DanmakuItemData(
-                    danmakuId = dmid ?: System.currentTimeMillis(),
-                    position = progress.toLong(),
-                    content = text,
-                    mode = when (mode) {
-                        4 -> DanmakuItemData.DANMAKU_MODE_CENTER_BOTTOM
-                        5 -> DanmakuItemData.DANMAKU_MODE_CENTER_TOP
-                        else -> DanmakuItemData.DANMAKU_MODE_ROLLING
-                    },
-                    textSize = fontSize,
-                    textColor = Color(color).toArgb(),
-                    danmakuStyle = DanmakuItemData.DANMAKU_STYLE_SELF_SEND
-                )
-                withContext(Dispatchers.Main) {
-                    danmakuData.add(item)
-                    danmakuPlayer?.updateData(listOf(item))
-                }
-                "发送成功"
-            } finally {
-                withContext(Dispatchers.Main) { sendingVideoDanmaku = false }
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            return Result.failure(error)
+        }
+
+        return try {
+            val dmid = videoPlayRepository.sendDanmaku(
+                cid = snapshot.cid,
+                bvid = AvBvConverter.av2bv(snapshot.aid),
+                message = text,
+                progress = snapshot.progress,
+                mode = mode,
+                fontSize = fontSize,
+                color = color
+            )
+            val item = DanmakuItemData(
+                danmakuId = dmid ?: System.currentTimeMillis(),
+                position = snapshot.progress.toLong(),
+                content = text,
+                mode = when (mode) {
+                    4 -> DanmakuItemData.DANMAKU_MODE_CENTER_BOTTOM
+                    5 -> DanmakuItemData.DANMAKU_MODE_CENTER_TOP
+                    else -> DanmakuItemData.DANMAKU_MODE_ROLLING
+                },
+                textSize = fontSize,
+                textColor = Color(color).toArgb(),
+                danmakuStyle = DanmakuItemData.DANMAKU_STYLE_SELF_SEND
+            )
+            withContext(Dispatchers.Main.immediate) {
+                danmakuData.add(item)
+                danmakuPlayer?.updateData(listOf(item))
+            }
+            Result.success("发送成功")
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Result.failure(error)
+        } finally {
+            withContext(NonCancellable + Dispatchers.Main.immediate) {
+                sendingVideoDanmaku = false
             }
         }
     }
@@ -5755,8 +5783,34 @@ class VideoPlayerV3ViewModel(
             }
 
             if (showDanmaku) {
-                liveDanmakuPlayer?.emit(danmakuItem)
+                liveDanmakuPlayer?.let { emitLiveDanmaku(it, danmakuItem) }
             }
+        }
+    }
+
+    private fun emitLiveDanmaku(player: LiveDanmakuPlayer, data: DanmakuItemData) {
+        if (liveDanmakuObjectPoolUsable) {
+            try {
+                player.emit(data)
+                return
+            } catch (error: NullPointerException) {
+                // A corrupted AkDanmaku pool leaves a null entry below a positive pool size.
+                // Once observed, the data overload will fail on every subsequent acquisition.
+                liveDanmakuObjectPoolUsable = false
+                logger.fWarn {
+                    "Live danmaku object pool is corrupted; switching to direct items: " +
+                        error.stackTraceToString()
+                }
+            } catch (error: Exception) {
+                logger.fWarn { "Emit live danmaku failed: ${error.stackTraceToString()}" }
+                return
+            }
+        }
+
+        try {
+            player.emit(DanmakuItem(data, null))
+        } catch (error: Exception) {
+            logger.fWarn { "Emit live danmaku without pooling failed: ${error.stackTraceToString()}" }
         }
     }
 }

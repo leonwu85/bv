@@ -2,6 +2,7 @@ package dev.aaa1115910.bv.viewmodel.pgc
 
 import dev.aaa1115910.biliapi.entity.season.Timeline
 import dev.aaa1115910.biliapi.entity.season.TimelineEp
+import java.net.SocketTimeoutException
 import java.util.Date
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -59,6 +60,31 @@ class PgcHomeViewModelTest {
         assertEquals(listOf("7-16", "7-17"), result.map { it.dateString })
         assertEquals(listOf(1, 2), result.first().episodes.map { it.seasonId })
         assertTrue(result.first().isToday)
+    }
+
+    @Test
+    fun mergeTimelineResultsKeepsDataWhenOneRequestTimesOut() {
+        val availableTimeline = timeline(
+            date = "7-16",
+            episodes = listOf(episode(seasonId = 1, episodeId = 11, publishAt = 100))
+        )
+
+        val result = mergeTimelineResults(
+            first = Result.success(listOf(availableTimeline)),
+            second = Result.failure(SocketTimeoutException("timeout"))
+        )
+
+        assertEquals(listOf(availableTimeline), result)
+    }
+
+    @Test
+    fun mergeTimelineResultsReturnsEmptyWhenBothRequestsFail() {
+        val result = mergeTimelineResults(
+            first = Result.failure(SocketTimeoutException("anime timeout")),
+            second = Result.failure(SocketTimeoutException("guochuang timeout"))
+        )
+
+        assertTrue(result.isEmpty())
     }
 
     private fun timeline(
