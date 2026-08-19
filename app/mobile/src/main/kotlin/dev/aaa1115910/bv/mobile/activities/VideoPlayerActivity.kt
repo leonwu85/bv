@@ -1,21 +1,28 @@
 package dev.aaa1115910.bv.mobile.activities
 
 import android.app.PictureInPictureParams
+import android.app.PendingIntent
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.annotation.MainThread
+import androidx.annotation.RequiresApi
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.kuaishou.akdanmaku.render.SimpleRenderer
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
@@ -109,6 +116,12 @@ data class VideoLaunchArgs(
 
 class VideoPlayerActivity : ComponentActivity() {
     companion object {
+        private const val ACTION_PIP_PLAYBACK_CONTROL =
+            "dev.aaa1115910.bv.mobile.action.PIP_PLAYBACK_CONTROL"
+        private const val EXTRA_PIP_PLAYBACK_CONTROL = "pip_playback_control"
+        private const val PIP_CONTROL_PLAY = 1
+        private const val PIP_CONTROL_PAUSE = 2
+
         private fun formatPopularity(count: Int): String {
             return when {
                 count >= 100_000_000 -> String.format("%.1f亿人气", count / 100_000_000.0)
@@ -341,6 +354,7 @@ class VideoPlayerActivity : ComponentActivity() {
     private val videoDetailViewModel: VideoDetailViewModel by viewModel()
     private val logger = KotlinLogging.logger {}
     private var pipModeActive by mutableStateOf(false)
+    private var pipActionReceiverRegistered = false
     private var pgcEpisodeRefreshJob: Job? = null
     private var vodLaunchJob: Job? = null
 
@@ -370,6 +384,8 @@ class VideoPlayerActivity : ComponentActivity() {
         val activitySeasonViewModel = seasonViewModel
         val activityVideoDetailViewModel = videoDetailViewModel
 
+        registerPictureInPictureActionReceiver()
+
         val launchArgs = VideoLaunchArgs.fromIntent(intent)
         initVideoPlayer(launchArgs = launchArgs)
         if (!launchArgs.isLive) initDanmakuPlayer()
@@ -395,6 +411,20 @@ class VideoPlayerActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         if (!pictureInPictureSupported || pipModeActive || isFinishing) return
 
+        val params = buildPlayerPictureInPictureParams()
+
+        runCatching {
+            if (!enterPictureInPictureMode(params)) {
+                "系统拒绝进入画中画".toast(this)
+            }
+        }.onFailure {
+            logger.warn(it) { "Enter picture-in-picture failed" }
+            "无法进入画中画：${it.localizedMessage ?: "系统不支持"}".toast(this)
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun buildPlayerPictureInPictureParams(): PictureInPictureParams {
         val width = playerViewModel.currentVideoWidth.takeIf { it > 0 }
             ?: playerViewModel.videoPlayer?.videoWidth?.takeIf { it > 0 }
             ?: 16
@@ -407,15 +437,87 @@ class VideoPlayerActivity : ComponentActivity() {
             else -> Rational(width, height)
         }
 
+        return PictureInPictureParams.Builder()
+            .setAspectRatio(aspectRatio)
+            .setActions(listOf(buildPictureInPicturePlaybackAction()))
+            .build()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun buildPictureInPicturePlaybackAction(): RemoteAction {
+        val isPlaying = playerViewModel.videoPlayer?.isPlaying == true
+        val control = if (isPlaying) PIP_CONTROL_PAUSE else PIP_CONTROL_PLAY
+        val label = if (isPlaying) "暂停" else "播放"
+        val iconResource = if (isPlaying) {
+            android.R.drawable.ic_media_pause
+        } else {
+            android.R.drawable.ic_media_play
+        }
+        val intent = Intent(ACTION_PIP_PLAYBACK_CONTROL)
+            .setPackage(packageName)
+            .putExtra(EXTRA_PIP_PLAYBACK_CONTROL, control)
+        val pendingIntent = PendingIntent.getBroadcast(
+            this,
+            control,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return RemoteAction(
+            Icon.createWithResource(this, iconResource),
+            label,
+            label,
+            pendingIntent,
+        )
+    }
+
+    private fun registerPictureInPictureActionReceiver() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || pipActionReceiverRegistered) return
+        ContextCompat.registerReceiver(
+            this,
+            pictureInPictureActionReceiver,
+            IntentFilter(ACTION_PIP_PLAYBACK_CONTROL),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        pipActionReceiverRegistered = true
+    }
+
+    private val pictureInPictureActionReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != ACTION_PIP_PLAYBACK_CONTROL) return
+            when (intent.getIntExtra(EXTRA_PIP_PLAYBACK_CONTROL, 0)) {
+                PIP_CONTROL_PLAY -> setPictureInPicturePlaybackPlaying(true)
+                PIP_CONTROL_PAUSE -> setPictureInPicturePlaybackPlaying(false)
+            }
+        }
+    }
+
+    private fun setPictureInPicturePlaybackPlaying(playing: Boolean) {
+        val player = playerViewModel.videoPlayer ?: return
+        if (playing) {
+            player.start()
+            if (playerViewModel.isLive) {
+                playerViewModel.resumeLiveDanmakuIfNeeded()
+            } else {
+                playerViewModel.danmakuPlayer?.start()
+            }
+        } else {
+            player.pause()
+            if (playerViewModel.isLive) {
+                playerViewModel.stopLiveDanmaku()
+            } else {
+                playerViewModel.danmakuPlayer?.pause()
+            }
+        }
+        refreshPictureInPictureActions()
+    }
+
+    private fun refreshPictureInPictureActions() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (!pipModeActive && !isInPictureInPictureMode) return
         runCatching {
-            enterPictureInPictureMode(
-                PictureInPictureParams.Builder()
-                    .setAspectRatio(aspectRatio)
-                    .build()
-            )
+            setPictureInPictureParams(buildPlayerPictureInPictureParams())
         }.onFailure {
-            logger.warn(it) { "Enter picture-in-picture failed" }
-            "无法进入画中画：${it.localizedMessage ?: "系统不支持"}".toast(this)
+            logger.warn(it) { "Update picture-in-picture actions failed" }
         }
     }
 
@@ -425,6 +527,7 @@ class VideoPlayerActivity : ComponentActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         pipModeActive = isInPictureInPictureMode
+        if (isInPictureInPictureMode) refreshPictureInPictureActions()
     }
 
     private fun playPgcEpisode(episode: Episode) {
@@ -892,6 +995,10 @@ class VideoPlayerActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (pipActionReceiverRegistered) {
+            unregisterReceiver(pictureInPictureActionReceiver)
+            pipActionReceiverRegistered = false
+        }
         super.onDestroy()
         playerViewModel.videoPlayer?.release()
         playerViewModel.liveDanmakuPlayer?.release()

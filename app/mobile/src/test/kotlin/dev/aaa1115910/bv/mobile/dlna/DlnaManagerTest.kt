@@ -1,7 +1,11 @@
 package dev.aaa1115910.bv.mobile.dlna
 
+import dev.aaa1115910.bv.viewmodel.DlnaMediaSource
+import java.io.ByteArrayInputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class DlnaManagerTest {
     @Test
@@ -38,5 +42,38 @@ class DlnaManagerTest {
             "&lt;A &amp; &quot;B&quot; &apos;C&apos;&gt;",
             DlnaManager.escapeXml("<A & \"B\" 'C'>")
         )
+    }
+
+    @Test
+    fun `DLNA metadata uses the actual stream mime type`() {
+        val metadata = DlnaManager.buildDidlLiteMetadata(
+            DlnaMediaSource(
+                url = "https://example.com/video.flv",
+                mimeType = "video/x-flv",
+                title = "Video",
+                partTitle = "Part 1",
+                positionMs = 0L,
+            )
+        )
+
+        assertTrue(metadata.contains("http-get:*:video/x-flv:*"))
+    }
+
+    @Test
+    fun `device responses are capped by byte size`() {
+        assertEquals(
+            "1234",
+            DlnaManager.readUtf8TextLimited(
+                input = ByteArrayInputStream("1234".toByteArray()),
+                maxBytes = 4,
+            )
+        )
+
+        assertFailsWith<IllegalStateException> {
+            DlnaManager.readUtf8TextLimited(
+                input = ByteArrayInputStream("12345".toByteArray()),
+                maxBytes = 4,
+            )
+        }
     }
 }

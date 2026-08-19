@@ -15,6 +15,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.HttpURLConnection
@@ -62,7 +64,10 @@ class DlnaManager(context: Context) {
         }
 
     suspend fun cast(device: DlnaDevice, source: DlnaMediaSource) {
-        require(source.url.startsWith("http://") || source.url.startsWith("https://")) {
+        val sourceScheme = runCatching {
+            URI(source.url).scheme?.lowercase(Locale.ROOT)
+        }.getOrNull()
+        require(sourceScheme == "http" || sourceScheme == "https") {
             "投屏地址必须是 HTTP 或 HTTPS 链接"
         }
         setAvTransportUri(device, source)
@@ -212,8 +217,12 @@ class DlnaManager(context: Context) {
         try {
             val responseCode = connection.responseCode
             if (responseCode !in 200..299) return null
-            val description = connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use {
-                it.readText()
+            val description = connection.inputStream.use {
+                readUtf8TextLimited(
+                    input = it,
+                    maxBytes = MAX_DEVICE_DESCRIPTION_BYTES,
+                    oversizedMessage = "设备描述响应过大",
+                )
             }
             currentCoroutineContext().ensureActive()
             val parsed = parseDeviceDescription(description, candidate.location) ?: return null
@@ -334,10 +343,19 @@ class DlnaManager(context: Context) {
             currentCoroutineContext().ensureActive()
             val responseCode = connection.responseCode
             val responseBody = if (responseCode in 200..299) {
-                connection.inputStream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }
+                connection.inputStream?.use { input ->
+                    drainLimited(input, MAX_SOAP_RESPONSE_BYTES)
+                }
+                ""
             } else {
-                connection.errorStream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }
-            }.orEmpty()
+                connection.errorStream?.use { input ->
+                    readUtf8TextLimited(
+                        input = input,
+                        maxBytes = MAX_SOAP_RESPONSE_BYTES,
+                        oversizedMessage = "设备错误响应过大",
+                    )
+                }.orEmpty()
+            }
             if (responseCode !in 200..299) {
                 val fault = parseSoapFault(responseBody)
                 throw IllegalStateException(
@@ -382,6 +400,8 @@ class DlnaManager(context: Context) {
         private const val MAX_DESCRIPTION_REQUESTS = 24
         private const val HTTP_CONNECT_TIMEOUT_MS = 4_000
         private const val HTTP_READ_TIMEOUT_MS = 5_000
+        private const val MAX_DEVICE_DESCRIPTION_BYTES = 1024 * 1024
+        private const val MAX_SOAP_RESPONSE_BYTES = 256 * 1024
         private const val MIN_RESUME_POSITION_MS = 1_000L
         private const val SEEK_AFTER_PLAY_DELAY_MS = 350L
         private const val MULTICAST_LOCK_TAG = "bv-dlna-discovery"
@@ -432,14 +452,14 @@ class DlnaManager(context: Context) {
                 arguments +
                 """</u:$action></s:Body></s:Envelope>"""
 
-        private fun buildDidlLiteMetadata(source: DlnaMediaSource): String =
+        internal fun buildDidlLiteMetadata(source: DlnaMediaSource): String =
             """<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" """ +
                 """xmlns:dc="http://purl.org/dc/elements/1.1/" """ +
                 """xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">""" +
                 """<item id="0" parentID="0" restricted="1">""" +
                 """<dc:title>${escapeXml(source.displayTitle)}</dc:title>""" +
                 """<upnp:class>object.item.videoItem</upnp:class>""" +
-                """<res protocolInfo="http-get:*:video/mp4:*">${escapeXml(source.url)}</res>""" +
+                """<res protocolInfo="http-get:*:${escapeXml(source.mimeType)}:*">${escapeXml(source.url)}</res>""" +
                 """</item></DIDL-Lite>"""
 
         internal fun escapeXml(value: String): String = buildString(value.length) {
@@ -463,6 +483,38 @@ class DlnaManager(context: Context) {
             val minutes = totalSeconds % 3_600L / 60L
             val seconds = totalSeconds % 60L
             return String.format(Locale.ROOT, "%02d:%02d:%02d", hours, minutes, seconds)
+        }
+
+        internal fun readUtf8TextLimited(
+            input: InputStream,
+            maxBytes: Int,
+            oversizedMessage: String = "设备响应过大",
+        ): String {
+            require(maxBytes > 0) { "响应大小上限必须大于 0" }
+            val output = ByteArrayOutputStream(minOf(maxBytes, 8 * 1024))
+            val buffer = ByteArray(8 * 1024)
+            var totalBytes = 0
+            while (true) {
+                val readBytes = input.read(buffer)
+                if (readBytes < 0) break
+                if (totalBytes > maxBytes - readBytes) {
+                    throw IllegalStateException("$oversizedMessage（上限 ${maxBytes / 1024} KiB）")
+                }
+                output.write(buffer, 0, readBytes)
+                totalBytes += readBytes
+            }
+            return output.toString(StandardCharsets.UTF_8.name())
+        }
+
+        private fun drainLimited(input: InputStream, maxBytes: Int) {
+            val buffer = ByteArray(8 * 1024)
+            var totalBytes = 0
+            while (true) {
+                val readBytes = input.read(buffer)
+                if (readBytes < 0) return
+                if (totalBytes > maxBytes - readBytes) return
+                totalBytes += readBytes
+            }
         }
 
         private fun parseSoapFault(response: String): String {

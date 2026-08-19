@@ -24,6 +24,7 @@ import dev.aaa1115910.biliapi.http.BiliHttpProxyApi
 import dev.aaa1115910.biliapi.http.entity.AuthFailureException
 import dev.aaa1115910.biliapi.http.entity.BiliAuthFailureHandler
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
+import dev.aaa1115910.biliapi.http.entity.video.PlayUrlData
 import dev.aaa1115910.biliapi.http.entity.video.VideoPlayerInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -32,9 +33,51 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import org.koin.core.annotation.Single
 import bilibili.pgc.gateway.player.v2.PlayURLGrpcKt as PgcPlayURLGrpcKt
+import java.net.URI
+import java.util.Locale
 
 internal fun shouldTryLook1080P(enabled: Boolean, sessionData: String?): Boolean =
     enabled && sessionData.isNullOrBlank()
+
+data class DlnaPlayResource(
+    val url: String,
+    val mimeType: String,
+)
+
+internal fun PlayUrlData.toDlnaPlayResource(): DlnaPlayResource {
+    // Match PiliPlus' DLNA path: the dedicated TV play-url endpoint provides the
+    // renderer source in its first durl entry. Remaining URLs on that entry are
+    // CDN fallbacks, rather than additional media parts.
+    val castEntry = durl.firstOrNull()
+    checkNotNull(castEntry) { "当前视频不支持投屏" }
+    val url = (listOf(castEntry.url) + castEntry.backupUrl)
+        .asSequence()
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .firstOrNull { candidate ->
+            val scheme = runCatching {
+                URI(candidate).scheme?.lowercase(Locale.ROOT)
+            }.getOrNull()
+            scheme == "http" || scheme == "https"
+        }
+    checkNotNull(url) { "投屏地址不是有效的 HTTP 链接" }
+
+    val normalizedFormat = listOf(format, type)
+        .joinToString(separator = " ")
+        .lowercase(Locale.ROOT)
+    val path = runCatching { URI(url).path.orEmpty().lowercase(Locale.ROOT) }.getOrDefault("")
+    val mimeType = when {
+        "mp4" in normalizedFormat || path.endsWith(".mp4") -> "video/mp4"
+        "flv" in normalizedFormat || path.endsWith(".flv") -> "video/x-flv"
+        else -> null
+    }
+    checkNotNull(mimeType) {
+        val displayFormat = format.ifBlank { type }.ifBlank { "未知" }
+        "当前视频投屏格式不受支持：$displayFormat"
+    }
+
+    return DlnaPlayResource(url = url, mimeType = mimeType)
+}
 
 @Single
 class VideoPlayRepository(
@@ -259,12 +302,12 @@ class VideoPlayRepository(
      * The TV play-url endpoint differs from the regular DASH endpoint by returning a
      * muxed audio/video stream that standalone renderers can consume directly.
      */
-    suspend fun getDlnaPlayUrl(
+    suspend fun getDlnaPlayResource(
         aid: Long,
         cid: Long,
         epid: Int? = null,
         qn: Int = 80,
-    ): String {
+    ): DlnaPlayResource {
         require(aid > 0L) { "无效的视频 aid" }
         require(cid > 0L) { "无效的视频 cid" }
 
@@ -280,14 +323,7 @@ class VideoPlayRepository(
         }.onFailure(::notifyPlayUrlAuthFailureIfNeeded)
             .getOrThrow()
 
-        val url = response.getResponseData()
-            .durl
-            .firstOrNull()
-            ?.url
-            ?.trim()
-            .orEmpty()
-        check(url.isNotEmpty()) { "当前视频不支持投屏" }
-        return url
+        return response.getResponseData().toDlnaPlayResource()
     }
 
     private fun buildPlayViewUniteRequest(

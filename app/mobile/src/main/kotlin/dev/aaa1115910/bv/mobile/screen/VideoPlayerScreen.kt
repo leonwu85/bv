@@ -214,6 +214,9 @@ import dev.aaa1115910.bv.mobile.component.reply.CommentItem
 import dev.aaa1115910.bv.mobile.component.reply.CommentVoteCard
 import dev.aaa1115910.bv.mobile.component.reply.ReplySheetScaffold
 import dev.aaa1115910.bv.mobile.dlna.DlnaCastDialog
+import dev.aaa1115910.bv.mobile.dlna.DlnaCastSession
+import dev.aaa1115910.bv.mobile.dlna.DlnaControlDialog
+import dev.aaa1115910.bv.mobile.dlna.DlnaManager
 import dev.aaa1115910.bv.mobile.settings.MobilePrefs
 import dev.aaa1115910.bv.mobile.component.videocard.RelatedVideoItem
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
@@ -517,7 +520,10 @@ fun VideoPlayerScreen(
     var savingPreviewImage by remember { mutableStateOf(false) }
     var savingCoverImage by remember { mutableStateOf(false) }
     var showOfflineCacheDialog by remember { mutableStateOf(false) }
+    val dlnaManager = remember(context) { DlnaManager(context) }
     var showDlnaDialog by remember { mutableStateOf(false) }
+    var showDlnaControlDialog by remember { mutableStateOf(false) }
+    var activeDlnaSession by remember { mutableStateOf<DlnaCastSession?>(null) }
     var offlineCacheDialogLoading by remember { mutableStateOf(false) }
     val offlineCacheState = playerViewModel.offlineCacheState
 
@@ -525,6 +531,7 @@ fun VideoPlayerScreen(
         if (isInPictureInPictureMode) {
             showOfflineCacheDialog = false
             showDlnaDialog = false
+            showDlnaControlDialog = false
             showVideoDanmakuSheet = false
             showLiveDanmakuDialog = false
             replyDraftTarget = null
@@ -779,13 +786,43 @@ fun VideoPlayerScreen(
 
     if (showDlnaDialog) {
         DlnaCastDialog(
+            manager = dlnaManager,
             sourceProvider = playerViewModel::getDlnaMediaSource,
-            onCastStarted = { device, _ ->
+            onCastStarted = { device, source ->
                 playerViewModel.videoPlayer?.pause()
-                "已开始投屏到 ${device.name}".toast(context)
+                activeDlnaSession = DlnaCastSession(
+                    device = device,
+                    source = source,
+                    durationMs = playerViewModel.videoPlayer?.duration
+                        ?.coerceAtLeast(source.positionMs)
+                        ?: source.positionMs,
+                    positionMs = source.positionMs,
+                    isPlaying = true,
+                )
+                "已开始投屏到 ${device.name}，可在更多菜单中继续控制".toast(context)
             },
             onDismiss = { showDlnaDialog = false }
         )
+    }
+
+    activeDlnaSession?.let { session ->
+        if (showDlnaControlDialog) {
+            DlnaControlDialog(
+                manager = dlnaManager,
+                session = session,
+                onSessionChange = { activeDlnaSession = it },
+                onStopped = {
+                    activeDlnaSession = null
+                    showDlnaControlDialog = false
+                },
+                onChangeDevice = {
+                    activeDlnaSession = null
+                    showDlnaControlDialog = false
+                    showDlnaDialog = true
+                },
+                onDismiss = { showDlnaControlDialog = false },
+            )
+        }
     }
 
     Scaffold(
@@ -1265,7 +1302,9 @@ fun VideoPlayerScreen(
                                                     savingCover = savingCoverImage,
                                                     offlineCacheState = offlineCacheState,
                                                     offlinePlayback = playerViewModel.currentPlaybackOffline,
-                                                    dlnaAvailable = !playerViewModel.currentPlaybackOffline,
+                                                    dlnaAvailable = activeDlnaSession != null ||
+                                                        (!playerViewModel.isLive && !playerViewModel.currentPlaybackOffline),
+                                                    dlnaSessionActive = activeDlnaSession != null,
                                                     pictureInPictureSupported = pictureInPictureSupported,
                                                     onToggleLike = { launchVideoAction { videoDetailViewModel.toggleLike() } },
                                                     onTripleLike = { launchVideoAction { videoDetailViewModel.tripleLike() } },
@@ -1279,7 +1318,13 @@ fun VideoPlayerScreen(
                                                     },
                                                     onToggleToView = { launchVideoAction { videoDetailViewModel.toggleToView() } },
                                                     onShare = shareVideo,
-                                                    onCast = { showDlnaDialog = true },
+                                                    onCast = {
+                                                        if (activeDlnaSession == null) {
+                                                            showDlnaDialog = true
+                                                        } else {
+                                                            showDlnaControlDialog = true
+                                                        }
+                                                    },
                                                     onEnterPictureInPicture = onEnterPictureInPicture,
                                                     onSaveCover = saveCover,
                                                     onCacheVideo = { showOfflineCacheDialog = true },
@@ -1468,7 +1513,9 @@ fun VideoPlayerScreen(
                                 savingCover = savingCoverImage,
                                 offlineCacheState = offlineCacheState,
                                 offlinePlayback = playerViewModel.currentPlaybackOffline,
-                                dlnaAvailable = !playerViewModel.currentPlaybackOffline,
+                                dlnaAvailable = activeDlnaSession != null ||
+                                    (!playerViewModel.isLive && !playerViewModel.currentPlaybackOffline),
+                                dlnaSessionActive = activeDlnaSession != null,
                                 pictureInPictureSupported = pictureInPictureSupported,
                                 onToggleLike = { launchVideoAction { videoDetailViewModel.toggleLike() } },
                                 onTripleLike = { launchVideoAction { videoDetailViewModel.tripleLike() } },
@@ -1482,7 +1529,13 @@ fun VideoPlayerScreen(
                                 },
                                 onToggleToView = { launchVideoAction { videoDetailViewModel.toggleToView() } },
                                 onShare = shareVideo,
-                                onCast = { showDlnaDialog = true },
+                                onCast = {
+                                    if (activeDlnaSession == null) {
+                                        showDlnaDialog = true
+                                    } else {
+                                        showDlnaControlDialog = true
+                                    }
+                                },
                                 onEnterPictureInPicture = onEnterPictureInPicture,
                                 onSaveCover = saveCover,
                                 onCacheVideo = { showOfflineCacheDialog = true },
@@ -1929,6 +1982,7 @@ fun VideoPlayerInfo(
     offlineCacheState: OfflineVideoCacheTaskState = OfflineVideoCacheTaskState(aid = 0L, cid = 0L),
     offlinePlayback: Boolean = false,
     dlnaAvailable: Boolean = false,
+    dlnaSessionActive: Boolean = false,
     pictureInPictureSupported: Boolean = false,
     onToggleLike: () -> Unit = {},
     onTripleLike: () -> Unit = {},
@@ -2080,6 +2134,7 @@ fun VideoPlayerInfo(
                 offlineCacheState = offlineCacheState,
                 offlinePlayback = offlinePlayback,
                 dlnaAvailable = dlnaAvailable,
+                dlnaSessionActive = dlnaSessionActive,
                 pictureInPictureSupported = pictureInPictureSupported,
                 onToggleLike = onToggleLike,
                 onTripleLike = onTripleLike,
@@ -2181,6 +2236,7 @@ private fun VideoActionGrid(
     offlineCacheState: OfflineVideoCacheTaskState,
     offlinePlayback: Boolean,
     dlnaAvailable: Boolean,
+    dlnaSessionActive: Boolean,
     pictureInPictureSupported: Boolean,
     onToggleLike: () -> Unit,
     onTripleLike: () -> Unit,
@@ -2303,7 +2359,9 @@ private fun VideoActionGrid(
             ) {
                 if (dlnaAvailable) {
                     DropdownMenuItem(
-                        text = { Text(text = "投屏") },
+                        text = {
+                            Text(text = if (dlnaSessionActive) "投屏控制" else "投屏")
+                        },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Rounded.Cast,

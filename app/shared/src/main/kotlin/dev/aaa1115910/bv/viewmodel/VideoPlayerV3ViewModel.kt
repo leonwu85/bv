@@ -331,6 +331,7 @@ private fun Subtitle.matchesLanguagePreference(preference: SubtitleLanguagePrefe
 
 data class DlnaMediaSource(
     val url: String,
+    val mimeType: String,
     val title: String,
     val partTitle: String,
     val positionMs: Long,
@@ -5019,7 +5020,7 @@ class VideoPlayerV3ViewModel(
         }
 
         return try {
-            val url = videoPlayRepository.getDlnaPlayUrl(
+            val resource = videoPlayRepository.getDlnaPlayResource(
                 aid = snapshot.aid,
                 cid = snapshot.cid,
                 epid = snapshot.epid,
@@ -5027,7 +5028,8 @@ class VideoPlayerV3ViewModel(
             )
             Result.success(
                 DlnaMediaSource(
-                    url = url,
+                    url = resource.url,
+                    mimeType = resource.mimeType,
                     title = snapshot.title,
                     partTitle = snapshot.partTitle,
                     positionMs = snapshot.positionMs,

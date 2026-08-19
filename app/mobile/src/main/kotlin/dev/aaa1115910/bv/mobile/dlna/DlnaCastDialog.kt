@@ -42,12 +42,12 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun DlnaCastDialog(
+    manager: DlnaManager,
     sourceProvider: suspend () -> Result<DlnaMediaSource>,
     onCastStarted: (device: DlnaDevice, source: DlnaMediaSource) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val manager = remember(context) { DlnaManager(context) }
     val coroutineScope = rememberCoroutineScope()
     val latestSourceProvider by rememberUpdatedState(sourceProvider)
     val latestOnCastStarted by rememberUpdatedState(onCastStarted)
