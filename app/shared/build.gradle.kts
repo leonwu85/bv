@@ -143,6 +143,8 @@ dependencies {
     api(libs.coil.svg)
     api(libs.firebase.analytics)
     api(libs.firebase.crashlytics)
+    // 捕获 LibVLC/mpv/Media3 等 native 层崩溃并上报 Crashlytics
+    api(libs.firebase.crashlytics.ndk)
     api(libs.geetest.sensebot)
     api(libs.koin.android)
     api(libs.koin.annotations)

@@ -61,6 +61,14 @@ class BVApp : Application() {
         fun getAppDatabase(context: Context = this.context) = AppDatabase.getDatabase(context)
     }
 
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(base)
+        // 尽早注册崩溃日志捕获，覆盖 ContentProvider 初始化与 onCreate 全过程中的
+        // 崩溃（Release 包 R8 混淆引发的崩溃大多发生在这个阶段），此处不能依赖任何
+        // 其他初始化
+        LogCatcherUtil.installLogCatcher(this)
+    }
+
     override fun onCreate() {
         super.onCreate()
         context = this.applicationContext
@@ -79,7 +87,6 @@ class BVApp : Application() {
         }
         initCoil()
         initFirebase()
-        LogCatcherUtil.installLogCatcher()
         initApiConfig()
         initRepository()
         initProxy()

@@ -59,6 +59,7 @@ coil-svg = { module = "io.coil-kt:coil-svg", version.ref = "coil" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
 firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
+firebase-crashlytics-ndk = { module = "com.google.firebase:firebase-crashlytics-ndk" }
 
 # https://docs.geetest.com/sensebot/deploy/client/android
 geetest-sensebot = { module = "com.geetest.sensebot:sensebot", version.ref = "geetest-sensebot" }
