@@ -84,6 +84,7 @@ import dev.aaa1115910.bv.player.tv.controller.VideoPlayerController
 import dev.aaa1115910.bv.util.countDownTimer
 import dev.aaa1115910.bv.player.util.DanmakuMaskFinder
 import dev.aaa1115910.bv.player.util.DanmakuSpeedPolicy
+import dev.aaa1115910.bv.player.util.SeekRebufferingGuard
 import dev.aaa1115910.bv.player.util.isInitialPlaybackSeek
 import dev.aaa1115910.bv.player.util.TvDanmakuCompatibilityPolicy
 import dev.aaa1115910.bv.player.util.VideoContentGeometry
@@ -376,6 +377,9 @@ fun BvPlayer(
     var pendingReloadDanmakuPosition by remember { mutableLongStateOf(-1L) }
     var pendingReloadDanmakuShouldPlay by remember { mutableStateOf(false) }
     var hasStartedPlaybackOnce by remember(videoPlayerConfigData.currentVideoCid) { mutableStateOf(false) }
+    val seekRebufferingGuard = remember(videoPlayerConfigData.currentVideoCid) {
+        SeekRebufferingGuard()
+    }
     var handledNaturalVideoEnd by remember(videoPlayerConfigData.currentVideoCid) { mutableStateOf(false) }
     val initialPlaybackPositionSnapshot = remember(videoPlayerConfigData.currentVideoCid) {
         if (videoPlayerHistoryData.isInitialPlaybackPositionResolved) {
@@ -591,6 +595,7 @@ fun BvPlayer(
         pendingInitialPlaybackSeek = false
         pendingSeekDanmakuPosition = targetPosition
         pendingSeekDanmakuShouldPlay = shouldPlayAfterSeek
+        seekRebufferingGuard.onSeekStarted(targetPosition)
         mDanmakuPlayer?.pause()
         syncProcessedSponsorSegmentsForPosition(targetPosition)
     }
@@ -1073,6 +1078,7 @@ fun BvPlayer(
                         !isBuffering &&
                         pendingSeekDanmakuPosition < 0L &&
                         !pendingInitialPlaybackSeek &&
+                        !seekRebufferingGuard.shouldSuppressRebuffering &&
                         !videoPlayerConfigData.isLive &&
                         !offlinePlaybackMode
                 val rebufferingPositionMs = seekState.position
@@ -1105,6 +1111,7 @@ fun BvPlayer(
 
         override fun onSeeked(position: Long) {
             logger.info { "onSeeked: ${position.formatHourMinSec()}" }
+            seekRebufferingGuard.onSeekCompleted(position)
             val hasExplicitUserSeek = pendingSeekDanmakuPosition >= 0L
             val syncPosition = pendingSeekDanmakuPosition.takeIf { it >= 0L } ?: position
             val shouldPlayAfterSeek = if (hasExplicitUserSeek) {
@@ -1163,6 +1170,10 @@ fun BvPlayer(
                 val pos = position.coerceAtLeast(0L)
                 val dur = duration.coerceAtLeast(0L)
                 val buf = buffered.coerceIn(0, 100)
+
+                if (isPlaying && !isBuffering) {
+                    seekRebufferingGuard.onStablePlaybackProgress(pos)
+                }
 
                 if (seekState.position != pos) seekState.position = pos
                 if (seekState.duration != dur) seekState.duration = dur

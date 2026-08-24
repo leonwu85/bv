@@ -1,5 +1,10 @@
 import java.io.File
 
+data class AppVersion(
+    val code: Int,
+    val name: String
+)
+
 object AppConfiguration {
     const val appId = "dev.aaa1115910.bv"
     private const val defaultApplicationId = "dev.aaa1115910.bv2"
@@ -13,47 +18,40 @@ object AppConfiguration {
     private const val minor = 3
     private const val patch = 0
     private const val hotFix = 0
-    private val projectDir = File(System.getProperty("user.dir"))
-    private val gitCommitCount: Int by lazy {
-        runCommand("git", "rev-list", "--count", "HEAD")?.toIntOrNull() ?: 1
-    }
-    private val gitShortRevision: String by lazy {
-        runCommand("git", "rev-list", "HEAD", "--abbrev-commit", "--max-count=1") ?: "nogit"
-    }
 
     @Suppress("KotlinConstantConditions")
-    val versionName: String by lazy {
-        "$major.$minor.$patch${".$hotFix".takeIf { hotFix != 0 } ?: ""}" +
-                ".r${versionCode}.${gitShortRevision}"
+    fun resolveVersion(projectDir: File): AppVersion {
+        val gitCommitCount = runGitCommand(projectDir, "rev-list", "--count", "HEAD")
+            ?.toIntOrNull()
+            ?: 1
+        val gitShortRevision = runGitCommand(projectDir, "rev-parse", "--short", "HEAD")
+            ?: "nogit"
+        val baseVersion = "$major.$minor.$patch${".$hotFix".takeIf { hotFix != 0 } ?: ""}"
+
+        return AppVersion(
+            code = gitCommitCount,
+            name = "$baseVersion.r$gitCommitCount.$gitShortRevision"
+        )
     }
-    val applicationId: String by lazy {
-        resolveApplicationId()
-    }
-    val versionCode: Int by lazy { gitCommitCount }
+
+    val applicationId: String
+        get() = resolveApplicationId()
+
     const val libVLCVersion = "3.6.5"
-    var googleServicesAvailable = true
     const val blacklistUrl =
         "https://raw.githubusercontent.com/aaa1115910/bv-blacklist/main/blacklist.bin"
 
-    init {
-        initConfigurations()
-    }
-
-    private fun initConfigurations() {
-        val googleServicesJsonPath = "$projectDir/app/google-services.json"
-        val googleServicesJsonFile = File(googleServicesJsonPath)
+    fun isGoogleServicesAvailable(projectDir: File): Boolean {
+        val googleServicesJsonFile = projectDir.resolve("app/google-services.json")
         val expectedPackageNames = listOf(
             appId,
             applicationId,
             "$applicationId.r8test",
             "$applicationId.debug"
         )
-        googleServicesAvailable =
-            googleServicesJsonFile.exists() && googleServicesJsonFile.readText().let {
-                expectedPackageNames.all(it::contains)
-            }
-        println("Application ID: $applicationId")
-        println("Google Services available: $googleServicesAvailable")
+        return googleServicesJsonFile.exists() && googleServicesJsonFile.readText().let {
+            expectedPackageNames.all(it::contains)
+        }
     }
 
     private fun resolveApplicationId(): String {
@@ -64,12 +62,28 @@ object AppConfiguration {
     }
 }
 
-private fun runCommand(vararg command: String): String? = runCatching {
-    val process = ProcessBuilder(*command)
-        .directory(File(System.getProperty("user.dir")))
-        .redirectErrorStream(true)
-        .start()
-    val output = process.inputStream.bufferedReader().use { it.readText().trim() }
-    val exitCode = process.waitFor()
-    output.takeIf { exitCode == 0 && it.isNotEmpty() }
-}.getOrNull()
+private fun runGitCommand(projectDir: File, vararg arguments: String): String? {
+    val command = arrayOf("git", "-C", projectDir.absolutePath, *arguments)
+    return runCatching {
+        val process = ProcessBuilder(*command)
+            .directory(projectDir)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText().trim() }
+        val exitCode = process.waitFor()
+        output.takeIf { exitCode == 0 && it.isNotEmpty() }.also {
+            if (it == null) {
+                System.err.println(
+                    "Unable to determine app version from Git in ${projectDir.absolutePath}: " +
+                            output.ifEmpty { "git exited with code $exitCode" }
+                )
+            }
+        }
+    }.getOrElse {
+        System.err.println(
+            "Unable to determine app version from Git in ${projectDir.absolutePath}: " +
+                    (it.message ?: it::class.simpleName)
+        )
+        null
+    }
+}

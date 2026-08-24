@@ -16,6 +16,8 @@ plugins {
     alias(gradleLibs.plugins.kotlin.serialization)
 }
 
+val appVersion = AppConfiguration.resolveVersion(rootProject.projectDir)
+val googleServicesAvailable = AppConfiguration.isGoogleServicesAvailable(rootProject.projectDir)
 
 val signingProp = file(project.rootProject.file("signing.properties"))
 
@@ -41,8 +43,8 @@ android {
         applicationId = AppConfiguration.applicationId
         minSdk = AppConfiguration.minSdk
         targetSdk = AppConfiguration.targetSdk
-        versionCode = AppConfiguration.versionCode
-        versionName = AppConfiguration.versionName
+        versionCode = appVersion.code
+        versionName = appVersion.name
 
         // 只打包 ARM 架构，减少 APK 体积（排除 x86 和 x86_64）
         ndk {
@@ -75,7 +77,7 @@ android {
             )
             if (signingProp.exists()) signingConfig = signingConfigs.getByName("key")
             configure<CrashlyticsExtension> {
-                mappingFileUploadEnabled = AppConfiguration.googleServicesAvailable
+                mappingFileUploadEnabled = googleServicesAvailable
             }
         }
         debug {
@@ -109,7 +111,7 @@ android {
             )
             if (signingProp.exists()) signingConfig = signingConfigs.getByName("key")
             configure<CrashlyticsExtension> {
-                mappingFileUploadEnabled = AppConfiguration.googleServicesAvailable
+                mappingFileUploadEnabled = googleServicesAvailable
             }
         }
     }
@@ -154,9 +156,9 @@ androidComponents {
         variant.outputs.forEach { output ->
             val abi = output.filters.find { it.filterType == FilterType.ABI }?.identifier ?: "universal"
             (output as VariantOutputImpl).outputFileName.set(
-                "BV_${AppConfiguration.versionCode}_${AppConfiguration.versionName}.${variant.buildType}_${variant.flavorName}_$abi.apk"
+                "BV_${appVersion.code}_${appVersion.name}.${variant.buildType}_${variant.flavorName}_$abi.apk"
             )
-            output.versionName.set("${AppConfiguration.versionName}.${variant.buildType}")
+            output.versionName.set("${appVersion.name}.${variant.buildType}")
         }
     }
 }

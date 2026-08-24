@@ -10,6 +10,8 @@ plugins {
     alias(gradleLibs.plugins.kotlin.serialization)
 }
 
+val appVersion = AppConfiguration.resolveVersion(rootProject.projectDir)
+
 android {
     namespace = AppConfiguration.appId
     compileSdk = AppConfiguration.compileSdk
@@ -24,12 +26,12 @@ android {
             buildConfigField(
                 type = "int",
                 name = "VERSION_CODE",
-                value = "${AppConfiguration.versionCode}"
+                value = "${appVersion.code}"
             )
             buildConfigField(
                 type = "String",
                 name = "VERSION_NAME",
-                value = "\"${AppConfiguration.versionName}\""
+                value = "\"${appVersion.name}\""
             )
             buildConfigField(
                 type = "String",
