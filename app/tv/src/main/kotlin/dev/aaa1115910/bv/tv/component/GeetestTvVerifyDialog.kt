@@ -92,6 +92,35 @@ enum class GeetestVerifyMode {
     PhoneCompanion,
 }
 
+internal data class GeetestModeOption(
+    val mode: GeetestVerifyMode,
+    val label: String,
+)
+
+internal fun geetestModeOptions(
+    detectedTvMode: GeetestVerifyMode?,
+): List<GeetestModeOption> {
+    val tvMode = detectedTvMode.takeIf {
+        it == GeetestVerifyMode.TvRemote || it == GeetestVerifyMode.TvSlider
+    } ?: GeetestVerifyMode.TvRemote
+    val tvLabel = when (detectedTvMode) {
+        GeetestVerifyMode.TvRemote -> "点击验证"
+        GeetestVerifyMode.TvSlider -> "滑块验证"
+        else -> "本机验证"
+    }
+    return listOf(
+        GeetestModeOption(mode = tvMode, label = tvLabel),
+        GeetestModeOption(mode = GeetestVerifyMode.PhoneCompanion, label = "手机验证"),
+    )
+}
+
+internal fun geetestTvModeFromWebType(type: String?): GeetestVerifyMode? =
+    when (type?.trim()?.lowercase()) {
+        "click" -> GeetestVerifyMode.TvRemote
+        "slide", "slider" -> GeetestVerifyMode.TvSlider
+        else -> null
+    }
+
 internal fun shouldRefreshGeetestChallenge(
     currentMode: GeetestVerifyMode,
     requestedMode: GeetestVerifyMode,
@@ -116,9 +145,8 @@ internal fun resolveGeetestModeAfterRefresh(
  * TV 端 Geetest 风控验证弹窗
  *
  * 模式：
- * 1. 点击验证：WebView + 十字光标，遥控器方向键移动、确认键点击
- * 2. 滑块验证：确认键按下/松开滑块，方向键在按下期间注入拖动事件
- * 3. 手机验证：局域网 HTTP 页面 + 二维码，手机触屏完成极验后自动回传
+ * 1. 本机验证：根据 Geetest 下发的点击/滑块形式自动适配遥控器操作
+ * 2. 手机验证：局域网 HTTP 页面 + 二维码，手机触屏完成极验后自动回传
  *
  * @param mockMode Debug 用：不请求真实极验，用可点击 mock 页测遥控器/手机链路
  */
@@ -134,9 +162,18 @@ fun GeetestTvVerifyDialog(
 ) {
     var mode by remember { mutableStateOf(initialMode) }
     val tvModeFocusRequester = remember { FocusRequester() }
-    val sliderModeFocusRequester = remember { FocusRequester() }
     val phoneModeFocusRequester = remember { FocusRequester() }
     val contentFocusRequester = remember { FocusRequester() }
+    var detectedTvMode by remember(gt, challenge, mockMode) {
+        mutableStateOf(
+            when {
+                mockMode && initialMode == GeetestVerifyMode.TvSlider -> GeetestVerifyMode.TvSlider
+                mockMode -> GeetestVerifyMode.TvRemote
+                else -> null
+            }
+        )
+    }
+    val tvMode = geetestModeOptions(detectedTvMode).first().mode
     // >0 表示用户在模式 Tab 按了确定，需要把焦点交回验证区
     var enterContentToken by remember { mutableIntStateOf(0) }
     var pendingMode by remember { mutableStateOf<GeetestVerifyMode?>(null) }
@@ -147,8 +184,8 @@ fun GeetestTvVerifyDialog(
 
     // 当前选中模式对应的 tab 焦点，验证区按返回时落到这里
     val activeModeFocusRequester = when (mode) {
-        GeetestVerifyMode.TvRemote -> tvModeFocusRequester
-        GeetestVerifyMode.TvSlider -> sliderModeFocusRequester
+        GeetestVerifyMode.TvRemote,
+        GeetestVerifyMode.TvSlider -> tvModeFocusRequester
         GeetestVerifyMode.PhoneCompanion -> phoneModeFocusRequester
     }
 
@@ -272,8 +309,8 @@ fun GeetestTvVerifyDialog(
 
                 ModeSwitcher(
                     mode = pendingMode ?: mode,
+                    detectedTvMode = detectedTvMode,
                     tvModeFocusRequester = tvModeFocusRequester,
-                    sliderModeFocusRequester = sliderModeFocusRequester,
                     phoneModeFocusRequester = phoneModeFocusRequester,
                     contentFocusRequester = contentFocusRequester,
                     onModeChange = { newMode -> requestMode(newMode, enterContent = false) },
@@ -299,7 +336,7 @@ fun GeetestTvVerifyDialog(
                     textAlign = TextAlign.Center,
                 )
 
-                // 点击与滑块只改变同一个 WebView 的遥控器事件注入方式，不重新初始化 challenge。
+                // 点击与滑块由页面形式自动识别，只改变遥控器事件注入方式，不重新初始化 challenge。
                 key(mode == GeetestVerifyMode.PhoneCompanion, gt, challenge, mockMode) {
                     when (mode) {
                         GeetestVerifyMode.TvRemote,
@@ -307,9 +344,18 @@ fun GeetestTvVerifyDialog(
                             gt = gt,
                             challenge = challenge,
                             mockMode = mockMode,
-                            sliderMode = mode == GeetestVerifyMode.TvSlider,
+                            sliderMode = tvMode == GeetestVerifyMode.TvSlider,
                             contentFocusRequester = contentFocusRequester,
                             modeTabFocusRequester = activeModeFocusRequester,
+                            onTvModeDetected = { detectedMode ->
+                                detectedTvMode = detectedMode
+                                if (
+                                    mode != GeetestVerifyMode.PhoneCompanion &&
+                                    pendingMode != GeetestVerifyMode.PhoneCompanion
+                                ) {
+                                    mode = detectedMode
+                                }
+                            },
                             onResult = onResult,
                         )
 
@@ -374,56 +420,43 @@ private fun GeetestChallengeRefreshContent(
 @Composable
 private fun ModeSwitcher(
     mode: GeetestVerifyMode,
+    detectedTvMode: GeetestVerifyMode?,
     tvModeFocusRequester: FocusRequester,
-    sliderModeFocusRequester: FocusRequester,
     phoneModeFocusRequester: FocusRequester,
     contentFocusRequester: FocusRequester,
     onModeChange: (GeetestVerifyMode) -> Unit,
     onConfirmEnterContent: (GeetestVerifyMode) -> Unit,
     onBackFromModeTab: () -> Unit,
 ) {
+    val options = geetestModeOptions(detectedTvMode)
+    val focusRequesters = listOf(tvModeFocusRequester, phoneModeFocusRequester)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
     ) {
-        ModeChip(
-            selected = mode == GeetestVerifyMode.TvRemote,
-            label = "点击验证",
-            focusRequester = tvModeFocusRequester,
-            leftFocusRequester = null,
-            rightFocusRequester = sliderModeFocusRequester,
-            downFocusRequester = contentFocusRequester,
-            onSelect = {
-                // 左右移到 chip 时只预选模式，不立刻进内容
-                onModeChange(GeetestVerifyMode.TvRemote)
-            },
-            onConfirm = { onConfirmEnterContent(GeetestVerifyMode.TvRemote) },
-            onBack = onBackFromModeTab,
-        )
-        ModeChip(
-            selected = mode == GeetestVerifyMode.TvSlider,
-            label = "滑块验证",
-            focusRequester = sliderModeFocusRequester,
-            leftFocusRequester = tvModeFocusRequester,
-            rightFocusRequester = phoneModeFocusRequester,
-            downFocusRequester = contentFocusRequester,
-            onSelect = { onModeChange(GeetestVerifyMode.TvSlider) },
-            onConfirm = { onConfirmEnterContent(GeetestVerifyMode.TvSlider) },
-            onBack = onBackFromModeTab,
-        )
-        ModeChip(
-            selected = mode == GeetestVerifyMode.PhoneCompanion,
-            label = "手机验证",
-            focusRequester = phoneModeFocusRequester,
-            leftFocusRequester = sliderModeFocusRequester,
-            rightFocusRequester = null,
-            downFocusRequester = contentFocusRequester,
-            onSelect = { onModeChange(GeetestVerifyMode.PhoneCompanion) },
-            onConfirm = { onConfirmEnterContent(GeetestVerifyMode.PhoneCompanion) },
-            onBack = onBackFromModeTab,
-        )
+        options.forEachIndexed { index, option ->
+            val isPhoneMode = option.mode == GeetestVerifyMode.PhoneCompanion
+            ModeChip(
+                selected = if (isPhoneMode) {
+                    mode == GeetestVerifyMode.PhoneCompanion
+                } else {
+                    mode != GeetestVerifyMode.PhoneCompanion
+                },
+                label = option.label,
+                focusRequester = focusRequesters[index],
+                leftFocusRequester = focusRequesters.getOrNull(index - 1),
+                rightFocusRequester = focusRequesters.getOrNull(index + 1),
+                downFocusRequester = contentFocusRequester,
+                onSelect = {
+                    // 左右移到 chip 时只预选模式，不立刻进内容
+                    onModeChange(option.mode)
+                },
+                onConfirm = { onConfirmEnterContent(option.mode) },
+                onBack = onBackFromModeTab,
+            )
+        }
     }
 }
 
@@ -673,11 +706,13 @@ private fun GeetestTvVerifyContent(
     sliderMode: Boolean,
     contentFocusRequester: FocusRequester,
     modeTabFocusRequester: FocusRequester,
+    onTvModeDetected: (GeetestVerifyMode) -> Unit,
     onResult: (GeetestTvResult) -> Unit,
 ) {
     val density = LocalDensity.current
     val callbackScope = rememberCoroutineScope()
     val currentSliderMode = rememberUpdatedState(sliderMode)
+    val currentOnTvModeDetected = rememberUpdatedState(onTvModeDetected)
     val currentOnResult = rememberUpdatedState(onResult)
 
     var containerWidthPx by remember { mutableFloatStateOf(0f) }
@@ -1000,6 +1035,14 @@ private fun GeetestTvVerifyContent(
                                 }
 
                                 @JavascriptInterface
+                                fun onVerificationType(type: String?) {
+                                    val detectedMode = geetestTvModeFromWebType(type) ?: return
+                                    callbackScope.launch {
+                                        currentOnTvModeDetected.value(detectedMode)
+                                    }
+                                }
+
+                                @JavascriptInterface
                                 fun onSliderPosition(x: Double, y: Double) {
                                     if (!x.isFinite() || !y.isFinite()) return
                                     callbackScope.launch {
@@ -1261,6 +1304,9 @@ internal fun buildGeetestHtml(gt: String, challenge: String): String {
       function notify(msg) {
         try { window.Android.onStatusUpdate(msg); } catch(e) {}
       }
+      function reportVerificationType(type) {
+        try { window.Android.onVerificationType(type); } catch(e) {}
+      }
       function reportSliderPosition(attempt) {
         var selectors = [
           '.geetest_slider_button',
@@ -1279,6 +1325,7 @@ internal fun buildGeetestHtml(gt: String, challenge: String): String {
           }
         }
         if (handle) {
+          reportVerificationType('slider');
           var rect = handle.getBoundingClientRect();
           var scale = window.devicePixelRatio || 1;
           try {
@@ -1291,6 +1338,8 @@ internal fun buildGeetestHtml(gt: String, challenge: String): String {
         }
         if (attempt < 40) {
           setTimeout(function() { reportSliderPosition(attempt + 1); }, 100);
+        } else {
+          reportVerificationType('click');
         }
       }
       if (typeof initGeetest !== 'function') {
