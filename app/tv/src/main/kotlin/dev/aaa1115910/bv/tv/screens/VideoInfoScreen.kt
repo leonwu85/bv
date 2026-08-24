@@ -2298,7 +2298,7 @@ private fun VideoTagsRow(
                     focusedContainerColor = tagFocusedContainerColor,
                     pressedContainerColor = tagFocusedContainerColor
                 ),
-                scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1.05f),
+                scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1f),
                 shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(4.dp)),
                 border = ClickableSurfaceDefaults.border(
                     border = Border.None,
@@ -2307,15 +2307,21 @@ private fun VideoTagsRow(
                 ),
                 onClick = { currentOnClickTag(tag) }
             ) {
-                Text(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                    text = displayTagName,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (hasFocus) MaterialTheme.colorScheme.surface
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Box(
+                    modifier = Modifier
+                        .height(24.dp)
+                        .padding(horizontal = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = displayTagName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (hasFocus) MaterialTheme.colorScheme.surface
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
