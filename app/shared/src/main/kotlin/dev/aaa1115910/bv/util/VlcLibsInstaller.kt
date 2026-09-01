@@ -15,8 +15,9 @@ object VlcLibsInstaller {
         val vlcLibsDir = File(context.filesDir, VLC_LIBS_DIR)
         if (!vlcLibsDir.exists()) return false
 
-        val installedLibs = vlcLibsDir.listFiles()?.map { it.name } ?: emptyList()
-        return requiredLibs.all { it in installedLibs }
+        return requiredLibs.all { libraryName ->
+            NativeLibraryAbi.isCompatibleWithCurrentProcess(File(vlcLibsDir, libraryName))
+        }
     }
 
     /**
@@ -41,13 +42,7 @@ object VlcLibsInstaller {
      * 获取当前设备的目标 ABI
      */
     fun getTargetAbi(): String {
-        return when {
-            android.os.Build.SUPPORTED_ABIS.contains("arm64-v8a") -> "arm64-v8a"
-            android.os.Build.SUPPORTED_ABIS.contains("armeabi-v7a") -> "armeabi-v7a"
-            android.os.Build.SUPPORTED_ABIS.contains("x86_64") -> "x86_64"
-            android.os.Build.SUPPORTED_ABIS.contains("x86") -> "x86"
-            else -> throw IllegalStateException("Unsupported ABI")
-        }
+        return NativeLibraryAbi.currentProcessAbi()
     }
 
     /**

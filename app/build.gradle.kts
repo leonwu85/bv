@@ -2,9 +2,18 @@
 
 import com.android.build.api.variant.FilterConfiguration.FilterType
 import com.android.build.api.variant.impl.VariantOutputImpl
+import com.android.build.api.instrumentation.AsmClassVisitorFactory
+import com.android.build.api.instrumentation.ClassContext
+import com.android.build.api.instrumentation.ClassData
+import com.android.build.api.instrumentation.FramesComputationMode
+import com.android.build.api.instrumentation.InstrumentationParameters
+import com.android.build.api.instrumentation.InstrumentationScope
 import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
 import java.io.FileInputStream
 import java.util.Properties
+import org.objectweb.asm.ClassVisitor
+import org.objectweb.asm.MethodVisitor
+import org.objectweb.asm.Opcodes
 
 plugins {
     alias(gradleLibs.plugins.android.application)
@@ -14,6 +23,77 @@ plugins {
     alias(gradleLibs.plugins.google.ksp)
     alias(gradleLibs.plugins.google.services)
     alias(gradleLibs.plugins.kotlin.serialization)
+}
+
+/** Redirects API 34 calls omitted by a few non-conforming Android TV firmwares. */
+abstract class Android14ApiCompatClassVisitorFactory :
+    AsmClassVisitorFactory<InstrumentationParameters.None> {
+
+    override fun isInstrumentable(classData: ClassData): Boolean {
+        return classData.className in TARGET_CLASSES
+    }
+
+    override fun createClassVisitor(
+        classContext: ClassContext,
+        nextClassVisitor: ClassVisitor,
+    ): ClassVisitor = object : ClassVisitor(Opcodes.ASM9, nextClassVisitor) {
+        override fun visitMethod(
+            access: Int,
+            name: String?,
+            descriptor: String?,
+            signature: String?,
+            exceptions: Array<out String>?,
+        ): MethodVisitor {
+            val delegate = super.visitMethod(access, name, descriptor, signature, exceptions)
+            return object : MethodVisitor(Opcodes.ASM9, delegate) {
+                override fun visitMethodInsn(
+                    opcode: Int,
+                    owner: String,
+                    name: String,
+                    descriptor: String,
+                    isInterface: Boolean,
+                ) {
+                    when {
+                        opcode == Opcodes.INVOKEVIRTUAL &&
+                            owner == WINDOW_METRICS_OWNER &&
+                            name == "getDensity" &&
+                            descriptor == "()F" -> super.visitMethodInsn(
+                                Opcodes.INVOKESTATIC,
+                                COMPAT_HELPER_OWNER,
+                                "windowMetricsDensity",
+                                "(Ljava/lang/Object;)F",
+                                false,
+                            )
+
+                        opcode == Opcodes.INVOKESTATIC &&
+                            owner == WINDOW_INSETS_TYPE_OWNER &&
+                            name == "systemOverlays" &&
+                            descriptor == "()I" -> super.visitMethodInsn(
+                                Opcodes.INVOKESTATIC,
+                                COMPAT_HELPER_OWNER,
+                                "systemOverlays",
+                                "()I",
+                                false,
+                            )
+
+                        else -> super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
+                    }
+                }
+            }
+        }
+    }
+
+    private companion object {
+        const val COMPAT_HELPER_OWNER = "dev/aaa1115910/bv/util/Android14ApiCompat"
+        const val WINDOW_METRICS_OWNER = "android/view/WindowMetrics"
+        const val WINDOW_INSETS_TYPE_OWNER = "android/view/WindowInsets\$Type"
+
+        val TARGET_CLASSES = setOf(
+            "androidx.window.layout.util.DensityCompatHelperApi34Impl",
+            "androidx.window.layout.util.WindowMetricsCompatHelperApi34Impl",
+            "androidx.core.view.WindowInsetsCompat\$TypeImpl34",
+        )
+    }
 }
 
 val appVersion = AppConfiguration.resolveVersion(rootProject.projectDir)
@@ -153,6 +233,12 @@ android {
 
 androidComponents {
     onVariants(selector().all()) { variant ->
+        variant.instrumentation.transformClassesWith(
+            Android14ApiCompatClassVisitorFactory::class.java,
+            InstrumentationScope.ALL,
+        ) {}
+        variant.instrumentation.setAsmFramesComputationMode(FramesComputationMode.COPY_FRAMES)
+
         variant.outputs.forEach { output ->
             val abi = output.filters.find { it.filterType == FilterType.ABI }?.identifier ?: "universal"
             (output as VariantOutputImpl).outputFileName.set(

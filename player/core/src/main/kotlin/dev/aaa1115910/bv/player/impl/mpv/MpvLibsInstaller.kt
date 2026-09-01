@@ -1,7 +1,7 @@
 package dev.aaa1115910.bv.player.impl.mpv
 
 import android.content.Context
-import android.os.Build
+import dev.aaa1115910.bv.util.NativeLibraryAbi
 import `is`.xyz.mpv.MPVLib
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.File
@@ -36,8 +36,9 @@ object MpvLibsInstaller {
         val libsDir = getLibsDir(context)
         if (!libsDir.exists()) return false
 
-        val installedLibs = libsDir.listFiles()?.map { it.name }.orEmpty()
-        return requiredLibs.all { it in installedLibs }
+        return requiredLibs.all { libraryName ->
+            NativeLibraryAbi.isCompatibleWithCurrentProcess(File(libsDir, libraryName))
+        }
     }
 
     fun needsInstall(context: Context): Boolean = !isInstalled(context)
@@ -48,13 +49,7 @@ object MpvLibsInstaller {
     }
 
     fun getTargetAbi(): String {
-        return when {
-            Build.SUPPORTED_ABIS.contains("arm64-v8a") -> "arm64-v8a"
-            Build.SUPPORTED_ABIS.contains("armeabi-v7a") -> "armeabi-v7a"
-            Build.SUPPORTED_ABIS.contains("x86_64") -> "x86_64"
-            Build.SUPPORTED_ABIS.contains("x86") -> "x86"
-            else -> throw IllegalStateException("Unsupported ABI: ${Build.SUPPORTED_ABIS.joinToString()}")
-        }
+        return NativeLibraryAbi.currentProcessAbi()
     }
 
     fun installFromApk(

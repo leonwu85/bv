@@ -59,4 +59,9 @@ dependencies {
     implementation(libs.firebase.crashlytics)
     implementation(libs.logging)
     implementation(libs.material)
+    testImplementation(libs.kotlin.test)
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
 }

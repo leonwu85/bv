@@ -91,7 +91,15 @@ private class TvUiSurfaceHost(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
             )
-            holder.setFormat(PixelFormat.TRANSLUCENT)
+            holder.apply {
+                setFormat(PixelFormat.TRANSLUCENT)
+                // SurfaceControlViewHost only reparents its 1920x1080 child; it does not scale
+                // that child to this SurfaceView. Pinning the host buffer to the same size lets
+                // SurfaceView apply its normal buffer-to-view transform on 4K output. Without
+                // this, some Android 11 TV implementations show the UI at 1:1 in the top-left
+                // quarter of the screen.
+                setFixedSize(TV_UI_TARGET_WIDTH_PX, TV_UI_TARGET_HEIGHT_PX)
+            }
             setZOrderOnTop(true)
             isFocusable = true
             isFocusableInTouchMode = true

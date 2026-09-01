@@ -64,6 +64,7 @@ import dev.aaa1115910.bv.util.onBackPressed
 import dev.aaa1115910.bv.util.requestFocusWithRetry
 import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.tv.util.LatestRequestOwner
+import dev.aaa1115910.bv.tv.util.appendDistinctBy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -194,7 +195,7 @@ fun SubCommentPanel(
             if (reset) {
                 replies.clear()
             }
-            replies.addAll(data.replies)
+            replies.appendDistinctBy(data.replies) { it.rpid }
             currentPage = data.nextPage
             hasNext = data.hasNext
             loadedReplyKey = targetRootId to targetOid

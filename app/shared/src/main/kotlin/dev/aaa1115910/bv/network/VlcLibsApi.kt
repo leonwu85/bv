@@ -1,7 +1,7 @@
 package dev.aaa1115910.bv.network
 
-import android.os.Build
 import dev.aaa1115910.bv.network.entity.Release
+import dev.aaa1115910.bv.util.NativeLibraryAbi
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.content.ProgressListener
@@ -100,17 +100,7 @@ object VlcLibsApi {
     }
 
     private fun getFileName(): String {
-        return if (Build.SUPPORTED_ABIS.contains("x86_64")) {
-            "x86_64.zip"
-        } else if (Build.SUPPORTED_ABIS.contains("x86")) {
-            "x86.zip"
-        } else if (Build.SUPPORTED_ABIS.contains("arm64-v8a")) {
-            "arm64-v8a.zip"
-        } else if (Build.SUPPORTED_ABIS.contains("armeabi-v7a")) {
-            "armeabi-v7a.zip"
-        } else {
-            ""
-        }
+        return "${NativeLibraryAbi.currentProcessAbi()}.zip"
     }
 
     /**
@@ -159,4 +149,3 @@ object VlcLibsApi {
         throw lastException ?: IllegalStateException("All mirrors failed")
     }
 }
-

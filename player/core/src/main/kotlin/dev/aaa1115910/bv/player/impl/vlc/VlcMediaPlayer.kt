@@ -8,6 +8,7 @@ import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.VideoPlayerOptions
 import dev.aaa1115910.bv.player.playbackRefererFor
 import dev.aaa1115910.bv.util.formatHourMinSec
+import dev.aaa1115910.bv.util.NativeLibraryAbi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
@@ -995,7 +996,12 @@ class VlcMediaPlayer(
                 val cxxFile = File(vlcLibsDir, "libc++_shared.so")
                 val libvlcjniFile = File(vlcLibsDir, "libvlcjni.so")
 
-                if (vlcLibsDir.exists() && libvlcFile.exists() && cxxFile.exists()) {
+                val downloadedLibraries = listOf(cxxFile, libvlcFile, libvlcjniFile)
+                val downloadedLibrariesReady = downloadedLibraries.all {
+                    NativeLibraryAbi.isCompatibleWithCurrentProcess(it)
+                }
+
+                if (downloadedLibrariesReady) {
                     // 加载按需下载的库
                     logger.info { "[VLC-DEBUG] Loading VLC libs from: $vlcLibsDir" }
                     // 按序加载
@@ -1008,11 +1014,14 @@ class VlcMediaPlayer(
                     logger.info { "[VLC-DEBUG] Loaded libvlc from ${libvlcFile.absolutePath}" }
 
                     // 3. libvlcjni.so
-                    if (libvlcjniFile.exists()) {
-                        System.load(libvlcjniFile.absolutePath)
-                        logger.info { "[VLC-DEBUG] Loaded libvlcjni from ${libvlcjniFile.absolutePath}" }
-                    }
+                    System.load(libvlcjniFile.absolutePath)
+                    logger.info { "[VLC-DEBUG] Loaded libvlcjni from ${libvlcjniFile.absolutePath}" }
                 } else {
+                    if (downloadedLibraries.any { it.exists() }) {
+                        logger.warn {
+                            "Ignoring incomplete or wrong-bitness VLC libraries in $vlcLibsDir"
+                        }
+                    }
                     // 回退到 APK 内置库
                     logger.info { "[VLC-DEBUG] Loading VLC libs from APK (AAR built-in)" }
                     try {
@@ -1022,12 +1031,8 @@ class VlcMediaPlayer(
                         logger.debug { "libc++_shared already loaded or not available: ${e.message}" }
                     }
 
-                    try {
-                        System.loadLibrary("vlc")
-                        logger.info { "[VLC-DEBUG] Loaded libvlc from APK" }
-                    } catch (e: UnsatisfiedLinkError) {
-                        logger.debug { "libvlc already loaded or not available: ${e.message}" }
-                    }
+                    System.loadLibrary("vlc")
+                    logger.info { "[VLC-DEBUG] Loaded libvlc from APK" }
                 }
 
                 libsLoaded = true
