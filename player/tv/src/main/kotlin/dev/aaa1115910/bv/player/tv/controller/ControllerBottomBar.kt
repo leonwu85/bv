@@ -1,5 +1,7 @@
 package dev.aaa1115910.bv.player.tv.controller
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -46,6 +48,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
@@ -267,10 +270,24 @@ fun ControllerBottomBar(
     onToggleFollow: () -> Unit = {},
     onReportLiveHistory: () -> Unit = {},
     liveIncognitoMode: Boolean = false,
+    liveDanmakuSplitScreenAvailable: Boolean = false,
+    liveDanmakuSplitScreenActive: Boolean = false,
+    onToggleLiveDanmakuSplitScreen: () -> Unit = {},
 ) {
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
     val isLive = videoPlayerConfigData.isLive
     val currentOnHideInfo by rememberUpdatedState(onHideInfo)
+    val currentOnToggleLiveDanmakuSplitScreen by rememberUpdatedState(onToggleLiveDanmakuSplitScreen)
+    var liveDanmakuSplitButtonVisible by remember(isLive) { mutableStateOf(false) }
+
+    LaunchedEffect(isLive, liveDanmakuSplitScreenAvailable) {
+        liveDanmakuSplitButtonVisible = isLive && liveDanmakuSplitScreenAvailable
+    }
+    val liveDanmakuSplitButtonAlpha by animateFloatAsState(
+        targetValue = if (liveDanmakuSplitButtonVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 220),
+        label = "LiveDanmakuSplitButtonAlpha",
+    )
 
     // 根据播放列表位置决定上/下一集按钮可见性
     val videoList = videoPlayerConfigData.availableVideoList
@@ -399,7 +416,9 @@ fun ControllerBottomBar(
         isFollowingUp,
         liveIncognitoMode,
         availableLiveLines,
-        currentLiveLineButtonText
+        currentLiveLineButtonText,
+        liveDanmakuSplitScreenAvailable,
+        liveDanmakuSplitScreenActive,
     ) {
         if (!isLive) emptyList()
         else buildList {
@@ -415,6 +434,17 @@ fun ControllerBottomBar(
                 painterId = danmakuIconId,
                 onClick = { if (showDanmaku) onHideDanmaku() else onOpenDanmaku() }
             ))
+            if (liveDanmakuSplitScreenAvailable) {
+                add(ControlButton(
+                    id = "liveDanmakuSplit",
+                    icon = Icons.AutoMirrored.Rounded.Chat,
+                    text = "弹幕分屏",
+                    width = 112,
+                    onClick = { currentOnToggleLiveDanmakuSplitScreen() },
+                    selected = liveDanmakuSplitScreenActive,
+                    alwaysShowBorder = liveDanmakuSplitScreenActive,
+                ))
+            }
             if (availableLiveLines.isNotEmpty()) {
                 add(ControlButton(
                     id = "liveLine",
@@ -710,6 +740,13 @@ fun ControllerBottomBar(
                                     .dp
                                     .scaledBy(controllerPanelScale)
                             )
+                            .alpha(
+                                if (button.id == "liveDanmakuSplit") {
+                                    liveDanmakuSplitButtonAlpha
+                                } else {
+                                    1f
+                                }
+                            )
                             .focusRequester(liveFocusRequesters[button.id] ?: FocusRequester())
                             .onFocusChanged { if (it.isFocused) restartAutoHide() },
                         onClick = button.onClick,
@@ -717,13 +754,30 @@ fun ControllerBottomBar(
                         scale = ButtonDefaults.scale(focusedScale = 1.1f),
                         contentPadding = PaddingValues(0.dp),
                         colors = ButtonDefaults.colors(
-                            containerColor = PlayerColors.buttonDefault,
-                            focusedContainerColor = PlayerColors.buttonFocused
+                            containerColor = if (
+                                button.id == "liveDanmakuSplit" && button.selected
+                            ) {
+                                PlayerColors.buttonSelected
+                            } else {
+                                PlayerColors.buttonDefault
+                            },
+                            focusedContainerColor = PlayerColors.buttonFocused,
                         ),
                         border = ButtonDefaults.border(
-                            border = Border(border = BorderStroke(1.dp, PlayerColors.buttonDefault)),
-                            focusedBorder = Border(border = BorderStroke(1.5.dp, PlayerColors.buttonFocusedBorder))
-                        )
+                            border = Border(
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (button.id == "liveDanmakuSplit" && button.selected) {
+                                        PlayerColors.buttonAlwaysShowBorder
+                                    } else {
+                                        PlayerColors.buttonDefault
+                                    },
+                                ),
+                            ),
+                            focusedBorder = Border(
+                                border = BorderStroke(1.5.dp, PlayerColors.buttonFocusedBorder),
+                            ),
+                        ),
                     ) {
                         if (button.text != null && button.icon != null) {
                             Row(

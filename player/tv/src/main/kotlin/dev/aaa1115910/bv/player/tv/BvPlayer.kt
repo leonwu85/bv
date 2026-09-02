@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -31,6 +32,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
 import com.kuaishou.akdanmaku.DanmakuConfig
 import com.kuaishou.akdanmaku.data.DanmakuItemData
@@ -232,6 +234,13 @@ fun BvPlayer(
     onReportLiveHistory: () -> Unit = {},
     liveIncognitoMode: Boolean = false,
     isLive: Boolean = false,
+    liveDanmakuSplitScreenAvailable: Boolean = false,
+    liveDanmakuSplitScreenActive: Boolean = false,
+    onToggleLiveDanmakuSplitScreen: () -> Unit = {},
+    suppressDanmakuOverlay: Boolean = false,
+    videoContentTopPadding: Dp = 0.dp,
+    videoContentBottomPadding: Dp = 0.dp,
+    videoContentEndPadding: Dp = 0.dp,
     onLiveDanmakuPlayerReady: ((com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer) -> Unit)? = null,
 
     // SponsorBlock 相关参数
@@ -1734,7 +1743,7 @@ fun BvPlayer(
             onOpenDanmaku = {
                 onShowDanmakuChange(true)
                 videoPlayerConfigData.showDanmaku = true
-                danmakuLayerHandle.update(visible = true)
+                danmakuLayerHandle.update(visible = !suppressDanmakuOverlay)
                 applyDanmakuConfig(
                     "Update danmaku visibility",
                     false,
@@ -1771,6 +1780,9 @@ fun BvPlayer(
             onToggleFollow = onToggleFollow,
             onReportLiveHistory = onReportLiveHistory,
             liveIncognitoMode = liveIncognitoMode,
+            liveDanmakuSplitScreenAvailable = liveDanmakuSplitScreenAvailable,
+            liveDanmakuSplitScreenActive = liveDanmakuSplitScreenActive,
+            onToggleLiveDanmakuSplitScreen = onToggleLiveDanmakuSplitScreen,
 
             // SponsorBlock 相关参数
             enableSponsorBlock = enableSponsorBlock,
@@ -1792,7 +1804,7 @@ fun BvPlayer(
             // 将弹幕层副作用独立到子树，保证父级其它状态变化不导致 handle 以外的重组
             DanmakuLayerSideEffects(
                 danmakuLayerHandle = danmakuLayerHandle,
-                visible = videoPlayerConfigData.showDanmaku,
+                visible = videoPlayerConfigData.showDanmaku && !suppressDanmakuOverlay,
                 maskFrame = currentDanmakuMaskFrame.takeIf {
                     danmakuCapabilities.danmakuMaskSupported &&
                         videoPlayerConfigData.currentDanmakuMask &&
@@ -1808,6 +1820,11 @@ fun BvPlayer(
         
             BvVideoPlayer(
                 modifier = Modifier
+                    .padding(
+                        top = videoContentTopPadding,
+                        bottom = videoContentBottomPadding,
+                        end = videoContentEndPadding,
+                    )
                     .then(
                         if (videoPlayer is ExoMediaPlayer ||
                             (videoPlayer is MpvMediaPlayer && videoPlayer.usesEmbeddedVideoOutput)

@@ -89,6 +89,9 @@ fun ControllerVideoInfo(
     onToggleFollow: () -> Unit = {},
     onReportLiveHistory: () -> Unit = {},
     liveIncognitoMode: Boolean = false,
+    liveDanmakuSplitScreenAvailable: Boolean = false,
+    liveDanmakuSplitScreenActive: Boolean = false,
+    onToggleLiveDanmakuSplitScreen: () -> Unit = {},
 ) {
     val videoPlayerClockState = LocalVideoPlayerClockState.current
     val videoPlayerSeekState = LocalVideoPlayerSeekState.current
@@ -202,7 +205,10 @@ fun ControllerVideoInfo(
                 onTripleLike = onTripleLike,
                 onToggleFollow = onToggleFollow,
                 onReportLiveHistory = onReportLiveHistory,
-                liveIncognitoMode = liveIncognitoMode
+                liveIncognitoMode = liveIncognitoMode,
+                liveDanmakuSplitScreenAvailable = liveDanmakuSplitScreenAvailable,
+                liveDanmakuSplitScreenActive = liveDanmakuSplitScreenActive,
+                onToggleLiveDanmakuSplitScreen = onToggleLiveDanmakuSplitScreen,
             )
         }
     }

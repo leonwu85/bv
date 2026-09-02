@@ -103,6 +103,10 @@ import dev.aaa1115910.bv.player.tv.controller.TripleLikeTip
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
 import dev.aaa1115910.bv.tv.component.GeetestTvVerifyDialog
 import dev.aaa1115910.bv.tv.component.InteractiveOptionDialog
+import dev.aaa1115910.bv.tv.component.LiveDanmakuSplitPanel
+import dev.aaa1115910.bv.tv.component.LiveDanmakuSplitVideoBottomBarHeight
+import dev.aaa1115910.bv.tv.component.LiveDanmakuSplitVideoInfoOverlay
+import dev.aaa1115910.bv.tv.component.LiveDanmakuSplitVideoTopBarHeight
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.component.buttons.CoinButton
 import dev.aaa1115910.bv.tv.component.CommentPanel
@@ -134,7 +138,7 @@ import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.getKoin
 
-private const val COMMENT_SPLIT_PLAYER_RESIZE_ANIMATION_MS = 260
+private const val PLAYER_SPLIT_RESIZE_ANIMATION_MS = 260
 
 @Composable
 fun VideoPlayerV3Screen(
@@ -209,6 +213,7 @@ fun VideoPlayerV3Screen(
     var onlineViewerCount by remember { mutableStateOf("") }
     var showOnlineViewerCountTip by remember { mutableStateOf(false) }
     var showLiveControlPanel by remember { mutableStateOf(false) }
+    var showLiveDanmakuSplitScreen by remember(playerViewModel.currentCid) { mutableStateOf(false) }
 
     // 焦点管理
     val relatedVideosFocusRequester = remember { FocusRequester() }
@@ -226,6 +231,7 @@ fun VideoPlayerV3Screen(
     LaunchedEffect(playerViewModel.isLive) {
         if (!playerViewModel.isLive) {
             showLiveControlPanel = false
+            showLiveDanmakuSplitScreen = false
         }
     }
 
@@ -370,20 +376,26 @@ fun VideoPlayerV3Screen(
 
     val commentSplitScreenEnabled = Prefs.playerCommentSplitScreen && playerViewModel.currentAid > 0
     val useCommentSplitScreen = commentSplitScreenEnabled && showCommentPanel
+    val useLiveDanmakuSplitScreen = playerViewModel.isLive && showLiveDanmakuSplitScreen
+    val useSplitScreen = useCommentSplitScreen || useLiveDanmakuSplitScreen
     var splitPlayerSnapped by remember { mutableStateOf(false) }
-    var splitCommentPanelVisible by remember { mutableStateOf(false) }
+    var splitPanelVisible by remember { mutableStateOf(false) }
 
-    LaunchedEffect(useCommentSplitScreen) {
-        if (useCommentSplitScreen) {
+    LaunchedEffect(useSplitScreen) {
+        if (useSplitScreen) {
             splitPlayerSnapped = false
-            splitCommentPanelVisible = false
-            delay(COMMENT_SPLIT_PLAYER_RESIZE_ANIMATION_MS.toLong())
+            splitPanelVisible = false
+            delay(PLAYER_SPLIT_RESIZE_ANIMATION_MS.toLong())
             splitPlayerSnapped = true
-            splitCommentPanelVisible = true
+            splitPanelVisible = true
         } else {
             splitPlayerSnapped = false
-            splitCommentPanelVisible = false
+            splitPanelVisible = false
         }
+    }
+
+    BackHandler(enabled = useLiveDanmakuSplitScreen) {
+        showLiveDanmakuSplitScreen = false
     }
 
     LaunchedEffect(
@@ -523,10 +535,16 @@ fun VideoPlayerV3Screen(
         ) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val splitCommentPanelWidth = maxWidth * 0.3f
+                val liveDanmakuSplitPanelWidth = maxWidth / 7f
+                val activeSplitPanelWidth = when {
+                    useLiveDanmakuSplitScreen -> liveDanmakuSplitPanelWidth
+                    useCommentSplitScreen -> splitCommentPanelWidth
+                    else -> 0.dp
+                }
                 val splitMaskWidth by animateDpAsState(
-                    targetValue = if (useCommentSplitScreen) splitCommentPanelWidth else 0.dp,
-                    animationSpec = tween(durationMillis = COMMENT_SPLIT_PLAYER_RESIZE_ANIMATION_MS),
-                    label = "CommentSplitMaskWidth"
+                    targetValue = activeSplitPanelWidth,
+                    animationSpec = tween(durationMillis = PLAYER_SPLIT_RESIZE_ANIMATION_MS),
+                    label = "PlayerSplitMaskWidth"
                 )
                 Box(
                     modifier = Modifier
@@ -550,6 +568,27 @@ fun VideoPlayerV3Screen(
                         showBottomProgressBar = Prefs.playerShowBottomProgressBar,
                         bottomProgressBarColor = Prefs.playerBottomProgressBarColor.toComposeColor(),
                         bottomControlPanelConfig = Prefs.playerBottomControlPanelConfig,
+                        liveDanmakuSplitScreenAvailable = playerViewModel.isLive,
+                        liveDanmakuSplitScreenActive = useLiveDanmakuSplitScreen,
+                        onToggleLiveDanmakuSplitScreen = {
+                            showLiveDanmakuSplitScreen = !showLiveDanmakuSplitScreen
+                        },
+                        suppressDanmakuOverlay = useLiveDanmakuSplitScreen,
+                        videoContentTopPadding = if (useLiveDanmakuSplitScreen) {
+                            LiveDanmakuSplitVideoTopBarHeight
+                        } else {
+                            0.dp
+                        },
+                        videoContentBottomPadding = if (useLiveDanmakuSplitScreen) {
+                            LiveDanmakuSplitVideoBottomBarHeight
+                        } else {
+                            0.dp
+                        },
+                        videoContentEndPadding = if (useLiveDanmakuSplitScreen) {
+                            splitMaskWidth
+                        } else {
+                            0.dp
+                        },
                         useTextureViewFixPortraitVideo =
                             Prefs.portraitVideoFixMode == PortraitVideoFixMode.UseTextureView &&
                                 playerViewModel.isVerticalVideo &&
@@ -1358,7 +1397,10 @@ fun VideoPlayerV3Screen(
 
             // 直播人气 Tip（左下角常驻）
             LiveViewerCountTip(
-                show = playerViewModel.isLive && Prefs.showLivePopularity && !showLiveControlPanel,
+                show = playerViewModel.isLive &&
+                    Prefs.showLivePopularity &&
+                    !showLiveControlPanel &&
+                    !useLiveDanmakuSplitScreen,
                 popularityText = playerViewModel.livePopularityText,
                 onlineCount = playerViewModel.liveOnlineCount
             )
@@ -1367,6 +1409,17 @@ fun VideoPlayerV3Screen(
             TripleLikeTip(
                 show = showTripleLikeTip,
                 message = tripleLikeTipMessage
+            )
+
+            LiveDanmakuSplitVideoInfoOverlay(
+                show = useLiveDanmakuSplitScreen && !showLiveControlPanel,
+                upName = playerViewModel.upName,
+                upAvatar = playerViewModel.upFace,
+                viewerCount = playerViewModel.liveOnlineCount.ifBlank {
+                    playerViewModel.livePopularityText
+                },
+                title = playerViewModel.title,
+                modifier = Modifier.padding(end = liveDanmakuSplitPanelWidth),
             )
                 }
 
@@ -1384,10 +1437,24 @@ fun VideoPlayerV3Screen(
                             .align(Alignment.CenterEnd)
                             .width(splitCommentPanelWidth)
                             .fillMaxHeight(),
-                        show = splitCommentPanelVisible,
+                        show = splitPanelVisible,
                         oid = playerViewModel.currentAid,
                         onHide = { showCommentPanel = false },
                         embedded = true
+                    )
+                }
+
+                if (useLiveDanmakuSplitScreen && splitPanelVisible) {
+                    LiveDanmakuSplitPanel(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .width(liveDanmakuSplitPanelWidth)
+                            .fillMaxHeight(),
+                        messages = playerViewModel.liveDanmakuMessages,
+                        roomId = playerViewModel.currentCid,
+                        danmakuScale = playerViewModel.currentDanmakuScale,
+                        showEmoji = Prefs.showLiveDanmakuEmoji,
+                        minimumUserLevel = playerViewModel.currentLiveDanmakuFilterLevel,
                     )
                 }
             }

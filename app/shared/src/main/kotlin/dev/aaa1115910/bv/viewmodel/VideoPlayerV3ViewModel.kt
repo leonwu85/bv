@@ -152,6 +152,7 @@ data class LiveDanmakuMessage(
     val medalLevel: Int?,
     val userLevel: Int,
     val color: Int,
+    val fontSize: Int,
     val timestampMs: Long,
     val emojiMap: Map<String, String>
 )
@@ -5864,6 +5865,7 @@ class VideoPlayerV3ViewModel(
                     medalLevel = event.medalLevel,
                     userLevel = event.userLevel,
                     color = 0xFF000000.toInt() or event.color,
+                    fontSize = event.fontSize,
                     timestampMs = System.currentTimeMillis(),
                     emojiMap = event.emojiMap
                 )

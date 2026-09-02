@@ -168,6 +168,9 @@ fun VideoPlayerController(
     onToggleFollow: () -> Unit = {},
     onReportLiveHistory: () -> Unit = {},
     liveIncognitoMode: Boolean = false,
+    liveDanmakuSplitScreenAvailable: Boolean = false,
+    liveDanmakuSplitScreenActive: Boolean = false,
+    onToggleLiveDanmakuSplitScreen: () -> Unit = {},
 
     // SponsorBlock 相关参数
     enableSponsorBlock: Boolean = false,
@@ -927,7 +930,10 @@ fun VideoPlayerController(
                 onTripleLike = onTripleLike,
                 onToggleFollow = onToggleFollow,
                 onReportLiveHistory = onReportLiveHistory,
-                liveIncognitoMode = liveIncognitoMode
+                liveIncognitoMode = liveIncognitoMode,
+                liveDanmakuSplitScreenAvailable = liveDanmakuSplitScreenAvailable,
+                liveDanmakuSplitScreenActive = liveDanmakuSplitScreenActive,
+                onToggleLiveDanmakuSplitScreen = onToggleLiveDanmakuSplitScreen,
             )
         }
         SeekController(
