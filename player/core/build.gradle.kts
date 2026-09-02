@@ -14,6 +14,17 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
+
+        // Versions/fingerprints of the on-demand native player components. Kept here (not only in
+        // :player) so the loaders in this module can validate what they are about to dlopen.
+        buildConfigField("String", "libVLCVersion", "\"${AppConfiguration.libVLCVersion}\"")
+        buildConfigField("String", "libVLCAarSha256", "\"${AppConfiguration.libVLCAarSha256}\"")
+        buildConfigField("String", "mpvAndroidReleaseTag", "\"${AppConfiguration.mpvAndroidReleaseTag}\"")
+        buildConfigField(
+            "String",
+            "mpvAndroidSigningCertSha256",
+            "\"${AppConfiguration.mpvAndroidSigningCertSha256}\""
+        )
     }
 
     buildTypes {
@@ -41,6 +52,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 }

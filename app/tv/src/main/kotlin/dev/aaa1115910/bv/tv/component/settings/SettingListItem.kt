@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -16,6 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.ListItemDefaults
@@ -24,6 +27,9 @@ import androidx.tv.material3.Text
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 
 private val SettingItemShape = RoundedCornerShape(14.dp)
+
+/** 行内取值列的最大宽度：留出至少一半行宽给标题和说明 */
+private val SettingValueMaxWidth = 200.dp
 
 @Composable
 fun SettingListItem(
@@ -40,13 +46,28 @@ fun SettingListItem(
         modifier = modifier.onFocusChanged { hasFocus = it.hasFocus },
         headlineContent = { Text(text = title) },
         supportingContent = { Text(text = supportText) },
-        trailingContent = { if (valueText?.isNotEmpty() == true) Text(text = valueText) },
+        trailingContent = {
+            if (valueText?.isNotEmpty() == true) {
+                // ListItem 先量 trailing 再把剩余宽度给标题列；不限宽的长取值会把标题挤成竖排
+                Text(
+                    modifier = Modifier.widthIn(max = SettingValueMaxWidth),
+                    text = valueText,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.End
+                )
+            }
+        },
         onClick = onClick,
         selected = false,
         shape = ListItemDefaults.shape(shape = SettingItemShape)
     )
 }
 
+/**
+ * @param getValueText 列表行右侧显示的简短取值文案；为 null 时复用 [getDisplayName]。
+ *   选项说明较长时用它给行内一个紧凑标签，完整说明只在弹窗里展示。
+ */
 @Composable
 fun <T> SettingListItemWithDialog(
     modifier: Modifier = Modifier,
@@ -56,7 +77,8 @@ fun <T> SettingListItemWithDialog(
     getDisplayName: (T, Context) -> String,
     value: T,
     onValueChange: (T) -> Unit,
-    defaultHasFocus: Boolean = false
+    defaultHasFocus: Boolean = false,
+    getValueText: ((T, Context) -> String)? = null
 ) {
     val context = LocalContext.current
     var showDialog by remember { mutableStateOf(false) }
@@ -66,7 +88,7 @@ fun <T> SettingListItemWithDialog(
         title = title,
         supportText = supportText,
         defaultHasFocus = defaultHasFocus,
-        valueText = getDisplayName(value, context),
+        valueText = (getValueText ?: getDisplayName)(value, context),
         onClick = { showDialog = true }
     )
 

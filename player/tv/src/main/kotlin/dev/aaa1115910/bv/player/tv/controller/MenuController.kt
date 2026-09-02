@@ -358,8 +358,6 @@ private fun MenuList(
                     onAspectRatioChange = onAspectRatioChange,
                     onRotationChange = onRotationChange,
                     onPlaySpeedChange = onPlaySpeedChange,
-                    onDanmakuSpeedModeChange = onDanmakuSpeedModeChange,
-                    onDanmakuPresentationSpeedChange = onDanmakuPresentationSpeedChange,
                     onAudioChange = onAudioChange,
                     onLiveQualityChange = onLiveQualityChange,
                     onLiveCodecChange = onLiveCodecChange,

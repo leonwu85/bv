@@ -41,6 +41,12 @@
     <string name="vod_buffer_recovery_resolution_message">更换 CDN 后仍然出现缓冲，是否将清晰度从 %1$s 降至 %2$s？</string>
     <string name="vod_buffer_recovery_resolution_dismiss">暂不降级</string>
     <string name="vod_buffer_recovery_resolution_confirm">降至 %1$s</string>
+    <string name="vod_decoder_overload_resolution_title">设备解码跟不上</string>
+    <string name="vod_decoder_overload_resolution_message">当前设备解码 %1$s 视频时大量丢帧，画面会持续卡顿。是否将清晰度降至 %2$s？</string>
+    <string name="vod_super_resolution_overload_title">超分辨率负载过高</string>
+    <string name="vod_super_resolution_overload_message">当前设备的 GPU 无法实时运行超分辨率 shader，画面大量丢帧。是否关闭本次播放的超分辨率？关闭后如仍卡顿，会再建议降低清晰度。可在“MPV 设置”中永久关闭。</string>
+    <string name="vod_super_resolution_overload_dismiss">暂不关闭</string>
+    <string name="vod_super_resolution_overload_confirm">关闭超分</string>
 
     <string name="confirm">确认</string>
 
@@ -961,8 +967,6 @@
     <string name="settings_danmaku_engine_ecs">旧引擎 ECS</string>
 
     <!-- VLC Player Settings -->
-    <string name="settings_player_vlc_auto_rotate_title">VLC 自动旋转</string>
-    <string name="settings_player_vlc_auto_rotate_text">根据视频元数据自动旋转画面（切换时会短暂暂停）</string>
 
     <!-- Dynamic Tab -->
     <string name="dynamic_tab_all">全部</string>

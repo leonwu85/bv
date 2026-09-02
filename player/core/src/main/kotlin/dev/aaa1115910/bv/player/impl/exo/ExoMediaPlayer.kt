@@ -23,6 +23,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
@@ -68,6 +69,28 @@ class ExoMediaPlayer(
     var mPlayer: ExoPlayer? = null
     protected var mMediaSource: MediaSource? = null
     private var lastVideoFrameRate: Float? = null
+
+    // 解码能力检测：MediaCodecVideoRenderer 每累计一批丢帧上报一次 onDroppedVideoFrames
+    private var overloadedReportCount = 0
+    private var decoderOverloadReported = false
+    private val analyticsListener = object : AnalyticsListener {
+        override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
+            if (elapsedMs <= 0L || droppedFrames <= 0) return
+            val fps = mPlayer?.videoFormat?.frameRate?.takeIf { it > 1f } ?: DEFAULT_ASSUMED_FRAME_RATE
+            val expectedFrames = (fps * elapsedMs / 1000f).toInt().coerceAtLeast(1)
+            // 丢帧数达到应显示帧数的一半以上，说明解码/渲染跟不上
+            val overloaded = droppedFrames * 2 >= expectedFrames
+            overloadedReportCount = if (overloaded) overloadedReportCount + 1 else 0
+            if (overloaded) {
+                Log.d("ExoMediaPlayer", "Dropping frames: $droppedFrames / ~$expectedFrames in ${elapsedMs}ms")
+            }
+            if (overloadedReportCount >= OVERLOAD_REPORTS_REQUIRED && !decoderOverloadReported) {
+                decoderOverloadReported = true
+                Log.w("ExoMediaPlayer", "Decoder overloaded: $droppedFrames / ~$expectedFrames frames dropped in ${elapsedMs}ms")
+                mPlayerEventListener?.onDecoderOverloaded(droppedFrames, expectedFrames)
+            }
+        }
+    }
 
     // 进度更新 Handler，用于定期触发 onProgress 回调
     private val progressHandler = Handler(Looper.getMainLooper())
@@ -161,11 +184,7 @@ class ExoMediaPlayer(
 
     private fun initListener() {
         mPlayer?.addListener(this)
-    }
-
-    @OptIn(UnstableApi::class)
-    override fun setHeader(headers: Map<String, String>) {
-
+        mPlayer?.addAnalyticsListener(analyticsListener)
     }
 
     @OptIn(UnstableApi::class)
@@ -175,6 +194,8 @@ class ExoMediaPlayer(
 
         val mediaSources = listOfNotNull(videoMediaSource, audioMediaSource)
         mMediaSource = MergingMediaSource(*mediaSources.toTypedArray())
+        // A new source invalidates any start position that was set for the previous one.
+        clearPendingSeekPosition()
     }
 
     /**
@@ -226,6 +247,8 @@ class ExoMediaPlayer(
 
     @OptIn(UnstableApi::class)
     override fun prepare() {
+        overloadedReportCount = 0
+        decoderOverloadReported = false
         mPlayer?.setMediaSource(mMediaSource!!)
         mPlayer?.prepare()
         // 处理初始跳转位置，避免在 onReady 中 seek 导致的状态抖动
@@ -584,6 +607,11 @@ class ExoMediaPlayer(
      */
     private enum class DeviceTier {
         LOW, MID, HIGH
+    }
+
+    private companion object {
+        const val DEFAULT_ASSUMED_FRAME_RATE = 30f
+        const val OVERLOAD_REPORTS_REQUIRED = 2
     }
 
     /**

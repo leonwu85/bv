@@ -44,4 +44,13 @@ interface VideoPlayerListener {
 
     fun onVideoFrameRateChanged(frameRate: Float?) {}
 
+    /**
+     * 解码/渲染跟不上播放速度：在连续多个采样窗口内，被丢弃的视频帧占比过高（通常是设备解码能力不足）。
+     * 每个媒体只上报一次。
+     *
+     * @param droppedFrames 最近一个采样窗口内丢弃的帧数
+     * @param totalFrames 最近一个采样窗口内产出的总帧数（丢弃 + 显示）
+     */
+    fun onDecoderOverloaded(droppedFrames: Int, totalFrames: Int) {}
+
 }

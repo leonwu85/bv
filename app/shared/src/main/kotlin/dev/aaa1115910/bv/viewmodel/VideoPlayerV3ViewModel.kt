@@ -1070,6 +1070,58 @@ class VideoPlayerV3ViewModel(
         vodSourceTransitionPending = false
     }
 
+    /**
+     * 播放器报告解码/渲染跟不上（连续多个窗口丢帧过半）。与网络缓冲不同，换 CDN 无济于事，
+     * 直接建议降低清晰度；复用缓冲恢复的提示与切换流程。
+     */
+    fun onVodDecoderOverloaded(droppedFrames: Int, totalFrames: Int) {
+        if (
+            isLive ||
+            currentPlaybackOffline ||
+            currentPlaybackMediaMode == PlaybackMediaMode.AudioOnly ||
+            currentAid <= 0L ||
+            currentCid <= 0L ||
+            vodSourceTransitionPending ||
+            vodBufferRecoveryJob?.isActive == true ||
+            vodBufferRecoveryPrompt != null
+        ) {
+            return
+        }
+
+        if (vodBufferRecoveryPolicy.onDecoderOverload() != VodBufferRecoveryDecision.SuggestResolutionDowngrade) {
+            return
+        }
+
+        val resumePositionMs = videoPlayer?.currentPosition?.takeIf { it > 0L } ?: 0L
+
+        // 丢帧统计来自 VO：超分 shader 在跑时更可能是 GPU 渲染跟不上，先建议关超分，降清晰度救不了它
+        if (videoPlayer?.isSuperResolutionActive == true) {
+            videoPlayer?.pause()
+            vodBufferRecoveryPrompt = VodBufferRecoveryPrompt.DisableSuperResolution(
+                resumePositionMs = resumePositionMs,
+            )
+            addVodBufferRecoveryLog("渲染跟不上（超分开启，最近窗口丢帧 $droppedFrames/$totalFrames），建议关闭超分辨率")
+            return
+        }
+
+        val targetResolution = nextLowerVodResolution(currentQuality, availableQuality)
+        if (targetResolution == null) {
+            vodBufferRecoveryPolicy.suppress()
+            vodBufferRecoveryNotice = "设备解码跟不上，且当前已是最低清晰度"
+            addVodBufferRecoveryLog("解码跟不上（最近窗口丢帧 $droppedFrames/$totalFrames），当前已是最低清晰度")
+            return
+        }
+
+        videoPlayer?.pause()
+        vodBufferRecoveryPrompt = VodBufferRecoveryPrompt.LowerResolution(
+            resumePositionMs = resumePositionMs,
+            fromResolution = currentQuality,
+            toResolution = targetResolution,
+            reason = LowerResolutionReason.DecoderOverload,
+        )
+        addVodBufferRecoveryLog("解码跟不上（最近窗口丢帧 $droppedFrames/$totalFrames），建议从$currentQuality 降级到$targetResolution")
+    }
+
     fun dismissVodBufferRecoveryPrompt() {
         if (vodBufferRecoveryPrompt == null) return
         vodBufferRecoveryPrompt = null
@@ -1082,8 +1134,22 @@ class VideoPlayerV3ViewModel(
         when (val prompt = vodBufferRecoveryPrompt) {
             is VodBufferRecoveryPrompt.SwitchCdn -> confirmVodCdnSwitch(prompt)
             is VodBufferRecoveryPrompt.LowerResolution -> confirmVodResolutionDowngrade(prompt)
+            is VodBufferRecoveryPrompt.DisableSuperResolution -> confirmDisableSuperResolution()
             null -> Unit
         }
+    }
+
+    /**
+     * 关掉本次会话的超分 shader 后继续播放。策略回到初始监控态：如果去掉 shader 后仍然丢帧，
+     * 说明瓶颈在解码器，后续还可以正常走“降清晰度”提示。
+     */
+    private fun confirmDisableSuperResolution() {
+        vodBufferRecoveryPrompt = null
+        videoPlayer?.disableSuperResolution()
+        vodBufferRecoveryPolicy.reset()
+        videoPlayer?.start()
+        vodBufferRecoveryNotice = "已关闭本次播放的超分辨率（可在 MPV 设置中永久关闭）"
+        addVodBufferRecoveryLog("用户关闭本次播放的超分辨率")
     }
 
     fun consumeVodBufferRecoveryNotice() {
@@ -1860,6 +1926,18 @@ class VideoPlayerV3ViewModel(
                 }
             }
 
+            // 内核无法按 HDR 输出（如 MPV 的 gpu 路径）时，HDR/杜比视界档位只会得到发灰或被压成 SDR 的画面，
+            // 直接不提供这些档位，避免用户以为“开了 HDR”
+            val player = videoPlayer
+            if (player != null && !player.supportsHdrOutput) {
+                val hdrResolutions = resolutionList.filter { it == Resolution.RHdr || it == Resolution.RDolby }
+                if (hdrResolutions.isNotEmpty() && resolutionList.size > hdrResolutions.size) {
+                    resolutionList.removeAll(hdrResolutions)
+                    logger.fInfo { "Hide HDR resolutions for player without HDR output: $hdrResolutions" }
+                    addLogs("当前播放内核无法输出 HDR，已隐藏 ${hdrResolutions.joinToString()} 档位")
+                }
+            }
+
             logger.fInfo { "Video available resolution: $resolutionList" }
             availableQuality.swapListWithMainContext(resolutionList)
             if (resolutionList.isEmpty()) {
@@ -1903,7 +1981,7 @@ class VideoPlayerV3ViewModel(
             )
 
             // 确定使用哪个默认分辨率
-            val defaultQualityToUse = if (
+            val portraitLimitedQuality = if (
                 isVerticalVideo &&
                 settings.portraitVideoFixMode == PortraitVideoFixMode.LimitResolution1080P &&
                 preferredDefaultQuality >= Resolution.R4K
@@ -1913,6 +1991,17 @@ class VideoPlayerV3ViewModel(
             } else {
                 // 否则使用普通设置
                 preferredDefaultQuality
+            }
+
+            // 内核建议的上限（如 API 26 以下的 MPV 无法零拷贝硬解）：只约束自动选择，不覆盖用户在菜单里的手动选择
+            val playerMaxCode = player?.preferredMaxResolutionCode
+            val defaultQualityToUse = if (playerMaxCode != null && portraitLimitedQuality.code > playerMaxCode) {
+                val capped = Resolution.fromCode(playerMaxCode) ?: portraitLimitedQuality
+                logger.fInfo { "Cap default resolution $portraitLimitedQuality -> $capped for current player" }
+                addLogs("当前播放内核在此设备上建议不超过 $capped，默认清晰度已下调")
+                capped
+            } else {
+                portraitLimitedQuality
             }
 
             val preferredQuality = targetQuality ?: defaultQualityToUse
@@ -5542,7 +5631,8 @@ class VideoPlayerV3ViewModel(
                 availableLiveLines.addAll(playInfo.availableLines)
             }
 
-            // 无缝切换：更新播放器URL
+            // 预置新地址而不打断当前流：playUrl() 在所有内核上都是纯设置操作（见 AbstractVideoPlayer），
+            // 当前连接继续播放，直到出错/重试时 prepare() 才会使用新地址
             withContext(Dispatchers.Main) {
                 videoPlayer?.playUrl(videoUrl = playInfo.streamUrl)
             }

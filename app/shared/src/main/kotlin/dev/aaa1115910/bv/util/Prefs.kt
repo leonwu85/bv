@@ -902,10 +902,6 @@ object Prefs {
     val showOnlineViewerCountFlow: Flow<Int>
         get() = dsm.getPreferenceFlow(PrefKeys.prefShowOnlineViewerCountRequest)
 
-    var vlcAutoRotate: Boolean
-        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefVlcAutoRotateRequest).first() }
-        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefVlcAutoRotate, value) }
-
     var enableAsyncQueueing: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefEnableAsyncQueueingRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefEnableAsyncQueueing, value) }
@@ -983,6 +979,11 @@ object Prefs {
     var tvMpvVdQueueEnable: String
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefTvMpvVdQueueEnableRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefTvMpvVdQueueEnableKey, value.trim()) }
+
+    /** MPV 内核是否把 B 站 CDN 的 HTTPS 播放地址改写为 HTTP（明文传输播放地址） */
+    var tvMpvPreferHttpCdn: Boolean
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefTvMpvPreferHttpCdnRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefTvMpvPreferHttpCdnKey, value) }
 
     var superResolutionType: SuperResolutionType
         get() = runBlocking {
@@ -1155,7 +1156,6 @@ object PrefKeys {
     val prefPlayerShortcutTripleLikeKeyCodeKey = intPreferencesKey("player_shortcut_triple_like_key_code")
     val prefPlayerShortcutToggleRelatedVideosKeyCodeKey = intPreferencesKey("player_shortcut_toggle_related_videos_key_code")
     val prefShowOnlineViewerCountKey = intPreferencesKey("show_online_viewer_count_v2")
-    val prefVlcAutoRotate = booleanPreferencesKey("vlc_auto_rotate")
     val prefEnableAsyncQueueing = booleanPreferencesKey("enable_async_queueing")
     val prefEnableTunneling = booleanPreferencesKey("enable_tunneling")
     val prefEnableMobileTunneling = booleanPreferencesKey("enable_mobile_tunneling")
@@ -1171,6 +1171,7 @@ object PrefKeys {
     val prefTvMpvDemuxerMaxBytesKey = stringPreferencesKey("tv_mpv_demuxer_max_bytes")
     val prefTvMpvDemuxerMaxBackBytesKey = stringPreferencesKey("tv_mpv_demuxer_max_back_bytes")
     val prefTvMpvVdQueueEnableKey = stringPreferencesKey("tv_mpv_vd_queue_enable")
+    val prefTvMpvPreferHttpCdnKey = booleanPreferencesKey("tv_mpv_prefer_http_cdn")
     val prefSuperResolutionTypeKey = intPreferencesKey("super_resolution_type")
     val prefVlcLibsVersionKey = stringPreferencesKey("vlc_libs_version")
     val prefDefaultDanmakuFilterLevelKey = intPreferencesKey("default_danmaku_filter_level")
@@ -1310,7 +1311,6 @@ object PrefKeys {
     val prefPlayerShortcutToggleRelatedVideosKeyCodeRequest =
         PreferenceRequest(prefPlayerShortcutToggleRelatedVideosKeyCodeKey, KeyEvent.KEYCODE_UNKNOWN)
     val prefShowOnlineViewerCountRequest = PreferenceRequest(prefShowOnlineViewerCountKey, 1)  // 0=不显示, 1=30秒后隐藏, 2=始终显示
-    val prefVlcAutoRotateRequest = PreferenceRequest(prefVlcAutoRotate, true)
     val prefEnableAsyncQueueingRequest = PreferenceRequest(prefEnableAsyncQueueing, true)
     val prefEnableTunnelingRequest = PreferenceRequest(prefEnableTunneling, true)
     val prefEnableMobileTunnelingRequest = PreferenceRequest(prefEnableMobileTunneling, false)
@@ -1318,14 +1318,18 @@ object PrefKeys {
     val prefTvTunnelingDefaultMigrationDoneRequest = PreferenceRequest(prefTvTunnelingDefaultMigrationDone, false)
     val prefEnableAudioPlaybackParamsRequest = PreferenceRequest(prefEnableAudioPlaybackParams, true)
     val prefTvMpvVideoOutputRequest = PreferenceRequest(prefTvMpvVideoOutputKey, "gpu")
-    val prefTvMpvHardwareDecodeModeRequest = PreferenceRequest(prefTvMpvHardwareDecodeModeKey, "mediacodec")
+    // 带 mediacodec-copy 回退：vo=gpu + hwdec=mediacodec 依赖 AImageReader（API 26+），低版本 TV 上会退回软解
+    val prefTvMpvHardwareDecodeModeRequest = PreferenceRequest(prefTvMpvHardwareDecodeModeKey, "mediacodec,mediacodec-copy")
     val prefTvMpvHardwareDecodeCodecsRequest =
         PreferenceRequest(prefTvMpvHardwareDecodeCodecsKey, "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
     val prefTvMpvGpuContextRequest = PreferenceRequest(prefTvMpvGpuContextKey, "android")
     val prefTvMpvGpuApiRequest = PreferenceRequest(prefTvMpvGpuApiKey, "")
     val prefTvMpvCacheRequest = PreferenceRequest(prefTvMpvCacheKey, "yes")
-    val prefTvMpvDemuxerMaxBytesRequest = PreferenceRequest(prefTvMpvDemuxerMaxBytesKey, "150MiB")
-    val prefTvMpvDemuxerMaxBackBytesRequest = PreferenceRequest(prefTvMpvDemuxerMaxBackBytesKey, "50MiB")
+    // 留空 = 由播放器按设备内存分档（16/32/64MiB，直播减半，扩展缓冲 ×4）自动选择，见 MpvCachePolicy
+    val prefTvMpvDemuxerMaxBytesRequest = PreferenceRequest(prefTvMpvDemuxerMaxBytesKey, "")
+    val prefTvMpvDemuxerMaxBackBytesRequest = PreferenceRequest(prefTvMpvDemuxerMaxBackBytesKey, "")
+    // libmpv 现在用导出的系统根证书校验 HTTPS，不再需要默认降级为 HTTP
+    val prefTvMpvPreferHttpCdnRequest = PreferenceRequest(prefTvMpvPreferHttpCdnKey, false)
     val prefTvMpvVdQueueEnableRequest = PreferenceRequest(prefTvMpvVdQueueEnableKey, "")
     val prefSuperResolutionTypeRequest =
         PreferenceRequest(prefSuperResolutionTypeKey, SuperResolutionType.Disable.value)

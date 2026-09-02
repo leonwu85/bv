@@ -20,6 +20,8 @@ import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.viewmodel.VideoPlayerV3ViewModel
 import org.koin.androidx.viewmodel.ext.android.viewModel
+import dev.aaa1115910.bv.tv.util.TvMpvOptions
+import dev.aaa1115910.bv.tv.util.TvMpvOptions.coerceForTv
 
 class OfflineVideoPlayerActivity : TvComponentActivity() {
     companion object {
@@ -88,13 +90,14 @@ class OfflineVideoPlayerActivity : TvComponentActivity() {
             hardwareDecodeMode = Prefs.tvMpvHardwareDecodeMode,
             mpvHardwareDecodeCodecs = Prefs.tvMpvHardwareDecodeCodecs,
             mpvVideoOutput = Prefs.tvMpvVideoOutput,
-            mpvGpuContext = Prefs.tvMpvGpuContext,
-            mpvGpuApi = Prefs.tvMpvGpuApi,
+            mpvGpuContext = TvMpvOptions.GPU_CONTEXT,
+            mpvGpuApi = TvMpvOptions.GPU_API,
             mpvCache = Prefs.tvMpvCache,
             mpvDemuxerMaxBytes = Prefs.tvMpvDemuxerMaxBytes,
             mpvDemuxerMaxBackBytes = Prefs.tvMpvDemuxerMaxBackBytes,
             mpvVdQueueEnable = Prefs.tvMpvVdQueueEnable,
-            superResolutionType = Prefs.superResolutionType,
+            mpvPreferHttpForCdn = Prefs.tvMpvPreferHttpCdn,
+            superResolutionType = Prefs.superResolutionType.coerceForTv(),
             enableVideoFrameRateStrategy = false,
             isLive = false
         )

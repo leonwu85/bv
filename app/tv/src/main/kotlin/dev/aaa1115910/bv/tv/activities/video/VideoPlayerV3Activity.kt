@@ -33,6 +33,8 @@ import dev.aaa1115910.bv.viewmodel.VideoPlayerV3ViewModel
 import dev.aaa1115910.bv.viewmodel.video.VideoDetailViewModel
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.koin.androidx.viewmodel.ext.android.viewModel
+import dev.aaa1115910.bv.tv.util.TvMpvOptions
+import dev.aaa1115910.bv.tv.util.TvMpvOptions.coerceForTv
 
 class VideoPlayerV3Activity : TvComponentActivity() {
     companion object {
@@ -278,13 +280,14 @@ class VideoPlayerV3Activity : TvComponentActivity() {
             hardwareDecodeMode = Prefs.tvMpvHardwareDecodeMode,
             mpvHardwareDecodeCodecs = Prefs.tvMpvHardwareDecodeCodecs,
             mpvVideoOutput = Prefs.tvMpvVideoOutput,
-            mpvGpuContext = Prefs.tvMpvGpuContext,
-            mpvGpuApi = Prefs.tvMpvGpuApi,
+            mpvGpuContext = TvMpvOptions.GPU_CONTEXT,
+            mpvGpuApi = TvMpvOptions.GPU_API,
             mpvCache = Prefs.tvMpvCache,
             mpvDemuxerMaxBytes = Prefs.tvMpvDemuxerMaxBytes,
             mpvDemuxerMaxBackBytes = Prefs.tvMpvDemuxerMaxBackBytes,
             mpvVdQueueEnable = Prefs.tvMpvVdQueueEnable,
-            superResolutionType = Prefs.superResolutionType,
+            mpvPreferHttpForCdn = Prefs.tvMpvPreferHttpCdn,
+            superResolutionType = Prefs.superResolutionType.coerceForTv(),
             enableVideoFrameRateStrategy = false,
             isLive = isLive
         )

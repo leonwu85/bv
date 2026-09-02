@@ -1,6 +1,7 @@
 package dev.aaa1115910.bv.network
 
 import dev.aaa1115910.biliapi.BiliApiConstants
+import dev.aaa1115910.bv.player.impl.mpv.MpvLibsInstaller
 import io.ktor.client.HttpClient
 import io.ktor.client.content.ProgressListener
 import io.ktor.client.engine.okhttp.OkHttp
@@ -15,8 +16,8 @@ import io.ktor.utils.io.copyAndClose
 import java.io.File
 
 object MpvLibsApi {
-    private const val OFFICIAL_LATEST_DOWNLOAD_URL =
-        "https://github.com/mpv-android/mpv-android/releases/latest/download"
+    private const val OFFICIAL_RELEASE_DOWNLOAD_BASE_URL =
+        "https://github.com/mpv-android/mpv-android/releases/download"
     private val githubProxyPrefixes = listOf(
         "https://gh.llkk.cc/",
         "https://gh-proxy.com/",
@@ -41,12 +42,22 @@ object MpvLibsApi {
         }
     }
 
-    suspend fun downloadLatestApk(
+    /** The mpv-android release tag this app build is pinned to. */
+    val pinnedReleaseTag: String
+        get() = MpvLibsInstaller.expectedVersion
+
+    /**
+     * Downloads the pinned mpv-android release APK for [targetAbi] and returns the release tag that
+     * should be recorded as the installed version. The caller must verify the APK signature before
+     * extracting anything from it (see [MpvLibsInstaller.installFromApk]).
+     */
+    suspend fun downloadPinnedApk(
         targetAbi: String,
         targetFile: File,
         onProgress: ProgressListener
     ): String {
-        val downloadUrls = getLatestApkDownloadUrls(targetAbi)
+        val tag = pinnedReleaseTag
+        val downloadUrls = getApkDownloadUrls(tag, targetAbi)
         var lastException: Exception? = null
 
         for (downloadUrl in downloadUrls) {
@@ -65,7 +76,7 @@ object MpvLibsApi {
                 if (targetFile.length() <= 0L) {
                     throw IllegalStateException("Downloaded APK is empty")
                 }
-                return "latest"
+                return tag
             } catch (error: Exception) {
                 lastException = error
                 targetFile.delete()
@@ -75,7 +86,7 @@ object MpvLibsApi {
         throw lastException ?: IllegalStateException("All MPV download mirrors failed")
     }
 
-    private fun getLatestApkDownloadUrls(targetAbi: String): List<String> {
+    private fun getApkDownloadUrls(tag: String, targetAbi: String): List<String> {
         return listOf(
             "app-default-$targetAbi-release.apk",
             "app-default-universal-release.apk",
@@ -83,7 +94,7 @@ object MpvLibsApi {
         )
             .distinct()
             .flatMap { fileName ->
-                val officialUrl = "$OFFICIAL_LATEST_DOWNLOAD_URL/$fileName"
+                val officialUrl = "$OFFICIAL_RELEASE_DOWNLOAD_BASE_URL/$tag/$fileName"
                 listOf(officialUrl) + githubProxyPrefixes.map { proxy -> proxy + officialUrl }
             }
     }

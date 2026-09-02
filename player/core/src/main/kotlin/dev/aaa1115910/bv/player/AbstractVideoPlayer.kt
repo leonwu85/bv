@@ -21,18 +21,39 @@ abstract class AbstractVideoPlayer {
     open fun setOfflinePlaybackMode(enabled: Boolean) = Unit
 
     /**
+     * 当前是否有实时超分 shader 在 GPU 上运行。丢帧上报（[VideoPlayerListener.onDecoderOverloaded]）
+     * 无法区分解码慢和渲染慢，上层据此决定建议“关闭超分”还是“降低清晰度”。
+     */
+    open val isSuperResolutionActive: Boolean
+        get() = false
+
+    /** 运行时卸载超分 shader，仅影响本次会话；不支持超分的内核为空操作。 */
+    open fun disableSuperResolution() = Unit
+
+    /** 能否把 HDR / 杜比视界内容按 HDR 输出；为 false 时上层应从清晰度列表中去掉这些档位。 */
+    open val supportsHdrOutput: Boolean
+        get() = true
+
+    /** 内核建议的默认清晰度上限（B 站 qn 编码），null 表示不限制；只影响自动选择，不影响用户手动选择。 */
+    open val preferredMaxResolutionCode: Int?
+        get() = null
+
+    /**
      * 初始化播放器实例
      * 视频播放器第一步：创建视频播放器
      */
     abstract fun initPlayer()
 
-    /** 设置请求头 */
-    abstract fun setHeader(headers: Map<String, String>)
-
-    /** 设置播放地址 */
+    /**
+     * 设置播放地址。
+     *
+     * 契约：这是一个纯设置操作，只记录下一次 [prepare] 要使用的地址（并丢弃尚未消费的
+     * [pendingSeekPosition]），不得停止、重置或以其它方式影响当前正在进行的播放。
+     * 上层依赖这一点在直播 URL 续期时“预置”新地址而不打断当前流。
+     */
     abstract fun playUrl(videoUrl: String? = null, audioUrl: String? = null)
 
-    /** 准备开始播放 */
+    /** 准备开始播放，使用最近一次 [playUrl] 设置的地址 */
     abstract fun prepare()
 
     /** 播放 */

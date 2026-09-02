@@ -122,6 +122,7 @@ import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.util.formatHourMinSec
 import dev.aaa1115910.bv.util.swapList
 import dev.aaa1115910.bv.viewmodel.VideoPlayerV3ViewModel
+import dev.aaa1115910.bv.viewmodel.LowerResolutionReason
 import dev.aaa1115910.bv.viewmodel.VodBufferRecoveryPrompt
 import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.repositories.LiveRepository
@@ -775,6 +776,7 @@ fun VideoPlayerV3Screen(
                 },
                 onRebufferingStarted = playerViewModel::onVodRebufferingStarted,
                 onPlaybackResumed = playerViewModel::onVodPlaybackResumed,
+                onDecoderOverloaded = playerViewModel::onVodDecoderOverloaded,
                 commentPanelVisible = showCommentPanel,
                 hideControllerOnCommentPanelOpen = commentSplitScreenEnabled,
                 onShowComment = {
@@ -1456,17 +1458,37 @@ private fun VodBufferRecoveryDialog(
         is VodBufferRecoveryPrompt.LowerResolution -> {
             val fromResolution = prompt.fromResolution.getShortDisplayName(context)
             val toResolution = prompt.toResolution.getShortDisplayName(context)
-            title = stringResource(R.string.vod_buffer_recovery_resolution_title)
-            message = stringResource(
-                R.string.vod_buffer_recovery_resolution_message,
-                fromResolution,
-                toResolution,
-            )
+            when (prompt.reason) {
+                LowerResolutionReason.Rebuffering -> {
+                    title = stringResource(R.string.vod_buffer_recovery_resolution_title)
+                    message = stringResource(
+                        R.string.vod_buffer_recovery_resolution_message,
+                        fromResolution,
+                        toResolution,
+                    )
+                }
+
+                LowerResolutionReason.DecoderOverload -> {
+                    title = stringResource(R.string.vod_decoder_overload_resolution_title)
+                    message = stringResource(
+                        R.string.vod_decoder_overload_resolution_message,
+                        fromResolution,
+                        toResolution,
+                    )
+                }
+            }
             dismissText = stringResource(R.string.vod_buffer_recovery_resolution_dismiss)
             confirmText = stringResource(
                 R.string.vod_buffer_recovery_resolution_confirm,
                 toResolution,
             )
+        }
+
+        is VodBufferRecoveryPrompt.DisableSuperResolution -> {
+            title = stringResource(R.string.vod_super_resolution_overload_title)
+            message = stringResource(R.string.vod_super_resolution_overload_message)
+            dismissText = stringResource(R.string.vod_super_resolution_overload_dismiss)
+            confirmText = stringResource(R.string.vod_super_resolution_overload_confirm)
         }
     }
 

@@ -35,6 +35,7 @@ import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
 import dev.aaa1115910.bv.tv.component.settings.SettingNumberListItem
 import dev.aaa1115910.bv.tv.component.settings.SettingH265CodecPriorityListItem
 import dev.aaa1115910.bv.tv.component.LibMPVDownloaderDialog
+import dev.aaa1115910.bv.tv.util.TvMpvOptions
 import dev.aaa1115910.bv.tv.component.LibVLCDownloaderDialog
 import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
@@ -82,7 +83,6 @@ fun PlayerSetting(
         mutableDoubleStateOf(Prefs.defaultDanmakuPresentationSpeed.toDouble())
     }
     var skipPgcIntroOutro by remember { mutableStateOf(Prefs.skipPgcIntroOutro) }
-    var vlcAutoRotate by remember { mutableStateOf(Prefs.vlcAutoRotate) }
     var selectedPlayerType by remember { mutableStateOf(Prefs.playerType) }
     var enableAsyncQueueing by remember { mutableStateOf(Prefs.enableAsyncQueueing) }
     var enableTunneling by remember { mutableStateOf(Prefs.enableTvTunneling) }
@@ -195,13 +195,16 @@ fun PlayerSetting(
                                 }
                             }
                             PlayerType.MPV -> {
-                                // 检查 MPV 官方组件是否已安装
-                                if (MpvLibsInstaller.needsInstall(context)) {
+                                // 检查 MPV 官方组件是否已安装且与当前固定的 release 版本一致
+                                if (MpvLibsInstaller.needsUpdate(context)) {
                                     showMpvDownloadConfirmDialog = true
                                 } else {
                                     selectedPlayerType = newType
                                     Prefs.playerType = newType
                                     onPlayerTypeChanged(newType)
+                                    if (!TvMpvOptions.supportsZeroCopyHwdec) {
+                                        Toast.makeText(context, TvMpvOptions.LOW_API_MPV_HINT, Toast.LENGTH_LONG).show()
+                                    }
                                 }
                             }
                             else -> {
@@ -484,20 +487,6 @@ fun PlayerSetting(
                     }
                 )
             }
-            // VLC 播放器专用设置
-            if (selectedPlayerType == PlayerType.VLC) {
-                item {
-                    SettingSwitchListItem(
-                        title = stringResource(R.string.settings_player_vlc_auto_rotate_title),
-                        supportText = stringResource(R.string.settings_player_vlc_auto_rotate_text),
-                        checked = vlcAutoRotate,
-                        onCheckedChange = {
-                            vlcAutoRotate = it
-                            Prefs.vlcAutoRotate = it
-                        }
-                    )
-                }
-            }
             // ExoPlayer/Media3 专用设置
             if (selectedPlayerType == PlayerType.Media3) {
                 item {
@@ -592,8 +581,8 @@ fun PlayerSetting(
             title = { Text("需要下载 MPV 组件") },
             text = {
                 Text(
-                    "MPV 播放器需要下载官方 mpv-android 组件才能使用。\n\n" +
-                            "来源：mpv-android 官方 GitHub Release\n" +
+                    "MPV 播放器需要下载官方 mpv-android 组件（${MpvLibsInstaller.expectedVersion}）才能使用。\n\n" +
+                            "来源：mpv-android 官方 GitHub Release，安装前会校验官方签名\n" +
                             "连接失败时会自动尝试 GitHub 镜像\n" +
                             "建议在 Wi-Fi 环境下下载"
                 )
@@ -628,7 +617,8 @@ fun PlayerSetting(
                 selectedPlayerType = PlayerType.MPV
                 Prefs.playerType = PlayerType.MPV
                 onPlayerTypeChanged(PlayerType.MPV)
-                Toast.makeText(context, "MPV 组件下载完成", Toast.LENGTH_SHORT).show()
+                val hint = if (TvMpvOptions.supportsZeroCopyHwdec) "" else "。${TvMpvOptions.LOW_API_MPV_HINT}"
+                Toast.makeText(context, "MPV 组件下载完成$hint", Toast.LENGTH_LONG).show()
             },
             onDownloadFailed = { errorMessage ->
                 showMpvDownloaderDialog = false

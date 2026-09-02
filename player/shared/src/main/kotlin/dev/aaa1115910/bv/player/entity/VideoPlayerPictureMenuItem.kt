@@ -5,8 +5,6 @@ import dev.aaa1115910.bv.player.shared.R
 
 enum class VideoPlayerPictureMenuItem(private val strRes: Int) {
     PlaySpeed(R.string.video_player_menu_picture_play_speed),
-    DanmakuSpeedMode(R.string.video_player_menu_danmaku_speed_mode),
-    DanmakuPresentationSpeed(R.string.video_player_menu_danmaku_presentation_speed),
     Resolution(R.string.video_player_menu_picture_resolution),
     Codec(R.string.video_player_menu_picture_codec),
     LiveLine(R.string.video_player_menu_picture_live_line),

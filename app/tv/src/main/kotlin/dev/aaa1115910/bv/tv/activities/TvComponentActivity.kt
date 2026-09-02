@@ -22,7 +22,9 @@ import dev.aaa1115910.bv.tv.render.TV_UI_TARGET_HEIGHT_PX
 import dev.aaa1115910.bv.tv.render.TV_UI_TARGET_WIDTH_PX
 import dev.aaa1115910.bv.tv.render.TvUiRenderPath
 import dev.aaa1115910.bv.tv.render.TvUiRenderPipeline
+import androidx.compose.ui.unit.IntSize
 import dev.aaa1115910.bv.player.tv.LocalTvUiSurfaceEmbedded
+import dev.aaa1115910.bv.player.tv.LocalTvVideoSurfaceFixedSize
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 /**
@@ -53,6 +55,7 @@ abstract class TvComponentActivity : ComponentActivity() {
 
         uiSurfaceHost = TvUiSurfaceHost(
             activity = this,
+            physicalSize = IntSize(pipeline.physicalWidthPx, pipeline.physicalHeightPx),
             onFallback = { setNativeComposeContent(content) },
         ).also { it.attach(content) }
     }
@@ -77,6 +80,7 @@ abstract class TvComponentActivity : ComponentActivity() {
 @RequiresApi(Build.VERSION_CODES.R)
 private class TvUiSurfaceHost(
     private val activity: ComponentActivity,
+    private val physicalSize: IntSize,
     private val onFallback: () -> Unit,
 ) {
     private val logger = KotlinLogging.logger("TvUiSurfaceHost")
@@ -123,6 +127,10 @@ private class TvUiSurfaceHost(
                         CompositionLocalProvider(
                             LocalActivity provides activity,
                             LocalTvUiSurfaceEmbedded provides true,
+                            // 视频 SurfaceView 位于 1080p 宿主内，需要固定到物理分辨率才能保持原分辨率输出
+                            LocalTvVideoSurfaceFixedSize provides physicalSize.takeIf {
+                                it.width > 0 && it.height > 0
+                            },
                         ) {
                             content()
                         }

@@ -17,7 +17,21 @@ sealed interface VodBufferRecoveryPrompt {
         override val resumePositionMs: Long,
         val fromResolution: Resolution,
         val toResolution: Resolution,
+        val reason: LowerResolutionReason = LowerResolutionReason.Rebuffering,
     ) : VodBufferRecoveryPrompt
+
+    /** 丢帧发生时超分 shader 正在运行：先建议关掉超分（本次会话），而不是降清晰度 */
+    data class DisableSuperResolution(
+        override val resumePositionMs: Long,
+    ) : VodBufferRecoveryPrompt
+}
+
+enum class LowerResolutionReason {
+    /** 换源后仍频繁缓冲（网络原因） */
+    Rebuffering,
+
+    /** 解码/渲染跟不上，帧大量被丢弃（设备能力原因） */
+    DecoderOverload,
 }
 
 internal enum class VodBufferRecoveryStage {
@@ -62,6 +76,20 @@ internal class VodBufferRecoveryPolicy(
         }
 
         VodBufferRecoveryStage.MonitoringAfterCdnSwitch -> {
+            stage = VodBufferRecoveryStage.ResolutionPrompt
+            VodBufferRecoveryDecision.SuggestResolutionDowngrade
+        }
+
+        else -> VodBufferRecoveryDecision.None
+    }
+
+    /**
+     * 解码过载与网络无关，直接进入降清晰度提示；已在提示/切换/抑制阶段则不重复打扰。
+     */
+    fun onDecoderOverload(): VodBufferRecoveryDecision = when (stage) {
+        VodBufferRecoveryStage.MonitoringPrimary,
+        VodBufferRecoveryStage.MonitoringAfterCdnSwitch -> {
+            recentBufferingEvents.clear()
             stage = VodBufferRecoveryStage.ResolutionPrompt
             VodBufferRecoveryDecision.SuggestResolutionDowngrade
         }

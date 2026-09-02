@@ -219,6 +219,7 @@ fun BvPlayer(
     onLiveRetry: () -> Unit = {},
     onRebufferingStarted: (positionMs: Long) -> Unit = {},
     onPlaybackResumed: () -> Unit = {},
+    onDecoderOverloaded: (droppedFrames: Int, totalFrames: Int) -> Unit = { _, _ -> },
     onInfoVisibilityChanged: (Boolean) -> Unit = {},
     commentPanelVisible: Boolean = false,
     hideControllerOnCommentPanelOpen: Boolean = false,
@@ -984,6 +985,8 @@ fun BvPlayer(
             scope.launch(Dispatchers.Main) {
                 isError = false
                 exception = null
+                // 就绪即缓冲完成；暂停状态下完成 seek/缓冲时不会再有 onPlay 来清除缓冲指示
+                isBuffering = false
                 initDanmakuConfig()
 
                 if (videoPlayerConfigData.isLive) {
@@ -1161,6 +1164,14 @@ fun BvPlayer(
         override fun onVideoFrameRateChanged(frameRate: Float?) {
             logger.info { "onVideoFrameRateChanged: $frameRate" }
             mDanmakuPlayer?.updateSurfaceFrameRate(frameRate)
+        }
+
+        override fun onDecoderOverloaded(droppedFrames: Int, totalFrames: Int) {
+            logger.warn { "onDecoderOverloaded: dropped $droppedFrames / $totalFrames frames" }
+            if (videoPlayerConfigData.isLive || offlinePlaybackMode) return
+            scope.launch(Dispatchers.Main) {
+                onDecoderOverloaded(droppedFrames, totalFrames)
+            }
         }
 
         override fun onProgress(position: Long, duration: Long, buffered: Int) {
@@ -1602,7 +1613,7 @@ fun BvPlayer(
                 val current = seekState.position.takeIf { it > 0L } ?: videoPlayer.currentPosition
                 pendingDanmakuPosition = current
                 danmakuNeedsResume = true
-                videoPlayer.setInitialSeekPosition(current)
+                // 起播位置由 ViewModel 在 playUrl() 之后通过 setInitialSeekPosition 设置（playUrl 会清除旧值）
                 onPlaybackMediaModeChange(mediaMode, current) {
                     withContext(Dispatchers.Main) {
                         if (current > 0L) {
@@ -1818,6 +1829,8 @@ fun BvPlayer(
                     Resolution.RDolby,
                 ),
                 releasePlayerOnDispose = false,
+                // 4K 屏 + 1080p 嵌入界面模式下，把视频 Surface 固定到物理分辨率（MPV gpu vo 需要）
+                videoSurfaceFixedSize = LocalTvVideoSurfaceFixedSize.current,
             )
 
             DanmakuLayer(

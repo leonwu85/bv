@@ -61,7 +61,7 @@ fun AdvanceContent(
                         .associate { it.ordinal to it.name },
                     onValueChange = { ordinal ->
                         val newType = PlayerType.entries[ordinal]
-                        if (newType == PlayerType.MPV && MpvLibsInstaller.needsInstall(context)) {
+                        if (newType == PlayerType.MPV && MpvLibsInstaller.needsUpdate(context)) {
                             showMpvDownloadConfirmDialog = true
                             false
                         } else {

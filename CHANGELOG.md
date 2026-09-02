@@ -1,5 +1,43 @@
 [![Downloads](https://img.shields.io/github/downloads/leonwu85/bv/total?cacheSeconds=3600)](https://github.com/leonwu85/bv/releases)
 
+## TV 端 VLC / MPV 播放器审查修复 (2026-09-02)
+
+- 崩溃与稳定性
+    - VLC：手动加载按需下载的原生库后跳过 libvlc-android 自带的 `LibVLC.loadLibraries()`，修复 Android 6–10 设备选择 VLC 内核进入播放页即被 `System.exit(1)` 的问题
+    - MPV：mpv 句柄改为进程级唯一持有，创建新实例前先释放旧实例，修复播放页切换离线播放/重复打开播放页时 native `exit(1)`；所有 JNI 调用受初始化/释放状态保护，事件回调统一投递主线程
+    - `playUrl()` 在 Media3/VLC/MPV 三个内核上统一为纯设置操作，直播 URL 续期不再中断 VLC 播放或让 MPV 状态错乱
+    - MPV 加载失败或播放中断不再被当成“播放结束”自动切集，改为按 EOF/位置判定并上报错误（附 mpv 错误日志），使 CDN 切换、兜底与重试逻辑对 MPV 生效
+    - VLC 事件监听器在构造时正确注册（修复 Kotlin 初始化顺序问题），初始化失败在 `prepare()` 时上报
+- VLC 播放体验
+    - 修正 `VLCOptions` 中 9 处字符串模板导致选项失效的问题；`network-caching` 改为按点播/直播/扩展缓冲在 Media 上生效
+    - seek 超时后真正恢复播放，初始跳转同样受超时保护，并过滤 seek 命令下发前的残留缓冲事件
+    - 播放中的重缓冲经防抖后上报，起播缓冲阶段按缓冲状态显示，卡死检测不再把网络重缓冲误判为解码卡死
+    - 每个媒体上报一次 `onReady`（会话倍速在开播时生效），通过 Vout/ESAdded 事件上报视频尺寸与帧率（编码尺寸的 16 像素填充会被还原）
+    - 移除竖屏视频的 SURFACE_FILL + 手动缩放 SurfaceView 逻辑，统一交给 libvlc 的 SURFACE_BEST_FIT：修复竖屏视频画面被拉伸变形，以及从历史进度续播时 VLC 把画面绘制到 Surface 之外导致黑屏的问题；缓冲状态只在进入缓冲时上报一次
+    - 播放页进入后台（Home）再返回时按 ON_STOP/ON_START 分离并重新附加 VLC 视图，修复 Surface 重建后 VLC 画面一直黑屏只剩声音的问题
+    - VLC `attachViews` 启用字幕 Surface，使 libvlc 能选择 `android_display`（MediaCodec 直出、零拷贝）而不再回退到 `gles2` GL 拷贝路径
+    - 新增解码过载检测：VLC（libvlc 统计丢帧）、MPV（`frame-drop-count`）、Media3（`onDroppedVideoFrames`）连续多个窗口丢帧过半时上报 `onDecoderOverloaded`，TV 端直接弹出「设备解码跟不上，是否降低清晰度」并复用现有降清晰度流程（4K HEVC 在无硬解设备上持续卡顿的场景）
+    - LibVLC 实例进程级复用，`stop()/release()` 移到后台线程；开启音频时间拉伸，release 包不再输出 `-vv` 日志
+    - 缓冲百分比统一为“已缓冲到的时长比例”语义（MPV 使用 `demuxer-cache-time`）
+- 组件下载与安全
+    - MPV 组件固定为 mpv-android release `2026-08-11`，安装前校验官方签名证书，版本不一致时提示重新下载；VLC AAR 下载后校验 SHA-256，安装改为原子替换并写入版本文件，加载时校验版本
+    - 修复同一进程内先用 VLC 再切到 MPV 时提示“MPV 播放器不可用”（`libmpv.so` 报 `cannot locate symbol _ZNSt6__ndk1...`）：VLC 与 MPV 各自附带的 `libc++_shared.so` 版本不同（NDK r27 vs r29），而 Android 链接器只按 soname 解析到进程里第一份 libc++。现在两个组件共用 `NativeCxxRuntime`，进程内只加载一份 libc++——从所有已安装组件中按 ELF `.comment` 里的 clang 版本挑最新的一份（新版 libc++ 向下兼容）；如果下载组件时进程里已经加载了更旧的 libc++，下载弹窗会说明原因并提供“重启应用”，MPV 初始化错误也会区分“未安装”“运行库冲突”“加载失败（含 dlopen 详情）”
+- TV 端 MPV 默认参数审查修复
+    - HTTPS：libmpv（libcurl + mbedtls）没有系统证书库，之前所有 HTTPS 都因证书校验失败而打不开，只能默认把 CDN 地址降级成 HTTP。现在初始化时把设备系统根证书导出为 PEM（仅 `system:` 别名，系统更新后自动刷新）并设置 `tls-ca-file`/`tls-verify=yes`，“CDN 使用 HTTP 直连”默认关闭、仅作兜底（证书导出失败时自动退回 HTTP）
+    - demuxer 缓存按设备内存分档（低内存/≤1.5GB 16MiB、≤3GB 32MiB、其余 64MiB；直播减半且后向 4MiB；扩展缓冲 ×4 上限 256MiB），并下发 `cache-secs`（点播 120s / 直播 30s）防止低码率音轨 demuxer 填满字节配额；`cache-pause-wait` 点播 3s / 直播 1.5s，`curl-connect-timeout` 15s
+    - `vo=gpu-next` 实际下发 `gpu-next,gpu`，GLES 2.0 盒子上自动退回 `gpu`；`mediacodec_embed` 下强制 `hwdec=mediacodec`（回退拷贝/软解会黑屏）并忽略超分 shader，离线兼容模式同样保留直出
+    - 超分：TV 端只保留效率档（Anime4K S/M、FSRCNNX 8），已保存的“质量”档自动归一化；丢帧检测在超分开启时改为提示“关闭超分”（本次会话生效），关闭后若仍丢帧再走原有的降清晰度提示
+    - Android 8 以下设备 `vo=gpu` 无法零拷贝硬解，MPV 默认清晰度自动限制到 1080P60（手动选择不受限），选择 MPV 内核时给出提示
+    - gpu/gpu-next 路径拿不到 HDR 元数据，MPV 非直通输出时不再提供 HDR/杜比视界档位
+    - 下发 `display-fps-override`（显示刷新率），并在开启帧率策略时通过 `Surface.setFrameRate(ONLY_IF_SEAMLESS)` 与 Media3 对齐；删除对 Android 无效的 `audio-set-media-role`，关闭 OSC/统计/控制台/自动 profile 等内置 Lua 脚本
+    - MPV 设置页：移除本构建不可用的 `rkmpp`/`vulkan`/`auto*` hwdec、`gpu-api`、`gpu-context` 选项；`cache`、`demuxer-max-bytes`、`demuxer-max-back-bytes` 从自由填写改为固定选项，历史自由文本值自动回到“自动”；`hwdec`/`hwdec-codecs`/`vo` 行内改用简短标签且取值列限宽，完整说明只在弹窗里展示，不再把标题挤成竖排；所有 mpv 选项设置失败会记录日志
+- 设置
+    - MPV：新增“CDN 使用 HTTP 直连”开关；TV 默认 `hwdec` 改为 `mediacodec,mediacodec-copy`
+    - 移除无实际作用的“VLC 自动旋转”设置项及未接入的旋转代码
+- 界面
+    - 4K 屏 1080p 嵌入界面模式下，视频 Surface 固定到物理分辨率，MPV gpu 输出保持原分辨率
+    - 播放器视图按播放器实例 key，切换实例时正确重新绑定
+
 ## 新增功能点汇总 (2026-08-11 ~ 2026-08-24)
 
 > 基于 commit `cda199f79233ab281c33a07d69458bb08b26b39c` 之后的提交整理

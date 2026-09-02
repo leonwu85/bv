@@ -3,364 +3,247 @@ package dev.aaa1115910.bv.player.impl.vlc
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import org.videolan.libvlc.util.VLCVideoLayout
+import androidx.core.net.toUri
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.VideoPlayerOptions
+import dev.aaa1115910.bv.player.core.BuildConfig
 import dev.aaa1115910.bv.player.playbackRefererFor
 import dev.aaa1115910.bv.util.formatHourMinSec
-import dev.aaa1115910.bv.util.NativeLibraryAbi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
-import android.view.View
-import android.view.ViewGroup
-import android.widget.FrameLayout
-import android.view.SurfaceView
-import android.view.ViewTreeObserver
-import androidx.core.net.toUri
 import org.videolan.libvlc.interfaces.IMedia
-import java.io.File
+import org.videolan.libvlc.util.VLCVideoLayout
+import java.util.concurrent.Executors
 
 /**
- * VLC 播放器实现
+ * VLC 播放器实现（libvlc-all 3.6.x）。
  *
- * 基于 LibVLC 的视频播放器实现，支持更广泛的视频格式
+ * 线程模型：libvlc-android 的所有事件都在主线程回调，本类的可变状态也只在主线程读写；
+ * 唯一的例外是 [release] 中阻塞的 stop/release 被移到后台单线程执行。
  *
- * VLC native 库在 initPlayer() 中手动加载
+ * 状态约定：
+ * - [playRequested] 记录上层期望的播放状态（start/pause），seek 完成后据此决定是否恢复播放；
+ * - seek 期间内部会暂停 VLC 等待缓冲完成，期间的 `Paused` 事件不会上报，避免 UI 闪烁；
+ * - 播放中的重缓冲（VLC 状态仍为 Playing）经防抖后以 onBuffering/onPlay 上报，供上层缓冲恢复策略使用。
+ *
+ * 画面布局：完全交给 libvlc 的 VideoHelper（SURFACE_BEST_FIT）。VLC 的 vout 以整个 VLCVideoLayout 的尺寸
+ * 作为显示区域计算画面位置（gles2 路径直接用它设置 glViewport），因此应用侧绝不能自行改动 VLC 创建的
+ * SurfaceView 尺寸：缩小 Surface 会让画面被绘制到 Surface 之外（黑屏）或被拉伸变形。
  */
 class VlcMediaPlayer(
-    private val context: Context,
+    context: Context,
     private val options: VideoPlayerOptions
 ) : AbstractVideoPlayer() {
     private val logger = KotlinLogging.logger { }
-
-    init {
-        initPlayer()
-    }
+    private val appContext: Context = context.applicationContext
 
     var libVlc: LibVLC? = null
+        private set
     var mediaPlayer: MediaPlayer? = null
+        private set
 
+    private var initializationError: Exception? = null
     private var currentVideoUrl: String? = null
     private var currentAudioUrl: String? = null
-    private var headers: Map<String, String> = emptyMap()
 
-    // 视频旋转支持
-    private var currentRotation: Int = 0
+    /** 上层期望的播放状态（start()/pause() 记录） */
+    private var playRequested = false
+    private var readyDispatchedForCurrentMedia = false
 
-    // 缓冲百分比
-    private var _bufferedPercentage: Int = 0
+    /**
+     * VLC 3 在 Init 结束、缓存尚未填满时就进入 Playing 状态；这期间画面停在首帧。
+     * 为对齐 Exo 的 BUFFERING → READY 语义，Playing 后直到 Buffering 100% / 首个 TimeChanged 之前仍按缓冲上报。
+     */
+    private var startupBuffering = false
 
-    // seekable 状态（默认 true，根据 VLC 官方实现）
-    private var _isSeekable: Boolean = true
+    private var _isSeekable = true
 
-    // ========== 异步 Seek 状态 ==========
-    private var isSeeking = false              // 正在进行 seek 操作
-    private var shouldResumeAfterSeek = false  // seek 完成后是否需要恢复播放
-    private var seekTargetPosition = 0L        // 目标 seek 位置
-    private val seekHandler = Handler(Looper.getMainLooper())  // 异步执行 seek 的 Handler
-    private var seekTimeoutRunnable: Runnable? = null  // seek 超时处理
-    private val SEEK_TIMEOUT_MS = 10_000L  // 10秒超时（VLC 缓冲可能很慢）
+    /** VLC Buffering 事件给出的缓存填充比例（0..100，相对 network-caching） */
+    private var cacheFillPercent = 0
+    private var lastKnownPositionMs = 0L
+    private var lastKnownDurationMs = 0L
 
-    // VLC 版本检测（VLC 3 竖屏视频需要手动设置画面尺寸和 FILL 缩放）
-    private var isVlc3: Boolean = true
+    private val mainHandler = Handler(Looper.getMainLooper())
 
-    // 视频尺寸
-    private var _videoWidth: Int = 0
-    private var _videoHeight: Int = 0
+    // ========== seek ==========
+    private var isSeeking = false
+    private var seekCommandIssued = false
+    private var seekGeneration = 0
+    private var seekTargetPosition = 0L
+    private var seekTimeoutRunnable: Runnable? = null
 
-    // 保存 VideoLayout 引用用于尺寸调整
-    private var currentVideoLayout: VLCVideoLayout? = null
+    // ========== 播放中重缓冲 ==========
+    private var isRebuffering = false
+    private var rebufferNoticeRunnable: Runnable? = null
 
-    // 保存 VLC 内部创建的 SurfaceView 引用用于手动缩放
-    private var vlcSurfaceView: View? = null
+    /** 是否已向上层报告缓冲中（避免 VLC 每个百分比事件都触发一次 onBuffering） */
+    private var bufferingNotified = false
 
-    // VLC 3 竖屏视频布局监听是否已注册（防止 Playing 事件多次触发时重复注册）
-    private var vlc3LayoutListenerRegistered = false
+    // ========== 视频尺寸 / 视图 ==========
+    private var _videoWidth = 0
+    private var _videoHeight = 0
+    private var videoFrameRate: Float? = null
+    private var attachedVideoLayout: VLCVideoLayout? = null
 
     // ========== 画面卡死检测 ==========
-    // 使用 TimeChanged 事件检测视频卡死
-    // 直播流的 duration=0，导致 PositionChanged 的比例值不变化，因此改用 TimeChanged 的绝对时间
+    // 基于 TimeChanged（绝对时间）而非 PositionChanged：直播 duration=0 时 position 比例不会变化
     private var lastFrameUpdateTime = System.currentTimeMillis()
     private var lastTimeChangedValue = -1L
-    private val freezeDetectionHandler = Handler(Looper.getMainLooper())
     private var freezeDetectionRunnable: Runnable? = null
-    private val FREEZE_THRESHOLD_MS = 5_000L  // 5秒无时间变化视为卡死
 
-    // 保持事件监听器的强引用，防止被GC回收
-    // @Volatile
-    // private var eventListenerHolder: MediaPlayer.EventListener? = null
+    // ========== 解码能力检测（基于 libvlc 统计的丢帧比例） ==========
+    private var decodeStatsRunnable: Runnable? = null
+    private var decodeStatsBaselineValid = false
+    private var lastDisplayedPictures = 0
+    private var lastLostPictures = 0
+    private var overloadedSampleCount = 0
+    private var decoderOverloadReported = false
 
-    private val vlcEventListener = MediaPlayer.EventListener { event ->
-        when (event.type) {
-            MediaPlayer.Event.Playing -> {
-                // VLC 3 需要手动获取视频尺寸
-                // 获取尺寸后的竖屏处理
-                if (isVlc3 && _videoWidth <= 0) {
-                    updateVideoSize()
-                }
+    private val networkCachingMs = resolveNetworkCachingMs(options)
 
-                // 主动查询 seekable 状态（SeekableChanged 事件可能不可靠）
-                mediaPlayer?.let { mp ->
-                    val seekable = mp.isSeekable
-                    if (_isSeekable != seekable) {
-                        _isSeekable = seekable
-                        logger.debug { "Seekable (queried): $seekable" }
-                        mPlayerEventListener?.onSeekableChanged(seekable)
-                    }
-                }
+    private val vlcEventListener = MediaPlayer.EventListener { event -> handleEvent(event) }
 
-                // 处理初始跳转位置（Playing 事件触发后再 seek，确保 VLC 已真正开始播放）
-                val hasInitialSeek = pendingSeekPosition > 0
-                if (hasInitialSeek) {
-                    if (_isSeekable) {
-                        val position = pendingSeekPosition
-                        clearPendingSeekPosition()
-
-                        val mp = mediaPlayer
-                        if (mp != null) {
-                            // 初始跳转：标记为正在 seek，但不暂停播放器
-                            // 让 VLC 自然播放，seek 操作会平滑过渡
-                            seekTargetPosition = position
-                            isSeeking = true
-
-                            seekHandler.post {
-                                logger.debug { "Initial seek to ${position}ms (without pause)" }
-                                // 直接 seek，不暂停
-                                mp.time = position
-                            }
-                        }
-                    } else {
-                        logger.warn { "Media is not seekable, ignoring initial seek to ${pendingSeekPosition}ms" }
-                        clearPendingSeekPosition()
-                    }
-                }
-
-                // 只有在没有初始跳转时才报告 onPlay
-                // 初始跳转完成后会在 Buffering 事件中报告 onPlay
-                if (!hasInitialSeek) {
-                    mPlayerEventListener?.onPlay()
-                }
-            }
-            MediaPlayer.Event.Paused -> {
-                mPlayerEventListener?.onPause()
-            }
-            MediaPlayer.Event.Stopped -> {
-                mPlayerEventListener?.onIdle()
-            }
-            MediaPlayer.Event.EncounteredError -> {
-                logger.error { "VLC: Error event" }
-                mPlayerEventListener?.onError(Exception("VLC playback error"))
-            }
-            MediaPlayer.Event.EndReached -> {
-                mPlayerEventListener?.onEnd()
-            }
-            MediaPlayer.Event.Buffering -> {
-                val cache = event.buffering
-                _bufferedPercentage = cache.toInt()
-
-                // ========== seek 操作中的缓冲处理 ==========
-                if (isSeeking) {
-                    logger.debug { "Seek buffering: ${cache.toInt()}%" }
-                    if (cache >= 100f) {
-                        // 缓冲完成，取消超时
-                        seekTimeoutRunnable?.let { seekHandler.removeCallbacks(it) }
-                        seekTimeoutRunnable = null
-
-                        logger.debug { "Seek complete: at ${seekTargetPosition}ms, shouldResume=$shouldResumeAfterSeek" }
-
-                        mPlayerEventListener?.onSeeked(seekTargetPosition)
-
-                        // 恢复播放（无论是初始 seek 还是手动 seek）
-                        mediaPlayer?.play()
-                        isSeeking = false
-                        shouldResumeAfterSeek = false
-
-                        // 通知上层播放状态
-                        mPlayerEventListener?.onPlay()
-                        dispatchProgress()
-                        return@EventListener
-                    }
-                    // seek 期间保持缓冲状态
-                    mPlayerEventListener?.onBuffering()
-                    dispatchProgress()
-                    return@EventListener
-                }
-
-                // ========== 正常缓冲处理 ==========
-                // 只有当播放器实际暂停时才报告缓冲状态
-                if (mediaPlayer?.isPlaying == true) {
-                    // 播放中，不报告缓冲状态，只更新缓冲百分比
-                    if (cache >= 100f) {
-                        // 缓冲完成，确保播放状态正确
-                        mPlayerEventListener?.onPlay()
-                    }
-                } else {
-                    // 播放器暂停，正常报告缓冲状态
-                    if (cache < 100f) {
-                        mPlayerEventListener?.onBuffering()
-                    } else {
-                        mPlayerEventListener?.onReady()
-                    }
-                }
-                dispatchProgress()
-            }
-            MediaPlayer.Event.Opening -> {
-                mPlayerEventListener?.onBuffering()
-            }
-            MediaPlayer.Event.TimeChanged -> {
-                val timeMs = event.timeChanged
-                val now = System.currentTimeMillis()
-
-                // 更新卡死检测状态（基于播放时间变化，对直播流和点播都可靠）
-                // TimeChanged 返回绝对时间（毫秒），直播流中会持续递增，不会像 PositionChanged 的比例值在 duration=0 时不变
-                if (isPlaying && timeMs != lastTimeChangedValue) {
-                    lastFrameUpdateTime = now
-                    lastTimeChangedValue = timeMs
-                }
-
-                // TimeChanged 正常播放时也会触发，作为进度上报
-                dispatchProgress(timeMs = timeMs)
-            }
-            MediaPlayer.Event.PositionChanged -> {
-                val position = event.positionChanged
-
-                // PositionChanged 事件提供进度百分比，补充上报
-                dispatchProgress(positionFraction = position)
-            }
-            MediaPlayer.Event.SeekableChanged -> {
-                _isSeekable = event.seekable
-                logger.debug { "Seekable changed: ${event.seekable}" }
-                mPlayerEventListener?.onSeekableChanged(event.seekable)
-            }
-            MediaPlayer.Event.PausableChanged -> {
-//                mPlayerEventListener?.onPausableChanged(event.pausable)
-            }
-            MediaPlayer.Event.RecordChanged -> {
-                // 记录变化事件
-            }
-        }
-    }
+    // ------------------------------------------------------------------------------------------
+    // 生命周期
+    // ------------------------------------------------------------------------------------------
 
     override fun initPlayer() {
         logger.info { "Initializing VLC player" }
 
-        // 加载 VLC native 库
-        // 优先从 vlc_libs 目录加载按需下载的库，回退到 APK 内置库
-        loadVlcNativeLibs(context)
-
-        // 使用 VLCOptions 获取官方同步的配置
-        // 使用官方默认值 + 项目特定自定义选项（针对 B 站 DASH 流优化）
-        val vlcOptions = VLCOptions.getLibOptions(
-            context = context,
-            config = VLCConfig.Builder()
-                // ========== 网络缓存优化 ==========
-                // 增加网络缓存以减少 seek 和初始加载时的卡顿
-                .setNetworkCaching(if (options.expandBuffer) 32000 else 6000)
-
-                // ========== 项目特定自定义选项 ==========
-                // 通过 customOptions 添加官方默认值之外的项目特定配置
-//                .apply {
-                    // 添加项目特定的自定义选项
-//                    listOf(
-//                        "--codec=mediacodec-ndk,all",  // 硬件解码优先
-//                        "--vout=android-display,none"  // 使用 Android 原生显示
-//                    ).forEach { addCustomOption(it) }
-//                }
-                .build()
-        )
+        // 原生库不可用时直接抛出 LinkageError，由 VlcPlayerFactory 回退到 Media3
+        VlcNativeLibs.load(appContext)
 
         try {
-            libVlc = LibVLC(context, vlcOptions)
-            mediaPlayer = MediaPlayer(libVlc).apply {
-                setEventListener(vlcEventListener)
+            val lib = obtainSharedLibVlc(appContext)
+            libVlc = lib
+            mediaPlayer = MediaPlayer(lib).apply { setEventListener(vlcEventListener) }
+            logger.info {
+                "LibVLC ${runCatching { LibVLC.version() }.getOrDefault("unknown")} ready, " +
+                    "networkCaching=${networkCachingMs}ms"
             }
-
-            // ========== VLC 版本检测 ==========
-            isVlc3 = try {
-                val version = LibVLC.version()
-                version.startsWith("3.")
-            } catch (e: Exception) {
-                true // 默认视为 VLC 3
-            }
-
-            // ========== 调试日志：验证 LibVLC 实例 ==========
-            logger.info { "LibVLC created successfully" }
-            logger.info { "LibVLC version: ${try { LibVLC.version() } catch (e: Exception) { "unknown" }}, isVlc3=$isVlc3" }
-            logger.info { "LibVLC hashCode: ${libVlc?.hashCode()}" }
-            logger.info { "MediaPlayer created: ${mediaPlayer?.hashCode()}" }
-
-        } catch (e: UnsatisfiedLinkError) {
-            logger.error(e) { "VLC native library not available" }
-            mPlayerEventListener?.onError(Exception("VLC 播放器不可用，请确保应用正确安装"))
         } catch (e: Exception) {
+            // 事件监听器此时尚未绑定，错误在 prepare() 时上报
             logger.error(e) { "Failed to initialize VLC player" }
-            mPlayerEventListener?.onError(e)
+            initializationError = Exception("VLC 播放器初始化失败：${e.message}", e)
         }
-    }
-
-    override fun setHeader(headers: Map<String, String>) {
-        this.headers = headers
-        // VLC 通过 Media 选项设置请求头，需要重新创建 Media 才能生效
     }
 
     override fun playUrl(videoUrl: String?, audioUrl: String?) {
-        this.currentVideoUrl = videoUrl
-        this.currentAudioUrl = audioUrl
-
-        // 让 MediaPlayer 释放对旧 Media 的引用
-        mediaPlayer?.media = null
+        // 纯设置：不触碰当前 Media，避免直播 URL 续期时中断播放（见 AbstractVideoPlayer.playUrl 契约）
+        currentVideoUrl = videoUrl
+        currentAudioUrl = audioUrl
+        clearPendingSeekPosition()
     }
 
     override fun prepare() {
-        // 先释放旧的 Media（防止多次调用 prepare() 时泄漏）
-        mediaPlayer?.media = null
-
-        // 创建新的 Media
+        initializationError?.let {
+            mPlayerEventListener?.onError(it)
+            return
+        }
+        val mp = mediaPlayer ?: run {
+            mPlayerEventListener?.onError(IllegalStateException("VLC MediaPlayer 未初始化"))
+            return
+        }
         val url = currentVideoUrl ?: currentAudioUrl
-        if (url != null) {
-            val newMedia = buildMedia(url, currentAudioUrl)
-
-            // 设置给 MediaPlayer（MediaPlayer 会增加 native 引用计数）
-            mediaPlayer?.media = newMedia
-
-            // 立即释放 Java 引用
-            // MediaPlayer 已持有 native 引用，我们的 Java 引用不再需要
-            newMedia.release()
+        if (url == null) {
+            mPlayerEventListener?.onError(IllegalStateException("VLC 播放地址为空"))
+            return
         }
 
-        // 与 ExoPlayer 不同，VLC 不会在设置 media 后自动触发事件
-        mediaPlayer?.play()
+        resetTransientState()
+        readyDispatchedForCurrentMedia = false
+        startupBuffering = true
+        resetVideoInfo()
+        resetDecodeStats()
+        decoderOverloadReported = false
+        cacheFillPercent = 0
+        lastKnownPositionMs = 0L
+        lastKnownDurationMs = 0L
 
-        // 初始跳转位置移到 Playing 事件中处理，确保 VLC 已真正开始播放
+        // 释放旧 Media（多次 prepare 不泄漏），设置新 Media；MediaPlayer 会 retain，本地引用立即 release
+        mp.media = null
+        val media = buildMedia(url, currentAudioUrl)
+        mp.media = media
+        media.release()
+
+        // 与 ExoPlayer 不同，VLC 设置 media 后不会自动触发事件，这里直接开始播放；
+        // 初始跳转位置在 Playing 事件中处理，确保 VLC 已真正开始播放
+        playRequested = true
+        mp.play()
     }
 
     override fun start() {
-        logger.debug { "Starting VLC player" }
+        playRequested = true
+        if (isSeeking) {
+            logger.debug { "start(): deferred until the pending seek completes" }
+            return
+        }
         mediaPlayer?.play()
-        startFreezeDetection() // 启动卡死检测
+        startFreezeDetection()
+        startDecodeStatsMonitor()
     }
 
     override fun pause() {
-        logger.debug { "Pausing VLC player" }
+        playRequested = false
+        stopFreezeDetection()
+        stopDecodeStatsMonitor()
         mediaPlayer?.pause()
-        stopFreezeDetection() // 停止卡死检测
     }
 
     override fun stop() {
-        logger.debug { "Stopping VLC player" }
-        stopFreezeDetection() // 停止卡死检测
+        playRequested = false
+        resetTransientState()
+        stopFreezeDetection()
+        stopDecodeStatsMonitor()
+        clearPendingSeekPosition()
         mediaPlayer?.stop()
     }
 
     override fun reset() {
-        logger.debug { "Resetting VLC player" }
-        mediaPlayer?.stop()
-
-        // 让 MediaPlayer 释放对 Media 的引用
+        stop()
         mediaPlayer?.media = null
+        currentVideoUrl = null
+        currentAudioUrl = null
     }
+
+    override fun release() {
+        logger.info { "Releasing VLC player" }
+        stopFreezeDetection()
+        stopDecodeStatsMonitor()
+        cancelSeek()
+        cancelRebufferNotice()
+        mainHandler.removeCallbacksAndMessages(null)
+        mPlayerEventListener = null
+
+        val mp = mediaPlayer ?: return
+        mediaPlayer = null
+        libVlc = null // 进程级共享实例，不在此释放
+
+        try {
+            mp.setEventListener(null)
+            // 先分离 Surface，防止 VLC 继续渲染到已销毁的 Surface（BufferQueue abandoned）
+            attachedVideoLayout = null
+            mp.detachViews()
+        } catch (e: Exception) {
+            logger.error(e) { "Error detaching VLC views" }
+        }
+
+        // VLC 3 的 stop()/release() 会同步 join input 线程，网络卡顿时可达秒级，放到后台执行避免 ANR
+        releaseExecutor.execute {
+            try {
+                mp.stop()
+                mp.release()
+            } catch (e: Exception) {
+                logger.error(e) { "Error releasing VLC MediaPlayer" }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // 播放控制 / 状态
+    // ------------------------------------------------------------------------------------------
 
     override val isPlaying: Boolean
         get() = mediaPlayer?.isPlaying == true
@@ -373,104 +256,25 @@ class VlcMediaPlayer(
             logger.warn { "Media is not seekable, ignoring seek to ${time}ms" }
             return
         }
-
-        val mp = mediaPlayer
-        if (mp == null) {
+        if (mediaPlayer == null) {
             logger.warn { "MediaPlayer is null, ignoring seek to ${time}ms" }
             return
         }
-
-        // 取消之前的 pending seek 和超时
-        seekHandler.removeCallbacksAndMessages(null)
-        seekTimeoutRunnable?.let { seekHandler.removeCallbacks(it) }
-
-        // 记录是否正在播放，seek 完成后恢复
-        shouldResumeAfterSeek = mp.isPlaying
-        seekTargetPosition = time
-        isSeeking = true
-
-        // 启动超时计时器
-        seekTimeoutRunnable = Runnable {
-            if (isSeeking) {
-                logger.warn { "Seek timeout after ${SEEK_TIMEOUT_MS}ms, force resuming" }
-                // 超时后强制恢复播放
-                isSeeking = false
-                shouldResumeAfterSeek = false
-                mPlayerEventListener?.onPlay()
-            }
-        }
-        seekHandler.postDelayed(seekTimeoutRunnable!!, SEEK_TIMEOUT_MS)
-
-        seekHandler.post {
-            logger.debug { "Seek start: pausing, seeking to ${time}ms" }
-
-            // 1. 先暂停
-            if (mp.isPlaying) {
-                mp.pause()
-            }
-
-            // 2. 执行 seek（异步执行避免阻塞）
-            mp.time = time
-
-            // 等待 Buffering 事件触发恢复
-        }
-    }
-
-    override fun release() {
-        logger.info { "Releasing VLC player" }
-        stopFreezeDetection() // 停止卡死检测
-        try {
-            // 1. 先移除事件监听器，防止后续回调导致泄露
-            mediaPlayer?.setEventListener(null)
-
-            // 2. 停止播放
-            mediaPlayer?.stop()
-
-            // 3. 先分离 Surface 视图，防止 VLC 继续渲染到已销毁的 Surface
-            // 这一步必须在 release() 之前执行，否则会出现 BufferQueue abandoned 错误
-            mediaPlayer?.detachViews()
-            vlcSurfaceView = null
-            currentVideoLayout = null
-
-            // 4. 让 MediaPlayer 释放对 Media 的引用
-            mediaPlayer?.media = null
-
-            // 5. 释放 MediaPlayer
-            mediaPlayer?.release()
-            mediaPlayer = null
-
-            // 6. 释放 LibVLC
-            libVlc?.release()
-            libVlc = null
-
-            // 7. 清理 Handler 中的所有回调
-            freezeDetectionHandler.removeCallbacksAndMessages(null)
-            seekHandler.removeCallbacksAndMessages(null)
-
-            // 8. 清理 seek 状态
-            isSeeking = false
-            shouldResumeAfterSeek = false
-            seekTimeoutRunnable = null
-
-            // 8. 清理事件监听器引用
-            mPlayerEventListener = null
-
-        } catch (e: Exception) {
-            logger.error(e) { "Error releasing VLC player" }
-        }
+        beginSeek(target = time.coerceAtLeast(0L), pausePlayer = true)
     }
 
     override val currentPosition: Long
-        get() = mediaPlayer?.time ?: 0L 
+        get() = if (isSeeking) seekTargetPosition else mediaPlayer?.time ?: lastKnownPositionMs
 
     override val duration: Long
-        get() = mediaPlayer?.length ?: 0L 
+        get() = mediaPlayer?.length?.takeIf { it > 0L } ?: lastKnownDurationMs
 
+    /** 已缓冲到的时长比例（与 Exo 语义一致），由当前位置 + 缓存填充量 × network-caching 估算 */
     override val bufferedPercentage: Int
-        get() = _bufferedPercentage
+        get() = computeBufferedPercentage(lastKnownPositionMs, lastKnownDurationMs)
 
     override fun setOptions() {
-        // 保持兼容接口
+        // 保持兼容接口：VLC 在 prepare() 时即开始播放
     }
 
     override var speed: Float
@@ -484,10 +288,12 @@ class VlcMediaPlayer(
 
     override val debugInfo: String
         get() = """
-            player: VLC ${if (libVlc != null) try { LibVLC.version() } catch (_: Exception) { "unknown" } else "not initialized"}
+            player: VLC ${if (libVlc != null) runCatching { LibVLC.version() }.getOrDefault("unknown") else "not initialized"}
             time: ${currentPosition.formatHourMinSec()} / ${duration.formatHourMinSec()}
-            buffered: $bufferedPercentage%
+            buffered: $bufferedPercentage% (cache fill $cacheFillPercent% of ${networkCachingMs}ms)
             resolution: $videoWidth x $videoHeight
+            video fps: ${videoFrameRate ?: 0f}
+            pictures displayed/lost: $lastDisplayedPictures / $lastLostPictures
             speed: $speed
         """.trimIndent()
 
@@ -497,361 +303,461 @@ class VlcMediaPlayer(
     override val videoHeight: Int
         get() = _videoHeight
 
+    // ------------------------------------------------------------------------------------------
+    // 事件处理
+    // ------------------------------------------------------------------------------------------
+
+    private fun handleEvent(event: MediaPlayer.Event) {
+        when (event.type) {
+            MediaPlayer.Event.Opening -> {
+                readyDispatchedForCurrentMedia = false
+                startupBuffering = true
+                isRebuffering = false
+                cancelRebufferNotice()
+                notifyBuffering()
+            }
+
+            MediaPlayer.Event.Playing -> onPlayingEvent()
+
+            MediaPlayer.Event.Paused -> {
+                // seek 期间的内部暂停不上报，避免暂停图标闪烁
+                if (!isSeeking) notifyPause()
+            }
+
+            MediaPlayer.Event.Stopped -> {
+                resetTransientState()
+                mPlayerEventListener?.onIdle()
+            }
+
+            MediaPlayer.Event.EncounteredError -> {
+                logger.error { "VLC: EncounteredError" }
+                resetTransientState()
+                stopFreezeDetection()
+                stopDecodeStatsMonitor()
+                clearPendingSeekPosition()
+                mPlayerEventListener?.onError(Exception("VLC playback error"))
+            }
+
+            MediaPlayer.Event.EndReached -> {
+                resetTransientState()
+                stopFreezeDetection()
+                stopDecodeStatsMonitor()
+                clearPendingSeekPosition()
+                if (options.isLive) {
+                    // 直播流没有“自然结束”：连接被 CDN 关闭（如 URL 过期）时 VLC 只会给 EndReached，
+                    // 按错误上报以触发上层的直播重连（重新获取播放地址）
+                    logger.warn { "VLC: live stream reached end, reporting as interruption" }
+                    mPlayerEventListener?.onError(Exception("VLC live stream interrupted"))
+                } else {
+                    mPlayerEventListener?.onEnd()
+                }
+            }
+
+            MediaPlayer.Event.Buffering -> onBufferingEvent(event.buffering)
+
+            MediaPlayer.Event.TimeChanged -> {
+                val timeMs = event.timeChanged
+                lastKnownPositionMs = timeMs
+                if (timeMs != lastTimeChangedValue) {
+                    lastFrameUpdateTime = System.currentTimeMillis()
+                    lastTimeChangedValue = timeMs
+                }
+                // 时间开始推进说明起播缓冲已经结束（兜底：个别流不会发出 Buffering 100%）
+                if (startupBuffering && !isSeeking) {
+                    finishStartupBuffering()
+                }
+                dispatchProgress(timeMs = timeMs)
+            }
+
+            MediaPlayer.Event.PositionChanged -> dispatchProgress(positionFraction = event.positionChanged)
+
+            MediaPlayer.Event.LengthChanged -> {
+                lastKnownDurationMs = event.lengthChanged.coerceAtLeast(0L)
+                dispatchProgress()
+            }
+
+            MediaPlayer.Event.SeekableChanged -> {
+                _isSeekable = event.seekable
+                logger.debug { "Seekable changed: ${event.seekable}" }
+                mPlayerEventListener?.onSeekableChanged(event.seekable)
+            }
+
+            // 视频输出建立/视频轨道就绪时刷新尺寸：Playing 时容器可能还没有可靠的尺寸（尤其是直播 FLV）
+            MediaPlayer.Event.Vout -> if (event.voutCount > 0) updateVideoSize()
+
+            MediaPlayer.Event.ESAdded, MediaPlayer.Event.ESSelected -> {
+                if (event.esChangedType == IMedia.Track.Type.Video) updateVideoSize()
+            }
+        }
+    }
+
+    private fun onPlayingEvent() {
+        val mp = mediaPlayer ?: return
+
+        if (_videoWidth <= 0) updateVideoSize()
+
+        // 主动查询 seekable 状态（SeekableChanged 事件可能不可靠）
+        val seekable = mp.isSeekable
+        if (_isSeekable != seekable) {
+            _isSeekable = seekable
+            logger.debug { "Seekable (queried): $seekable" }
+            mPlayerEventListener?.onSeekableChanged(seekable)
+        }
+
+        // 初始跳转：Playing 之后再 seek，确保 VLC 已真正开始播放；就绪/播放状态由 completeSeek() 上报
+        val initialSeekPosition = pendingSeekPosition
+        if (initialSeekPosition > 0L) {
+            clearPendingSeekPosition()
+            if (_isSeekable) {
+                logger.debug { "Initial seek to ${initialSeekPosition}ms" }
+                startupBuffering = false
+                beginSeek(target = initialSeekPosition, pausePlayer = false)
+                return
+            }
+            logger.warn { "Media is not seekable, ignoring initial seek to ${initialSeekPosition}ms" }
+        }
+
+        if (isSeeking) return
+
+        // 缓存尚未填满：保持缓冲状态，等待 Buffering 100% / TimeChanged 再上报就绪与播放
+        if (startupBuffering && cacheFillPercent < 100) {
+            notifyBuffering()
+            return
+        }
+        startupBuffering = false
+
+        markReadyIfNeeded()
+        lastFrameUpdateTime = System.currentTimeMillis()
+        lastTimeChangedValue = -1L
+        notifyPlay()
+    }
+
+    /** 与 Exo 的 STATE_READY 对齐：每个媒体只上报一次 onReady */
+    private fun markReadyIfNeeded() {
+        if (readyDispatchedForCurrentMedia) return
+        readyDispatchedForCurrentMedia = true
+        bufferingNotified = false
+        mPlayerEventListener?.onReady()
+    }
+
+    /** VLC 每个缓冲百分比都会发事件，这里只在进入缓冲状态时上报一次 */
+    private fun notifyBuffering() {
+        if (bufferingNotified) return
+        bufferingNotified = true
+        mPlayerEventListener?.onBuffering()
+    }
+
+    /** 上报播放中；VLC 在 prepare() 后会直接开始播放而不经过 start()，因此监控随播放状态启停 */
+    private fun notifyPlay() {
+        bufferingNotified = false
+        startFreezeDetection()
+        startDecodeStatsMonitor()
+        mPlayerEventListener?.onPlay()
+    }
+
+    private fun notifyPause() {
+        bufferingNotified = false
+        stopFreezeDetection()
+        stopDecodeStatsMonitor()
+        mPlayerEventListener?.onPause()
+    }
+
+    /** 起播缓冲结束：上报就绪，并按 VLC 当前状态上报播放/暂停 */
+    private fun finishStartupBuffering() {
+        startupBuffering = false
+        markReadyIfNeeded()
+        lastFrameUpdateTime = System.currentTimeMillis()
+        lastTimeChangedValue = -1L
+        if (mediaPlayer?.isPlaying == true) {
+            notifyPlay()
+        } else {
+            notifyPause()
+        }
+    }
+
+    private fun onBufferingEvent(cache: Float) {
+        cacheFillPercent = cache.toInt().coerceIn(0, 100)
+
+        if (isSeeking) {
+            // seek 命令尚未真正下发时收到的 Buffering 属于上一状态的残留事件，不能当作 seek 完成
+            if (!seekCommandIssued) {
+                dispatchProgress()
+                return
+            }
+            if (cache >= 100f) {
+                completeSeek()
+            } else {
+                notifyBuffering()
+                dispatchProgress()
+            }
+            return
+        }
+
+        if (startupBuffering) {
+            // 起播阶段：Opening/Playing 之后的首次缓存填充，100% 即就绪
+            if (cache >= 100f) {
+                finishStartupBuffering()
+            } else {
+                notifyBuffering()
+            }
+            dispatchProgress()
+            return
+        }
+
+        val playing = mediaPlayer?.isPlaying == true
+        if (cache < 100f) {
+            if (playing) {
+                // VLC 在播放中重缓冲时状态仍为 Playing，这里防抖后上报，避免短暂抖动导致 UI 闪烁
+                scheduleRebufferNotice()
+            } else {
+                notifyBuffering()
+            }
+        } else {
+            cancelRebufferNotice()
+            val wasRebuffering = isRebuffering
+            isRebuffering = false
+            if (wasRebuffering) {
+                logger.debug { "Rebuffering finished" }
+                lastFrameUpdateTime = System.currentTimeMillis()
+                lastTimeChangedValue = -1L
+            }
+            if (playing) {
+                notifyPlay()
+            } else {
+                bufferingNotified = false
+                mPlayerEventListener?.onReady()
+            }
+        }
+        dispatchProgress()
+    }
+
+    private fun scheduleRebufferNotice() {
+        if (rebufferNoticeRunnable != null) return
+        rebufferNoticeRunnable = Runnable {
+            rebufferNoticeRunnable = null
+            if (cacheFillPercent < 100 && !isSeeking && mediaPlayer?.isPlaying == true) {
+                isRebuffering = true
+                logger.debug { "Rebuffering while playing: $cacheFillPercent%" }
+                notifyBuffering()
+            }
+        }.also { mainHandler.postDelayed(it, REBUFFER_NOTICE_DELAY_MS) }
+    }
+
+    private fun cancelRebufferNotice() {
+        rebufferNoticeRunnable?.let { mainHandler.removeCallbacks(it) }
+        rebufferNoticeRunnable = null
+    }
+
+    private fun resetTransientState() {
+        cancelSeek()
+        cancelRebufferNotice()
+        isRebuffering = false
+        startupBuffering = false
+        bufferingNotified = false
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // seek
+    // ------------------------------------------------------------------------------------------
+
     /**
-     * 统一分发进度信息，兼容 TimeChanged/PositionChanged 事件来源
+     * 启动一次 seek：暂停（可选）→ 设置时间 → 等待 Buffering 100% 或超时后 [completeSeek]。
+     * seek 命令异步下发，避免阻塞事件回调；[seekCommandIssued] 用来过滤下发前的残留 Buffering 事件。
      */
+    private fun beginSeek(target: Long, pausePlayer: Boolean) {
+        cancelSeek()
+        val generation = ++seekGeneration
+        isSeeking = true
+        seekCommandIssued = false
+        seekTargetPosition = target
+        lastKnownPositionMs = target
+        notifyBuffering()
+
+        seekTimeoutRunnable = Runnable {
+            if (isSeeking && generation == seekGeneration) {
+                logger.warn { "Seek to ${target}ms timed out after ${SEEK_TIMEOUT_MS}ms, forcing completion" }
+                completeSeek()
+            }
+        }.also { mainHandler.postDelayed(it, SEEK_TIMEOUT_MS) }
+
+        mainHandler.post {
+            val mp = mediaPlayer
+            if (!isSeeking || generation != seekGeneration || mp == null) return@post
+            if (pausePlayer && mp.isPlaying) mp.pause()
+            mp.time = target
+            seekCommandIssued = true
+        }
+    }
+
+    /** seek 完成（缓冲就绪或超时）：上报 onSeeked，并按上层期望的状态恢复播放或保持暂停 */
+    private fun completeSeek() {
+        val target = seekTargetPosition
+        cancelSeek()
+        startupBuffering = false
+        lastFrameUpdateTime = System.currentTimeMillis()
+        lastTimeChangedValue = -1L
+        markReadyIfNeeded()
+        mPlayerEventListener?.onSeeked(target)
+
+        val mp = mediaPlayer
+        if (playRequested && mp != null) {
+            mp.play()
+            startFreezeDetection()
+            startDecodeStatsMonitor()
+            notifyPlay()
+        } else {
+            notifyPause()
+        }
+        dispatchProgress()
+    }
+
+    private fun cancelSeek() {
+        seekTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        seekTimeoutRunnable = null
+        isSeeking = false
+        seekCommandIssued = false
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // 进度
+    // ------------------------------------------------------------------------------------------
+
+    /** 统一分发进度信息，兼容 TimeChanged/PositionChanged/LengthChanged 事件来源 */
     private fun dispatchProgress(timeMs: Long? = null, positionFraction: Float? = null) {
-        val durationMs = mediaPlayer?.length ?: 0L
+        val mp = mediaPlayer ?: return
+        val durationMs = (mp.length.takeIf { it > 0L } ?: lastKnownDurationMs).coerceAtLeast(0L)
+        lastKnownDurationMs = durationMs
         val positionMs = when {
+            isSeeking -> seekTargetPosition
             timeMs != null && timeMs >= 0 -> timeMs
             positionFraction != null && durationMs > 0 -> (durationMs * positionFraction).toLong()
-            else -> mediaPlayer?.time ?: 0L
+            else -> mp.time
         }.coerceAtLeast(0L)
-
-        val buffered = _bufferedPercentage.coerceIn(0, 100)
-        mPlayerEventListener?.onProgress(positionMs, durationMs.coerceAtLeast(0L), buffered)
+        lastKnownPositionMs = positionMs
+        mPlayerEventListener?.onProgress(positionMs, durationMs, computeBufferedPercentage(positionMs, durationMs))
     }
 
-    /**
-     * 使用反射兼容 VLC 3/VLC 4 获取视频轨道
-     * VLC 4: 使用 media.getTracks() 方法（支持按类型过滤）
-     * VLC 3: 使用 media.trackCount + media.getTrack(index)
-     */
-    private fun getVideoTracksCompatible(media: IMedia): List<IMedia.Track> {
-        // 尝试 VLC 4 API: getTracks() 方法（无参，获取所有轨道）
-        try {
-            val getTracksMethod = media.javaClass.getDeclaredMethod("getTracks")
-            getTracksMethod.isAccessible = true
-            @Suppress("UNCHECKED_CAST")
-            val tracks = getTracksMethod.invoke(media) as? Array<IMedia.Track>
-            if (tracks != null) {
-                logger.debug { "Using VLC 4 API (getTracks()), found ${tracks.size} tracks" }
-                return tracks.toList()
-            }
-        } catch (e: NoSuchMethodException) {
-            logger.debug { "VLC 4 getTracks() method not found, trying VLC 3 API" }
-        } catch (e: Exception) {
-            logger.debug { "Failed to access VLC 4 getTracks(): ${e.message}" }
-        }
-
-        // 回退到 VLC 3 API: getTrackCount() + getTrack(index)
-        return try {
-            val getTrackCountMethod = media.javaClass.getDeclaredMethod("getTrackCount")
-            getTrackCountMethod.isAccessible = true
-            val trackCount = getTrackCountMethod.invoke(media) as Int
-
-            val getTrackMethod = media.javaClass.getDeclaredMethod("getTrack", Int::class.javaPrimitiveType)
-            getTrackMethod.isAccessible = true
-
-            val tracks = mutableListOf<IMedia.Track>()
-            for (i in 0 until trackCount) {
-                val track = getTrackMethod.invoke(media, i) as? IMedia.Track
-                if (track != null) {
-                    tracks.add(track)
-                }
-            }
-            logger.debug { "Using VLC 3 API (getTrackCount + getTrack), found ${tracks.size} tracks" }
-            tracks
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to get tracks using VLC 3 API: ${e.message}" }
-            emptyList()
-        }
+    private fun computeBufferedPercentage(positionMs: Long, durationMs: Long): Int {
+        if (durationMs <= 0L) return cacheFillPercent.coerceIn(0, 100)
+        val bufferedEndMs = positionMs + networkCachingMs.toLong() * cacheFillPercent / 100L
+        return (bufferedEndMs * 100L / durationMs).toInt().coerceIn(0, 100)
     }
 
-    /**
-     * 更新视频尺寸（兼容 VLC 3/VLC 4）
-     * 从 VLC 的 IMedia.Track 获取视频尺寸
-     * 确保 MediaPlayer 已经加载媒体并开始播放
-     */
+    // ------------------------------------------------------------------------------------------
+    // 视频尺寸
+    // ------------------------------------------------------------------------------------------
+
+    private fun resetVideoInfo() {
+        _videoWidth = 0
+        _videoHeight = 0
+        videoFrameRate = null
+    }
+
+    /** 从当前 Media 的视频轨道读取尺寸/帧率（VLC 3 需要主动查询），有变化时上报 */
     private fun updateVideoSize() {
+        val mp = mediaPlayer ?: return
+        // getMedia() 会增加引用计数，必须 release
+        val media = mp.media ?: return
         try {
-            val mp = mediaPlayer ?: return
-            val media = mp.media ?: return
-
-            try {
-                val tracks = getVideoTracksCompatible(media)
-                for (track in tracks) {
-                    if (track.type == IMedia.Track.Type.Video) {
-                        val videoTrack = track as IMedia.VideoTrack
-                        val width = videoTrack.width
-                        val height = videoTrack.height
-                        if (width > 0 && height > 0) {
-                            _videoWidth = width
-                            _videoHeight = height
-                            logger.info { "Video size: ${_videoWidth}x${_videoHeight}" }
-                            updateScaleMode()
-                            // 应用手动缩放
-                            if (isVlc3 && isPortraitVideo()) {
-                                setupVlc3PortraitScaling()
-                            }
-                            return
-                        }
-                    }
-                }
-                logger.debug { "No video track found or invalid size" }
-            } finally {
-                // 关键：释放从 MediaPlayer.media 获取的引用
-                // mediaPlayer.media 会增加引用计数，必须手动释放
-                media.release()
+            for (index in 0 until media.trackCount) {
+                val track = media.getTrack(index) as? IMedia.VideoTrack ?: continue
+                if (track.width <= 0 || track.height <= 0) continue
+                applyVideoTrackInfo(track)
+                return
             }
+            logger.debug { "No video track with a valid size yet" }
         } catch (e: Exception) {
-            logger.debug { "Failed to get video size: ${e.message}" }
+            logger.debug { "Failed to read video track info: ${e.message}" }
+        } finally {
+            media.release()
         }
     }
 
-    /**
-     * VLC 3 竖屏视频设置
-     * 仅在 updateVideoSize() 成功获取尺寸且确认为竖屏后调用一次
-     */
-    private fun setupVlc3PortraitScaling() {
-        val layout = currentVideoLayout ?: return
-
-        // 查找 VLC 内部创建的 SurfaceView
-        if (vlcSurfaceView == null) {
-            vlcSurfaceView = findVlcSurfaceView(layout)
-            logger.info { "Found VLC SurfaceView: $vlcSurfaceView" }
-        }
-
-        // 应用手动缩放
-        applyManualSurfaceViewScaling()
-
-        // 注册布局监听
-        if (!vlc3LayoutListenerRegistered) {
-            vlc3LayoutListenerRegistered = true
-            layout.viewTreeObserver.addOnGlobalLayoutListener(
-                object : ViewTreeObserver.OnGlobalLayoutListener {
-                    override fun onGlobalLayout() {
-                        applyManualSurfaceViewScaling()
-                    }
-                }
-            )
-        }
-    }
-
-    /**
-     * 判断视频是否为竖屏
-     * @return true 如果视频高度大于宽度（竖屏），false 否则（横屏或正方形）
-     */
-    private fun isPortraitVideo(): Boolean {
-        return _videoHeight > _videoWidth
-    }
-
-    /**
-     * 根据视频方向动态设置 VLC 缩放模式
-     * - 竖屏视频：使用 SURFACE_FILL 填充整个屏幕
-     * - 横屏视频：使用 SURFACE_BEST_FIT 保持宽高比适配屏幕
-     */
-    private fun updateScaleMode() {
-        val scaleType = if (isVlc3 && isPortraitVideo()) {
-            // VLC 3 竖屏视频使用 SURFACE_FILL 填充屏幕
-            MediaPlayer.ScaleType.SURFACE_FILL
-        } else {
-            MediaPlayer.ScaleType.SURFACE_BEST_FIT
-        }
-        mediaPlayer?.videoScale = scaleType
-        logger.info { "Updated scale mode: $scaleType (video=${_videoWidth}x${_videoHeight}, isPortrait=${isPortraitVideo()})" }
-    }
-
-    /**
-     * 手动计算并设置 SurfaceView 的尺寸
-     * 保持视频原始比例，根据屏幕尺寸进行 fit-center 缩放
-     * 确保宽高符合硬件解码器的像素对齐要求（32 字节对齐）
-     * 注意：仅对竖屏视频应用手动缩放，横屏视频由 VLC 的 SURFACE_BEST_FIT 自动处理
-     */
-    private fun applyManualSurfaceViewScaling() {
-        if (_videoWidth <= 0 || _videoHeight <= 0) {
-            logger.debug { "Video size not available, skipping scaling" }
-            return
-        }
-
-        // 横屏视频不应用手动缩放，由 VLC 的 SURFACE_BEST_FIT 自动处理
-        if (!isPortraitVideo()) {
-            logger.debug { "Landscape video, skipping manual scaling (VLC will handle it)" }
-            return
-        }
-
-        val surfaceView = vlcSurfaceView ?: return
-        val container = currentVideoLayout ?: return
-
-        // 使用屏幕尺寸进行缩放计算，而非容器尺寸
-        // 因为容器可能被外层的 aspectRatio 修饰符限制，导致视频显示区域过小
-        val screenWidth = context.resources.displayMetrics.widthPixels
-        val screenHeight = context.resources.displayMetrics.heightPixels
-        val containerWidth = container.width
-        val containerHeight = container.height
-
-        if (screenWidth <= 0 || screenHeight <= 0) {
-            logger.debug { "Screen size not available, skipping scaling" }
-            return
-        }
-
-        // 计算视频宽高比和屏幕宽高比
-        val videoRatio = _videoWidth.toFloat() / _videoHeight.toFloat()
-        val screenRatio = screenWidth.toFloat() / screenHeight.toFloat()
-
-        // 计算 fit-center 缩放后的原始尺寸（基于屏幕尺寸）
-        val (rawWidth, rawHeight) = if (videoRatio > screenRatio) {
-            screenWidth to (screenWidth / videoRatio).toInt()
-        } else {
-            (screenHeight * videoRatio).toInt() to screenHeight
-        }
-
-        // 应用像素对齐（最大值为屏幕尺寸）
-        // 竖屏视频：宽度对齐，高度保持原值
-        val surfaceWidth = calculateAlignedSize(rawWidth, screenWidth)
-        val surfaceHeight = rawHeight  // 竖屏高度不需要对齐
-
-        // 设置 SurfaceView 的 LayoutParams
-        val params = surfaceView.layoutParams as? FrameLayout.LayoutParams
-            ?: FrameLayout.LayoutParams(surfaceWidth, surfaceHeight)
-
-        // 检查当前 layoutParams 是否已经是目标值，避免不必要的布局更新和死循环
-        if (params.width == surfaceWidth && params.height == surfaceHeight) {
-            logger.debug { "LayoutParams already correct ($surfaceWidth x $surfaceHeight), skipping layout update" }
-            return
-        }
-
-        params.width = surfaceWidth
-        params.height = surfaceHeight
-        params.gravity = android.view.Gravity.CENTER
-
-        surfaceView.layoutParams = params
-
-        logger.info { "Applied manual SurfaceView scaling: " +
-            "video=${_videoWidth}x${_videoHeight}, " +
-            "screen=${screenWidth}x${screenHeight}, " +
-            "container=${containerWidth}x${containerHeight}, " +
-            "raw=${rawWidth}x${rawHeight}, " +
-            "aligned=${surfaceWidth}x${surfaceHeight} " +
-            "(alignment=$PIXEL_ALIGNMENT)" }
-    }
-
-    /**
-     * 递归查找 VLC 创建的 SurfaceView
-     * 
-     */
-    private fun findVlcSurfaceView(parent: ViewGroup): View? {
-        for (i in 0 until parent.childCount) {
-            val child = parent.getChildAt(i)
-            if (child is SurfaceView) {
-                return child
-            }
-            if (child is ViewGroup) {
-                val found = findVlcSurfaceView(child)
-                if (found != null) return found
+    private fun applyVideoTrackInfo(track: IMedia.VideoTrack) {
+        if (track.frameRateDen > 0 && track.frameRateNum > 0) {
+            val frameRate = track.frameRateNum.toFloat() / track.frameRateDen.toFloat()
+            if (frameRate.isFinite() && frameRate > 0f && frameRate != videoFrameRate) {
+                videoFrameRate = frameRate
+                mPlayerEventListener?.onVideoFrameRateChanged(frameRate)
             }
         }
-        return null
+
+        // VLC 报告的是编码尺寸（如 1920x1088），换算为可见尺寸再上报
+        val (width, height) = VlcVideoSizeNormalizer.normalize(track.width, track.height)
+        if (width == _videoWidth && height == _videoHeight) return
+        _videoWidth = width
+        _videoHeight = height
+        logger.info { "Video size: ${width}x$height (coded ${track.width}x${track.height})" }
+        mPlayerEventListener?.onVideoSizeChanged(width, height)
     }
 
+    // ------------------------------------------------------------------------------------------
+    // 视图绑定
+    // ------------------------------------------------------------------------------------------
+
     /**
-     * 附加视频渲染视图（官方推荐方式）
-     * 使用 mediaPlayer.attachViews() 而非 IVLCVout.setVideoView()
+     * 附加视频渲染视图（官方推荐方式 attachViews）。
      *
-     * @param videoLayout FrameLayout 容器，VLC 将在其中创建和管理 SurfaceView
+     * 画面缩放固定为 SURFACE_BEST_FIT：横屏/竖屏视频都由 libvlc 在整个容器内 fit-center 放置，
+     * SurfaceView 始终与容器同尺寸（也就天然满足硬解对 Surface 尺寸 16/32 对齐的要求）。
+     *
+     * @param videoLayout VLC 将在其中创建和管理 SurfaceView
      */
     fun attachVideoLayout(videoLayout: VLCVideoLayout) {
+        val mp = mediaPlayer ?: return
+        if (attachedVideoLayout === videoLayout) return
+        if (attachedVideoLayout != null) detachVideoLayout()
         try {
-            currentVideoLayout = videoLayout
-
-            // 根据视频方向动态设置缩放模式
-            // 竖屏视频使用 SURFACE_FILL，横屏视频使用 SURFACE_BEST_FIT
-            updateScaleMode()
-
-            // 使用官方推荐的 attachViews 方法
             // 参数：FrameLayout, DisplayManager, enableSubtitles, enableTextureView
-            mediaPlayer?.attachViews(videoLayout, null, false, false)
-
-            // 重新设置事件监听器
-            mediaPlayer?.setEventListener(vlcEventListener)
-
-            logger.info { "Attached VLC views to video layout" }
+            // enableSubtitles=true 会额外创建一个透明的字幕 SurfaceView：libvlc 的 android_display（MediaCodec
+            // 直出、零拷贝）要求有它才能启用，否则会回退到 gles2 走 GL 拷贝，4K 时每帧多一次 GPU 上传。
+            mp.attachViews(videoLayout, null, true, false)
+            // 缩放模式必须在 attachViews 之后设置才会生效（VideoHelper 由 attachViews 创建）
+            mp.videoScale = MediaPlayer.ScaleType.SURFACE_BEST_FIT
+            attachedVideoLayout = videoLayout
+            logger.info { "Attached VLC views to video layout (scale=SURFACE_BEST_FIT)" }
         } catch (e: Exception) {
             logger.error(e) { "Failed to attach video layout" }
         }
     }
 
     /**
-     * 分离视频渲染视图
+     * 分离视频渲染视图。
+     *
+     * 也用于 Activity 进入后台（ON_STOP）：SurfaceView 的 Surface 会随窗口隐藏而销毁，VLC 3 的 vout 随之关闭且
+     * 不会在 Surface 重建后自动恢复（画面变黑、只剩声音）。libvlc 的 detachViews/attachViews 会关闭/重新启用视频轨，
+     * 回到前台时重新 attach 即可让 VLC 用新的 Surface 重建 vout。
      */
     fun detachVideoLayout() {
+        if (attachedVideoLayout == null) return
         logger.debug { "Detaching video layout from VLC player" }
+        attachedVideoLayout = null
         try {
-            vlcSurfaceView = null
-            currentVideoLayout = null
-            vlc3LayoutListenerRegistered = false
-            // 使用官方方法分离视图
             mediaPlayer?.detachViews()
         } catch (e: Exception) {
             logger.error(e) { "Failed to detach video layout" }
         }
     }
 
-    /**
-     * 设置视频旋转角度
-     * VLC 通过 transform 滤镜实现视频旋转
-     *
-     * @param degrees 旋转角度（90、180、270 或 0）
-     */
-    fun setVideoRotation(degrees: Int) {
-        if (currentRotation == degrees) return
-
-        logger.info { "Setting video rotation to $degrees degrees" }
-        currentRotation = degrees
-
-        // 触发缓冲回调（显示加载提示）
-        mPlayerEventListener?.onBuffering()
-
-        // 保存当前位置和播放状态
-        val position = currentPosition
-        val wasPlaying = isPlaying
-
-        val url = currentVideoUrl ?: currentAudioUrl
-        url?.let {
-            // 创建新 Media，带有旋转滤镜
-            val newMedia = buildMedia(it, currentAudioUrl)
-
-            // 设置给 MediaPlayer（会自动释放旧 Media 的 native 引用）
-            mediaPlayer?.media = newMedia
-
-            // 立即释放 Java 引用，MediaPlayer 保持 native 引用
-            newMedia.release()
-
-            // 恢复播放位置
-            if (position > 0) {
-                seekTo(position)
-            }
-
-            // 恢复播放状态
-            if (wasPlaying) {
-                start()
-            }
-        }
-    }
+    // ------------------------------------------------------------------------------------------
+    // Media 构建
+    // ------------------------------------------------------------------------------------------
 
     private fun buildMedia(url: String, audioUrl: String?): Media {
         val normalizedAudioUrl = audioUrl?.takeIf { it.isNotBlank() && it != url }
         return Media(libVlc, url.toUri()).apply {
-            // VLC 使用 :http-header= 格式设置自定义请求头
-            headers.forEach { (key, value) ->
-                addOption(":http-header=$key: $value")
-            }
-            // 设置 Referer
+            // 必须在 setMedia() 之前设置：否则 libvlc-android 的 setDefaultMediaPlayerOptions()
+            // 会为每个 Media 追加 :network-caching=1500，覆盖 LibVLC 级别的 --network-caching
+            addOption(":network-caching=$networkCachingMs")
             options.playbackRefererFor(url, normalizedAudioUrl)?.let {
                 addOption(":http-referrer=$it")
             }
-            // 设置 User-Agent
             options.userAgent?.let {
                 addOption(":http-user-agent=$it")
             }
-            // 合入音频流
-            normalizedAudioUrl?.let { audioUrl ->
-                addSlave(IMedia.Slave(IMedia.Slave.Type.Audio, 0, audioUrl))
-            }
-            // 如果有旋转设置，添加滤镜
-            if (currentRotation != 0) {
-                addOption(":video-filter=transform")
-                addOption(":transform-type=${mapDegreesToTransform(currentRotation)}")
+            // 合入 DASH 音频流
+            normalizedAudioUrl?.let { audio ->
+                addSlave(IMedia.Slave(IMedia.Slave.Type.Audio, 0, audio))
             }
             VLCOptions.setMediaOptions(
                 media = this,
@@ -865,180 +771,190 @@ class VlcMediaPlayer(
         }
     }
 
-    /**
-     * 将角度映射到 VLC transform 类型的字符串表示
-     */
-    private fun mapDegreesToTransform(degrees: Int): String = when (degrees) {
-        90 -> "90"
-        180 -> "180"
-        270, -90 -> "270"
-        else -> "0"
-    }
-
-    // ========== 画面卡死检测和恢复 ==========
+    // ------------------------------------------------------------------------------------------
+    // 画面卡死检测和恢复
+    // ------------------------------------------------------------------------------------------
 
     /**
-     * 启动画面卡死检测
-     * 定期检查 TimeChanged 事件是否触发（基于播放时间），如果超过阈值未更新则尝试恢复
-     * 使用 TimeChanged 而非 PositionChanged，因为直播流 duration=0 导致 position fraction 不变
+     * 定期检查 TimeChanged 是否停止更新。仅在缓存已满（非重缓冲）、非 seek 期间判定为卡死，
+     * 避免把网络重缓冲误判为解码卡死而反复 pause/play。
      */
     private fun startFreezeDetection() {
         stopFreezeDetection()
-        // 重置检测时间，避免从暂停恢复时误判
         lastFrameUpdateTime = System.currentTimeMillis()
         lastTimeChangedValue = -1L
         freezeDetectionRunnable = object : Runnable {
             override fun run() {
-                if (isPlaying) {
-                    val now = System.currentTimeMillis()
-                    val timeSinceLastFrame = now - lastFrameUpdateTime
-
+                if (isPlaying && !isSeeking && !isRebuffering && cacheFillPercent >= 100) {
+                    val timeSinceLastFrame = System.currentTimeMillis() - lastFrameUpdateTime
                     if (timeSinceLastFrame > FREEZE_THRESHOLD_MS) {
                         logger.warn { "Detected video freeze (no TimeChanged for ${timeSinceLastFrame}ms), attempting recovery" }
                         attemptFreezeRecovery()
                     }
                 }
-                freezeDetectionHandler.postDelayed(this, 5_000) // 每5秒检查一次
+                mainHandler.postDelayed(this, FREEZE_CHECK_INTERVAL_MS)
+            }
+        }.also { mainHandler.postDelayed(it, FREEZE_CHECK_INTERVAL_MS) }
+    }
+
+    private fun stopFreezeDetection() {
+        freezeDetectionRunnable?.let { mainHandler.removeCallbacks(it) }
+        freezeDetectionRunnable = null
+    }
+
+    /** 策略：暂停再播放（最简单且有效的恢复方式） */
+    private fun attemptFreezeRecovery() {
+        val mp = mediaPlayer ?: return
+        if (!mp.isPlaying) return
+        logger.info { "Freeze recovery: toggling pause/play" }
+        lastFrameUpdateTime = System.currentTimeMillis()
+        mp.pause()
+        mainHandler.postDelayed({
+            val player = mediaPlayer ?: return@postDelayed
+            if (playRequested && !isSeeking && !player.isPlaying) {
+                player.play()
+            }
+        }, FREEZE_RECOVERY_RESUME_DELAY_MS)
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // 解码能力检测
+    // ------------------------------------------------------------------------------------------
+
+    /**
+     * 每 [DECODE_STATS_INTERVAL_MS] 读取一次 libvlc 统计（--stats），比较采样窗口内被 vout 丢弃的帧数
+     * （`lostPictures`，即 "picture is too late to be displayed"）与显示的帧数。硬件/软件解码器跟不上时
+     * VLC 3 无法跳过解码，帧会持续晚到并全部被丢弃、画面越来越落后；这里连续 [OVERLOAD_SAMPLES_REQUIRED] 个
+     * 窗口丢帧占比 ≥ 50% 即判定解码过载，上报一次供上层建议降低清晰度。
+     */
+    private fun startDecodeStatsMonitor() {
+        if (decodeStatsRunnable != null) return
+        decodeStatsBaselineValid = false
+        decodeStatsRunnable = object : Runnable {
+            override fun run() {
+                sampleDecodeStats()
+                mainHandler.postDelayed(this, DECODE_STATS_INTERVAL_MS)
+            }
+        }.also { mainHandler.postDelayed(it, DECODE_STATS_INTERVAL_MS) }
+    }
+
+    private fun stopDecodeStatsMonitor() {
+        decodeStatsRunnable?.let { mainHandler.removeCallbacks(it) }
+        decodeStatsRunnable = null
+        decodeStatsBaselineValid = false
+        overloadedSampleCount = 0
+    }
+
+    private fun resetDecodeStats() {
+        decodeStatsBaselineValid = false
+        lastDisplayedPictures = 0
+        lastLostPictures = 0
+        overloadedSampleCount = 0
+    }
+
+    private fun sampleDecodeStats() {
+        val mp = mediaPlayer ?: return
+        if (!mp.isPlaying || isSeeking || isRebuffering || startupBuffering) {
+            // 非稳态播放期间的丢帧不具参考意义，重新建立基线
+            decodeStatsBaselineValid = false
+            overloadedSampleCount = 0
+            return
+        }
+        val media = mp.media ?: return
+        val stats = try {
+            media.stats
+        } catch (e: Exception) {
+            logger.debug { "Failed to read VLC stats: ${e.message}" }
+            null
+        } finally {
+            media.release()
+        } ?: return
+
+        val displayed = stats.displayedPictures
+        val lost = stats.lostPictures
+        if (decodeStatsBaselineValid) {
+            val displayedDelta = (displayed - lastDisplayedPictures).coerceAtLeast(0)
+            val lostDelta = (lost - lastLostPictures).coerceAtLeast(0)
+            val total = displayedDelta + lostDelta
+            val overloaded = total >= MIN_FRAMES_PER_STATS_SAMPLE && lostDelta * 2 >= total
+            overloadedSampleCount = if (overloaded) overloadedSampleCount + 1 else 0
+            if (overloaded) {
+                logger.debug { "Decoder falling behind: lost $lostDelta / $total frames in last ${DECODE_STATS_INTERVAL_MS}ms" }
+            }
+            if (overloadedSampleCount >= OVERLOAD_SAMPLES_REQUIRED && !decoderOverloadReported) {
+                decoderOverloadReported = true
+                logger.warn {
+                    "Decoder overloaded: $lostDelta / $total frames dropped per ${DECODE_STATS_INTERVAL_MS}ms " +
+                        "for ${overloadedSampleCount * DECODE_STATS_INTERVAL_MS}ms (video ${_videoWidth}x${_videoHeight})"
+                }
+                mPlayerEventListener?.onDecoderOverloaded(lostDelta, total)
             }
         }
-        freezeDetectionHandler.post(freezeDetectionRunnable!!)
+        lastDisplayedPictures = displayed
+        lastLostPictures = lost
+        decodeStatsBaselineValid = true
     }
 
-    /**
-     * 停止画面卡死检测
-     */
-    private fun stopFreezeDetection() {
-        freezeDetectionRunnable?.let {
-            freezeDetectionHandler.removeCallbacks(it)
-        }
-        freezeDetectionRunnable = null
-        // 清理所有可能的 pending callbacks，防止 Handler 导致内存泄露
-        freezeDetectionHandler.removeCallbacksAndMessages(null)
-    }
-
-    /**
-     * 尝试从画面卡死中恢复
-     * 策略：暂停再播放（最简单且有效的恢复方式）
-     */
-    private fun attemptFreezeRecovery() {
-        val wasPlaying = isPlaying
-        if (wasPlaying) {
-            logger.info { "Freeze recovery: toggling play/pause" }
-            pause()
-            freezeDetectionHandler.postDelayed({
-                if (isPlaying.not()) {
-                    start()
-                }
-            }, 500)
-        }
+    init {
+        // 必须放在所有属性初始化器之后：Kotlin 按声明顺序执行初始化，
+        // 提前调用会让 initPlayer() 读到尚未初始化的字段（如 vlcEventListener）。
+        initPlayer()
     }
 
     companion object {
         private val logger = KotlinLogging.logger { }
-        private var libsLoaded = false
 
-        /**
-         * 像素对齐常量
-         * MTK 和部分高通芯片要求 SurfaceView 的宽高必须是 16 或 32 的倍数
-         */
-        private const val PIXEL_ALIGNMENT = 32
+        private const val SEEK_TIMEOUT_MS = 10_000L // VLC 缓冲可能很慢
+        private const val REBUFFER_NOTICE_DELAY_MS = 400L
+        private const val FREEZE_THRESHOLD_MS = 5_000L
+        private const val FREEZE_CHECK_INTERVAL_MS = 5_000L
+        private const val FREEZE_RECOVERY_RESUME_DELAY_MS = 500L
+        private const val DECODE_STATS_INTERVAL_MS = 2_000L
+        private const val MIN_FRAMES_PER_STATS_SAMPLE = 20
+        private const val OVERLOAD_SAMPLES_REQUIRED = 3
 
-        /**
-         * 将数值对齐到指定的倍数
-         * @param value 原始值
-         * @param alignment 对齐倍数（16 或 32）
-         * @return 对齐后的值（向下取整到最接近的 alignment 倍数）
-         */
-        private fun alignTo(value: Int, alignment: Int = PIXEL_ALIGNMENT): Int {
-            return (value / alignment) * alignment
+        /** network-caching 同时是起播前的预缓冲量和稳态目标缓冲量，过大会拖慢起播和 seek */
+        private const val NETWORK_CACHING_LIVE_MS = 1_500
+        private const val NETWORK_CACHING_VOD_MS = 3_000
+        private const val NETWORK_CACHING_EXPANDED_MS = 8_000
+
+        private val releaseExecutor = Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "vlc-release")
+        }
+
+        @Volatile
+        private var sharedLibVlc: LibVLC? = null
+        private val libVlcLock = Any()
+
+        internal fun resolveNetworkCachingMs(options: VideoPlayerOptions): Int = when {
+            options.expandBuffer -> NETWORK_CACHING_EXPANDED_MS
+            options.isLive -> NETWORK_CACHING_LIVE_MS
+            else -> NETWORK_CACHING_VOD_MS
         }
 
         /**
-         * 将数值对齐到指定的倍数（向上取整）
-         * @param value 原始值
-         * @param alignment 对齐倍数（16 或 32）
-         * @return 对齐后的值（向上取整到最接近的 alignment 倍数）
+         * LibVLC 实例进程级复用：加载模块列表耗时较长且实例间没有差异（网络缓存等按 Media 设置），
+         * 与官方 VLC-Android 的 VLCInstance 单例做法一致。
          */
-        private fun alignToCeil(value: Int, alignment: Int = PIXEL_ALIGNMENT): Int {
-            return ((value + alignment - 1) / alignment) * alignment
-        }
-
-        /**
-         * 计算对齐后的尺寸，确保不超过容器尺寸
-         * @param desired 期望的尺寸
-         * @param max 容器的最大尺寸
-         * @param alignment 对齐倍数
-         * @return 对齐后的尺寸（保证 <= max）
-         */
-        private fun calculateAlignedSize(desired: Int, max: Int, alignment: Int = PIXEL_ALIGNMENT): Int {
-            val aligned = alignTo(desired, alignment)
-            // 如果对齐后为 0 或超过最大值，尝试向下对齐
-            return when {
-                aligned == 0 -> alignment
-                aligned > max -> alignTo(max, alignment)
-                else -> aligned
-            }
-        }
-
-        /**
-         * 加载 VLC native 库
-         * 优先从 vlc_libs 目录加载按需下载的库，回退到 APK 内置库
-         */
-        private fun loadVlcNativeLibs(context: Context) {
-            if (libsLoaded) {
-                logger.debug { "VLC libs already loaded" }
-                return
-            }
-
-            try {
-                val vlcLibsDir = File(context.filesDir, "vlc_libs")
-                val libvlcFile = File(vlcLibsDir, "libvlc.so")
-                val cxxFile = File(vlcLibsDir, "libc++_shared.so")
-                val libvlcjniFile = File(vlcLibsDir, "libvlcjni.so")
-
-                val downloadedLibraries = listOf(cxxFile, libvlcFile, libvlcjniFile)
-                val downloadedLibrariesReady = downloadedLibraries.all {
-                    NativeLibraryAbi.isCompatibleWithCurrentProcess(it)
+        private fun obtainSharedLibVlc(context: Context): LibVLC {
+            sharedLibVlc?.let { return it }
+            synchronized(libVlcLock) {
+                sharedLibVlc?.let { return it }
+                val libOptions = VLCOptions.getLibOptions(
+                    context = context,
+                    config = VLCConfig.Builder()
+                        // 倍速播放时保持音调（scaletempo），本项目倍速是核心功能
+                        .setEnableTimeStretching(true)
+                        // LibVLC 级别默认值；实际生效的是 buildMedia() 中的 :network-caching
+                        .setNetworkCaching(NETWORK_CACHING_VOD_MS)
+                        // release 包不输出 -vv 级别日志
+                        .setVerboseMode(BuildConfig.DEBUG)
+                        .build()
+                )
+                return LibVLC(context, libOptions).also {
+                    sharedLibVlc = it
+                    logger.info { "Created shared LibVLC instance" }
                 }
-
-                if (downloadedLibrariesReady) {
-                    // 加载按需下载的库
-                    logger.info { "[VLC-DEBUG] Loading VLC libs from: $vlcLibsDir" }
-                    // 按序加载
-                    // 1. libc++_shared
-                    System.load(cxxFile.absolutePath)
-                    logger.info { "[VLC-DEBUG] Loaded libc++_shared from ${cxxFile.absolutePath}" }
-
-                    // 2. libvlc.so
-                    System.load(libvlcFile.absolutePath)
-                    logger.info { "[VLC-DEBUG] Loaded libvlc from ${libvlcFile.absolutePath}" }
-
-                    // 3. libvlcjni.so
-                    System.load(libvlcjniFile.absolutePath)
-                    logger.info { "[VLC-DEBUG] Loaded libvlcjni from ${libvlcjniFile.absolutePath}" }
-                } else {
-                    if (downloadedLibraries.any { it.exists() }) {
-                        logger.warn {
-                            "Ignoring incomplete or wrong-bitness VLC libraries in $vlcLibsDir"
-                        }
-                    }
-                    // 回退到 APK 内置库
-                    logger.info { "[VLC-DEBUG] Loading VLC libs from APK (AAR built-in)" }
-                    try {
-                        System.loadLibrary("c++_shared")
-                        logger.info { "[VLC-DEBUG] Loaded libc++_shared from APK" }
-                    } catch (e: UnsatisfiedLinkError) {
-                        logger.debug { "libc++_shared already loaded or not available: ${e.message}" }
-                    }
-
-                    System.loadLibrary("vlc")
-                    logger.info { "[VLC-DEBUG] Loaded libvlc from APK" }
-                }
-
-                libsLoaded = true
-            } catch (e: Exception) {
-                logger.error(e) { "Failed to load VLC native libraries" }
-                throw e
             }
         }
     }

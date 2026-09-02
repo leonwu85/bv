@@ -94,7 +94,7 @@ object VLCOptions {
         // ========== 缓存配置 ==========
         // 网络缓存（官方默认: 0）
         if (config.networkCaching > 0) {
-            options.add("--network-caching=$config.networkCaching")
+            options.add("--network-caching=${config.networkCaching}")
         }
 
         // ========== 音频重采样器（官方: soxr） ==========
@@ -109,7 +109,7 @@ object VLCOptions {
         if (config.isVLC4) {
             options.add("--sub-text-scale=" + (1600 / config.subtitlesSize.toFloat()))
         } else {
-            options.add("--freetype-rel-fontsize=$config.subtitlesSize")
+            options.add("--freetype-rel-fontsize=${config.subtitlesSize}")
         }
 
         // 字幕粗体
@@ -120,7 +120,7 @@ object VLCOptions {
         // 字幕颜色
         val freetypeColor = Integer.decode(String.format("0x%06X", (0xFFFFFF and config.subtitlesColor)))
         options.add("--freetype-color=$freetypeColor")
-        options.add("--freetype-opacity=$config.subtitlesColorOpacity")
+        options.add("--freetype-opacity=${config.subtitlesColorOpacity}")
 
         // 字幕背景
         if (config.subtitlesBackground) {
@@ -128,7 +128,7 @@ object VLCOptions {
                 String.format("0x%06X", (0xFFFFFF and config.subtitlesBackgroundColor))
             )
             options.add("--freetype-background-color=$freetypeBackgroundColor")
-            options.add("--freetype-background-opacity=$config.subtitlesBackgroundColorOpacity")
+            options.add("--freetype-background-opacity=${config.subtitlesBackgroundColorOpacity}")
         } else {
             options.add("--freetype-background-opacity=0")
         }
@@ -139,19 +139,19 @@ object VLCOptions {
                 String.format("0x%06X", (0xFFFFFF and config.subtitlesShadowColor))
             )
             options.add("--freetype-shadow-color=$freetypeShadowColor")
-            options.add("--freetype-shadow-opacity=$config.subtitlesShadowOpacity")
+            options.add("--freetype-shadow-opacity=${config.subtitlesShadowOpacity}")
         } else {
             options.add("--freetype-shadow-opacity=0")
         }
 
         // 字幕描边
         if (config.subtitlesOutline) {
-            options.add("--freetype-outline-thickness=$config.subtitlesOutlineSize")
+            options.add("--freetype-outline-thickness=${config.subtitlesOutlineSize}")
             val freetypeOutlineColor = Integer.decode(
                 String.format("0x%06X", (0xFFFFFF and config.subtitlesOutlineColor))
             )
             options.add("--freetype-outline-color=$freetypeOutlineColor")
-            options.add("--freetype-outline-opacity=$config.subtitlesOutlineOpacity")
+            options.add("--freetype-outline-opacity=${config.subtitlesOutlineOpacity}")
         } else {
             options.add("--freetype-outline-opacity=0")
         }
@@ -184,7 +184,7 @@ object VLCOptions {
             } else {
                 options.add("--no-sout-chromecast-audio-passthrough")
             }
-            options.add("--sout-chromecast-conversion-quality=$config.castingQuality")
+            options.add("--sout-chromecast-conversion-quality=${config.castingQuality}")
         }
 
         // ========== Sout keep（官方） ==========
@@ -231,7 +231,7 @@ object VLCOptions {
         }
 
         // ========== Preferred resolution（官方） ==========
-        options.add("--preferred-resolution=$config.preferredResolution")
+        options.add("--preferred-resolution=${config.preferredResolution}")
 
         // 调试日志
         if (config.debugLogging) {
