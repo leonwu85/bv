@@ -22,7 +22,10 @@ import dev.aaa1115910.biliapi.http.entity.video.isInteractiveVideo
 import dev.aaa1115910.biliapi.grpc.utils.handleGrpcException
 import dev.aaa1115910.biliapi.http.BiliHttpApi
 import dev.aaa1115910.biliapi.http.entity.user.garb.EquipPart
+import dev.aaa1115910.biliapi.util.AvBvConverter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.koin.core.annotation.Single
@@ -140,86 +143,75 @@ class VideoDetailRepository(
                     // 串行执行：获取视频详情
                     val videoDetailWithoutUserActions = run {
                         val httpVideoDetail = BiliHttpApi.getVideoDetail(
-                            av = aid,
+                            bv = AvBvConverter.av2bv(aid),
                             sessData = authRepository.sessionData ?: ""
                         ).getResponseData()
                         VideoDetail.fromVideoDetail(httpVideoDetail)
                     }
 
-                    // 声明变量
-                    var isLiked = false
-                    var isFavoured = false
-                    var isCoined = false
+                    val hasWebSession = !authRepository.sessionData.isNullOrBlank()
+                    coroutineScope {
+                        // These requests are independent. Running them concurrently keeps detail
+                        // loading bounded by the slowest request instead of their combined latency.
+                        val likedDeferred = async {
+                            if (!withUserActions || !hasWebSession) return@async false
+                            runCatching {
+                                likeRepository.checkVideoLike(
+                                    aid = aid,
+                                    preferApiType = ApiType.Web
+                                )
+                            }.onFailure {
+                                println("Check video liked failed: $it")
+                            }.getOrDefault(false)
+                        }
+                        val coinedDeferred = async {
+                            if (!withUserActions || !hasWebSession) return@async false
+                            runCatching {
+                                coinRepository.checkVideoCoin(
+                                    aid = aid,
+                                    preferApiType = ApiType.Web
+                                )
+                            }.onFailure {
+                                println("Check video coined failed: $it")
+                            }.getOrDefault(false)
+                        }
+                        val favouredDeferred = async {
+                            if (!withUserActions || !hasWebSession) return@async false
+                            runCatching {
+                                favoriteRepository.checkVideoFavoured(
+                                    aid = aid,
+                                    preferApiType = ApiType.Web
+                                )
+                            }.onFailure {
+                                println("Check video favoured failed: $it")
+                            }.getOrDefault(false)
+                        }
+                        val historyDeferred = async {
+                            getWebVideoHistory(videoDetailWithoutUserActions)
+                        }
+                        val playerIconDeferred = async {
+                            runCatching {
+                                val videoModeInfo = BiliHttpApi.getVideoMoreInfo(
+                                    avid = aid,
+                                    cid = videoDetailWithoutUserActions.cid,
+                                    sessData = authRepository.sessionData ?: "",
+                                    buvid3 = authRepository.buvid3 ?: ""
+                                ).getResponseData()
+                                VideoDetail.PlayerIcon.fromPlayerIcon(videoModeInfo.playerIcon)
+                            }.onFailure {
+                                println("Get video player icon failed: $it")
+                            }.getOrDefault(null)
+                        }
 
-//                    if (withUserActions) {
-//                        // 检查点赞、收藏、投币状态
-//                        runCatching {
-//                            val archiveRelation = BiliHttpApi.getArchiveRelation(
-//                                avid = aid,
-//                                sessData = authRepository.sessionData ?: ""
-//                            ).getResponseData()
-//                            isLiked = archiveRelation.like
-//                            isCoined = archiveRelation.coin > 0
-//                            isFavoured = archiveRelation.favorite
-//                        }.onFailure {
-//                            println("Check video relation failed: $it")
-//                        }
-//                    }
-                    if (withUserActions) {
-                        // 串行执行：检查点赞状态
-                        isLiked = runCatching {
-                            likeRepository.checkVideoLike(
-                                aid = aid,
-                                preferApiType = ApiType.Web
-                            )
-                        }.onFailure {
-                            println("Check video liked failed: $it")
-                        }.getOrDefault(false)
-
-                        // 串行执行：检查投币状态
-                        isCoined =  runCatching {
-                            coinRepository.checkVideoCoin(
-                                aid = aid,
-                                preferApiType = ApiType.Web
-                            )
-                        }.onFailure {
-                            println("Check video liked failed: $it")
-                        }.getOrDefault(false)
-
-                        // 串行执行：检查收藏状态
-                        isFavoured = runCatching {
-                            favoriteRepository.checkVideoFavoured(
-                                aid = aid,
-                                preferApiType = ApiType.Web
-                            )
-                        }.onFailure {
-                            println("Check video favoured failed: $it")
-                        }.getOrDefault(false)
-                    }
-
-                    val history = getWebVideoHistory(videoDetailWithoutUserActions)
-
-                    // 串行执行：获取播放器图标
-                    val playerIcon = runCatching {
-                        val videoModeInfo = BiliHttpApi.getVideoMoreInfo(
-                            avid = aid,
-                            cid = videoDetailWithoutUserActions.cid,
-                            sessData = authRepository.sessionData ?: "",
-                            buvid3 = authRepository.buvid3 ?: ""
-                        ).getResponseData()
-                        VideoDetail.PlayerIcon.fromPlayerIcon(videoModeInfo.playerIcon)
-                    }.onFailure {
-                        println("Get video player icon failed: $it")
-                    }.getOrDefault(null)
-
-                    // 更新并返回结果
-                    videoDetailWithoutUserActions.apply {
-                        userActions.like = isLiked
-                        userActions.coin = isCoined
-                        userActions.favorite = isFavoured
-                        this.history = history
-                        this.playerIcon = playerIcon
-                        fillInteractiveInfo(this, knownInteractive = this.isInteractive)
+                        videoDetailWithoutUserActions.apply {
+                            userActions.like = likedDeferred.await()
+                            userActions.coin = coinedDeferred.await()
+                            userActions.favorite = favouredDeferred.await()
+                            history = historyDeferred.await()
+                            playerIcon = playerIconDeferred.await()
+                        }
+                    }.apply {
+                        fillInteractiveInfo(this, knownInteractive = isInteractive)
                     }
                 }
             }

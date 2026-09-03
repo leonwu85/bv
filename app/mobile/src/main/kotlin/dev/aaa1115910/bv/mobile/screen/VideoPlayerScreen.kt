@@ -527,6 +527,15 @@ fun VideoPlayerScreen(
     var activeDlnaSession by remember { mutableStateOf<DlnaCastSession?>(null) }
     var offlineCacheDialogLoading by remember { mutableStateOf(false) }
     val offlineCacheState = playerViewModel.offlineCacheState
+    val dlnaAvailable = activeDlnaSession != null ||
+        (!playerViewModel.isLive && !playerViewModel.currentPlaybackOffline)
+    val openDlna: () -> Unit = {
+        if (activeDlnaSession == null) {
+            showDlnaDialog = true
+        } else {
+            showDlnaControlDialog = true
+        }
+    }
 
     LaunchedEffect(isInPictureInPictureMode) {
         if (isInPictureInPictureMode) {
@@ -963,7 +972,13 @@ fun VideoPlayerScreen(
                                 .fillMaxWidth()
                                 .aspectRatio(16f / 9f),
                             isFullScreen = isVideoFullscreen || isInPictureInPictureMode,
+                            isInPictureInPictureMode = isInPictureInPictureMode,
                             controlsEnabled = !isInPictureInPictureMode,
+                            dlnaAvailable = dlnaAvailable,
+                            dlnaSessionActive = activeDlnaSession != null,
+                            pictureInPictureSupported = pictureInPictureSupported,
+                            onCast = openDlna,
+                            onEnterPictureInPicture = onEnterPictureInPicture,
                             videoPlayer = playerViewModel.videoPlayer!!,
                             danmakuPlayer = playerViewModel.danmakuPlayer,
                             onClearBackToHistoryData = { playerViewModel.lastPlayed = 0 },
@@ -1315,8 +1330,7 @@ fun VideoPlayerScreen(
                                                     savingCover = savingCoverImage,
                                                     offlineCacheState = offlineCacheState,
                                                     offlinePlayback = playerViewModel.currentPlaybackOffline,
-                                                    dlnaAvailable = activeDlnaSession != null ||
-                                                        (!playerViewModel.isLive && !playerViewModel.currentPlaybackOffline),
+                                                    dlnaAvailable = dlnaAvailable,
                                                     dlnaSessionActive = activeDlnaSession != null,
                                                     pictureInPictureSupported = pictureInPictureSupported,
                                                     onToggleLike = { launchVideoAction { videoDetailViewModel.toggleLike() } },
@@ -1331,13 +1345,7 @@ fun VideoPlayerScreen(
                                                     },
                                                     onToggleToView = { launchVideoAction { videoDetailViewModel.toggleToView() } },
                                                     onShare = shareVideo,
-                                                    onCast = {
-                                                        if (activeDlnaSession == null) {
-                                                            showDlnaDialog = true
-                                                        } else {
-                                                            showDlnaControlDialog = true
-                                                        }
-                                                    },
+                                                    onCast = openDlna,
                                                     onEnterPictureInPicture = onEnterPictureInPicture,
                                                     onSaveCover = saveCover,
                                                     onCacheVideo = { showOfflineCacheDialog = true },
@@ -1526,8 +1534,7 @@ fun VideoPlayerScreen(
                                 savingCover = savingCoverImage,
                                 offlineCacheState = offlineCacheState,
                                 offlinePlayback = playerViewModel.currentPlaybackOffline,
-                                dlnaAvailable = activeDlnaSession != null ||
-                                    (!playerViewModel.isLive && !playerViewModel.currentPlaybackOffline),
+                                dlnaAvailable = dlnaAvailable,
                                 dlnaSessionActive = activeDlnaSession != null,
                                 pictureInPictureSupported = pictureInPictureSupported,
                                 onToggleLike = { launchVideoAction { videoDetailViewModel.toggleLike() } },
@@ -1542,13 +1549,7 @@ fun VideoPlayerScreen(
                                 },
                                 onToggleToView = { launchVideoAction { videoDetailViewModel.toggleToView() } },
                                 onShare = shareVideo,
-                                onCast = {
-                                    if (activeDlnaSession == null) {
-                                        showDlnaDialog = true
-                                    } else {
-                                        showDlnaControlDialog = true
-                                    }
-                                },
+                                onCast = openDlna,
                                 onEnterPictureInPicture = onEnterPictureInPicture,
                                 onSaveCover = saveCover,
                                 onCacheVideo = { showOfflineCacheDialog = true },

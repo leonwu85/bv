@@ -480,13 +480,33 @@ class VideoPlayRepository(
         cid: Long,
         epid: Int? = null,
         seasonId: Int? = null,
-    ): VideoPlayerInfo = BiliHttpApi.getVideoPlayerWbiInfo(
-        av = aid,
-        cid = cid,
-        epid = epid,
-        seasonId = seasonId,
-        sessData = authRepository.sessionData
-    ).getResponseData()
+    ): VideoPlayerInfo {
+        val isUgcRequest = epid?.takeIf { it > 0 } == null &&
+            seasonId?.takeIf { it > 0 } == null
+        if (isUgcRequest) {
+            return BiliHttpApi.getVideoMoreInfo(
+                avid = aid,
+                cid = cid,
+                sessData = authRepository.sessionData ?: "",
+                buvid3 = authRepository.buvid3 ?: ""
+            ).getResponseData().let { info ->
+                VideoPlayerInfo(
+                    interaction = info.interaction,
+                    lastPlayTime = info.lastPlayTime,
+                    lastPlayCid = info.lastPlayCid,
+                    viewPoints = info.viewPoints
+                )
+            }
+        }
+
+        return BiliHttpApi.getVideoPlayerWbiInfo(
+            av = aid,
+            cid = cid,
+            epid = epid,
+            seasonId = seasonId,
+            sessData = authRepository.sessionData
+        ).getResponseData()
+    }
 
     suspend fun getSubtitle(
         aid: Long,

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Fullscreen
@@ -21,6 +22,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -32,6 +34,7 @@ import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekData
 import dev.aaa1115910.bv.player.entity.VideoPlayerStateData
+import dev.aaa1115910.bv.player.mobile.R
 import dev.aaa1115910.bv.player.mobile.VideoSeekBar
 import dev.aaa1115910.bv.util.formatHourMinSec
 
@@ -43,6 +46,11 @@ fun MiniControllers(
     onPause: () -> Unit,
     onEnterFullScreen: () -> Unit,
     onSeekToPosition: (Long) -> Unit,
+    dlnaAvailable: Boolean = false,
+    dlnaSessionActive: Boolean = false,
+    pictureInPictureSupported: Boolean = false,
+    onCast: () -> Unit = {},
+    onEnterPictureInPicture: () -> Unit = {},
 ) {
     val videoPlayerVideoInfoData = LocalVideoPlayerVideoInfoData.current
     Box(
@@ -54,6 +62,11 @@ fun MiniControllers(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth(),
             onBack = onBack,
+            dlnaAvailable = dlnaAvailable,
+            dlnaSessionActive = dlnaSessionActive,
+            pictureInPictureSupported = pictureInPictureSupported,
+            onCast = onCast,
+            onEnterPictureInPicture = onEnterPictureInPicture,
             title = videoPlayerVideoInfoData.displayTitle()
         )
         BottomControllers(
@@ -72,6 +85,11 @@ fun MiniControllers(
 private fun TopControllers(
     modifier: Modifier = Modifier,
     onBack: () -> Unit,
+    dlnaAvailable: Boolean,
+    dlnaSessionActive: Boolean,
+    pictureInPictureSupported: Boolean,
+    onCast: () -> Unit,
+    onEnterPictureInPicture: () -> Unit,
     title: String
 ) {
     Box(
@@ -85,16 +103,43 @@ private fun TopControllers(
             IconButton(onClick = onBack) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = null,
+                    contentDescription = "返回",
                     tint = Color.White
                 )
             }
             Text(
+                modifier = Modifier.weight(1f),
                 text = title,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = Color.White
             )
+            if (dlnaAvailable) {
+                IconButton(onClick = onCast) {
+                    Icon(
+                        modifier = Modifier.size(24.dp),
+                        painter = painterResource(R.drawable.ic_player_cast_image2),
+                        contentDescription = if (dlnaSessionActive) "投屏控制" else "投屏",
+                        tint = if (dlnaSessionActive) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            Color.White
+                        }
+                    )
+                }
+            }
+            if (pictureInPictureSupported) {
+                IconButton(onClick = onEnterPictureInPicture) {
+                    Icon(
+                        modifier = Modifier.size(24.dp),
+                        painter = painterResource(
+                            R.drawable.ic_player_picture_in_picture_image2
+                        ),
+                        contentDescription = "画中画",
+                        tint = Color.White
+                    )
+                }
+            }
         }
     }
 }
@@ -232,6 +277,8 @@ fun MiniControllerPreview() {
                 onPause = {},
                 onEnterFullScreen = {},
                 onSeekToPosition = {},
+                dlnaAvailable = true,
+                pictureInPictureSupported = true,
             )
         }
     }

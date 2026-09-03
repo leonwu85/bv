@@ -34,6 +34,7 @@ fun AkDanmakuPlayer(
     visible: Boolean = true,
     maskBitmap: Bitmap? = null,
     videoAspectRatio: Float = 0f,
+    releaseDanmakuPlayerOnDispose: Boolean = true,
     onVideoDanmakuSurfaceViewReady: ((VideoDanmakuSurfaceView?) -> Unit)? = null,
     onVideoDanmakuSurfaceViewRelease: ((VideoDanmakuSurfaceView) -> Unit)? = null,
     onDanmakuPlayerBound: ((DanmakuPlayer) -> Unit)? = null,
@@ -44,6 +45,7 @@ fun AkDanmakuPlayer(
         visible = visible,
         maskBitmap = maskBitmap,
         videoAspectRatio = videoAspectRatio,
+        releaseDanmakuPlayerOnDispose = releaseDanmakuPlayerOnDispose,
         onVideoDanmakuSurfaceViewReady = onVideoDanmakuSurfaceViewReady,
         onVideoDanmakuSurfaceViewRelease = onVideoDanmakuSurfaceViewRelease,
         onDanmakuPlayerBound = onDanmakuPlayerBound,
@@ -58,6 +60,8 @@ fun AkDanmakuPlayer(
  *
  * @param isLiveMode
  * @param onLiveDanmakuPlayerReady
+ * @param releaseDanmakuPlayerOnDispose whether this renderer owns and releases [danmakuPlayer].
+ * Callers that keep the player in an Activity or ViewModel must pass `false`.
  */
 @Composable
 fun AkDanmakuPlayer(
@@ -66,6 +70,7 @@ fun AkDanmakuPlayer(
     visible: Boolean = true,
     maskBitmap: Bitmap? = null,
     videoAspectRatio: Float = 0f,
+    releaseDanmakuPlayerOnDispose: Boolean = true,
     onVideoDanmakuSurfaceViewReady: ((VideoDanmakuSurfaceView?) -> Unit)? = null,
     onVideoDanmakuSurfaceViewRelease: ((VideoDanmakuSurfaceView) -> Unit)? = null,
     onDanmakuPlayerBound: ((DanmakuPlayer) -> Unit)? = null,
@@ -80,10 +85,12 @@ fun AkDanmakuPlayer(
     val currentOnVideoDanmakuSurfaceViewReady by rememberUpdatedState(onVideoDanmakuSurfaceViewReady)
     val currentOnVideoDanmakuSurfaceViewRelease by rememberUpdatedState(onVideoDanmakuSurfaceViewRelease)
 
-    DisposableEffect(danmakuPlayer, isLiveMode) {
+    DisposableEffect(danmakuPlayer, isLiveMode, releaseDanmakuPlayerOnDispose) {
         onDispose {
             if (!isLiveMode) {
-                danmakuPlayer?.release()
+                if (releaseDanmakuPlayerOnDispose) {
+                    danmakuPlayer?.release()
+                }
             } else {
                 liveDanmakuPlayer?.release()
             }

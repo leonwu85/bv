@@ -95,7 +95,8 @@ data class VideoMoreInfo(
     @SerialName("player_icon")
     val playerIcon: PlayerIcon? = null,
     @SerialName("view_points")
-    val viewPoints: JsonArray,
+    val viewPoints: List<VideoPlayerInfo.ViewPoint> = emptyList(),
+    val interaction: VideoPlayerInfo.Interaction? = null,
     @SerialName("is_ugc_pay_preview")
     val isUgcPayPreview: Boolean,
     @SerialName("preview_toast")

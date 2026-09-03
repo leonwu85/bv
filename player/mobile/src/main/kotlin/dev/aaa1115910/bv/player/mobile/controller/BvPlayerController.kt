@@ -123,18 +123,13 @@ fun BvPlayerController(
     currentSponsorSegment: SponsorSegment? = null,
     onSkipSponsorSegment: () -> Unit = {},
     onDismissSponsorBlockTip: () -> Unit = {},
+    dlnaAvailable: Boolean = false,
+    dlnaSessionActive: Boolean = false,
+    pictureInPictureSupported: Boolean = false,
+    onCast: () -> Unit = {},
+    onEnterPictureInPicture: () -> Unit = {},
     content: @Composable BoxScope.() -> Unit
 ) {
-    if (!controlsEnabled) {
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .background(Color.Black),
-            content = content
-        )
-        return
-    }
-
     val context = LocalContext.current
     val density = LocalDensity.current
     val view = LocalView.current
@@ -146,7 +141,7 @@ fun BvPlayerController(
 
     var isMenuOpen by remember { mutableStateOf(false) }
     val videoContentWidth by animateFloatAsState(
-        targetValue = if (isMenuOpen) 0.7f else 1f
+        targetValue = if (controlsEnabled && isMenuOpen) 0.7f else 1f
     )
     val settingsContentOffset by remember(screenHeight, screenWidth) {
         derivedStateOf {
@@ -167,8 +162,12 @@ fun BvPlayerController(
         if (!isFullScreen) isMenuOpen = false
     }
 
+    // Keep the media content in one composition slot when PiP only hides the controls. Moving it
+    // between branches disposes AndroidView surfaces and can release externally owned players.
     Box(
-        modifier = modifier.fillMaxSize()
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
     ) {
         Row(
             modifier = Modifier
@@ -179,6 +178,7 @@ fun BvPlayerController(
                 modifier = Modifier.fillMaxSize(),
                 isMenuOpen = isMenuOpen,
                 isFullScreen = isFullScreen,
+                controlsEnabled = controlsEnabled,
                 onEnterFullScreen = onEnterFullScreen,
                 onExitFullScreen = onExitFullScreen,
                 onBack = onBack,
@@ -193,6 +193,11 @@ fun BvPlayerController(
                 onOpenDanmakuMenu = { openMenu(MenuType.Danmaku) },
                 onOpenListMenu = { openMenu(MenuType.List) },
                 onCloseMenu = { isMenuOpen = false },
+                dlnaAvailable = dlnaAvailable,
+                dlnaSessionActive = dlnaSessionActive,
+                pictureInPictureSupported = pictureInPictureSupported,
+                onCast = onCast,
+                onEnterPictureInPicture = onEnterPictureInPicture,
                 showSponsorBlockTip = showSponsorBlockTip,
                 showAutoSkipSponsorTip = showAutoSkipSponsorTip,
                 autoSkipSponsorSeconds = autoSkipSponsorSeconds,
@@ -210,41 +215,43 @@ fun BvPlayerController(
             }
         }
 
-        Row(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .fillMaxHeight()
-                .fillMaxWidth(0.3f)
-                .offset {
-                    IntOffset(
-                        x = with(density) { settingsContentOffset.roundToPx() },
-                        y = 0
-                    )
-                }
-                .background(Color.Black)
-        ) {
-            BvPlayerControllerSettings(
-                modifier = Modifier.fillMaxSize(),
-                menuType = menuType,
-                onCloseMenu = { isMenuOpen = false },
-                onChangeResolution = onChangeResolution,
-                onChangeVideoCodec = onChangeVideoCodec,
-                onChangeAudio = onChangeAudio,
-                onChangeLiveQuality = onChangeLiveQuality,
-                onChangeLiveCodec = onChangeLiveCodec,
-                onChangeLiveLine = onChangeLiveLine,
-                onChangeSpeed = onChangeSpeed,
-                onEnabledDanmakuTypesChange = onEnabledDanmakuTypesChange,
-                onDanmakuOpacityChange = onDanmakuOpacityChange,
-                onDanmakuScaleChange = onDanmakuScaleChange,
-                onDanmakuAreaChange = onDanmakuAreaChange,
-                onDanmakuSpeedModeChange = onDanmakuSpeedModeChange,
-                onDanmakuPresentationSpeedChange = onDanmakuPresentationSpeedChange,
-                onDanmakuMergeChange = onDanmakuMergeChange,
-                onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
-                onPlayModeChange = onPlayModeChange,
-                onPlayNewVideo = onPlayNewVideo
-            )
+        if (controlsEnabled) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.3f)
+                    .offset {
+                        IntOffset(
+                            x = with(density) { settingsContentOffset.roundToPx() },
+                            y = 0
+                        )
+                    }
+                    .background(Color.Black)
+            ) {
+                BvPlayerControllerSettings(
+                    modifier = Modifier.fillMaxSize(),
+                    menuType = menuType,
+                    onCloseMenu = { isMenuOpen = false },
+                    onChangeResolution = onChangeResolution,
+                    onChangeVideoCodec = onChangeVideoCodec,
+                    onChangeAudio = onChangeAudio,
+                    onChangeLiveQuality = onChangeLiveQuality,
+                    onChangeLiveCodec = onChangeLiveCodec,
+                    onChangeLiveLine = onChangeLiveLine,
+                    onChangeSpeed = onChangeSpeed,
+                    onEnabledDanmakuTypesChange = onEnabledDanmakuTypesChange,
+                    onDanmakuOpacityChange = onDanmakuOpacityChange,
+                    onDanmakuScaleChange = onDanmakuScaleChange,
+                    onDanmakuAreaChange = onDanmakuAreaChange,
+                    onDanmakuSpeedModeChange = onDanmakuSpeedModeChange,
+                    onDanmakuPresentationSpeedChange = onDanmakuPresentationSpeedChange,
+                    onDanmakuMergeChange = onDanmakuMergeChange,
+                    onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
+                    onPlayModeChange = onPlayModeChange,
+                    onPlayNewVideo = onPlayNewVideo
+                )
+            }
         }
     }
 }
@@ -345,6 +352,7 @@ fun BvPlayerControllerVideoContent(
     modifier: Modifier = Modifier,
     isMenuOpen: Boolean,
     isFullScreen: Boolean,
+    controlsEnabled: Boolean = true,
     onEnterFullScreen: () -> Unit,
     onExitFullScreen: () -> Unit,
     onBack: () -> Unit,
@@ -359,6 +367,11 @@ fun BvPlayerControllerVideoContent(
     onOpenDanmakuMenu: () -> Unit,
     onOpenListMenu: () -> Unit,
     onCloseMenu: () -> Unit,
+    dlnaAvailable: Boolean = false,
+    dlnaSessionActive: Boolean = false,
+    pictureInPictureSupported: Boolean = false,
+    onCast: () -> Unit = {},
+    onEnterPictureInPicture: () -> Unit = {},
     showSponsorBlockTip: Boolean = false,
     showAutoSkipSponsorTip: Boolean = false,
     autoSkipSponsorSeconds: Int = 0,
@@ -502,8 +515,10 @@ fun BvPlayerControllerVideoContent(
     Box(
         modifier = modifier
             .background(Color.Black)
-    ) {
+    ) playerContent@{
         content()
+
+        if (!controlsEnabled) return@playerContent
 
         if (videoPlayerStateData.isBuffering && !videoPlayerStateData.isError && !showManualStartOverlay) {
             BufferingTip(modifier = Modifier.align(Alignment.Center))
@@ -630,6 +645,11 @@ fun BvPlayerControllerVideoContent(
                         showBaseUi = false
                         onOpenListMenu()
                     },
+                    dlnaAvailable = dlnaAvailable,
+                    dlnaSessionActive = dlnaSessionActive,
+                    pictureInPictureSupported = pictureInPictureSupported,
+                    onCast = onCast,
+                    onEnterPictureInPicture = onEnterPictureInPicture,
                     onOpenMoreMenu = {
                         showBaseUi = false
                         onOpenMoreMenu()
@@ -641,7 +661,12 @@ fun BvPlayerControllerVideoContent(
                     onPlay = onPlay,
                     onPause = onPause,
                     onEnterFullScreen = onEnterFullScreen,
-                    onSeekToPosition = onSeekToPosition
+                    onSeekToPosition = onSeekToPosition,
+                    dlnaAvailable = dlnaAvailable,
+                    dlnaSessionActive = dlnaSessionActive,
+                    pictureInPictureSupported = pictureInPictureSupported,
+                    onCast = onCast,
+                    onEnterPictureInPicture = onEnterPictureInPicture
                 )
             }
         }

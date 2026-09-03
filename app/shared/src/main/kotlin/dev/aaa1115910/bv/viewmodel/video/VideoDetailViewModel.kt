@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
 import dev.aaa1115910.biliapi.entity.user.Author
@@ -35,8 +36,11 @@ import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.swapListWithMainContext
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import org.koin.core.annotation.KoinViewModel
 import java.util.Date
@@ -77,8 +81,10 @@ class VideoDetailViewModel(
     var inToView by mutableStateOf(false)
     var userActionUpdating by mutableStateOf(false)
     var favoriteFoldersLoading by mutableStateOf(false)
+    private var supplementalDetailJob: Job? = null
 
     suspend fun loadDetail(aid: Long, fromPgcSeason: Boolean = false, withUserActions: Boolean = true) {
+        supplementalDetailJob?.cancel()
         logger.fInfo { "Load detail: [avid=$aid, preferApiType=${DETAIL_API_TYPE.name}]" }
         withContext(Dispatchers.Main.immediate) {
             state = VideoInfoState.Loading
@@ -114,11 +120,35 @@ class VideoDetailViewModel(
             logger.fInfo { "Load video av$aid success" }
 
             updateRelatedVideos()
-            refreshUpOwnerStats(loadedVideoDetail?.author?.mid ?: 0L)
-            if (Prefs.isLogin) {
-                refreshFavoriteFolders(aid)
-            }
+            loadSupplementalDetailData(
+                aid = aid,
+                mid = loadedVideoDetail?.author?.mid ?: 0L
+            )
         }.getOrThrow()
+    }
+
+    private fun loadSupplementalDetailData(aid: Long, mid: Long) {
+        supplementalDetailJob = viewModelScope.launch {
+            supervisorScope {
+                launch {
+                    runCatching { refreshUpOwnerStats(mid) }
+                        .onFailure {
+                            logger.fInfo {
+                                "Load up owner stats for av$aid failed: ${it.stackTraceToString()}"
+                            }
+                        }
+                }
+                if (Prefs.isLogin) {
+                    launch {
+                        refreshFavoriteFolders(aid).onFailure {
+                            logger.fInfo {
+                                "Load favorite folders for av$aid failed: ${it.stackTraceToString()}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     suspend fun loadDetailOnlyUpdateHistory(aid: Long) {
@@ -507,6 +537,10 @@ class VideoDetailViewModel(
                     preferApiType = DETAIL_API_TYPE
                 )
             }
+            val isCurrentVideo = withContext(Dispatchers.Main.immediate) {
+                videoDetail?.aid == aid
+            }
+            if (!isCurrentVideo) return@runCatching Unit
             favoriteFolders.swapListWithMainContext(folders)
             favoriteFolderIds.swapListWithMainContext(
                 folders.filter { it.videoInThisFav }.map { it.id }

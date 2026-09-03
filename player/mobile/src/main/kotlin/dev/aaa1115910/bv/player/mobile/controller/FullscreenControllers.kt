@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
@@ -36,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,6 +51,7 @@ import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekData
 import dev.aaa1115910.bv.player.entity.VideoPlayerStateData
+import dev.aaa1115910.bv.player.mobile.R
 import dev.aaa1115910.bv.player.mobile.VideoSeekBar
 import dev.aaa1115910.bv.player.mobile.noRippleClickable
 import dev.aaa1115910.bv.util.formatHourMinSec
@@ -69,7 +72,12 @@ fun FullscreenControllers(
     onToggleDanmaku: (Boolean) -> Unit,
     onShowDanmakuController: () -> Unit,
     onShowVideoListController: () -> Unit,
-    onOpenMoreMenu: () -> Unit
+    onOpenMoreMenu: () -> Unit,
+    dlnaAvailable: Boolean = false,
+    dlnaSessionActive: Boolean = false,
+    pictureInPictureSupported: Boolean = false,
+    onCast: () -> Unit = {},
+    onEnterPictureInPicture: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val videoPlayerSeekData = LocalVideoPlayerSeekData.current
@@ -85,6 +93,11 @@ fun FullscreenControllers(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .noRippleClickable { },
+            dlnaAvailable = dlnaAvailable,
+            dlnaSessionActive = dlnaSessionActive,
+            pictureInPictureSupported = pictureInPictureSupported,
+            onCast = onCast,
+            onEnterPictureInPicture = onEnterPictureInPicture,
             onOpenMoreMenu = onOpenMoreMenu,
             onExitFullScreen = onExitFullScreen,
             title = videoPlayerVideoInfoData.displayTitle()
@@ -118,6 +131,11 @@ fun FullscreenControllers(
 @Composable
 private fun TopControllers(
     modifier: Modifier = Modifier,
+    dlnaAvailable: Boolean,
+    dlnaSessionActive: Boolean,
+    pictureInPictureSupported: Boolean,
+    onCast: () -> Unit,
+    onEnterPictureInPicture: () -> Unit,
     onOpenMoreMenu: () -> Unit,
     onExitFullScreen: () -> Unit,
     title: String
@@ -134,14 +152,19 @@ private fun TopControllers(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            ControllerButtonGroup {
+            ControllerButtonGroup(
+                modifier = Modifier.weight(1f, fill = false)
+            ) {
                 IconButton(
                     onClick = onExitFullScreen,
                     colors = IconButtonDefaults.iconButtonColors(
                         contentColor = Color.White
                     )
                 ) {
-                    Icon(imageVector = Icons.Rounded.ArrowBackIosNew, contentDescription = null)
+                    Icon(
+                        imageVector = Icons.Rounded.ArrowBackIosNew,
+                        contentDescription = "退出全屏"
+                    )
                 }
                 Text(
                     modifier = Modifier.padding(end = 12.dp),
@@ -151,7 +174,43 @@ private fun TopControllers(
                     color = Color.White
                 )
             }
-            ControllerButtonGroup {
+            ControllerButtonGroup(
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                if (dlnaAvailable) {
+                    IconButton(
+                        onClick = onCast,
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = if (dlnaSessionActive) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                Color.White
+                            }
+                        )
+                    ) {
+                        Icon(
+                            modifier = Modifier.size(24.dp),
+                            painter = painterResource(R.drawable.ic_player_cast_image2),
+                            contentDescription = if (dlnaSessionActive) "投屏控制" else "投屏"
+                        )
+                    }
+                }
+                if (pictureInPictureSupported) {
+                    IconButton(
+                        onClick = onEnterPictureInPicture,
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(
+                            modifier = Modifier.size(24.dp),
+                            painter = painterResource(
+                                R.drawable.ic_player_picture_in_picture_image2
+                            ),
+                            contentDescription = "画中画"
+                        )
+                    }
+                }
                 IconButton(
                     onClick = {},
                     colors = IconButtonDefaults.iconButtonColors(
@@ -166,7 +225,10 @@ private fun TopControllers(
                         contentColor = Color.White
                     )
                 ) {
-                    Icon(imageVector = Icons.Rounded.MoreVert, contentDescription = null)
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = "更多设置"
+                    )
                 }
             }
         }
@@ -396,6 +458,8 @@ fun FullscreenControllerLightBackgroundPreview() {
             onToggleDanmaku = {},
             onShowDanmakuController = {},
             onShowVideoListController = {},
+            dlnaAvailable = true,
+            pictureInPictureSupported = true,
             onOpenMoreMenu = {}
         )
     }
@@ -429,6 +493,9 @@ fun FullscreenControllerDarkBackgroundPreview() {
             onToggleDanmaku = {},
             onShowDanmakuController = {},
             onShowVideoListController = {},
+            dlnaAvailable = true,
+            dlnaSessionActive = true,
+            pictureInPictureSupported = true,
             onOpenMoreMenu = {}
         )
     }

@@ -165,6 +165,8 @@ import kotlin.random.Random
 
 @Suppress("SpellCheckingInspection")
 object BiliHttpApi {
+    private const val VIDEO_MORE_INFO_CACHE_TTL_MILLIS = 30_000L
+
     private var endPoint: String = "api.bilibili.com"
     private lateinit var client: HttpClient
 
@@ -454,10 +456,15 @@ object BiliHttpApi {
         av: Long? = null,
         bv: String? = null,
         sessData: String? = null
-    ): BiliResponse<VideoDetail> = client.get("/x/web-interface/view/detail") {
-        parameter("aid", av)
-        parameter("bvid", bv)
-        sessData?.let { header("Cookie", "SESSDATA=$sessData;") }
+    ): BiliResponse<VideoDetail> = client.get("/x/web-interface/wbi/view/detail") {
+        require(av != null || bv != null) { "av and bv cannot be null at the same time" }
+        av?.let { parameter("aid", it) }
+        bv?.let { parameter("bvid", it) }
+        appendWebCookie(
+            sessData = sessData,
+            buvid3 = buvid3Provider()
+        )
+        header("Referer", "https://www.bilibili.com/")
     }.body()
 
     /**
@@ -637,18 +644,12 @@ object BiliHttpApi {
         sessData: String? = null,
     ): BiliResponse<VideoPlayerInfo> {
         require(av != null || bv != null) { "av and bv cannot be null at the same time" }
-        val signedParams = Parameters.build {
-            av?.let { append("aid", it.toString()) }
-            bv?.let { append("bvid", it) }
-            append("cid", cid.toString())
-            seasonId?.takeIf { it > 0 }?.let { append("season_id", it.toString()) }
-            epid?.takeIf { it > 0 }?.let { append("ep_id", it.toString()) }
-        }.signWbi()
-
         return client.get("/x/player/wbi/v2") {
-            signedParams.entries().forEach { (key, values) ->
-                values.forEach { value -> parameter(key, value) }
-            }
+            av?.let { parameter("aid", it) }
+            bv?.let { parameter("bvid", it) }
+            parameter("cid", cid)
+            seasonId?.takeIf { it > 0 }?.let { parameter("season_id", it) }
+            epid?.takeIf { it > 0 }?.let { parameter("ep_id", it) }
             sessData?.let { header("Cookie", "SESSDATA=$sessData;") }
         }.body()
     }
@@ -1993,7 +1994,7 @@ object BiliHttpApi {
 
         videoMoreInfoCache[cacheKey]?.let { cacheEntry ->
             // 缓存存在且有效，重置TTL并返回缓存结果
-            cacheEntry.expireTime = currentTime + 1000L
+            cacheEntry.expireTime = currentTime + VIDEO_MORE_INFO_CACHE_TTL_MILLIS
             return cacheEntry.data
         }
 
@@ -2005,7 +2006,10 @@ object BiliHttpApi {
         }.body()
 
         // 缓存结果
-        videoMoreInfoCache[cacheKey] = CacheEntry(response, currentTime + 1000L)
+        videoMoreInfoCache[cacheKey] = CacheEntry(
+            response,
+            currentTime + VIDEO_MORE_INFO_CACHE_TTL_MILLIS
+        )
 
         return response
     }

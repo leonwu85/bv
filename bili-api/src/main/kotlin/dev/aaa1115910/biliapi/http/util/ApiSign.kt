@@ -111,6 +111,10 @@ suspend fun HttpRequestBuilder.encWbi() {
     require(BiliHttpApi.wbiImgKey != null && BiliHttpApi.wbiSubKey != null) { "Wbi keys can't be null!" }
     val mixinKey = getMixinKey(BiliHttpApi.wbiImgKey + BiliHttpApi.wbiSubKey)
 
+    // HttpRequestRetry reuses the request builder. Remove the previous signature before
+    // signing again, otherwise every retry appends another wts/w_rid pair.
+    url.parameters.remove("wts")
+    url.parameters.remove("w_rid")
     val wts = (System.currentTimeMillis() / 1000).toInt()
     parameter("wts", wts)
 

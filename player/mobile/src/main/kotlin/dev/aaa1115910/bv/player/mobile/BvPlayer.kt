@@ -77,6 +77,7 @@ import kotlin.math.roundToInt
 
 private const val FULLSCREEN_DANMAKU_TEXT_SIZE_SCALE = 1f
 private const val EMBEDDED_DANMAKU_TEXT_SIZE_SCALE = 0.8f
+private const val PICTURE_IN_PICTURE_DANMAKU_TEXT_SIZE_SCALE = 0.5f
 
 internal fun shouldResetPlaybackStartedState(previousCid: Long, currentCid: Long): Boolean =
     previousCid != 0L && currentCid != previousCid
@@ -120,6 +121,7 @@ private class DanmakuMaskBitmapPool {
 fun BvPlayer(
     modifier: Modifier = Modifier,
     isFullScreen: Boolean,
+    isInPictureInPictureMode: Boolean = false,
     controlsEnabled: Boolean = true,
     onEnterFullScreen: () -> Unit,
     onExitFullScreen: () -> Unit,
@@ -167,6 +169,11 @@ fun BvPlayer(
     onShowSponsorBlockTip: (SponsorSegment) -> Unit = {},
     onSkipSponsorSegment: (SponsorSegment?) -> Unit = {},
     onDismissSponsorBlockTip: () -> Unit = {},
+    dlnaAvailable: Boolean = false,
+    dlnaSessionActive: Boolean = false,
+    pictureInPictureSupported: Boolean = false,
+    onCast: () -> Unit = {},
+    onEnterPictureInPicture: () -> Unit = {},
 ) {
     val logger = KotlinLogging.logger("BvPlayer")
     val scope = rememberCoroutineScope()
@@ -281,10 +288,10 @@ fun BvPlayer(
     }
 
     val danmakuTextSizeScale: () -> Float = {
-        if (isFullScreen) {
-            FULLSCREEN_DANMAKU_TEXT_SIZE_SCALE
-        } else {
-            EMBEDDED_DANMAKU_TEXT_SIZE_SCALE
+        when {
+            isInPictureInPictureMode -> PICTURE_IN_PICTURE_DANMAKU_TEXT_SIZE_SCALE
+            isFullScreen -> FULLSCREEN_DANMAKU_TEXT_SIZE_SCALE
+            else -> EMBEDDED_DANMAKU_TEXT_SIZE_SCALE
         }
     }
 
@@ -664,7 +671,7 @@ fun BvPlayer(
         applyDanmakuSpeedPolicy()
     }
 
-    LaunchedEffect(isFullScreen) {
+    LaunchedEffect(isFullScreen, isInPictureInPictureMode) {
         updateDanmakuConfig()
     }
 
@@ -889,13 +896,21 @@ fun BvPlayer(
                 logger.info { "Skip sponsor segment" }
                 skipSponsorSegment(currentSponsorSegment)
             },
-            onDismissSponsorBlockTip = currentOnDismissSponsorBlockTip
+            onDismissSponsorBlockTip = currentOnDismissSponsorBlockTip,
+            dlnaAvailable = dlnaAvailable,
+            dlnaSessionActive = dlnaSessionActive,
+            pictureInPictureSupported = pictureInPictureSupported,
+            onCast = onCast,
+            onEnterPictureInPicture = onEnterPictureInPicture
         ) {
             BvVideoPlayer(
                 modifier = Modifier
                     .aspectRatio(aspectRatio)
                     .align(Alignment.Center),
-                videoPlayer = videoPlayer, playerListener = videoPlayerListener
+                videoPlayer = videoPlayer,
+                playerListener = videoPlayerListener,
+                // VideoPlayerActivity/ViewModel owns this player.
+                releasePlayerOnDispose = false,
             )
             Box(
                 modifier = Modifier
@@ -914,6 +929,9 @@ fun BvPlayer(
                         modifier = Modifier.fillMaxSize(),
                         danmakuPlayer = mDanmakuPlayer,
                         visible = !isLive || isFullScreen,
+                        // VOD danmaku is owned by VideoPlayerActivity/ViewModel. A renderer leaving
+                        // composition (for example during a configuration change) must not kill it.
+                        releaseDanmakuPlayerOnDispose = false,
                         isLiveMode = isLive,
                         onLiveDanmakuPlayerReady = { player ->
                             mLiveDanmakuPlayer = player
