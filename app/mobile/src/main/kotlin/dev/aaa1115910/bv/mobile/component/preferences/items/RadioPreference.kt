@@ -207,7 +207,6 @@ fun <T> PreferenceGroupScope.radioPreference(
             scope.launch(Dispatchers.IO) {
                 dataStoreManager.editPreference(prefReq.key, newValue)
             }
-            onValueChange(newValue)
         }
 
         RadioPreference(
@@ -221,6 +220,7 @@ fun <T> PreferenceGroupScope.radioPreference(
             value = value,
             values = values,
             onValueChange = {
+                // 回调只调用一次：返回 true 才写入偏好（组件缺失需先下载时返回 false）
                 if (onValueChange(it)) setValue(it)
             }
         )

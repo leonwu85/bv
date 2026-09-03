@@ -29,6 +29,11 @@ data class VideoPlayerOptions(
      */
     val mpvPreferHttpForCdn: Boolean = false,
     val superResolutionType: SuperResolutionType = SuperResolutionType.Disable,
+    /**
+     * VLC 内核的视频输出模块：空 = 由 libvlc 自选（Android 上为 android_display 直出），
+     * "gles2" = 强制 OpenGL 渲染，"android_display" = 强制直出。LibVLC 实例进程级复用，更改需重启应用。
+     */
+    val vlcVideoOutput: String = "",
     val audioOutputDevices: String = "audiotrack,opensles",
     val enableVideoFrameRateStrategy: Boolean = true,
     val isLive: Boolean = false

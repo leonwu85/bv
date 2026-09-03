@@ -18,6 +18,7 @@ import dev.aaa1115910.bv.entity.LiveQualityPreference
 import dev.aaa1115910.bv.entity.PlayerType
 import dev.aaa1115910.bv.entity.ThemeType
 import dev.aaa1115910.bv.mobile.theme.MobileThemePalette
+import dev.aaa1115910.bv.mobile.util.MobileMpvOptions
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
 import dev.aaa1115910.bv.player.entity.DanmakuType
@@ -29,10 +30,12 @@ import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.player.entity.SuperResolutionType
 import dev.aaa1115910.bv.player.entity.VideoCodec
+import dev.aaa1115910.bv.player.impl.vlc.VlcNativeLibs
 import dev.aaa1115910.bv.player.util.DanmakuSpeedPolicy
 import dev.aaa1115910.bv.util.DanmakuSmartFilterPolicy
 import dev.aaa1115910.bv.util.MobileThemeModeManager
 import dev.aaa1115910.bv.util.PlaybackPreferenceSelector
+import dev.aaa1115910.bv.util.VlcLibsInstaller
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.transform
@@ -148,13 +151,44 @@ object MobilePrefs {
 
     var playerType: PlayerType
         get() = resolveMobilePlayerType(read(MobilePrefKeys.playerTypeRequest))
-        set(value) = write(MobilePrefKeys.playerTypeKey, resolveMobilePlayerType(value.ordinal).ordinal)
+        set(value) = write(MobilePrefKeys.playerTypeKey, value.ordinal)
 
+    /**
+     * 启动时校正播放器内核：越界值回到 Media3；选了 VLC 但组件没装（历史版本曾把 VLC 从手机端屏蔽，
+     * 存量选择不会有可用组件）也回到 Media3，避免进播放页才报“VLC 播放器不可用”。
+     */
     fun sanitizePlayerType() {
         val rawPlayerType = read(MobilePrefKeys.playerTypeRequest)
-        val resolvedPlayerType = resolveMobilePlayerType(rawPlayerType)
+        var resolvedPlayerType = resolveMobilePlayerType(rawPlayerType)
+        if (resolvedPlayerType == PlayerType.VLC && !VlcLibsInstaller.isVlcLibsInstalled(BVApp.context)) {
+            resolvedPlayerType = PlayerType.Media3
+        }
         if (rawPlayerType != resolvedPlayerType.ordinal) {
             playerType = resolvedPlayerType
+        }
+    }
+
+    /**
+     * MPV 参数只能从 [MobileMpvOptions] 的固定选项里选；早期版本允许自由填写（150MiB、auto-safe、
+     * vulkan…），这里把不在表内的存量值归一化为“默认”，与 TV 端行为一致。
+     */
+    fun sanitizeMpvOptions() {
+        fun normalize(request: PreferenceRequest<String>, options: LinkedHashMap<String, String>) {
+            val stored = read(request)
+            val normalized = MobileMpvOptions.normalizeChoice(stored, options)
+            if (normalized != stored) write(request.key, normalized)
+        }
+        normalize(MobilePrefKeys.hardwareDecodeModeRequest, MobileMpvOptions.hardwareDecodeOptions)
+        normalize(MobilePrefKeys.mpvHardwareDecodeCodecsRequest, MobileMpvOptions.hardwareDecodeCodecsOptions)
+        normalize(MobilePrefKeys.mpvVideoOutputRequest, MobileMpvOptions.videoOutputOptions)
+        normalize(MobilePrefKeys.mpvVdQueueEnableRequest, MobileMpvOptions.vdQueueEnableOptions)
+        normalize(MobilePrefKeys.mpvCacheRequest, MobileMpvOptions.cacheOptions)
+        normalize(MobilePrefKeys.mpvDemuxerMaxBytesRequest, MobileMpvOptions.demuxerMaxBytesOptions)
+        normalize(MobilePrefKeys.mpvDemuxerMaxBackBytesRequest, MobileMpvOptions.demuxerMaxBackBytesOptions)
+        normalize(MobilePrefKeys.vlcVideoOutputRequest, MobileMpvOptions.vlcVideoOutputOptions)
+        val storedVlcVersion = read(MobilePrefKeys.vlcSelectedVersionRequest)
+        if (!VlcNativeLibs.isSupportedVersion(storedVlcVersion)) {
+            write(MobilePrefKeys.vlcSelectedVersionKey, VlcNativeLibs.defaultVersion)
         }
     }
 
@@ -451,6 +485,23 @@ object MobilePrefs {
         get() = SuperResolutionType.fromValue(read(MobilePrefKeys.superResolutionTypeRequest))
         set(value) = write(MobilePrefKeys.superResolutionTypeKey, value.value)
 
+    /** 把 bilivideo/akamaized 的 HTTPS 播放地址改写为 HTTP 交给 MPV；MPV 已用系统根证书校验 HTTPS，默认关闭 */
+    var mpvPreferHttpCdn: Boolean
+        get() = read(MobilePrefKeys.mpvPreferHttpCdnRequest)
+        set(value) = write(MobilePrefKeys.mpvPreferHttpCdnKey, value)
+
+    /** 用户选择的 libvlc-all 版本（VLC 3 稳定版 / VLC 4 预览版）；不受支持的存量值回到默认 */
+    var vlcSelectedVersion: String
+        get() = read(MobilePrefKeys.vlcSelectedVersionRequest)
+            .takeIf { VlcNativeLibs.isSupportedVersion(it) }
+            ?: VlcNativeLibs.defaultVersion
+        set(value) = write(MobilePrefKeys.vlcSelectedVersionKey, value.trim())
+
+    /** VLC `--vout`：空串表示交给 libvlc 自选 */
+    var vlcVideoOutput: String
+        get() = read(MobilePrefKeys.vlcVideoOutputRequest)
+        set(value) = write(MobilePrefKeys.vlcVideoOutputKey, value.trim())
+
     var audioOutputDevices: String
         get() = read(MobilePrefKeys.audioOutputDevicesRequest)
         set(value) = write(MobilePrefKeys.audioOutputDevicesKey, value.trim())
@@ -465,8 +516,6 @@ object MobilePrefs {
 
     private fun resolveMobilePlayerType(ordinal: Int): PlayerType =
         PlayerType.entries.getOrElse(ordinal) { PlayerType.Media3 }
-            .takeUnless { it == PlayerType.VLC }
-            ?: PlayerType.Media3
 
     private fun <T> read(request: PreferenceRequest<T>): T =
         runBlocking { dsm.getPreferenceFlow(request).first() }
@@ -555,6 +604,9 @@ object MobilePrefKeys {
     val mpvDemuxerMaxBackBytesKey = stringPreferencesKey("mobile_mpv_demuxer_max_back_bytes")
     val mpvVdQueueEnableKey = stringPreferencesKey("mobile_mpv_vd_queue_enable")
     val superResolutionTypeKey = intPreferencesKey("mobile_super_resolution_type")
+    val mpvPreferHttpCdnKey = booleanPreferencesKey("mobile_mpv_prefer_http_cdn")
+    val vlcSelectedVersionKey = stringPreferencesKey("mobile_vlc_selected_version")
+    val vlcVideoOutputKey = stringPreferencesKey("mobile_vlc_video_output")
     val audioOutputDevicesKey = stringPreferencesKey("mobile_audio_output_devices")
     val showLiveDanmakuEmojiKey = booleanPreferencesKey("mobile_show_live_danmaku_emoji")
     val incognitoModeKey = booleanPreferencesKey("mobile_incognito_mode")
@@ -631,17 +683,21 @@ object MobilePrefKeys {
     val tryLook1080PRequest = PreferenceRequest(tryLook1080PKey, true)
     val autoSyncRequest = PreferenceRequest(autoSyncKey, "30")
     val videoSyncRequest = PreferenceRequest(videoSyncKey, "display-resample")
-    val hardwareDecodeModeRequest = PreferenceRequest(hardwareDecodeModeKey, "auto-safe")
+    val hardwareDecodeModeRequest = PreferenceRequest(hardwareDecodeModeKey, "mediacodec,mediacodec-copy")
     val mpvHardwareDecodeCodecsRequest =
         PreferenceRequest(mpvHardwareDecodeCodecsKey, "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
     val mpvVideoOutputRequest = PreferenceRequest(mpvVideoOutputKey, "gpu")
     val mpvGpuContextRequest = PreferenceRequest(mpvGpuContextKey, "android")
     val mpvGpuApiRequest = PreferenceRequest(mpvGpuApiKey, "")
     val mpvCacheRequest = PreferenceRequest(mpvCacheKey, "yes")
-    val mpvDemuxerMaxBytesRequest = PreferenceRequest(mpvDemuxerMaxBytesKey, "150MiB")
-    val mpvDemuxerMaxBackBytesRequest = PreferenceRequest(mpvDemuxerMaxBackBytesKey, "50MiB")
+    // 空串 = 按设备内存自动分档（见 MpvCachePolicy），与 TV 端一致
+    val mpvDemuxerMaxBytesRequest = PreferenceRequest(mpvDemuxerMaxBytesKey, "")
+    val mpvDemuxerMaxBackBytesRequest = PreferenceRequest(mpvDemuxerMaxBackBytesKey, "")
     val mpvVdQueueEnableRequest = PreferenceRequest(mpvVdQueueEnableKey, "")
     val superResolutionTypeRequest = PreferenceRequest(superResolutionTypeKey, SuperResolutionType.Disable.value)
+    val mpvPreferHttpCdnRequest = PreferenceRequest(mpvPreferHttpCdnKey, false)
+    val vlcSelectedVersionRequest = PreferenceRequest(vlcSelectedVersionKey, VlcNativeLibs.defaultVersion)
+    val vlcVideoOutputRequest = PreferenceRequest(vlcVideoOutputKey, "")
     val audioOutputDevicesRequest = PreferenceRequest(audioOutputDevicesKey, "opensles,aaudio,audiotrack")
     val showLiveDanmakuEmojiRequest = PreferenceRequest(showLiveDanmakuEmojiKey, false)
     val incognitoModeRequest = PreferenceRequest(incognitoModeKey, false)

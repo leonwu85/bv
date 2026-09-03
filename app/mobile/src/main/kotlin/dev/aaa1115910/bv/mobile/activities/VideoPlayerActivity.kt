@@ -40,6 +40,7 @@ import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.PlayerType
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.mobile.screen.VideoPlayerScreen
+import dev.aaa1115910.bv.mobile.settings.MobilePrefs
 import dev.aaa1115910.bv.mobile.settings.MobileRuntime
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
@@ -634,7 +635,9 @@ class VideoPlayerActivity : ComponentActivity() {
             mpvDemuxerMaxBytes = settings.mpvDemuxerMaxBytes,
             mpvDemuxerMaxBackBytes = settings.mpvDemuxerMaxBackBytes,
             mpvVdQueueEnable = settings.mpvVdQueueEnable,
+            mpvPreferHttpForCdn = MobilePrefs.mpvPreferHttpCdn,
             superResolutionType = settings.superResolutionType,
+            vlcVideoOutput = MobilePrefs.vlcVideoOutput,
             audioOutputDevices = settings.audioOutputDevices,
             isLive = launchArgs.isLive
         )
@@ -643,7 +646,8 @@ class VideoPlayerActivity : ComponentActivity() {
                     "superResolution=${options.superResolutionType}, " +
                     "enableHardwareDecode=${options.enableHardwareDecode}, " +
                     "hardwareDecodeMode=${options.hardwareDecodeMode}, " +
-                    "mpvVideoOutput=${options.mpvVideoOutput}, mpvGpuContext=${options.mpvGpuContext}"
+                    "mpvVideoOutput=${options.mpvVideoOutput}, mpvGpuContext=${options.mpvGpuContext}, " +
+                    "mpvPreferHttpForCdn=${options.mpvPreferHttpForCdn}, vlcVideoOutput=${options.vlcVideoOutput}"
         }
         val videoPlayer = when (settings.playerType) {
             PlayerType.Media3 -> ExoPlayerFactory().create(this, options)

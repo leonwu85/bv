@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -147,6 +148,12 @@ fun BvPlayer(
     onLoadNextVideo: () -> Unit,
     onLoadNewVideo: (VideoListItem) -> Unit,
     onSendHeartbeat: suspend (Int) -> Unit,
+    /** 起播后的再次缓冲（非 seek 引起），供上层的点播卡顿恢复策略统计 */
+    onRebufferingStarted: (positionMs: Long) -> Unit = {},
+    /** 播放真正恢复：上层据此结束“正在切源”状态 */
+    onPlaybackResumed: () -> Unit = {},
+    /** 内核报告解码/渲染跟不上（窗口内丢帧过半） */
+    onDecoderOverloaded: (droppedFrames: Int, totalFrames: Int) -> Unit = { _, _ -> },
     videoPlayer: AbstractVideoPlayer,
     danmakuPlayer: DanmakuPlayer?,
     danmakuOpacity: Float,
@@ -211,6 +218,8 @@ fun BvPlayer(
     var lastHeartbeatPosition by remember { mutableLongStateOf(0L) }
     var playbackStateCid by remember { mutableLongStateOf(videoPlayerConfigData.currentVideoCid) }
     var hasStartedPlaybackOnce by remember { mutableStateOf(false) }
+    // 最近一次 seek 的时间：seek 后紧跟的缓冲不算“再次缓冲”
+    var lastSeekRequestAtMs by remember { mutableLongStateOf(0L) }
     var pendingDanmakuPlaySyncPosition by remember { mutableLongStateOf(-1L) }
     var showAutoSkipSponsorTip by remember { mutableStateOf(false) }
     var autoSkipSponsorSeconds by remember { mutableIntStateOf(0) }
@@ -519,6 +528,7 @@ fun BvPlayer(
             mDanmakuPlayer?.start()
             isPlaying = true
             isBuffering = false
+            onPlaybackResumed()
             updateBackToHistory()
         }
 
@@ -538,8 +548,24 @@ fun BvPlayer(
 
         override fun onBuffering() {
             logger.info { "onBuffering" }
+            val shouldReportRebuffering =
+                hasStartedPlaybackOnce &&
+                    !isBuffering &&
+                    !isLive &&
+                    SystemClock.elapsedRealtime() - lastSeekRequestAtMs > SEEK_REBUFFERING_GRACE_MS
             isBuffering = true
             mDanmakuPlayer?.pause()
+            if (shouldReportRebuffering) {
+                onRebufferingStarted(videoPlayer.currentPosition.coerceAtLeast(0L))
+            }
+        }
+
+        override fun onDecoderOverloaded(droppedFrames: Int, totalFrames: Int) {
+            logger.warn { "onDecoderOverloaded: dropped $droppedFrames / $totalFrames frames" }
+            if (isLive) return
+            scope.launch(Dispatchers.Main) {
+                onDecoderOverloaded(droppedFrames, totalFrames)
+            }
         }
 
         override fun onProgress(position: Long, duration: Long, buffered: Int) {
@@ -569,12 +595,14 @@ fun BvPlayer(
         }
 
         override fun onSeekBack(seekBackIncrementMs: Long) {
+            lastSeekRequestAtMs = SystemClock.elapsedRealtime()
             syncProcessedSponsorSegmentsForPosition(currentPosition)
             if (!isPlaying) pendingDanmakuPlaySyncPosition = currentPosition
             onReloadDanmakuAfterSeek(currentPosition, isPlaying)
         }
 
         override fun onSeekForward(seekForwardIncrementMs: Long) {
+            lastSeekRequestAtMs = SystemClock.elapsedRealtime()
             syncProcessedSponsorSegmentsForPosition(currentPosition)
             if (!isPlaying) pendingDanmakuPlaySyncPosition = currentPosition
             onReloadDanmakuAfterSeek(currentPosition, isPlaying)
@@ -769,6 +797,7 @@ fun BvPlayer(
                 }
             },
             onSeekToPosition = { position ->
+                lastSeekRequestAtMs = SystemClock.elapsedRealtime()
                 syncProcessedSponsorSegmentsForPosition(position)
                 if (!isPlaying) pendingDanmakuPlaySyncPosition = position
                 onReloadDanmakuAfterSeek(position, isPlaying)
@@ -897,3 +926,6 @@ fun BvPlayer(
         }
     }
 }
+
+/** seek 之后这么久内出现的缓冲视为 seek 本身引起，不上报为再次缓冲 */
+private const val SEEK_REBUFFERING_GRACE_MS = 4_000L

@@ -163,7 +163,10 @@ data class PlayData(
                     height = it.height,
                     frameRate = it.frameRate,
                     backUrl = it.backupUrl,
-                    codecs = it.codecs
+                    codecs = it.codecs,
+                    mimeType = it.mimeType,
+                    initRange = it.segmentBase.initialization.takeIf { range -> range.isNotBlank() },
+                    indexRange = it.segmentBase.indexRange.takeIf { range -> range.isNotBlank() }
                 )
             }.ifEmpty {
                 progressiveVideos(
@@ -178,7 +181,11 @@ data class PlayData(
                     baseUrl = it.baseUrl,
                     bandwidth = it.bandwidth,
                     codecId = it.id,
-                    backUrl = it.backupUrl
+                    backUrl = it.backupUrl,
+                    mimeType = it.mimeType,
+                    codecs = it.codecs,
+                    initRange = it.segmentBase.initialization.takeIf { range -> range.isNotBlank() },
+                    indexRange = it.segmentBase.indexRange.takeIf { range -> range.isNotBlank() }
                 )
             } ?: emptyList()
             val dolby = dolbyItem?.let {
@@ -186,7 +193,11 @@ data class PlayData(
                     baseUrl = it.baseUrl,
                     bandwidth = it.bandwidth,
                     codecId = it.id,
-                    backUrl = it.backupUrl
+                    backUrl = it.backupUrl,
+                    mimeType = it.mimeType,
+                    codecs = it.codecs,
+                    initRange = it.segmentBase.initialization.takeIf { range -> range.isNotBlank() },
+                    indexRange = it.segmentBase.indexRange.takeIf { range -> range.isNotBlank() }
                 )
             }
             val flac = flacItem?.let {
@@ -194,7 +205,11 @@ data class PlayData(
                     baseUrl = it.baseUrl,
                     bandwidth = it.bandwidth,
                     codecId = it.id,
-                    backUrl = it.backupUrl
+                    backUrl = it.backupUrl,
+                    mimeType = it.mimeType,
+                    codecs = it.codecs,
+                    initRange = it.segmentBase.initialization.takeIf { range -> range.isNotBlank() },
+                    indexRange = it.segmentBase.indexRange.takeIf { range -> range.isNotBlank() }
                 )
             }
 
@@ -230,7 +245,10 @@ data class PlayData(
                     height = it.height,
                     frameRate = it.frameRate,
                     backUrl = it.backupUrl,
-                    codecs = it.codecs
+                    codecs = it.codecs,
+                    mimeType = it.mimeType,
+                    initRange = it.segmentBase.initialization.takeIf { range -> range.isNotBlank() },
+                    indexRange = it.segmentBase.indexRange.takeIf { range -> range.isNotBlank() }
                 )
             }.ifEmpty {
                 progressiveVideos(
@@ -245,7 +263,11 @@ data class PlayData(
                     baseUrl = it.baseUrl,
                     bandwidth = it.bandwidth,
                     codecId = it.id,
-                    backUrl = it.backupUrl
+                    backUrl = it.backupUrl,
+                    mimeType = it.mimeType,
+                    codecs = it.codecs,
+                    initRange = it.segmentBase.initialization.takeIf { range -> range.isNotBlank() },
+                    indexRange = it.segmentBase.indexRange.takeIf { range -> range.isNotBlank() }
                 )
             } ?: emptyList()
             val dolby = dolbyItem?.let {
@@ -253,7 +275,11 @@ data class PlayData(
                     baseUrl = it.baseUrl,
                     bandwidth = it.bandwidth,
                     codecId = it.id,
-                    backUrl = it.backupUrl
+                    backUrl = it.backupUrl,
+                    mimeType = it.mimeType,
+                    codecs = it.codecs,
+                    initRange = it.segmentBase.initialization.takeIf { range -> range.isNotBlank() },
+                    indexRange = it.segmentBase.indexRange.takeIf { range -> range.isNotBlank() }
                 )
             }
             val flac = flacItem?.let {
@@ -261,7 +287,11 @@ data class PlayData(
                     baseUrl = it.baseUrl,
                     bandwidth = it.bandwidth,
                     codecId = it.id,
-                    backUrl = it.backupUrl
+                    backUrl = it.backupUrl,
+                    mimeType = it.mimeType,
+                    codecs = it.codecs,
+                    initRange = it.segmentBase.initialization.takeIf { range -> range.isNotBlank() },
+                    indexRange = it.segmentBase.indexRange.takeIf { range -> range.isNotBlank() }
                 )
             }
 
@@ -297,7 +327,10 @@ data class PlayData(
                     height = it.height,
                     frameRate = it.frameRate,
                     backUrl = it.backupUrl,
-                    codecs = it.codecs
+                    codecs = it.codecs,
+                    mimeType = it.mimeType,
+                    initRange = it.segmentBase.initialization.takeIf { range -> range.isNotBlank() },
+                    indexRange = it.segmentBase.indexRange.takeIf { range -> range.isNotBlank() }
                 )
             }.ifEmpty {
                 progressiveVideos(
@@ -312,7 +345,11 @@ data class PlayData(
                     baseUrl = it.baseUrl,
                     bandwidth = it.bandwidth,
                     codecId = it.id,
-                    backUrl = it.backupUrl
+                    backUrl = it.backupUrl,
+                    mimeType = it.mimeType,
+                    codecs = it.codecs,
+                    initRange = it.segmentBase.initialization.takeIf { range -> range.isNotBlank() },
+                    indexRange = it.segmentBase.indexRange.takeIf { range -> range.isNotBlank() }
                 )
             } ?: emptyList()
             val dolby = dolbyItem?.let {
@@ -320,7 +357,11 @@ data class PlayData(
                     baseUrl = it.baseUrl,
                     bandwidth = it.bandwidth,
                     codecId = it.id,
-                    backUrl = it.backupUrl
+                    backUrl = it.backupUrl,
+                    mimeType = it.mimeType,
+                    codecs = it.codecs,
+                    initRange = it.segmentBase.initialization.takeIf { range -> range.isNotBlank() },
+                    indexRange = it.segmentBase.indexRange.takeIf { range -> range.isNotBlank() }
                 )
             }
             val flac = flacItem?.let {
@@ -328,7 +369,11 @@ data class PlayData(
                     baseUrl = it.baseUrl,
                     bandwidth = it.bandwidth,
                     codecId = it.id,
-                    backUrl = it.backupUrl
+                    backUrl = it.backupUrl,
+                    mimeType = it.mimeType,
+                    codecs = it.codecs,
+                    initRange = it.segmentBase.initialization.takeIf { range -> range.isNotBlank() },
+                    indexRange = it.segmentBase.indexRange.takeIf { range -> range.isNotBlank() }
                 )
             }
 
@@ -435,7 +480,13 @@ data class DashVideo(
     val frameRate: String,
     val backUrl: List<String>,
     val codecs: String? = null,
-    val isMuxed: Boolean = false
+    val isMuxed: Boolean = false,
+    /** DASH `mimeType`（HTTP 接口提供；gRPC 接口没有，留空） */
+    val mimeType: String? = null,
+    /** `SegmentBase/Initialization@range`，如 "0-1017"；接口未提供时为 null */
+    val initRange: String? = null,
+    /** `SegmentBase@indexRange`（sidx 字节范围），如 "1018-1613"；接口未提供时为 null */
+    val indexRange: String? = null
 )
 
 /**
@@ -448,7 +499,15 @@ data class DashAudio(
     val baseUrl: String,
     val bandwidth: Int,
     val codecId: Int,
-    val backUrl: List<String>
+    val backUrl: List<String>,
+    /** DASH `mimeType`（HTTP 接口提供；gRPC 接口没有，留空） */
+    val mimeType: String? = null,
+    /** DASH `codecs`，如 "mp4a.40.2"（HTTP 接口提供） */
+    val codecs: String? = null,
+    /** `SegmentBase/Initialization@range`；接口未提供时为 null */
+    val initRange: String? = null,
+    /** `SegmentBase@indexRange`（sidx 字节范围）；接口未提供时为 null */
+    val indexRange: String? = null
 )
 
 class PlayDataUnavailableException : IllegalStateException {

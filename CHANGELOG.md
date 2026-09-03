@@ -1,5 +1,24 @@
 [![Downloads](https://img.shields.io/github/downloads/leonwu85/bv/total?cacheSeconds=3600)](https://github.com/leonwu85/bv/releases)
 
+## 手机端同步 VLC / MPV 改动 (2026-09-03)
+
+- 手机端重新开放 VLC 内核（6 月起被 `MobilePrefs` 强制改写为 Media3，因为当时没有组件下载入口）：「音视频 → 播放器」选 VLC 时按需下载 libvlc-all，新增「LibVLC 版本」（3.7.5 稳定版 / 4.0.0-eap29 预览版）与「VLC 视频输出」（自动 / gles2 / android_display）两项，下载与重启提示逻辑与 TV 端一致（`LibVLCDownloaderDialog`、libc++ 运行库冲突或已加载另一版本时提示重启）。启动时若选了 VLC 但组件未安装则回落 Media3，避免进播放页才报错
+- 「音视频」「高级」两页的内核选择与 MPV/VLC 组件下载弹窗合并为 `PlayerKernelPreferences`；选 MPV 且系统低于 Android 8 时提示无法零拷贝硬解、默认清晰度限制为 1080P60。修复 `radioPreference` 把 `onValueChange` 回调调用两次的问题
+- MPV 设置与 TV 端同一套取值表（`MobileMpvOptions`）：hwdec 只保留 mediacodec 直出/拷贝/软解四种（默认改为 `mediacodec,mediacodec-copy`），去掉 gpu-context/gpu-api（固定 Android GL，mpv-android 构建没有 Vulkan/ANGLE），cache/demuxer 由自由填写改为选择，demuxer 默认按设备内存自动分档；新增「CDN 使用 HTTP 直连」开关（默认关闭，MPV 已用系统根证书校验 HTTPS）。存量的自由文本值启动时归一化为默认。超分档位保留全部（手机 GPU 强于电视盒子），跑不动时由丢帧检测弹窗建议关闭
+- 手机播放页补上点播卡顿恢复链路：`player/mobile` 的 `BvPlayer` 新增 `onRebufferingStarted` / `onPlaybackResumed` / `onDecoderOverloaded` 回调（seek 后 4 s 内的缓冲不计入），接到共享 ViewModel 的 `onVodRebufferingStarted` / `onVodPlaybackResumed` / `onVodDecoderOverloaded`；新增 `VodBufferRecoveryDialog`（换 CDN / 降清晰度 / 关闭超分）。此前手机端既没有上报这些事件也没有界面消费提示，而且 `vodSourceTransitionPending` 从未被清除，恢复策略在手机上实际是死的。手机模拟器实测：MPV 丢帧 → “设备解码跟不上” 弹窗 → 确认后 360P 从原进度续播
+- `VideoPlayerActivity` 把 `vlcVideoOutput`、`mpvPreferHttpForCdn` 传入内核；VLC 4 的 DASH 清单播放、MPV 的 CA 证书/缓存分档等共享层改动在手机端随之生效
+
+## VLC 组件升级到 3.7.5，并可选 VLC 4 预览版 (2026-09-03)
+
+- 默认下载的 `libvlc-all` 从 3.6.5 升到 3.7.5（VLC 3.0.24 内核，NDK r29）；新增 4.0.0-eap29（VLC 4 预览版）可选，播放设置新增「LibVLC 版本」，切换后即提示下载对应组件，若本进程已加载另一版本会提示重启应用。两个版本的 AAR 都在构建期固定 SHA-256，下载后校验
+- libvlc-android 的 Java 层源码入库为 `:player:libvlcjni`（LGPL-2.1，来源与改动见该目录 README）：3.x 与 4.0 的 `libvlcjni.so` 在 `JNI_OnLoad` 查找的 Java 方法签名不兼容（`Stats` 计数 int/long、`Track` 工厂参数、`TrackDescription` 等），Maven 上的任一版本 Java 层都无法同时驱动两套原生库，因此维护一份双版本超集，运行时按 `LibVLC.majorVersion()` 切换行为（轨道 API、`VideoHelper` 布局、`setScale`、显示适配等）。同时去掉了 `LibVLC.loadLibraries()` 里的 `System.exit(1)` 和加载器侧的反射 hack，APK 不再打包 libvlc 的 lua/hrtfs 资源
+- VLC 4 下不再创建多余的字幕 Surface（应用自绘字幕/弹幕，VLC 4 的 android_display 用 ASurfaceControl 直出）；新增「VLC 视频输出」设置（自动 / gles2 / android_display），供直出黑屏的设备切到 OpenGL 渲染，更改后需重启应用
+- 修复 VLC 4 播放点播时每隔几秒暂停一下再继续：VLC 4 把输入时钟的不连续阈值从 60 s 收紧到 300 ms，而 `addSlave` 加入的音轨与视频是两个独立的 fMP4 解复用器，各自按 5 s 分片推进 PCR，交替喂给同一个时钟就被判成每包一次 "clock gap" 并不断重置参考点（日志里成对出现 `stream_diff: -5000000 / 5015510`）。现在 VLC 4 不再用 input slave，而是把音视频两个 `.m4s` 写成一份静态 DASH MPD（`VlcDashManifest`）交给 libvlc 的 `adaptive` 解复用器当一个输入播放，同步在解复用器内部完成。分段表由应用自己生成：`DashIndexProbe` 读取两个文件的 `sidx`（Web/代理接口给了 `SegmentBase` 范围就只取那几百字节，gRPC 接口没给就先扫 16 KiB 文件头定位；请求头与播放器同规则，APP 签名地址不带网页 Referer），解析成每段精确的字节范围与时长，写成 `SegmentList` + 逐段的 `SegmentTimeline`。`PlayData` 的 `DashVideo/DashAudio` 新增 `mimeType/codecs/initRange/indexRange`。读取失败仍回退到双地址方式；VLC 3 路径不变
+    - 之所以不用更简单的 `SegmentBase@indexRange` 让 libvlc 自己解释 sidx：其 `SplitUsingIndex` 给最后一个子段算出的字节范围是 `start-(start-1)`，B 站 CDN 对这种 Range 直接回整个文件，于是播到结尾时解复用器从第 0 字节重来一遍——画面/音频回到片头、整份文件重新下载、EndReached 迟迟不来。`SegmentTimeline` 也刻意不用 `r` 压缩：libvlc 的 `SegmentList::getMediaSegment` 按时间线元素下标而不是段号取 `SegmentURL`，带 `r` 时跳转会落到正确的时间戳却取错字节
+    - VLC 片尾兜底：位置停在结尾 5 s 内且 2 s 没有推进时按自然结束处理并停止输入，不再等 10 s 的卡死恢复去 pause/play
+    - 模拟器实测：同一视频 45 s 内 clock gap 从 562 次降到 0，跳转、从历史进度续播、播放到结尾触发 EndReached 均正常
+- 已知：VLC 4 预览版在 Android 模拟器上 android_display 直出为黑屏，切到 gles2 可以出画但右侧有一条绿色/花屏竖条——模拟器的软解把 480 宽的画面放进 512 宽的 buffer，而 VLC 4 gles2 唯一的 AImageReader interop 按上报的 480 宽裁切；真机硬解 buffer 尺寸与上报一致、且默认的 android_display 按可见尺寸裁切，不受影响。真机表现待验证；默认仍为 3.7.5
+
 ## TV 端 VLC / MPV 播放器审查修复 (2026-09-02)
 
 - 崩溃与稳定性

@@ -23,7 +23,10 @@ import com.kuaishou.akdanmaku.data.DanmakuItemData
 import com.kuaishou.akdanmaku.ext.RETAINER_BILIBILI
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import com.kuaishou.akdanmaku.ui.LiveDanmakuPlayer
+import dev.aaa1115910.biliapi.BiliApiConstants
 import dev.aaa1115910.biliapi.entity.ApiType
+import dev.aaa1115910.biliapi.entity.DashAudio
+import dev.aaa1115910.biliapi.entity.DashVideo
 import dev.aaa1115910.biliapi.entity.PlayData
 import dev.aaa1115910.biliapi.entity.PlayDataUnavailableException
 import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskSegment
@@ -56,6 +59,7 @@ import dev.aaa1115910.biliapi.websocket.LiveDataWebSocket
 import dev.aaa1115910.bilisubtitle.SubtitleParser
 import dev.aaa1115910.bilisubtitle.entity.SubtitleItem
 import dev.aaa1115910.bv.BVApp
+import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.CdnService
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.entity.LiveQualityPreference
@@ -75,7 +79,11 @@ import dev.aaa1115910.bv.player.renderer.OptimizedTextRenderer
 import dev.aaa1115910.bv.player.renderer.SimpleRenderer
 import dev.aaa1115910.bv.player.util.TvDanmakuCompatibilityPolicy
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
+import dev.aaa1115910.bv.network.DashIndexProbe
+import dev.aaa1115910.bv.player.PlaybackRequestHeaders
 import dev.aaa1115910.bv.player.entity.Audio
+import dev.aaa1115910.bv.player.entity.DashRepresentation
+import dev.aaa1115910.bv.player.entity.DashStreamInfo
 import dev.aaa1115910.bv.player.entity.DanmakuType
 import dev.aaa1115910.bv.player.entity.PlaybackMediaMode
 import dev.aaa1115910.bv.player.entity.PlayMode
@@ -370,6 +378,8 @@ class VideoPlayerV3ViewModel(
         val audioUrl: String?,
         val startPositionMs: Long,
         val playbackSessionToken: Long,
+        /** 与地址对应的 DASH 描述（含 sidx 范围），仅需要它的内核（VLC 4）会用到 */
+        val dashStreamInfo: DashStreamInfo? = null,
     )
 
     private data class DlnaSourceSnapshot(
@@ -1784,6 +1794,8 @@ class VideoPlayerV3ViewModel(
         logger.info { "Video url: ${playbackSource.videoUrl}" }
         logger.info { "Audio url: ${playbackSource.audioUrl}" }
         player.playUrl(playbackSource.videoUrl, playbackSource.audioUrl)
+        // playUrl 会清掉上一份描述，必须在其后设置
+        player.setDashStreamInfo(playbackSource.dashStreamInfo)
 
         if (playbackSource.startPositionMs > 0L) {
             logger.info { "Set initial seek position to ${playbackSource.startPositionMs}ms" }
@@ -2876,6 +2888,22 @@ class VideoPlayerV3ViewModel(
 
         val playUrlExpiresAt = pickEarliestUrlExpiryEpochMs(videoUrl, audioUrl)
 
+        // 需要完整 DASH 描述的内核（VLC 4）：用最终选定的地址组装，接口没给 sidx 范围就探测一次文件头
+        val dashStreamInfo = if (
+            !audioOnlyMode && muxedVideo == null && selectedVideoItem != null && audioItem != null &&
+            videoUrl != null && audioUrl != null && videoPlayer?.prefersDashManifest == true
+        ) {
+            resolveDashStreamInfo(
+                video = selectedVideoItem,
+                videoUrl = videoUrl,
+                audio = audioItem,
+                audioUrl = audioUrl,
+                durationMs = playData?.timeLength ?: 0L,
+            )
+        } else {
+            null
+        }
+
         withContext(Dispatchers.Main) {
             if (!isVodPlaybackSessionActive(playbackSessionToken)) return@withContext
             currentVideoHeight = selectedVideoItem?.height ?: 0
@@ -2899,6 +2927,7 @@ class VideoPlayerV3ViewModel(
                 audioUrl = audioUrl,
                 startPositionMs = startPositionMs,
                 playbackSessionToken = playbackSessionToken,
+                dashStreamInfo = dashStreamInfo,
             )
             if (!settings.autoPlay && !manualVodPlaybackRequested) {
                 logger.info { "Defer vod playback prepare until manual play" }
@@ -2920,6 +2949,65 @@ class VideoPlayerV3ViewModel(
             cancelVodPlayUrlAutoRefresh()
             logger.fWarn { "Skip vod URL auto refresh because no deadline/expires was parsed" }
         }
+    }
+
+    /**
+     * 把选定的视频/音频表示整理成 [DashStreamInfo]：读取两个文件的 `sidx`（Web/代理接口给了范围就只取那几百字节，
+     * gRPC 接口没给就先扫 16 KiB 文件头）并解析成精确的分段表。任一失败返回 null，播放器回退到双地址方式。
+     */
+    private suspend fun resolveDashStreamInfo(
+        video: DashVideo,
+        videoUrl: String,
+        audio: DashAudio,
+        audioUrl: String,
+        durationMs: Long,
+    ): DashStreamInfo? {
+        // 与播放器内核同一套请求头规则：APP 签名地址不能带网页 Referer，否则 CDN 返回 403
+        val referer = PlaybackRequestHeaders.refererFor(
+            BVApp.context.getString(R.string.video_player_referer),
+            videoUrl,
+            audioUrl,
+        )
+        val userAgent = when (settings.apiType) {
+            ApiType.Web -> BiliApiConstants.USER_AGENT_WEB
+            ApiType.App -> BiliApiConstants.USER_AGENT_APP
+        }
+
+        val videoIndex = DashIndexProbe.fetchSegmentIndex(videoUrl, referer, userAgent, video.initRange, video.indexRange)
+        val audioIndex = DashIndexProbe.fetchSegmentIndex(audioUrl, referer, userAgent, audio.initRange, audio.indexRange)
+        if (videoIndex == null || audioIndex == null) {
+            logger.fInfo { "DASH manifest unavailable: sidx unreadable (video=${videoIndex != null}, audio=${audioIndex != null})" }
+            addLogs("未能读取 DASH 索引，VLC 4 回退到双地址播放")
+            return null
+        }
+        addLogs(
+            "DASH 索引：video ${videoIndex.segmentIndex.segments.size} 段@${videoIndex.indexRange}, " +
+                "audio ${audioIndex.segmentIndex.segments.size} 段@${audioIndex.indexRange}"
+        )
+
+        return DashStreamInfo(
+            durationMs = durationMs,
+            video = DashRepresentation(
+                url = videoUrl,
+                mimeType = video.mimeType?.takeIf { it.isNotBlank() } ?: "video/mp4",
+                codecs = video.codecs,
+                bandwidth = video.bandwidth,
+                width = video.width,
+                height = video.height,
+                initRange = videoIndex.initRange,
+                indexRange = videoIndex.indexRange,
+                segmentIndex = videoIndex.segmentIndex,
+            ),
+            audio = DashRepresentation(
+                url = audioUrl,
+                mimeType = audio.mimeType?.takeIf { it.isNotBlank() } ?: "audio/mp4",
+                codecs = audio.codecs,
+                bandwidth = audio.bandwidth,
+                initRange = audioIndex.initRange,
+                indexRange = audioIndex.indexRange,
+                segmentIndex = audioIndex.segmentIndex,
+            ),
+        )
     }
 
     private fun String.toMediaLocationLog(): String =

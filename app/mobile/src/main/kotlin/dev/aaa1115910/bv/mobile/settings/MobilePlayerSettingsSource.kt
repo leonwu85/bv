@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.mobile.settings
 
+import dev.aaa1115910.bv.mobile.util.MobileMpvOptions
 import dev.aaa1115910.bv.settings.PlayerSettingsProvider
 import dev.aaa1115910.bv.settings.PlayerSettingsSource
 
@@ -114,8 +115,9 @@ object MobilePlayerSettingsSource : PlayerSettingsSource {
     override val hardwareDecodeMode get() = MobilePrefs.hardwareDecodeMode
     override val mpvHardwareDecodeCodecs get() = MobilePrefs.mpvHardwareDecodeCodecs
     override val mpvVideoOutput get() = MobilePrefs.mpvVideoOutput
-    override val mpvGpuContext get() = MobilePrefs.mpvGpuContext
-    override val mpvGpuApi get() = MobilePrefs.mpvGpuApi
+    // 与 TV 端一致：mpv-android 构建只有 Android GL 上下文，不再让用户选 angle/vulkan
+    override val mpvGpuContext get() = MobileMpvOptions.GPU_CONTEXT
+    override val mpvGpuApi get() = MobileMpvOptions.GPU_API
     override val mpvCache get() = MobilePrefs.mpvCache
     override val mpvDemuxerMaxBytes get() = MobilePrefs.mpvDemuxerMaxBytes
     override val mpvDemuxerMaxBackBytes get() = MobilePrefs.mpvDemuxerMaxBackBytes
@@ -127,8 +129,16 @@ object MobilePlayerSettingsSource : PlayerSettingsSource {
 }
 
 object MobileRuntime {
+    // install() 会在主题组合时被反复调用；偏好校正只需在进程内做一次
+    @Volatile
+    private var sanitized = false
+
     fun install() {
-        MobilePrefs.sanitizePlayerType()
+        if (!sanitized) {
+            MobilePrefs.sanitizePlayerType()
+            MobilePrefs.sanitizeMpvOptions()
+            sanitized = true
+        }
         PlayerSettingsProvider.current = MobilePlayerSettingsSource
     }
 }

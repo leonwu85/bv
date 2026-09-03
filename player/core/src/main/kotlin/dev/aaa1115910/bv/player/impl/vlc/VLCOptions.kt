@@ -158,6 +158,9 @@ object VLCOptions {
 
         // ========== 视频输出配置（官方） ==========
         when (config.opengl) {
+            // 注意：VLC 4 的 gles2 只有 AImageReader interop（glinterop_aimage），按 AImage 上报的宽度裁切；
+            // 模拟器的软解把 480 宽的画面放进 512 宽的 buffer 却仍报 480，右侧会多出一条绿色/花屏竖条。
+            // 真机硬解的 buffer 尺寸与上报一致，且默认的 android_display 直出按可见尺寸裁切，不受影响。
             OpenGLMode.Enabled -> options.add("--vout=gles2,none")
             OpenGLMode.Disabled -> options.add("--vout=android_display,none")
             OpenGLMode.Automatic -> {

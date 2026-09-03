@@ -28,7 +28,6 @@ rememberPreference = "1.1.1"
 slf4j-android-mvysny = "2.0.13"
 slf4j-simple = "2.0.18"
 jpinyin = "1.1.8"
-vlc = "3.6.5"
 zxing = "3.5.4"
 
 [libraries]
@@ -140,8 +139,7 @@ slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j-simple"
 # https://github.com/stuxuhai/jpinyin
 jpinyin = { module = "com.github.stuxuhai:jpinyin", version.ref = "jpinyin" }
 
-# https://code.videolan.org/videolan/vlc-android
-vlc-android-all = { module = "org.videolan.android:libvlc-all", version.ref = "vlc" }
+# libvlc Java 层已源码入库：player/libvlcjni（原生库运行时下载，版本见 AppConfiguration.libVLC*Version）
 
 # https://github.com/zxing/zxing
 zxing = { module = "com.google.zxing:core", version.ref = "zxing" }

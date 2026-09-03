@@ -9,9 +9,20 @@ import java.nio.charset.StandardCharsets
  * attached. Keep the Referer for live/WEB URLs, including WEB URLs returned by API fallback.
  */
 internal fun VideoPlayerOptions.playbackRefererFor(vararg urls: String?): String? {
-    val configuredReferer = referer?.takeIf { it.isNotBlank() } ?: return null
-    return configuredReferer.takeUnless {
-        urls.filterNotNull().any(String::isAndroidAppMediaUrl)
+    return PlaybackRequestHeaders.refererFor(referer, *urls)
+}
+
+/** Header rules shared by the players and by app code that fetches the same media URLs (e.g. sidx probing). */
+object PlaybackRequestHeaders {
+    /**
+     * The Referer to send for [urls], or null when any of them is an APP-signed URL that Bilibili
+     * would reject with a web Referer.
+     */
+    fun refererFor(configuredReferer: String?, vararg urls: String?): String? {
+        val referer = configuredReferer?.takeIf { it.isNotBlank() } ?: return null
+        return referer.takeUnless {
+            urls.filterNotNull().any(String::isAndroidAppMediaUrl)
+        }
     }
 }
 

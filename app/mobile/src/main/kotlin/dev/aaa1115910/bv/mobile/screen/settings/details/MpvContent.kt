@@ -11,15 +11,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import de.schnettler.datastore.manager.PreferenceRequest
-import dev.aaa1115910.bv.mobile.component.preferences.PreferenceGroupScope
-import dev.aaa1115910.bv.mobile.component.preferences.items.editTextPreference
 import dev.aaa1115910.bv.mobile.component.preferences.items.radioPreference
+import dev.aaa1115910.bv.mobile.component.preferences.items.switchPreference
 import dev.aaa1115910.bv.mobile.component.preferences.preferenceGroups
 import dev.aaa1115910.bv.mobile.settings.MobilePrefKeys
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
+import dev.aaa1115910.bv.mobile.util.MobileMpvOptions
 import dev.aaa1115910.bv.player.entity.SuperResolutionType
 
+/**
+ * 手机端 MPV 参数，与 TV 端 `MpvSetting` 同一套取值表：所有项只能从固定选项里选
+ * （mpv-android 这个构建没有 Vulkan/rkmpp，gpu-context/gpu-api 固定为 Android GL，不再暴露），
+ * 存量的自由文本值在启动时归一化为“默认”。所有更改重进播放器后生效。
+ */
 @Composable
 fun MpvContent(
     modifier: Modifier = Modifier
@@ -38,125 +42,58 @@ fun MpvContent(
                     values = SuperResolutionType.entries.associate { it.value to it.displayName(context) }
                 )
                 radioPreference(
-                    title = "vo",
+                    title = "vo（视频输出）",
                     prefReq = MobilePrefKeys.mpvVideoOutputRequest,
-                    values = MpvVideoOutputOptions
-                )
-                radioPreference(
-                    title = "gpu-context",
-                    prefReq = MobilePrefKeys.mpvGpuContextRequest,
-                    values = MpvGpuContextOptions
-                )
-                radioPreference(
-                    title = "gpu-api",
-                    prefReq = MobilePrefKeys.mpvGpuApiRequest,
-                    values = MpvGpuApiOptions
+                    values = MobileMpvOptions.videoOutputOptions
                 )
             },
-            "解码与缓存" to {
+            "解码" to {
                 radioPreference(
-                    title = "hwdec",
+                    title = "hwdec（硬解方式）",
                     prefReq = MobilePrefKeys.hardwareDecodeModeRequest,
-                    values = MpvHardwareDecodeOptions
+                    values = MobileMpvOptions.hardwareDecodeOptions
                 )
                 radioPreference(
-                    title = "hwdec-codecs",
+                    title = "hwdec-codecs（允许硬解的编码）",
                     prefReq = MobilePrefKeys.mpvHardwareDecodeCodecsRequest,
-                    values = MpvHardwareDecodeCodecsOptions
+                    values = MobileMpvOptions.hardwareDecodeCodecsOptions
                 )
                 radioPreference(
-                    title = "vd-queue-enable",
+                    title = "vd-queue-enable（解码器输出队列）",
                     prefReq = MobilePrefKeys.mpvVdQueueEnableRequest,
-                    values = MpvVdQueueEnableOptions
+                    values = MobileMpvOptions.vdQueueEnableOptions
                 )
-                mpvTextPreference(
-                    title = "cache",
+            },
+            "缓存" to {
+                radioPreference(
+                    title = "cache（网络流缓存）",
                     prefReq = MobilePrefKeys.mpvCacheRequest,
-                    defaultValue = "yes",
-                    defaultSummary = "默认 yes",
-                    optionName = "cache"
+                    values = MobileMpvOptions.cacheOptions
                 )
-                mpvTextPreference(
-                    title = "demuxer-max-bytes",
+                radioPreference(
+                    title = "demuxer-max-bytes（前向缓存上限）",
                     prefReq = MobilePrefKeys.mpvDemuxerMaxBytesRequest,
-                    defaultValue = "150MiB",
-                    defaultSummary = "默认 150MiB",
-                    optionName = "demuxer-max-bytes"
+                    values = MobileMpvOptions.demuxerMaxBytesOptions
                 )
-                mpvTextPreference(
-                    title = "demuxer-max-back-bytes",
+                radioPreference(
+                    title = "demuxer-max-back-bytes（后向缓存上限）",
                     prefReq = MobilePrefKeys.mpvDemuxerMaxBackBytesRequest,
-                    defaultValue = "50MiB",
-                    defaultSummary = "默认 50MiB",
-                    optionName = "demuxer-max-back-bytes"
+                    values = MobileMpvOptions.demuxerMaxBackBytesOptions
+                )
+            },
+            "网络" to {
+                switchPreference(
+                    title = "CDN 使用 HTTP 直连",
+                    summary = "把 bilivideo/akamaized 的 HTTPS 播放地址改写为 HTTP。MPV 已使用系统根证书校验 HTTPS，" +
+                        "仅在系统根证书过期/损坏导致 TLS 校验失败时打开；带签名的播放地址与请求头会明文传输，" +
+                        "部分 PCDN 节点不提供 HTTP",
+                    prefReq = MobilePrefKeys.mpvPreferHttpCdnRequest,
+                    onCheckedChange = { true }
                 )
             }
         )
     }
 }
-
-private fun PreferenceGroupScope.mpvTextPreference(
-    title: String,
-    prefReq: PreferenceRequest<String>,
-    defaultValue: String,
-    defaultSummary: String,
-    optionName: String
-) {
-    editTextPreference(
-        title = title,
-        prefReq = prefReq,
-        emptySummary = "$defaultSummary（MPV --$optionName）",
-        summary = { value ->
-            value.takeIf { it.isNotBlank() }
-                ?.let { "$it（MPV --$optionName）" }
-                ?: "$defaultSummary（MPV --$optionName）"
-        },
-        transformValue = { value -> value.trim().replace("\n", "").ifBlank { defaultValue } }
-    )
-}
-
-private val MpvHardwareDecodeOptions = linkedMapOf(
-    "no" to "no（软解）",
-    "auto-safe" to "auto-safe",
-    "auto" to "auto",
-    "auto-copy" to "auto-copy",
-    "mediacodec" to "mediacodec",
-    "mediacodec-copy" to "mediacodec-copy",
-    "rkmpp" to "rkmpp",
-    "vulkan" to "vulkan",
-    "vulkan-copy" to "vulkan-copy"
-)
-
-private val MpvHardwareDecodeCodecsOptions = linkedMapOf(
-    "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1" to "默认：h264, hevc, mpeg4, mpeg2video, vp8, vp9, av1",
-    "h264,hevc" to "h264, hevc",
-    "h264,hevc,vp9,av1" to "h264, hevc, vp9, av1",
-    "all" to "all"
-)
-
-private val MpvVideoOutputOptions = linkedMapOf(
-    "gpu" to "gpu",
-    "gpu-next" to "gpu-next",
-    "mediacodec_embed" to "mediacodec_embed"
-)
-
-private val MpvGpuContextOptions = linkedMapOf(
-    "android" to "android",
-    "auto" to "auto",
-    "angle" to "angle"
-)
-
-private val MpvGpuApiOptions = linkedMapOf(
-    "" to "默认",
-    "opengl" to "opengl",
-    "vulkan" to "vulkan"
-)
-
-private val MpvVdQueueEnableOptions = linkedMapOf(
-    "" to "默认",
-    "yes" to "yes",
-    "no" to "no"
-)
 
 @Preview
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES)

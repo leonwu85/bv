@@ -37,14 +37,27 @@ object AppConfiguration {
     val applicationId: String
         get() = resolveApplicationId()
 
-    const val libVLCVersion = "3.6.5"
+    /**
+     * VLC 3 line (default): `org.videolan.android:libvlc-all:$libVLCVersion`, downloaded at runtime
+     * for the on-demand VLC libraries. The Java layer in `:player:libvlcjni` supports both this and
+     * [libVLC4Version]; bumping either requires re-checking the JNI surface (see player/libvlcjni/README.md).
+     */
+    const val libVLCVersion = "3.7.5"
 
     /**
-     * SHA-256 of `org.videolan.android:libvlc-all:$libVLCVersion` (the AAR downloaded at runtime for
-     * the on-demand VLC libraries). Cross-checked against Maven Central's `.sha1` sidecar
-     * (60a2ba57c500a11cb7a0d9d9f3612cfbd36c6a96). Update together with [libVLCVersion].
+     * SHA-256 of the `libvlc-all-$libVLCVersion.aar`. Cross-checked against Maven Central's `.sha1`
+     * sidecar (9ba36b9af5774ba56e691fa3c92efbad801eb51e). Update together with [libVLCVersion].
      */
-    const val libVLCAarSha256 = "6a15a1f7acd0738a31acce0c7e5eb6f5f340b62e6b64d8f83df547da56a44b47"
+    const val libVLCAarSha256 = "2c25507adb1260aa4d81aad8c2ce98765d98026b9381f49ea454d0b8092f21cb"
+
+    /** VLC 4 preview line, selectable by the user in the TV player settings. */
+    const val libVLC4Version = "4.0.0-eap29"
+
+    /**
+     * SHA-256 of the `libvlc-all-$libVLC4Version.aar`. Cross-checked against Maven Central's `.sha1`
+     * sidecar (63d85e3057b98b8d401869c8e1ec8476b9e4b3b0). Update together with [libVLC4Version].
+     */
+    const val libVLC4AarSha256 = "2033a8552d7c62c2c2deb52568c91ceb97378c532cdb69e9d457755654cbc727"
 
     /**
      * Pinned mpv-android GitHub release. `is.xyz.mpv.MPVLib` in `:player:core` mirrors the JNI ABI of

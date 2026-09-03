@@ -3,9 +3,11 @@ package dev.aaa1115910.bv.player.impl.vlc
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.net.Uri
 import androidx.core.net.toUri
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.player.VideoPlayerOptions
+import dev.aaa1115910.bv.player.entity.DashStreamInfo
 import dev.aaa1115910.bv.player.core.BuildConfig
 import dev.aaa1115910.bv.player.playbackRefererFor
 import dev.aaa1115910.bv.util.formatHourMinSec
@@ -47,6 +49,8 @@ class VlcMediaPlayer(
     private var initializationError: Exception? = null
     private var currentVideoUrl: String? = null
     private var currentAudioUrl: String? = null
+    /** 当前地址对应的 DASH 描述（VLC 4 走 MPD 播放时使用），随 playUrl 重置 */
+    private var dashStreamInfo: DashStreamInfo? = null
 
     /** 上层期望的播放状态（start()/pause() 记录） */
     private var playRequested = false
@@ -92,12 +96,15 @@ class VlcMediaPlayer(
     private var lastFrameUpdateTime = System.currentTimeMillis()
     private var lastTimeChangedValue = -1L
     private var freezeDetectionRunnable: Runnable? = null
+    private var endOfStreamWatchdog: Runnable? = null
+    /** 本次 Media 是否已经上报过结束（真实 EndReached 或片尾兜底），避免重复 onEnd */
+    private var endDispatchedForCurrentMedia = false
 
     // ========== 解码能力检测（基于 libvlc 统计的丢帧比例） ==========
     private var decodeStatsRunnable: Runnable? = null
     private var decodeStatsBaselineValid = false
-    private var lastDisplayedPictures = 0
-    private var lastLostPictures = 0
+    private var lastDisplayedPictures = 0L
+    private var lastLostPictures = 0L
     private var overloadedSampleCount = 0
     private var decoderOverloadReported = false
 
@@ -116,7 +123,7 @@ class VlcMediaPlayer(
         VlcNativeLibs.load(appContext)
 
         try {
-            val lib = obtainSharedLibVlc(appContext)
+            val lib = obtainSharedLibVlc(appContext, options)
             libVlc = lib
             mediaPlayer = MediaPlayer(lib).apply { setEventListener(vlcEventListener) }
             logger.info {
@@ -134,7 +141,19 @@ class VlcMediaPlayer(
         // 纯设置：不触碰当前 Media，避免直播 URL 续期时中断播放（见 AbstractVideoPlayer.playUrl 契约）
         currentVideoUrl = videoUrl
         currentAudioUrl = audioUrl
+        dashStreamInfo = null
         clearPendingSeekPosition()
+    }
+
+    /**
+     * VLC 4 用 adaptive 解复用器播放 DASH（见 [VlcDashManifest]）；VLC 3 的 input slave 与 fMP4 音轨相处良好，
+     * 不需要额外探测 sidx，因此不索取描述。
+     */
+    override val prefersDashManifest: Boolean
+        get() = libVlc != null && !LibVLC.isVlc3()
+
+    override fun setDashStreamInfo(info: DashStreamInfo?) {
+        dashStreamInfo = info
     }
 
     override fun prepare() {
@@ -153,6 +172,8 @@ class VlcMediaPlayer(
         }
 
         resetTransientState()
+        cancelEndOfStreamWatchdog()
+        endDispatchedForCurrentMedia = false
         readyDispatchedForCurrentMedia = false
         startupBuffering = true
         resetVideoInfo()
@@ -187,6 +208,7 @@ class VlcMediaPlayer(
 
     override fun pause() {
         playRequested = false
+        cancelEndOfStreamWatchdog()
         stopFreezeDetection()
         stopDecodeStatsMonitor()
         mediaPlayer?.pause()
@@ -195,6 +217,7 @@ class VlcMediaPlayer(
     override fun stop() {
         playRequested = false
         resetTransientState()
+        cancelEndOfStreamWatchdog()
         stopFreezeDetection()
         stopDecodeStatsMonitor()
         clearPendingSeekPosition()
@@ -210,6 +233,7 @@ class VlcMediaPlayer(
 
     override fun release() {
         logger.info { "Releasing VLC player" }
+        cancelEndOfStreamWatchdog()
         stopFreezeDetection()
         stopDecodeStatsMonitor()
         cancelSeek()
@@ -338,20 +362,7 @@ class VlcMediaPlayer(
                 mPlayerEventListener?.onError(Exception("VLC playback error"))
             }
 
-            MediaPlayer.Event.EndReached -> {
-                resetTransientState()
-                stopFreezeDetection()
-                stopDecodeStatsMonitor()
-                clearPendingSeekPosition()
-                if (options.isLive) {
-                    // 直播流没有“自然结束”：连接被 CDN 关闭（如 URL 过期）时 VLC 只会给 EndReached，
-                    // 按错误上报以触发上层的直播重连（重新获取播放地址）
-                    logger.warn { "VLC: live stream reached end, reporting as interruption" }
-                    mPlayerEventListener?.onError(Exception("VLC live stream interrupted"))
-                } else {
-                    mPlayerEventListener?.onEnd()
-                }
-            }
+            MediaPlayer.Event.EndReached -> handleEndReached(synthesized = false)
 
             MediaPlayer.Event.Buffering -> onBufferingEvent(event.buffering)
 
@@ -361,6 +372,8 @@ class VlcMediaPlayer(
                 if (timeMs != lastTimeChangedValue) {
                     lastFrameUpdateTime = System.currentTimeMillis()
                     lastTimeChangedValue = timeMs
+                    // 只在位置真正推进时重新布防，停在原地反复上报同一时间不能推迟判定
+                    armEndOfStreamWatchdog(timeMs)
                 }
                 // 时间开始推进说明起播缓冲已经结束（兜底：个别流不会发出 Buffering 100%）
                 if (startupBuffering && !isSeeking) {
@@ -659,10 +672,12 @@ class VlcMediaPlayer(
         // getMedia() 会增加引用计数，必须 release
         val media = mp.media ?: return
         try {
-            for (index in 0 until media.trackCount) {
-                val track = media.getTrack(index) as? IMedia.VideoTrack ?: continue
-                if (track.width <= 0 || track.height <= 0) continue
-                applyVideoTrackInfo(track)
+            // getTracks(type) 在 VLC 3/4 上都可用（双版本 Java 层内部按内核适配）
+            val tracks = media.getTracks(IMedia.Track.Type.Video).orEmpty()
+            for (track in tracks) {
+                val videoTrack = track as? IMedia.VideoTrack ?: continue
+                if (videoTrack.width <= 0 || videoTrack.height <= 0) continue
+                applyVideoTrackInfo(videoTrack)
                 return
             }
             logger.debug { "No video track with a valid size yet" }
@@ -709,9 +724,11 @@ class VlcMediaPlayer(
         if (attachedVideoLayout != null) detachVideoLayout()
         try {
             // 参数：FrameLayout, DisplayManager, enableSubtitles, enableTextureView
-            // enableSubtitles=true 会额外创建一个透明的字幕 SurfaceView：libvlc 的 android_display（MediaCodec
+            // VLC 3：enableSubtitles=true 会额外创建一个透明的字幕 SurfaceView，libvlc 3 的 android_display（MediaCodec
             // 直出、零拷贝）要求有它才能启用，否则会回退到 gles2 走 GL 拷贝，4K 时每帧多一次 GPU 上传。
-            mp.attachViews(videoLayout, null, true, false)
+            // VLC 4：android_display 用 ASurfaceControl 直出，不需要字幕 Surface；应用自己渲染字幕/弹幕，
+            // 多出来的 GL 字幕层只会白白盖在视频上。
+            mp.attachViews(videoLayout, null, LibVLC.isVlc3(), false)
             // 缩放模式必须在 attachViews 之后设置才会生效（VideoHelper 由 attachViews 创建）
             mp.videoScale = MediaPlayer.ScaleType.SURFACE_BEST_FIT
             attachedVideoLayout = videoLayout
@@ -745,19 +762,33 @@ class VlcMediaPlayer(
 
     private fun buildMedia(url: String, audioUrl: String?): Media {
         val normalizedAudioUrl = audioUrl?.takeIf { it.isNotBlank() && it != url }
-        return Media(libVlc, url.toUri()).apply {
+        val manifest = dashStreamInfo?.takeIf { info ->
+            !LibVLC.isVlc3() && normalizedAudioUrl != null && VlcDashManifest.isApplicable(info)
+        }
+        val media = if (manifest != null) {
+            // VLC 4：把音视频两个 fMP4 交给 adaptive 解复用器当一个 DASH 输入播，避免 input slave 的 PCR 互相打架
+            val mpd = VlcDashManifest.write(appContext.cacheDir.resolve("vlc"), manifest)
+            logger.info { "Playing through DASH manifest $mpd (VLC ${runCatching { LibVLC.version() }.getOrDefault("?")})" }
+            Media(libVlc, Uri.fromFile(mpd))
+        } else {
+            Media(libVlc, url.toUri())
+        }
+        return media.apply {
             // 必须在 setMedia() 之前设置：否则 libvlc-android 的 setDefaultMediaPlayerOptions()
             // 会为每个 Media 追加 :network-caching=1500，覆盖 LibVLC 级别的 --network-caching
             addOption(":network-caching=$networkCachingMs")
+            // adaptive 的 HTTP 客户端同样继承 http-referrer / http-user-agent
             options.playbackRefererFor(url, normalizedAudioUrl)?.let {
                 addOption(":http-referrer=$it")
             }
             options.userAgent?.let {
                 addOption(":http-user-agent=$it")
             }
-            // 合入 DASH 音频流
-            normalizedAudioUrl?.let { audio ->
-                addSlave(IMedia.Slave(IMedia.Slave.Type.Audio, 0, audio))
+            // 合入 DASH 音频流（VLC 3，或拿不到 sidx 范围时的 VLC 4 兜底）
+            if (manifest == null) {
+                normalizedAudioUrl?.let { audio ->
+                    addSlave(IMedia.Slave(IMedia.Slave.Type.Audio, 0, audio))
+                }
             }
             VLCOptions.setMediaOptions(
                 media = this,
@@ -775,6 +806,60 @@ class VlcMediaPlayer(
     // 画面卡死检测和恢复
     // ------------------------------------------------------------------------------------------
 
+    private fun handleEndReached(synthesized: Boolean) {
+        if (endDispatchedForCurrentMedia) {
+            logger.debug { "VLC: end already dispatched for this media, ignoring ${if (synthesized) "watchdog" else "EndReached"}" }
+            return
+        }
+        endDispatchedForCurrentMedia = true
+        cancelEndOfStreamWatchdog()
+        resetTransientState()
+        stopFreezeDetection()
+        stopDecodeStatsMonitor()
+        clearPendingSeekPosition()
+        if (options.isLive) {
+            // 直播流没有“自然结束”：连接被 CDN 关闭（如 URL 过期）时 VLC 只会给 EndReached，
+            // 按错误上报以触发上层的直播重连（重新获取播放地址）
+            logger.warn { "VLC: live stream reached end, reporting as interruption" }
+            mPlayerEventListener?.onError(Exception("VLC live stream interrupted"))
+        } else {
+            mPlayerEventListener?.onEnd()
+        }
+    }
+
+    /**
+     * 片尾兜底：VLC 4 的 MediaCodec 解码器在 EOS 之后偶尔不会把最后几帧交还（输入线程一直
+     * “waiting decoder fifos to empty”），EndReached 迟迟不来，播放位置停在离结尾不到一秒的地方。
+     * 每次 TimeChanged 落在结尾附近时布一个定时器：若到期仍未推进、也没有在 seek/重缓冲，
+     * 就按自然结束处理并主动停止输入，而不是等 [FREEZE_THRESHOLD_MS] 的卡死恢复去 pause/play 碰运气。
+     */
+    private fun armEndOfStreamWatchdog(positionMs: Long) {
+        cancelEndOfStreamWatchdog()
+        val durationMs = lastKnownDurationMs
+        if (options.isLive || durationMs <= 0L || durationMs - positionMs > END_OF_STREAM_WINDOW_MS) return
+        val runnable = Runnable {
+            endOfStreamWatchdog = null
+            val mp = mediaPlayer ?: return@Runnable
+            if (endDispatchedForCurrentMedia || !playRequested || isSeeking || isRebuffering) return@Runnable
+            // 仍在推进的话新的 TimeChanged 会重新布防并取消本次；这里再确认一次没有新帧
+            if (System.currentTimeMillis() - lastFrameUpdateTime < END_OF_STREAM_STALL_MS) return@Runnable
+            if (lastKnownDurationMs - lastKnownPositionMs > END_OF_STREAM_WINDOW_MS) return@Runnable
+            logger.warn {
+                "VLC: playback stalled at ${positionMs}ms of ${lastKnownDurationMs}ms without EndReached, treating as end of stream"
+            }
+            handleEndReached(synthesized = true)
+            playRequested = false
+            mp.stop()
+        }
+        endOfStreamWatchdog = runnable
+        mainHandler.postDelayed(runnable, END_OF_STREAM_STALL_MS)
+    }
+
+    private fun cancelEndOfStreamWatchdog() {
+        endOfStreamWatchdog?.let { mainHandler.removeCallbacks(it) }
+        endOfStreamWatchdog = null
+    }
+
     /**
      * 定期检查 TimeChanged 是否停止更新。仅在缓存已满（非重缓冲）、非 seek 期间判定为卡死，
      * 避免把网络重缓冲误判为解码卡死而反复 pause/play。
@@ -788,7 +873,7 @@ class VlcMediaPlayer(
                 if (isPlaying && !isSeeking && !isRebuffering && cacheFillPercent >= 100) {
                     val timeSinceLastFrame = System.currentTimeMillis() - lastFrameUpdateTime
                     if (timeSinceLastFrame > FREEZE_THRESHOLD_MS) {
-                        logger.warn { "Detected video freeze (no TimeChanged for ${timeSinceLastFrame}ms), attempting recovery" }
+                        logger.warn { "Detected video freeze (no TimeChanged for ${timeSinceLastFrame}ms at ${lastKnownPositionMs}/${lastKnownDurationMs}ms), attempting recovery" }
                         attemptFreezeRecovery()
                     }
                 }
@@ -847,8 +932,8 @@ class VlcMediaPlayer(
 
     private fun resetDecodeStats() {
         decodeStatsBaselineValid = false
-        lastDisplayedPictures = 0
-        lastLostPictures = 0
+        lastDisplayedPictures = 0L
+        lastLostPictures = 0L
         overloadedSampleCount = 0
     }
 
@@ -870,11 +955,12 @@ class VlcMediaPlayer(
             media.release()
         } ?: return
 
+        // IMedia.Stats 计数在双版本 Java 层里统一为 long（VLC 4 的原生类型）
         val displayed = stats.displayedPictures
         val lost = stats.lostPictures
         if (decodeStatsBaselineValid) {
-            val displayedDelta = (displayed - lastDisplayedPictures).coerceAtLeast(0)
-            val lostDelta = (lost - lastLostPictures).coerceAtLeast(0)
+            val displayedDelta = (displayed - lastDisplayedPictures).coerceAtLeast(0L).toInt()
+            val lostDelta = (lost - lastLostPictures).coerceAtLeast(0L).toInt()
             val total = displayedDelta + lostDelta
             val overloaded = total >= MIN_FRAMES_PER_STATS_SAMPLE && lostDelta * 2 >= total
             overloadedSampleCount = if (overloaded) overloadedSampleCount + 1 else 0
@@ -907,6 +993,10 @@ class VlcMediaPlayer(
         private const val SEEK_TIMEOUT_MS = 10_000L // VLC 缓冲可能很慢
         private const val REBUFFER_NOTICE_DELAY_MS = 400L
         private const val FREEZE_THRESHOLD_MS = 5_000L
+        /** 距结尾多近才启用片尾兜底 */
+        private const val END_OF_STREAM_WINDOW_MS = 5_000L
+        /** 结尾附近位置停止推进多久视为播放已结束 */
+        private const val END_OF_STREAM_STALL_MS = 2_000L
         private const val FREEZE_CHECK_INTERVAL_MS = 5_000L
         private const val FREEZE_RECOVERY_RESUME_DELAY_MS = 500L
         private const val DECODE_STATS_INTERVAL_MS = 2_000L
@@ -926,6 +1016,16 @@ class VlcMediaPlayer(
         private var sharedLibVlc: LibVLC? = null
         private val libVlcLock = Any()
 
+        /** `VideoPlayerOptions.vlcVideoOutput`：空 = 自动，"gles2" = OpenGL，"android_display" = 直出 */
+        internal fun resolveOpenGlMode(vlcVideoOutput: String): OpenGLMode = when (vlcVideoOutput.trim()) {
+            VLC_VIDEO_OUTPUT_GLES2 -> OpenGLMode.Enabled
+            VLC_VIDEO_OUTPUT_ANDROID_DISPLAY -> OpenGLMode.Disabled
+            else -> OpenGLMode.Automatic
+        }
+
+        const val VLC_VIDEO_OUTPUT_GLES2 = "gles2"
+        const val VLC_VIDEO_OUTPUT_ANDROID_DISPLAY = "android_display"
+
         internal fun resolveNetworkCachingMs(options: VideoPlayerOptions): Int = when {
             options.expandBuffer -> NETWORK_CACHING_EXPANDED_MS
             options.isLive -> NETWORK_CACHING_LIVE_MS
@@ -936,7 +1036,7 @@ class VlcMediaPlayer(
          * LibVLC 实例进程级复用：加载模块列表耗时较长且实例间没有差异（网络缓存等按 Media 设置），
          * 与官方 VLC-Android 的 VLCInstance 单例做法一致。
          */
-        private fun obtainSharedLibVlc(context: Context): LibVLC {
+        private fun obtainSharedLibVlc(context: Context, options: VideoPlayerOptions): LibVLC {
             sharedLibVlc?.let { return it }
             synchronized(libVlcLock) {
                 sharedLibVlc?.let { return it }
@@ -949,6 +1049,10 @@ class VlcMediaPlayer(
                         .setNetworkCaching(NETWORK_CACHING_VOD_MS)
                         // release 包不输出 -vv 级别日志
                         .setVerboseMode(BuildConfig.DEBUG)
+                        // 字幕字号等选项在 VLC 4 上换了名字（--sub-text-scale），按实际加载的内核选择
+                        .setIsVLC4(!LibVLC.isVlc3())
+                        // 视频输出：默认交给 libvlc 自选（android_display 直出）；用户可强制 gles2/android_display
+                        .setOpenGL(resolveOpenGlMode(options.vlcVideoOutput))
                         .build()
                 )
                 return LibVLC(context, libOptions).also {

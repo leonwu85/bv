@@ -267,7 +267,7 @@ dependencies {
     implementation(project(":app:tv"))
     implementation(project(":app:shared"))
     implementation(androidx.profileinstaller)
-    implementation(libs.vlc.android.all)
+    implementation(project(":player:libvlcjni"))
 }
 
 baselineProfile {

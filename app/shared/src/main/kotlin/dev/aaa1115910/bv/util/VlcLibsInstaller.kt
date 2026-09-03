@@ -1,7 +1,6 @@
 package dev.aaa1115910.bv.util
 
 import android.content.Context
-import dev.aaa1115910.bv.player.core.BuildConfig
 import dev.aaa1115910.bv.player.impl.vlc.VlcNativeLibs
 import java.io.File
 import java.security.MessageDigest
@@ -44,12 +43,16 @@ object VlcLibsInstaller {
     }
 
     /**
-     * 校验下载的 AAR 与构建时固定的 SHA-256 一致（AppConfiguration.libVLCAarSha256）。
-     * 镜像源不可信，且原生库会被直接加载执行，因此不匹配时拒绝安装。
+     * 校验下载的 AAR 与构建时为该版本固定的 SHA-256 一致（AppConfiguration.libVLCAarSha256 /
+     * libVLC4AarSha256）。镜像源不可信，且原生库会被直接加载执行，因此不匹配时拒绝安装；
+     * 不在支持列表内的版本没有可比对的校验值，同样拒绝。
      */
     @Throws(SecurityException::class)
-    fun verifyAarChecksum(aarFile: File) {
-        val expected = BuildConfig.libVLCAarSha256.lowercase()
+    fun verifyAarChecksum(aarFile: File, version: String) {
+        val expected = VlcNativeLibs.aarSha256(version)?.lowercase()
+            ?: throw SecurityException(
+                "不支持的 VLC 组件版本 $version（可用：${VlcNativeLibs.supportedVersions.joinToString()}）"
+            )
         val actual = sha256Hex(aarFile)
         if (actual != expected) {
             throw SecurityException("VLC 组件校验失败：SHA-256 不匹配（expected=$expected, actual=$actual）")
@@ -65,7 +68,7 @@ object VlcLibsInstaller {
     @Throws(SecurityException::class, IllegalStateException::class)
     fun installFromAar(aarFile: File, targetDir: File, targetAbi: String, version: String) {
         require(aarFile.isFile) { "AAR does not exist: ${aarFile.absolutePath}" }
-        verifyAarChecksum(aarFile)
+        verifyAarChecksum(aarFile, version)
 
         val tempDir = File(targetDir.parentFile, "${targetDir.name}_tmp")
         tempDir.deleteRecursively()

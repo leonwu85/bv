@@ -1,5 +1,7 @@
 package dev.aaa1115910.bv.player
 
+import dev.aaa1115910.bv.player.entity.DashStreamInfo
+
 abstract class AbstractVideoPlayer {
     /** 播放器事件回调 */
     protected var mPlayerEventListener: VideoPlayerListener? = null
@@ -37,6 +39,19 @@ abstract class AbstractVideoPlayer {
     /** 内核建议的默认清晰度上限（B 站 qn 编码），null 表示不限制；只影响自动选择，不影响用户手动选择。 */
     open val preferredMaxResolutionCode: Int?
         get() = null
+
+    /**
+     * 内核是否希望拿到完整的 DASH 描述（[DashStreamInfo]，含 sidx 字节范围）而不只是两个 URL。
+     * 为 true 时上层会在必要时探测 fMP4 头部补齐 sidx 范围，然后调用 [setDashStreamInfo]。
+     */
+    open val prefersDashManifest: Boolean
+        get() = false
+
+    /**
+     * 提供当前 [playUrl] 地址对应的 DASH 描述。必须在 [playUrl] 之后、[prepare] 之前调用；
+     * [playUrl] 会清掉上一次的描述。不需要的内核忽略即可。
+     */
+    open fun setDashStreamInfo(info: DashStreamInfo?) = Unit
 
     /**
      * 初始化播放器实例

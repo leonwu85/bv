@@ -288,6 +288,7 @@ class VideoPlayerV3Activity : TvComponentActivity() {
             mpvVdQueueEnable = Prefs.tvMpvVdQueueEnable,
             mpvPreferHttpForCdn = Prefs.tvMpvPreferHttpCdn,
             superResolutionType = Prefs.superResolutionType.coerceForTv(),
+            vlcVideoOutput = Prefs.tvVlcVideoOutput,
             enableVideoFrameRateStrategy = false,
             isLive = isLive
         )

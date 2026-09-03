@@ -19,6 +19,8 @@ android {
         // :player) so the loaders in this module can validate what they are about to dlopen.
         buildConfigField("String", "libVLCVersion", "\"${AppConfiguration.libVLCVersion}\"")
         buildConfigField("String", "libVLCAarSha256", "\"${AppConfiguration.libVLCAarSha256}\"")
+        buildConfigField("String", "libVLC4Version", "\"${AppConfiguration.libVLC4Version}\"")
+        buildConfigField("String", "libVLC4AarSha256", "\"${AppConfiguration.libVLC4AarSha256}\"")
         buildConfigField("String", "mpvAndroidReleaseTag", "\"${AppConfiguration.mpvAndroidReleaseTag}\"")
         buildConfigField(
             "String",
@@ -82,7 +84,8 @@ dependencies {
     implementation(libs.material)
     implementation(project(":libs:ffmpegDecoder"))
     implementation(project(":player:shared"))
-    api(libs.vlc.android.all)
+    // libvlc-android Java 层（VLC 3/4 双版本超集），原生库运行时下载
+    api(project(":player:libvlcjni"))
     testImplementation(libs.kotlin.test)
     androidTestImplementation(androidx.compose.ui.test.junit4)
     debugImplementation(androidx.compose.ui.test.manifest)

@@ -12,7 +12,6 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.network.VlcLibsApi
-import dev.aaa1115910.bv.player.BuildConfig
 import dev.aaa1115910.bv.player.impl.vlc.VlcNativeLibs
 import dev.aaa1115910.bv.util.AppRestarter
 import dev.aaa1115910.bv.util.Prefs
@@ -22,10 +21,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
+/**
+ * @param version 要下载的 `libvlc-all` 版本，必须在 [VlcNativeLibs.supportedVersions] 内
+ *   （VLC 3 稳定版或 VLC 4 预览版，Java 层同时兼容两者）
+ */
 @Composable
 fun LibVLCDownloaderDialog(
     modifier: Modifier = Modifier,
     show: Boolean = true,
+    version: String = VlcNativeLibs.defaultVersion,
     onDismissRequest: () -> Unit = {},
     onDownloadComplete: () -> Unit = {},
     onDownloadFailed: (String) -> Unit = {}
@@ -35,7 +39,6 @@ fun LibVLCDownloaderDialog(
     var processing by remember { mutableStateOf(false) }
     var text by remember { mutableStateOf("等待操作中...") }
     var restartRequired by remember { mutableStateOf(false) }
-    val version = BuildConfig.libVLCVersion
 
     val startInstall: () -> Unit = {
         processing = true
@@ -63,8 +66,12 @@ fun LibVLCDownloaderDialog(
                 // 4. 保存已安装的版本号
                 Prefs.vlcLibsVersion = version
 
-                // 5. 通知完成；若本进程已加载了更旧的 C++ 运行库（来自 MPV 组件），需重启进程才能用 VLC
+                // 5. 通知完成；若本进程已加载了更旧的 C++ 运行库（来自 MPV 组件），或已加载了另一版本的
+                //    LibVLC（原生库无法卸载），都需要重启进程才能用上刚装好的组件
                 val restartReason = VlcNativeLibs.restartRequiredReason(context)
+                    ?: VlcNativeLibs.loadedVersion
+                        ?.takeIf { it != version }
+                        ?.let { loaded -> "当前进程已加载 LibVLC $loaded，请完全退出并重新打开应用后再使用 $version。" }
                 withContext(Dispatchers.Main) {
                     if (restartReason != null) {
                         text = "LibVLC 组件已安装。\n\n$restartReason"

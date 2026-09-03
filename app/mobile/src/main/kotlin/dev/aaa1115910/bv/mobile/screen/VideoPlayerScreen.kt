@@ -209,6 +209,7 @@ import dev.aaa1115910.bv.mobile.component.emote.EmoteTextSelection
 import dev.aaa1115910.bv.mobile.component.emote.EmotePanel
 import dev.aaa1115910.bv.mobile.component.emote.EmoteTextEditor
 import dev.aaa1115910.bv.mobile.component.emote.emoteDisplayName
+import dev.aaa1115910.bv.mobile.component.player.VodBufferRecoveryDialog
 import dev.aaa1115910.bv.mobile.component.player.VideoPlayerPages
 import dev.aaa1115910.bv.mobile.component.reply.CommentItem
 import dev.aaa1115910.bv.mobile.component.reply.CommentVoteCard
@@ -805,6 +806,15 @@ fun VideoPlayerScreen(
         )
     }
 
+    // 点播卡顿恢复：换 CDN / 降清晰度 / 关闭超分（提示由共享 ViewModel 产生）
+    playerViewModel.vodBufferRecoveryPrompt?.let { prompt ->
+        VodBufferRecoveryDialog(
+            prompt = prompt,
+            onDismiss = playerViewModel::dismissVodBufferRecoveryPrompt,
+            onConfirm = playerViewModel::confirmVodBufferRecoveryPrompt,
+        )
+    }
+
     activeDlnaSession?.let { session ->
         if (showDlnaControlDialog) {
             DlnaControlDialog(
@@ -1061,6 +1071,9 @@ fun VideoPlayerScreen(
                             },
                             onLoadNextVideo = playerViewModel::playNextVideo,
                             onSendHeartbeat = playerViewModel::uploadHistory,
+                            onRebufferingStarted = playerViewModel::onVodRebufferingStarted,
+                            onPlaybackResumed = playerViewModel::onVodPlaybackResumed,
+                            onDecoderOverloaded = playerViewModel::onVodDecoderOverloaded,
                             onLoadNewVideo = { videoListItem ->
                                 logger.fInfo { "on load new video: $videoListItem" }
                                 var aid = 0L

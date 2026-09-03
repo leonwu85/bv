@@ -41,7 +41,8 @@ import dev.aaa1115910.bv.tv.component.TvAlertDialog
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.VlcLibsInstaller
-import dev.aaa1115910.bv.player.BuildConfig
+import dev.aaa1115910.bv.player.impl.vlc.VlcMediaPlayer
+import dev.aaa1115910.bv.player.impl.vlc.VlcNativeLibs
 import dev.aaa1115910.bv.player.impl.mpv.MpvLibsInstaller
 import android.widget.Toast
 import androidx.tv.material3.Button
@@ -89,6 +90,13 @@ fun PlayerSetting(
     var enableAudioPlaybackParams by remember { mutableStateOf(Prefs.enableAudioPlaybackParams) }
     var showVlcDownloadConfirmDialog by remember { mutableStateOf(false) }
     var showVlcDownloaderDialog by remember { mutableStateOf(false) }
+    // 用户选择的 libvlc-all 版本（VLC 3 稳定版 / VLC 4 预览版）；下载弹窗按它取包
+    var selectedVlcVersion by remember { mutableStateOf(Prefs.vlcSelectedVersion) }
+    // 切换 VLC 版本后的下载不改变播放器内核选择，只替换组件
+    var vlcDownloadForVersionSwitch by remember { mutableStateOf(false) }
+    var selectedVlcVideoOutput by remember {
+        mutableStateOf(Prefs.tvVlcVideoOutput.takeIf { it in VlcVideoOutputOptions.keys } ?: "")
+    }
     var showMpvDownloadConfirmDialog by remember { mutableStateOf(false) }
     var showMpvDownloaderDialog by remember { mutableStateOf(false) }
 
@@ -184,9 +192,10 @@ fun PlayerSetting(
                     onValueChange = { newType ->
                         when (newType) {
                             PlayerType.VLC -> {
-                                // 检查 VLC 库是否需要更新（未安装或版本不匹配）
-                                if (VlcLibsInstaller.needsUpdate(context, BuildConfig.libVLCVersion)) {
+                                // 检查 VLC 库是否需要更新（未安装或与所选版本不匹配）
+                                if (VlcLibsInstaller.needsUpdate(context, selectedVlcVersion)) {
                                     // 显示下载确认弹窗
+                                    vlcDownloadForVersionSwitch = false
                                     showVlcDownloadConfirmDialog = true
                                 } else {
                                     selectedPlayerType = newType
@@ -213,6 +222,42 @@ fun PlayerSetting(
                                 onPlayerTypeChanged(newType)
                             }
                         }
+                    }
+                )
+            }
+            item {
+                SettingListItemWithDialog(
+                    title = "LibVLC 版本",
+                    supportText = "VLC 内核使用的 libvlc-all 组件。VLC 4 为预览版：新的视频布局与解码管线，" +
+                        "可能不稳定；切换后需要重新下载组件（约 90–110 MB），重进播放器后生效",
+                    options = VlcNativeLibs.supportedVersions,
+                    getDisplayName = { item, _ -> VlcNativeLibs.describeVersion(item) },
+                    getValueText = { item, _ -> item },
+                    value = selectedVlcVersion,
+                    onValueChange = { version ->
+                        if (version == selectedVlcVersion) return@SettingListItemWithDialog
+                        selectedVlcVersion = version
+                        Prefs.vlcSelectedVersion = version
+                        // 已安装的是另一版本：立刻提示下载，避免下次进播放器时才发现组件不匹配
+                        if (VlcLibsInstaller.needsUpdate(context, version)) {
+                            vlcDownloadForVersionSwitch = true
+                            showVlcDownloadConfirmDialog = true
+                        }
+                    }
+                )
+            }
+            item {
+                SettingListItemWithDialog(
+                    title = "VLC 视频输出",
+                    supportText = "自动 = libvlc 自选（Android 直出，MediaCodec 零拷贝）。个别设备/VLC 4 预览版直出黑屏时可改为 gles2（OpenGL 渲染，多一次 GPU 拷贝）。" +
+                        "LibVLC 实例进程内复用，更改后需完全退出并重新打开应用",
+                    options = VlcVideoOutputOptions.keys.toList(),
+                    getDisplayName = { item, _ -> VlcVideoOutputOptions[item] ?: item },
+                    getValueText = { item, _ -> item.ifBlank { "自动" } },
+                    value = selectedVlcVideoOutput,
+                    onValueChange = { output ->
+                        selectedVlcVideoOutput = output
+                        Prefs.tvVlcVideoOutput = output
                     }
                 )
             }
@@ -532,8 +577,9 @@ fun PlayerSetting(
             onDismissRequest = { showVlcDownloadConfirmDialog = false },
             title = { Text("需要下载 VLC 组件") },
             text = {
-                Text("VLC 播放器需要下载额外的组件才能使用。\n\n" +
-                     "下载大小：约 80 MB\n" +
+                Text("VLC 播放器需要下载 libvlc-all ${VlcNativeLibs.describeVersion(selectedVlcVersion)} 组件才能使用。\n\n" +
+                     "来源：Maven Central（连接失败时自动尝试镜像），安装前校验 SHA-256\n" +
+                     "下载大小：约 ${if (selectedVlcVersion == VlcNativeLibs.vlc4Version) "105" else "90"} MB\n" +
                      "建议在 Wi-Fi 环境下下载")
             },
             confirmButton = {
@@ -558,14 +604,20 @@ fun PlayerSetting(
     if (showVlcDownloaderDialog) {
         LibVLCDownloaderDialog(
             show = true,
+            version = selectedVlcVersion,
             onDismissRequest = {
                 showVlcDownloaderDialog = false
             },
             onDownloadComplete = {
                 showVlcDownloaderDialog = false
-                selectedPlayerType = PlayerType.VLC
-                Prefs.playerType = PlayerType.VLC
-                onPlayerTypeChanged(PlayerType.VLC)
+                if (vlcDownloadForVersionSwitch) {
+                    // 仅替换组件；内核保持用户当前的选择
+                    Toast.makeText(context, "LibVLC $selectedVlcVersion 组件下载完成", Toast.LENGTH_SHORT).show()
+                } else {
+                    selectedPlayerType = PlayerType.VLC
+                    Prefs.playerType = PlayerType.VLC
+                    onPlayerTypeChanged(PlayerType.VLC)
+                }
             },
             onDownloadFailed = { errorMessage ->
                 showVlcDownloaderDialog = false
@@ -628,3 +680,10 @@ fun PlayerSetting(
     }
 
 }
+
+/** VLC 内核视频输出选项：键为下发给 libvlc 的模块名（空 = 自动） */
+private val VlcVideoOutputOptions = linkedMapOf(
+    "" to "自动（默认，libvlc 自选）",
+    VlcMediaPlayer.VLC_VIDEO_OUTPUT_GLES2 to "gles2（OpenGL 渲染）",
+    VlcMediaPlayer.VLC_VIDEO_OUTPUT_ANDROID_DISPLAY to "android_display（强制直出）"
+)

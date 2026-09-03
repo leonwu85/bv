@@ -22,6 +22,7 @@ import dev.aaa1115910.bv.entity.PlayerType
 import dev.aaa1115910.bv.entity.ThemeType
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.DanmakuSpeedMode
+import dev.aaa1115910.bv.player.impl.vlc.VlcNativeLibs
 import dev.aaa1115910.bv.player.entity.DanmakuType
 import dev.aaa1115910.bv.player.entity.PlayMode
 import dev.aaa1115910.bv.player.entity.PortraitVideoFixMode
@@ -995,6 +996,23 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefVlcLibsVersionRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefVlcLibsVersionKey, value) }
 
+    /**
+     * 用户选择要下载/使用的 `libvlc-all` 版本（VLC 3 稳定版或 VLC 4 预览版）。
+     * 存量值不在支持列表内时回落到默认版本，避免升级后卡在一个已下线的版本上。
+     */
+    var vlcSelectedVersion: String
+        get() = runBlocking {
+            dsm.getPreferenceFlow(PrefKeys.prefVlcSelectedVersionRequest).first()
+                .takeIf { VlcNativeLibs.isSupportedVersion(it) }
+                ?: VlcNativeLibs.defaultVersion
+        }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefVlcSelectedVersionKey, value) }
+
+    /** VLC 内核视频输出：空 = 自动，"gles2" / "android_display" = 强制；LibVLC 进程级复用，更改需重启应用 */
+    var tvVlcVideoOutput: String
+        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefTvVlcVideoOutputRequest).first() }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefTvVlcVideoOutputKey, value.trim()) }
+
     var defaultDanmakuFilterLevel: Int
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDefaultDanmakuFilterLevelRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDefaultDanmakuFilterLevelKey, value) }
@@ -1174,6 +1192,8 @@ object PrefKeys {
     val prefTvMpvPreferHttpCdnKey = booleanPreferencesKey("tv_mpv_prefer_http_cdn")
     val prefSuperResolutionTypeKey = intPreferencesKey("super_resolution_type")
     val prefVlcLibsVersionKey = stringPreferencesKey("vlc_libs_version")
+    val prefVlcSelectedVersionKey = stringPreferencesKey("vlc_selected_version")
+    val prefTvVlcVideoOutputKey = stringPreferencesKey("tv_vlc_video_output")
     val prefDefaultDanmakuFilterLevelKey = intPreferencesKey("default_danmaku_filter_level")
     val prefDefaultDanmakuMergeEnabledKey = booleanPreferencesKey("default_danmaku_merge_enabled")
     val prefDefaultLiveDanmakuFilterLevelKey = intPreferencesKey("default_live_danmaku_filter_level")
@@ -1334,6 +1354,9 @@ object PrefKeys {
     val prefSuperResolutionTypeRequest =
         PreferenceRequest(prefSuperResolutionTypeKey, SuperResolutionType.Disable.value)
     val prefVlcLibsVersionRequest = PreferenceRequest(prefVlcLibsVersionKey, "")
+    // 默认 VLC 3 稳定版；用户可在播放设置中切到 VLC 4 预览版
+    val prefVlcSelectedVersionRequest = PreferenceRequest(prefVlcSelectedVersionKey, "")
+    val prefTvVlcVideoOutputRequest = PreferenceRequest(prefTvVlcVideoOutputKey, "")
     val prefDefaultDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultDanmakuFilterLevelKey, 1)
     val prefDefaultDanmakuMergeEnabledRequest = PreferenceRequest(prefDefaultDanmakuMergeEnabledKey, true)
     val prefDefaultLiveDanmakuFilterLevelRequest = PreferenceRequest(prefDefaultLiveDanmakuFilterLevelKey, 0)

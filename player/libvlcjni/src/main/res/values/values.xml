@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#000000</color>
+    <string name="build_libvlc_revision" translatable="false">a8d53a9</string>
+    <string name="build_vlc_revision" translatable="false">27a79e11c0</string>
+</resources>

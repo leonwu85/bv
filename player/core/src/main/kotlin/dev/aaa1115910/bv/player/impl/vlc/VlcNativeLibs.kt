@@ -19,7 +19,6 @@ import java.io.File
 object VlcNativeLibs {
     private const val LIBS_DIR = "vlc_libs"
     private const val VERSION_FILE = "version.txt"
-    private const val LIBVLC_LOADED_FIELD = "sLoaded"
     private val logger = KotlinLogging.logger { }
 
     /** Component name used in [NativeCxxRuntime] diagnostics. */
@@ -28,9 +27,44 @@ object VlcNativeLibs {
     /** Load order matters: libvlc depends on libc++_shared, libvlcjni depends on libvlc. */
     val requiredLibs: List<String> = listOf(NativeCxxRuntime.LIBRARY_NAME, "libvlc.so", "libvlcjni.so")
 
-    /** Version the Java layer in this build was compiled against. */
-    val expectedVersion: String
+    /** Downloadable `libvlc-all` line the app ships with by default (VLC 3). */
+    val defaultVersion: String
         get() = BuildConfig.libVLCVersion
+
+    /** VLC 4 preview line. */
+    val vlc4Version: String
+        get() = BuildConfig.libVLC4Version
+
+    /**
+     * Every `libvlc-all` version the Java layer in `:player:libvlcjni` can drive. Anything else
+     * (including the "latest" a mirror might hand out) is refused by [load].
+     */
+    val supportedVersions: List<String>
+        get() = listOf(defaultVersion, vlc4Version)
+
+    fun isSupportedVersion(version: String?): Boolean = version != null && version in supportedVersions
+
+    /** SHA-256 of the `libvlc-all` AAR for a supported [version], or null for unknown versions. */
+    fun aarSha256(version: String): String? = when (version) {
+        defaultVersion -> BuildConfig.libVLCAarSha256
+        vlc4Version -> BuildConfig.libVLC4AarSha256
+        else -> null
+    }
+
+    /** Human readable label for a version choice (major line + stability). */
+    fun describeVersion(version: String): String = when {
+        version == vlc4Version -> "$version（VLC 4 预览版）"
+        version == defaultVersion -> "$version（VLC 3 稳定版）"
+        else -> version
+    }
+
+    /**
+     * Backwards compatible alias of [defaultVersion]. The Java layer no longer targets a single
+     * version; callers that need the user's choice should read it from preferences.
+     */
+    @Deprecated("Use defaultVersion or the selected version from preferences", ReplaceWith("defaultVersion"))
+    val expectedVersion: String
+        get() = defaultVersion
 
     @Volatile
     private var libsLoaded = false
@@ -66,14 +100,27 @@ object VlcNativeLibs {
 
     /**
      * Whether the installed libraries can be used by this build. A missing version file is
-     * accepted (legacy installs only recorded the version in preferences); a mismatching one is not.
+     * accepted (legacy 3.6.x installs only recorded the version in preferences and share the VLC 3
+     * JNI surface); a version outside [supportedVersions] is not.
      */
     fun isInstalledVersionUsable(context: Context): Boolean {
         val libsDir = libsDir(context)
         if (!hasCompatibleLibraries(libsDir)) return false
         val installed = readInstalledVersion(libsDir) ?: return true
-        return installed == expectedVersion
+        return isSupportedVersion(installed)
     }
+
+    /**
+     * The `libvlc-all` version whose libraries are loaded in this process, or null before [load].
+     * Legacy installs without a version file report [defaultVersion]'s major line as "3.x".
+     */
+    @Volatile
+    var loadedVersion: String? = null
+        private set
+
+    /** True once VLC 4 native libraries are loaded in this process. */
+    val isVlc4Loaded: Boolean
+        get() = libsLoaded && runCatching { !LibVLC.isVlc3() }.getOrDefault(false)
 
     /**
      * Loads the VLC native libraries exactly once per process.
@@ -94,10 +141,10 @@ object VlcNativeLibs {
             val installedVersion = readInstalledVersion(libsDir)
 
             when {
-                downloadedReady && installedVersion != null && installedVersion != expectedVersion -> {
+                downloadedReady && installedVersion != null && !isSupportedVersion(installedVersion) -> {
                     throw UnsatisfiedLinkError(
-                        "Installed VLC libraries ($installedVersion) do not match the Java layer " +
-                            "($expectedVersion); the component must be downloaded again"
+                        "Installed VLC libraries ($installedVersion) are not supported by this build " +
+                            "(${supportedVersions.joinToString()}); the component must be downloaded again"
                     )
                 }
 
@@ -117,6 +164,7 @@ object VlcNativeLibs {
                     downloaded
                         .filter { it.name != NativeCxxRuntime.LIBRARY_NAME }
                         .forEach { System.load(it.absolutePath) }
+                    loadedVersion = installedVersion ?: "3.x"
                 }
 
                 else -> {
@@ -129,29 +177,17 @@ object VlcNativeLibs {
                     // turns that into a Media3 fallback.
                     System.loadLibrary("vlc")
                     System.loadLibrary("vlcjni")
+                    loadedVersion = "bundled"
                 }
             }
 
-            markLibVlcLibrariesLoaded()
+            // The libraries were loaded by absolute path; tell the (forked) Java layer so that
+            // LibVLC(Context, List) does not run System.loadLibrary("vlc") a second time.
+            LibVLC.markLibrariesLoaded()
             libsLoaded = true
-        }
-    }
-
-    /**
-     * `LibVLC(Context, List)` unconditionally runs the static `LibVLC.loadLibraries()`, which calls
-     * `System.loadLibrary("vlc")` and, on `UnsatisfiedLinkError`, `System.exit(1)`. Because the APK
-     * does not bundle the libraries and `System.loadLibrary` only started resolving already-loaded
-     * sonames on Android 11, that path kills the process on Android 6–10. We have already loaded the
-     * libraries by absolute path, so flip the guard field and skip the official loader entirely
-     * (this also avoids a second `JNI_OnLoad` of libvlcjni on Android 11+).
-     */
-    private fun markLibVlcLibrariesLoaded() {
-        try {
-            val field = LibVLC::class.java.getDeclaredField(LIBVLC_LOADED_FIELD)
-            field.isAccessible = true
-            field.setBoolean(null, true)
-        } catch (e: Exception) {
-            logger.warn(e) { "Unable to mark LibVLC libraries as loaded; LibVLC.loadLibraries() will run" }
+            logger.info {
+                "VLC natives ready: version=$loadedVersion, core=${runCatching { LibVLC.version() }.getOrDefault("?")}"
+            }
         }
     }
 }
