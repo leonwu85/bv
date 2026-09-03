@@ -61,7 +61,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 internal const val LIVE_DANMAKU_SPLIT_BUFFER_CAPACITY = 16
-internal const val LIVE_DANMAKU_SPLIT_MAX_VISIBLE_MESSAGES = 28
+internal const val LIVE_DANMAKU_SPLIT_MAX_HISTORY_MESSAGES = 500
 internal const val LIVE_DANMAKU_SPLIT_INITIAL_MESSAGES = 8
 internal const val LIVE_DANMAKU_SPLIT_SCALE_REDUCTION = 0.2f
 internal val LiveDanmakuSplitVideoTopBarHeight = 40.dp
@@ -70,6 +70,14 @@ internal val LiveDanmakuSplitVideoBottomBarHeight = 40.dp
 internal fun LiveDanmakuMessage.passesLiveDanmakuSplitFilter(
     minimumUserLevel: Int,
 ): Boolean = userLevel >= minimumUserLevel
+
+internal fun trimLiveDanmakuSplitHistory(
+    messages: MutableList<LiveDanmakuMessage>,
+    maxSize: Int = LIVE_DANMAKU_SPLIT_MAX_HISTORY_MESSAGES,
+) {
+    require(maxSize > 0)
+    while (messages.size > maxSize) messages.removeAt(0)
+}
 
 /**
  * A bounded chronological queue that rejects or evicts the lowest-level message first. When
@@ -144,8 +152,8 @@ internal class LiveDanmakuPriorityBuffer(
  */
 internal fun liveDanmakuSplitInsertIntervalMs(content: String): Long {
     val codePointCount = content.codePointCount(0, content.length)
-    return (500L + codePointCount.coerceAtMost(44) * 25L)
-        .coerceIn(600L, 1_600L)
+    return (300L + codePointCount.coerceAtMost(44) * 30L)
+        .coerceIn(330L, 670L)
 }
 
 /**
@@ -240,9 +248,7 @@ fun LiveDanmakuSplitPanel(
         while (isActive) {
             val message = incomingMessages.take()
             visibleMessages.add(message)
-            while (visibleMessages.size > LIVE_DANMAKU_SPLIT_MAX_VISIBLE_MESSAGES) {
-                visibleMessages.removeAt(0)
-            }
+            trimLiveDanmakuSplitHistory(visibleMessages)
             listState.animateScrollToItem(visibleMessages.lastIndex)
             delay(liveDanmakuSplitInsertIntervalMs(message.content))
         }

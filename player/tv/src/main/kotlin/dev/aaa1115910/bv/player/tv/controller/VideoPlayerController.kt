@@ -171,6 +171,7 @@ fun VideoPlayerController(
     liveDanmakuSplitScreenAvailable: Boolean = false,
     liveDanmakuSplitScreenActive: Boolean = false,
     onToggleLiveDanmakuSplitScreen: () -> Unit = {},
+    menuEndPadding: Dp = 0.dp,
 
     // SponsorBlock 相关参数
     enableSponsorBlock: Boolean = false,
@@ -948,6 +949,7 @@ fun VideoPlayerController(
         )
         if (!offlinePlaybackMode) {
             MenuController(
+                modifier = Modifier.padding(end = menuEndPadding),
                 show = showMenuController,
             onInteraction = { markControllerInteraction(CONTROLLER_INTERACTION_COOLDOWN_MS) },
             onResolutionChange = onResolutionChange,

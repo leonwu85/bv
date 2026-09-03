@@ -1783,6 +1783,7 @@ fun BvPlayer(
             liveDanmakuSplitScreenAvailable = liveDanmakuSplitScreenAvailable,
             liveDanmakuSplitScreenActive = liveDanmakuSplitScreenActive,
             onToggleLiveDanmakuSplitScreen = onToggleLiveDanmakuSplitScreen,
+            menuEndPadding = videoContentEndPadding,
 
             // SponsorBlock 相关参数
             enableSponsorBlock = enableSponsorBlock,

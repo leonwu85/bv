@@ -740,7 +740,7 @@ class VideoPlayerV3ViewModel(
         private const val DANMAKU_SLICE_EMIT_DELAY_MS = 12L
         private const val DANMAKU_WEB_EMPTY_IMMEDIATE_RETRIES = 2
         private const val DANMAKU_WEB_EMPTY_RETRY_DELAY_MS = 180L
-        private const val LIVE_DANMAKU_MESSAGE_LIMIT = 300
+        private const val LIVE_DANMAKU_MESSAGE_LIMIT = 500
         private const val AUTO_PLAY_PREPARE_WAIT_MS = 1_200L
         private const val PREPARED_AUTO_PLAY_PLAY_DATA_TTL_MS = 2 * 60_000L
     }
@@ -880,6 +880,10 @@ class VideoPlayerV3ViewModel(
     fun setLivePlayer(player: LiveDanmakuPlayer) {
         liveDanmakuPlayer = player
         logger.fInfo { "LiveDanmakuPlayer set from Compose: $player" }
+    }
+
+    fun clearLiveDanmakuOverlay() {
+        liveDanmakuPlayer?.clear()
     }
 
     fun prepareAutoPlayTarget(candidate: AutoPlayCandidate?) {

@@ -215,6 +215,11 @@ fun VideoPlayerV3Screen(
     var showLiveControlPanel by remember { mutableStateOf(false) }
     var showLiveDanmakuSplitScreen by remember(playerViewModel.currentCid) { mutableStateOf(false) }
 
+    fun setLiveDanmakuSplitScreenEnabled(enabled: Boolean) {
+        playerViewModel.clearLiveDanmakuOverlay()
+        showLiveDanmakuSplitScreen = enabled
+    }
+
     // 焦点管理
     val relatedVideosFocusRequester = remember { FocusRequester() }
 
@@ -231,8 +236,12 @@ fun VideoPlayerV3Screen(
     LaunchedEffect(playerViewModel.isLive) {
         if (!playerViewModel.isLive) {
             showLiveControlPanel = false
-            showLiveDanmakuSplitScreen = false
+            setLiveDanmakuSplitScreenEnabled(false)
         }
+    }
+
+    LaunchedEffect(playerViewModel.currentCid) {
+        playerViewModel.clearLiveDanmakuOverlay()
     }
 
     // 获取在线观看人数
@@ -395,7 +404,7 @@ fun VideoPlayerV3Screen(
     }
 
     BackHandler(enabled = useLiveDanmakuSplitScreen) {
-        showLiveDanmakuSplitScreen = false
+        setLiveDanmakuSplitScreenEnabled(false)
     }
 
     LaunchedEffect(
@@ -571,7 +580,7 @@ fun VideoPlayerV3Screen(
                         liveDanmakuSplitScreenAvailable = playerViewModel.isLive,
                         liveDanmakuSplitScreenActive = useLiveDanmakuSplitScreen,
                         onToggleLiveDanmakuSplitScreen = {
-                            showLiveDanmakuSplitScreen = !showLiveDanmakuSplitScreen
+                            setLiveDanmakuSplitScreenEnabled(!showLiveDanmakuSplitScreen)
                         },
                         suppressDanmakuOverlay = useLiveDanmakuSplitScreen,
                         videoContentTopPadding = if (useLiveDanmakuSplitScreen) {

@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 class LiveDanmakuSplitPanelTest {
     @Test
     fun shortMessagesStillGetMinimumReadingTime() {
-        assertEquals(600L, liveDanmakuSplitInsertIntervalMs("好"))
+        assertEquals(330L, liveDanmakuSplitInsertIntervalMs("好"))
     }
 
     @Test
@@ -17,8 +17,21 @@ class LiveDanmakuSplitPanelTest {
         val medium = liveDanmakuSplitInsertIntervalMs("这是一条需要稍微多一点时间阅读的直播弹幕")
         val veryLong = liveDanmakuSplitInsertIntervalMs("很".repeat(100))
 
-        assertTrue(medium > 600L)
-        assertEquals(1_600L, veryLong)
+        assertTrue(medium > 330L)
+        assertEquals(670L, veryLong)
+    }
+
+    @Test
+    fun splitHistoryKeepsOnlyTheNewestFiveHundredMessages() {
+        val messages = (0L..500L)
+            .map { id -> message(id = id, userLevel = 0, timestampMs = id) }
+            .toMutableList()
+
+        trimLiveDanmakuSplitHistory(messages)
+
+        assertEquals(LIVE_DANMAKU_SPLIT_MAX_HISTORY_MESSAGES, messages.size)
+        assertEquals(1L, messages.first().id)
+        assertEquals(500L, messages.last().id)
     }
 
     @Test
