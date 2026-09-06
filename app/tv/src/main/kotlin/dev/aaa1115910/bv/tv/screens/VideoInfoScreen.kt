@@ -2285,7 +2285,7 @@ private fun VideoTagsRow(
         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        itemsIndexed(items = tags, key = { _, tag -> tag.id }) { index, tag ->
+        itemsIndexed(items = tags, key = { index, tag -> "$index:${tag.id}" }) { index, tag ->
             var hasFocus by remember(tag.id) { mutableStateOf(false) }
             val displayTagName = remember(tag.name) { formatVideoTagName(tag.name) }
 

@@ -4,7 +4,12 @@ import dev.aaa1115910.bv.viewmodel.LiveDanmakuMessage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 
 class LiveDanmakuSplitPanelTest {
     @Test
@@ -132,6 +137,44 @@ class LiveDanmakuSplitPanelTest {
         assertFalse(buffer.offer(message(id = 3, userLevel = 1, timestampMs = 3)))
         assertEquals(listOf(1L, 2L), buffer.snapshot().map { it.id })
         buffer.close()
+    }
+
+    @Test
+    fun closingWhileWaitingEndsTheConsumerNormally() = runBlocking {
+        val buffer = LiveDanmakuPriorityBuffer()
+        val waiting = async(start = CoroutineStart.UNDISPATCHED) { buffer.take() }
+        assertFalse(waiting.isCompleted)
+
+        buffer.close()
+
+        withTimeout(1_000) { assertNull(waiting.await()) }
+    }
+
+    @Test
+    fun closingDropsPendingMessagesAndRejectsFurtherOffers() = runBlocking {
+        val buffer = LiveDanmakuPriorityBuffer()
+        buffer.offer(message(id = 1, userLevel = 10, timestampMs = 1))
+
+        buffer.close()
+        buffer.close()
+
+        assertTrue(buffer.snapshot().isEmpty())
+        assertFalse(buffer.offer(message(id = 2, userLevel = 10, timestampMs = 2)))
+        withTimeout(1_000) { assertNull(buffer.take()) }
+    }
+
+    @Test
+    fun consumerWaitsAgainAfterDrainingTheQueueAndCanBeClosed() = runBlocking {
+        val buffer = LiveDanmakuPriorityBuffer()
+        val first = message(id = 1, userLevel = 10, timestampMs = 1)
+        val waiting = async(start = CoroutineStart.UNDISPATCHED) { buffer.take() }
+        buffer.offer(first)
+        withTimeout(1_000) { assertEquals(first, waiting.await()) }
+
+        val next = async(start = CoroutineStart.UNDISPATCHED) { buffer.take() }
+        assertFalse(next.isCompleted)
+        buffer.close()
+        withTimeout(1_000) { assertNull(next.await()) }
     }
 
     private fun message(

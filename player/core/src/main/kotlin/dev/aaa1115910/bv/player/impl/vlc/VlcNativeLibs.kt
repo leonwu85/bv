@@ -149,6 +149,10 @@ object VlcNativeLibs {
                 }
 
                 downloadedReady -> {
+                    VlcNativeCompatibility.unsupportedReason(
+                        installedVersion,
+                        NativeLibraryAbi.currentProcessAbi(),
+                    )?.let { throw UnsatisfiedLinkError(it) }
                     logger.info { "Loading VLC libs from $libsDir (version=${installedVersion ?: "legacy"})" }
                     // libc++ is shared with MPV: exactly one copy per process, the newest installed one.
                     try {

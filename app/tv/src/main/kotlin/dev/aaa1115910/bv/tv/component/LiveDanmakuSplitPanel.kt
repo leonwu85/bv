@@ -82,18 +82,21 @@ internal fun trimLiveDanmakuSplitHistory(
 /**
  * A bounded chronological queue that rejects or evicts the lowest-level message first. When
  * levels match, the older message is discarded so recent context remains readable.
+ * All operations run on the Compose UI thread; close discards pending messages on disposal.
  */
 internal class LiveDanmakuPriorityBuffer(
     private val capacity: Int = LIVE_DANMAKU_SPLIT_BUFFER_CAPACITY,
 ) {
     private val pending = mutableListOf<LiveDanmakuMessage>()
     private val available = Channel<Unit>(capacity = Channel.CONFLATED)
+    private var closed = false
 
     init {
         require(capacity > 0)
     }
 
     fun offer(message: LiveDanmakuMessage): Boolean {
+        if (closed) return false
         if (pending.size >= capacity) {
             val dropCandidate = (pending + message)
                 .withIndex()
@@ -113,15 +116,17 @@ internal class LiveDanmakuPriorityBuffer(
         return true
     }
 
-    suspend fun take(): LiveDanmakuMessage {
-        while (true) {
+    /** Returns null when disposed, including when close wakes a suspended consumer. */
+    suspend fun take(): LiveDanmakuMessage? {
+        while (!closed) {
             if (pending.isNotEmpty()) {
                 val next = pending.removeAt(0)
                 if (pending.isEmpty()) available.tryReceive()
                 return next
             }
-            available.receive()
+            if (available.receiveCatching().isClosed) return null
         }
+        return null
     }
 
     fun clear() {
@@ -135,6 +140,8 @@ internal class LiveDanmakuPriorityBuffer(
     }
 
     fun close() {
+        closed = true
+        clear()
         available.close()
     }
 
@@ -246,7 +253,7 @@ fun LiveDanmakuSplitPanel(
 
     LaunchedEffect(roomId) {
         while (isActive) {
-            val message = incomingMessages.take()
+            val message = incomingMessages.take() ?: break
             visibleMessages.add(message)
             trimLiveDanmakuSplitHistory(visibleMessages)
             listState.animateScrollToItem(visibleMessages.lastIndex)
