@@ -443,7 +443,7 @@ object BiliHttpApi {
         av: Int? = null,
         bv: String? = null,
         sessData: String? = null
-    ): BiliResponse<VideoInfo> = client.get("/x/web-interface/view") {
+    ): BiliResponse<VideoInfo> = client.get("/x/web-interface/wbi/view") {
         parameter("aid", av)
         parameter("bvid", bv)
         sessData?.let { header("Cookie", "SESSDATA=$sessData;") }

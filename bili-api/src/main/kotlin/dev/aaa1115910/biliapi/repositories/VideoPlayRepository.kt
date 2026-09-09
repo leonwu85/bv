@@ -148,26 +148,36 @@ class VideoPlayRepository(
     ): PlayData {
         return when (preferApiType) {
             ApiType.Web -> {
-                val tryLook = shouldTryLook1080P(tryLook1080P, authRepository.sessionData)
+                // Both requests belong to the same account, even if it changes while suspended.
+                val sessionData = authRepository.sessionData
+                val mid = authRepository.mid
+                val buvid3 = authRepository.buvid3
+                val dedeUserIDCkMd5 = authRepository.dedeUserIDCkMd5
+                val biliJct = authRepository.biliJct
+                val sid = authRepository.sid
+                val gaiaVtoken = authRepository.gaiaVtoken
+                val tryLook = shouldTryLook1080P(tryLook1080P, sessionData)
                 runCatching {
                     val requestedQn = 127
-                    val playUrlData = BiliHttpApi.getVideoWbiPlayUrl(
-                        av = aid,
-                        bv = bvid.takeIf { it.isNotBlank() },
-                        cid = cid,
-                        fnval = 4048,
-                        qn = requestedQn,
-                        fnver = 0,
-                        fourk = 1,
-                        sessData = authRepository.sessionData,
-                        dedeUserID = authRepository.mid,
-                        buvid3 = authRepository.buvid3,
-                        dedeUserIDCkMd5 = authRepository.dedeUserIDCkMd5,
-                        biliJct = authRepository.biliJct,
-                        sid = authRepository.sid,
-                        tryLook = tryLook,
-                        gaiaVtoken = authRepository.gaiaVtoken
-                    ).getResponseData()
+                    val playUrlData = fetchWebPlayUrlWithQualitySupplement(requestedQn) { qn ->
+                        BiliHttpApi.getVideoWbiPlayUrl(
+                            av = aid,
+                            bv = bvid.takeIf { it.isNotBlank() },
+                            cid = cid,
+                            fnval = 4048,
+                            qn = qn,
+                            fnver = 0,
+                            fourk = 1,
+                            sessData = sessionData,
+                            dedeUserID = mid,
+                            buvid3 = buvid3,
+                            dedeUserIDCkMd5 = dedeUserIDCkMd5,
+                            biliJct = biliJct,
+                            sid = sid,
+                            tryLook = tryLook,
+                            gaiaVtoken = gaiaVtoken
+                        ).getResponseData()
+                    }
                     val playData = PlayData.fromPlayUrlData(playUrlData)
                     if (!playData.needPay && !playData.hasPlayableVodStreams()) {
                         throw PlayDataUnavailableException(
@@ -387,41 +397,43 @@ class VideoPlayRepository(
         println("get pgc play data: [aid=$aid, cid=$cid, epid=$epid, preferCodec=$preferCodec, preferApiType=$preferApiType, enableProxy=$enableProxy, proxyArea=$proxyArea]")
         return when (preferApiType) {
             ApiType.Web -> {
-                val tryLook = shouldTryLook1080P(tryLook1080P, authRepository.sessionData)
+                val sessionData = authRepository.sessionData
+                val gaiaVtoken = authRepository.gaiaVtoken
+                val tryLook = shouldTryLook1080P(tryLook1080P, sessionData)
                 val playUrlData = runCatching {
-                    if (enableProxy) {
-                        BiliHttpProxyApi.getPgcVideoPlayUrlV2(
-                            av = aid,
-                            cid = cid,
-                            epid = epid,
-                            fnval = 4048,
-                            qn = 127,
-                            fnver = 0,
-                            fourk = 1,
-                            sessData = authRepository.sessionData,
-                            tryLook = tryLook,
-                            gaiaVtoken = authRepository.gaiaVtoken
-//                            buvid3 = authRepository.buvid3
-                        )
-                    } else {
-                        BiliHttpApi.getPgcVideoPlayUrlV2(
-                            av = aid,
-                            cid = cid,
-                            epid = epid,
-                            fnval = 4048,
-                            qn = 127,
-                            fnver = 0,
-                            fourk = 1,
-                            sessData = authRepository.sessionData,
-                            tryLook = tryLook,
-                            gaiaVtoken = authRepository.gaiaVtoken
-//                            buvid3 = authRepository.buvid3
-                        )
-                    }.getResponseData()
+                    fetchWebPlayUrlWithQualitySupplement { qn ->
+                        if (enableProxy) {
+                            BiliHttpProxyApi.getPgcVideoPlayUrlV2(
+                                av = aid,
+                                cid = cid,
+                                epid = epid,
+                                fnval = 4048,
+                                qn = qn,
+                                fnver = 0,
+                                fourk = 1,
+                                sessData = sessionData,
+                                tryLook = tryLook,
+                                gaiaVtoken = gaiaVtoken
+                            )
+                        } else {
+                            BiliHttpApi.getPgcVideoPlayUrlV2(
+                                av = aid,
+                                cid = cid,
+                                epid = epid,
+                                fnval = 4048,
+                                qn = qn,
+                                fnver = 0,
+                                fourk = 1,
+                                sessData = sessionData,
+                                tryLook = tryLook,
+                                gaiaVtoken = gaiaVtoken
+                            )
+                        }.getResponseData().videoInfo
+                    }
                 }.onFailure(::notifyPlayUrlAuthFailureIfNeeded)
                     .getOrThrow()
 
-                PlayData.fromPlayUrlV2Data(playUrlData)
+                PlayData.fromPlayUrlData(playUrlData)
             }
 
             ApiType.App -> {
