@@ -28,7 +28,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -97,6 +96,7 @@ internal class LiveDanmakuPriorityBuffer(
 
     fun offer(message: LiveDanmakuMessage): Boolean {
         if (closed) return false
+        if (pending.any { it.id == message.id }) return false
         if (pending.size >= capacity) {
             val dropCandidate = (pending + message)
                 .withIndex()
@@ -205,64 +205,27 @@ fun LiveDanmakuSplitPanel(
     minimumUserLevel: Int,
     modifier: Modifier = Modifier,
 ) {
-    val visibleMessages = remember(roomId) { mutableStateListOf<LiveDanmakuMessage>() }
-    val incomingMessages = remember(roomId) { LiveDanmakuPriorityBuffer() }
+    val state = remember(roomId) { LiveDanmakuSplitState(mutableStateListOf()) }
+    val visibleMessages = state.visibleMessages
     val listState = rememberLazyListState()
-    var initialized by remember(roomId) { mutableStateOf(false) }
-    var lastQueuedMessageId by remember(roomId) { mutableLongStateOf(-1L) }
     val latestMessageId = messages.lastOrNull()?.id
 
     LaunchedEffect(roomId, latestMessageId, minimumUserLevel) {
-        incomingMessages.removeBelowUserLevel(minimumUserLevel)
-        val visibleMessagesChanged = visibleMessages.removeAll {
-            !it.passesLiveDanmakuSplitFilter(minimumUserLevel)
-        }
-        if (visibleMessagesChanged && visibleMessages.isNotEmpty()) {
+        if (state.updateMessages(messages, minimumUserLevel)) {
             listState.scrollToItem(visibleMessages.lastIndex)
-        }
-
-        if (!initialized) {
-            visibleMessages.addAll(
-                messages
-                    .filter { it.passesLiveDanmakuSplitFilter(minimumUserLevel) }
-                    .takeLast(LIVE_DANMAKU_SPLIT_INITIAL_MESSAGES)
-            )
-            lastQueuedMessageId = latestMessageId ?: -1L
-            initialized = true
-            if (visibleMessages.isNotEmpty()) {
-                listState.scrollToItem(visibleMessages.lastIndex)
-            }
-            return@LaunchedEffect
-        }
-
-        if (latestMessageId != null && latestMessageId < lastQueuedMessageId) {
-            incomingMessages.clear()
-            visibleMessages.clear()
-            lastQueuedMessageId = -1L
-        }
-
-        messages
-            .asSequence()
-            .filter { it.id > lastQueuedMessageId }
-            .filter { it.passesLiveDanmakuSplitFilter(minimumUserLevel) }
-            .forEach { message -> incomingMessages.offer(message) }
-        if (latestMessageId != null) {
-            lastQueuedMessageId = latestMessageId
         }
     }
 
     LaunchedEffect(roomId) {
         while (isActive) {
-            val message = incomingMessages.take() ?: break
-            visibleMessages.add(message)
-            trimLiveDanmakuSplitHistory(visibleMessages)
+            val message = state.appendNextMessage() ?: break
             listState.animateScrollToItem(visibleMessages.lastIndex)
             delay(liveDanmakuSplitInsertIntervalMs(message.content))
         }
     }
 
     DisposableEffect(roomId) {
-        onDispose { incomingMessages.close() }
+        onDispose { state.close() }
     }
 
     Column(
@@ -308,7 +271,8 @@ fun LiveDanmakuSplitPanel(
             userScrollEnabled = false,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 6.dp),
         ) {
-            items(visibleMessages, key = { it.id }) { message ->
+            // Item count, keys and content must all refer to the same history snapshot.
+            items(visibleMessages.toList(), key = { it.id }) { message ->
                 LiveDanmakuSplitMessage(
                     message = message,
                     danmakuScale = danmakuScale,

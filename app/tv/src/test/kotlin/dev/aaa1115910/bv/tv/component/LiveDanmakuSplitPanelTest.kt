@@ -118,6 +118,30 @@ class LiveDanmakuSplitPanelTest {
     }
 
     @Test
+    fun repeatedMessageIsNotQueuedTwice() {
+        val buffer = LiveDanmakuPriorityBuffer()
+        val repeated = message(id = 6567, userLevel = 10, timestampMs = 1)
+
+        assertTrue(buffer.offer(repeated))
+        assertFalse(buffer.offer(repeated.copy(content = "duplicate delivery")))
+        assertEquals(listOf(repeated), buffer.snapshot())
+        buffer.close()
+    }
+
+    @Test
+    fun duplicateInFullBufferDoesNotEvictAnotherMessage() {
+        val buffer = LiveDanmakuPriorityBuffer(capacity = 2)
+        val lowLevel = message(id = 1, userLevel = 1, timestampMs = 1)
+        val highLevel = message(id = 2, userLevel = 10, timestampMs = 2)
+        buffer.offer(lowLevel)
+        buffer.offer(highLevel)
+
+        assertFalse(buffer.offer(highLevel))
+        assertEquals(listOf(lowLevel, highLevel), buffer.snapshot())
+        buffer.close()
+    }
+
+    @Test
     fun fullBufferDropsOldestWhenLevelsMatch() {
         val buffer = LiveDanmakuPriorityBuffer(capacity = 2)
         buffer.offer(message(id = 1, userLevel = 10, timestampMs = 1))
