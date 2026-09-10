@@ -16,6 +16,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -64,6 +65,8 @@ private const val PAGE_LAYOUT_WAIT_MS = 500L
  *
  * - **活跃页**全屏布局；窗口外非活跃页 0×0，减轻压力。
  * - 传入 [orderedItems] + [preloadStep] 时，在当前页稳定后逐个保留当前 ± step 的邻居页。
+ * - [preloadLayout] 为 true 时，在空闲期间以全屏、alpha=0 预布局邻页，
+ *   不加载图片；嵌套的隐藏页只准备当前子页，不再展开多层邻页。
  * - [enableAnimation] 为 true 时：
  *   - **邻页预热**：当前页过渡完成后，才将预加载窗口内页面逐个以全屏、alpha=0
  *     布局，让 LazyGrid 提前 compose；避免动画期间同时创建下一批页面。
@@ -81,6 +84,7 @@ fun <T : Any> KeepAlivePages(
     enableAnimation: Boolean = false,
     orderedItems: List<T>? = null,
     preloadStep: Int = 0,
+    preloadLayout: Boolean = enableAnimation,
     prepareBeforeDisplay: Boolean = false,
     imageLoadDelayMillis: Long? = null,
     onDisplayedPageChanged: (T) -> Unit = {},
@@ -90,6 +94,7 @@ fun <T : Any> KeepAlivePages(
     val currentOnDisplayedPageChanged by rememberUpdatedState(onDisplayedPageChanged)
     val performanceProfile = LocalTvUiPerformanceProfile.current
     val preloadCoordinator = LocalTvPreloadCoordinator.current
+    val parentPageActive = LocalTvPageActive.current
     val parentImageLoadingAllowed = LocalTvImageLoadingAllowed.current
     val effectiveImageLoadDelay = imageLoadDelayMillis
         ?: performanceProfile.imageLoadDelayMillis
@@ -116,7 +121,9 @@ fun <T : Any> KeepAlivePages(
     // 避免切换瞬间同时 measure/compose 新邻页拖慢可见动画。
     val warmedPages = remember { mutableStateListOf(current) }
     val hasUsableLayout = containerWidthPx > 0f
-    var imageReadyPage by remember { mutableStateOf<T?>(null) }
+    // Delay images only on the first display of a retained page. Revisiting a ready page
+    // should restore cached covers immediately instead of showing another placeholder pass.
+    val imageReadyPages = remember { mutableStateMapOf<T, Boolean>() }
 
     fun markLaidOut(page: T) {
         if (laidOutPages.add(page)) {
@@ -154,23 +161,27 @@ fun <T : Any> KeepAlivePages(
     }
 
     LaunchedEffect(displayedCurrent, effectiveImageLoadDelay) {
-        imageReadyPage = null
+        if (imageReadyPages[displayedCurrent] == true) return@LaunchedEffect
         if (effectiveImageLoadDelay > 0L) {
             delay(effectiveImageLoadDelay)
         }
         withFrameNanos { }
-        imageReadyPage = displayedCurrent
+        imageReadyPages[displayedCurrent] = true
     }
 
     val safeMaxKeep = maxKeep.coerceAtLeast(1)
     val safeStep = preloadStep.coerceAtLeast(0)
-    val preloadWindow = remember(displayedCurrent, orderedItems, safeStep, safeMaxKeep) {
+    val preloadWindow = remember(displayedCurrent, orderedItems, safeStep, safeMaxKeep, preloadLayout) {
         if (orderedItems != null && safeStep > 0) {
             boundedAdjacentNavItems(
                 items = orderedItems,
                 current = displayedCurrent,
                 step = safeStep,
                 maxItems = safeMaxKeep,
+                // Capture the page we are leaving before the transition effect updates
+                // previousCurrent. With two slots, keep Home/UGC warm on round trips
+                // instead of repeatedly evicting Home to lay out an unvisited PGC page.
+                preferredNeighbor = previousCurrent.takeIf { preloadLayout },
             )
         } else {
             listOf(displayedCurrent)
@@ -179,8 +190,8 @@ fun <T : Any> KeepAlivePages(
 
     // 外层 KeepAlive 把本页收成 0×0 时，立即释放内部邻页的全屏预布局状态。
     // 否则外层再次显示时，多个嵌套 LazyGrid 会在同一帧一起恢复全屏布局。
-    LaunchedEffect(hasUsableLayout) {
-        if (!hasUsableLayout) {
+    LaunchedEffect(hasUsableLayout, parentPageActive) {
+        if (!hasUsableLayout || !parentPageActive) {
             warmedPages.removeAll { it != displayedCurrent }
         }
     }
@@ -192,10 +203,18 @@ fun <T : Any> KeepAlivePages(
         safeMaxKeep,
         preloadWindow,
         hasUsableLayout,
+        parentPageActive,
+        preloadLayout,
     ) {
         val from = previousCurrent
         val generation = transitionGeneration + 1
         transitionGeneration = generation
+        if (!parentPageActive || !hasUsableLayout) {
+            previousCurrent = displayedCurrent
+            isEnterAnimating = false
+            slideProgress.snapTo(1f)
+            return@LaunchedEffect
+        }
         if (preparingPage != null) {
             isEnterAnimating = false
             slideProgress.snapTo(1f)
@@ -276,10 +295,12 @@ fun <T : Any> KeepAlivePages(
             preloadWindow.asSequence()
                 .filter { it != displayedCurrent }
                 .forEach { page ->
+                    // The coordinator may have been busy since the first idle check.
+                    // Recheck after acquiring it, and between pages, so held D-pad input
+                    // cannot race background layout while the drawer defers selection.
+                    preloadCoordinator.awaitInteractionIdle(PAGE_PRELOAD_INTERACTION_QUIET_MS)
                     if (page !in keptPages) keptPages.add(page)
-                    // 关闭动画时仅以 0×0 组合邻页来预取数据，维持低内存占用；
-                    // 开启动画才做全屏预布局，为下一次切换准备好 LazyGrid 首帧。
-                    if (enableAnimation && hasUsableLayout && page !in warmedPages) {
+                    if (preloadLayout && hasUsableLayout && page !in warmedPages) {
                         warmedPages.add(page)
                     }
                     withFrameNanos { }
@@ -289,7 +310,7 @@ fun <T : Any> KeepAlivePages(
 
         // 新窗口完成预热后再收起旧窗口，动画期间不触发额外的大范围重布局。
         val protectedPages = preloadWindow.toSet() + displayedCurrent
-        val fullLayoutPages = if (enableAnimation && hasUsableLayout) {
+        val fullLayoutPages = if (preloadLayout && hasUsableLayout) {
             protectedPages
         } else {
             setOf(displayedCurrent)
@@ -344,7 +365,10 @@ fun <T : Any> KeepAlivePages(
                 }
                 // 被 LRU 移出 composition 时兜底清理（与上方 LaunchedEffect 双保险）
                 DisposableEffect(page) {
-                    onDispose { clearLaidOut(page) }
+                    onDispose {
+                        clearLaidOut(page)
+                        imageReadyPages.remove(page)
+                    }
                 }
 
                 Box(
@@ -392,8 +416,9 @@ fun <T : Any> KeepAlivePages(
                         )
                 ) {
                     val allowPageImages = parentImageLoadingAllowed &&
-                            active && imageReadyPage == page
+                            active && imageReadyPages[page] == true
                     CompositionLocalProvider(
+                        LocalTvPageActive provides (parentPageActive && active),
                         LocalTvImageLoadingAllowed provides allowPageImages
                     ) {
                         content(page, active)

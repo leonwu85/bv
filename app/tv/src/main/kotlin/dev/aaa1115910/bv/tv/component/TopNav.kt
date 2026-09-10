@@ -52,6 +52,7 @@ fun TopNav(
     isLargePadding: Boolean,
     initialSelectedItem: TopNavItem? = null,
     focusSelectedToken: Int = 0,
+    selectionDelayMillis: Long = 80L,
     onFocusedChanged: (TopNavItem) -> Unit = {},
     onSelectedChanged: (TopNavItem) -> Unit = {},
     onClick: (TopNavItem) -> Unit = {},
@@ -69,7 +70,8 @@ fun TopNav(
     val enablePageAnimation =
         enableMainUiAnimation && performanceProfile.allowFullPageAnimation
     // 仅做轻微防抖；焦点解锁与内容就绪绑定为短延迟，避免原先 200+400ms 叠卡顿
-    val selectionDispatchDelay = if (enablePageAnimation) 80L else 0L
+    val selectionDispatchDelay = if (enablePageAnimation) selectionDelayMillis.coerceAtLeast(0L) else 0L
+    val deferSelection = selectionDispatchDelay > 0L
     val focusUnlockDelay = if (enablePageAnimation) 100L else 0L
 
     var highlightedNav by remember(initialSelectedItem, items) {
@@ -92,7 +94,7 @@ fun TopNav(
         initialSelectedItem,
         items,
         hasNavFocus,
-        enablePageAnimation,
+        selectionDispatchDelay,
     ) {
         if (highlightedNav !in items) return@LaunchedEffect
         if (!hasNavFocus) {
@@ -103,7 +105,7 @@ fun TopNav(
             canMoveFocusDown = true
             return@LaunchedEffect
         }
-        if (!enablePageAnimation) {
+        if (!deferSelection) {
             canMoveFocusDown = true
             return@LaunchedEffect
         }
@@ -180,7 +182,7 @@ fun TopNav(
                         highlightedNav = tab
                         onFocusedChanged(tab)
                         if (!isSameTab) {
-                            if (enablePageAnimation) {
+                            if (deferSelection) {
                                 canMoveFocusDown = false
                             } else {
                                 onSelectedChanged(tab)

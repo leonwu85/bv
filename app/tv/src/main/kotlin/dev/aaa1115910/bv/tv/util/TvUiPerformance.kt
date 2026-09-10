@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
@@ -164,7 +165,12 @@ class TvPreloadCoordinator {
 
 val LocalTvUiPerformanceProfile = staticCompositionLocalOf { TvUiPerformanceProfile.Default }
 val LocalTvPreloadCoordinator = staticCompositionLocalOf { TvPreloadCoordinator() }
-val LocalTvImageLoadingAllowed = staticCompositionLocalOf { true }
+// Nested page hosts may lay out their current page while hidden, but should only
+// expand their own adjacent pages when all parent pages are active.
+val LocalTvPageActive = compositionLocalOf { true }
+// This changes on every page switch and again when its images become ready. Track the
+// readers so toggling image requests does not invalidate the entire page composition.
+val LocalTvImageLoadingAllowed = compositionLocalOf { true }
 
 @Composable
 fun rememberTvUiPerformanceProfile(): TvUiPerformanceProfile {

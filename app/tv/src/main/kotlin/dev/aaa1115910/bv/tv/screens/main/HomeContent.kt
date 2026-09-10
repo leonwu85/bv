@@ -45,6 +45,7 @@ import dev.aaa1115910.bv.tv.screens.user.ToViewScreen
 import dev.aaa1115910.bv.tv.util.KeepAlivePages
 import dev.aaa1115910.bv.tv.util.LocalTvUiPerformanceProfile
 import dev.aaa1115910.bv.tv.util.LocalTvPreloadCoordinator
+import dev.aaa1115910.bv.tv.util.LocalTvPageActive
 import dev.aaa1115910.bv.tv.util.TOP_NAV_PRELOAD_STEP
 import dev.aaa1115910.bv.tv.util.TvUiPerformanceTier
 import dev.aaa1115910.bv.tv.util.boundedAdjacentNavItems
@@ -105,6 +106,7 @@ fun HomeContent(
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
     val performanceProfile = LocalTvUiPerformanceProfile.current
     val preloadCoordinator = LocalTvPreloadCoordinator.current
+    val pageActive = LocalTvPageActive.current
     val enableFullPageAnimation =
         enableMainUiAnimation && performanceProfile.allowFullPageAnimation
 
@@ -283,7 +285,7 @@ fun HomeContent(
     }
 
     // 当前页优先，再按设备预算预取最多一个相邻页。
-    LaunchedEffect(selectedTab, effectiveNavItems, userViewModel.isLogin) {
+    LaunchedEffect(selectedTab, effectiveNavItems, userViewModel.isLogin, pageActive) {
         loadJob?.cancel()
         val targets = boundedAdjacentNavItems(
             items = effectiveNavItems,
@@ -294,6 +296,9 @@ fun HomeContent(
         loadJob = scope.launch(Dispatchers.IO) {
             // 当前页优先
             initDataFor(selectedTab)
+            // Hidden drawer pages prepare only their selected tab, without competing
+            // with the visible drawer destination for adjacent-page preload work.
+            if (!pageActive) return@launch
             awaitListIdle(selectedTab)
             preloadCoordinator.runExclusive {
                 targets.filter { it != selectedTab }.forEach { tab ->
@@ -375,6 +380,9 @@ fun HomeContent(
                 isLargePadding = focusLayer != HomeFocusLayer.Content && currentListOnTop,
                 initialSelectedItem = selectedTab,
                 focusSelectedToken = topNavFocusSelectedToken,
+                // Match dynamic sub-tabs: commit focus selection immediately. KeepAlivePages
+                // owns the page transition, so an extra navigation delay only adds latency.
+                selectionDelayMillis = 0L,
                 onFocusedChanged = { nav ->
                     val homeNav = nav as HomeTopNavItem
                     val previousTopNavItem = focusedTopNavItem

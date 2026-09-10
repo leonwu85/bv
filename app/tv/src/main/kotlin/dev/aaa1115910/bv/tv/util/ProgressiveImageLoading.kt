@@ -48,10 +48,14 @@ fun rememberProgressiveImageLoadLimit(
         performanceTier,
         coordinator,
     ) {
-        if (!enabled || itemCount <= 0) {
+        if (itemCount <= 0) {
             loadLimit = 0
             return@LaunchedEffect
         }
+        // A hidden retained page stops issuing requests but keeps its released batches.
+        // Restarting from zero on every visit would add another delay and composition even
+        // when KeepAlivePages has already marked this page's images ready.
+        if (!enabled) return@LaunchedEffect
         if (!progressive) {
             // The startup page can use the launch interval to fill Coil's queue. Leaving it in
             // staged mode creates stale work that competes with the user's first Tab switch.

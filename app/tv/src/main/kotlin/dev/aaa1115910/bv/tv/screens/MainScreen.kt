@@ -286,7 +286,10 @@ fun MainScreen(
                     avatar = userViewModel.face,
                     username = userViewModel.username,
                     performanceProfile = performanceProfile,
-                    onDrawerItemChanged = { requestedDrawerItem = it },
+                    onDrawerItemChanged = {
+                        requestedDrawerItem = it
+                        if (pendingContentFocusItem != it) pendingContentFocusItem = null
+                    },
                     onOpenSettings = {
                         context.startActivity(Intent(context, SettingsActivity::class.java))
                     },
@@ -305,6 +308,9 @@ fun MainScreen(
                 enableAnimation = false,
                 orderedItems = drawerPageOrder,
                 preloadStep = 1,
+                // Prepare the bounded adjacent viewport while idle, even without a
+                // page animation. Hidden nested hosts do not expand more neighbours.
+                preloadLayout = true,
                 prepareBeforeDisplay = true,
                 imageLoadDelayMillis = performanceProfile.imageLoadDelayMillis,
                 onDisplayedPageChanged = { displayedDrawerItem = it },

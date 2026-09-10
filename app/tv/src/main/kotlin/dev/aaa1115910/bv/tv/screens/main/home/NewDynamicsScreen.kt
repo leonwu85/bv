@@ -111,6 +111,7 @@ import dev.aaa1115910.bv.tv.component.TvSafeDynamicImage
 import dev.aaa1115910.bv.tv.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.tv.util.ProvideListBringIntoViewSpec
 import dev.aaa1115910.bv.tv.util.LocalTvImageLoadingAllowed
+import dev.aaa1115910.bv.tv.util.LocalTvPageActive
 import dev.aaa1115910.bv.tv.util.TOP_NAV_PRELOAD_STEP
 import dev.aaa1115910.bv.tv.util.LocalTvPreloadCoordinator
 import dev.aaa1115910.bv.tv.util.LocalTvUiPerformanceProfile
@@ -175,6 +176,7 @@ fun NewDynamicsScreen(
     val currentOnSubTabRowUnavailable by rememberUpdatedState(onSubTabRowUnavailable)
     val performanceProfile = LocalTvUiPerformanceProfile.current
     val preloadCoordinator = LocalTvPreloadCoordinator.current
+    val pageActive = LocalTvPageActive.current
     val dynamicTabs = remember {
         listOf(
             DynamicTabType.All,
@@ -364,7 +366,7 @@ fun NewDynamicsScreen(
 
     // 子 Tab 预加载：当前页优先，再按设备预算串行预取相邻页。
     // 任务直接挂在 LaunchedEffect 下，切换 Tab 时可以取消旧的预加载队列。
-    LaunchedEffect(selectedTabType, dynamicViewModel.isLogin) {
+    LaunchedEffect(selectedTabType, dynamicViewModel.isLogin, pageActive) {
         if (!dynamicViewModel.isLogin) return@LaunchedEffect
         val targets = boundedAdjacentNavItems(
             items = dynamicTabs,
@@ -375,6 +377,7 @@ fun NewDynamicsScreen(
         withContext(Dispatchers.IO) {
             dynamicViewModel.ensureFirstPage(selectedTabType)
         }
+        if (!pageActive) return@LaunchedEffect
         awaitListIdle(selectedTabType)
         withContext(Dispatchers.IO) {
             preloadCoordinator.runExclusive {

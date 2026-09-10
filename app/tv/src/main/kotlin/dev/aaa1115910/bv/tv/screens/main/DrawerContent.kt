@@ -1,6 +1,5 @@
 package dev.aaa1115910.bv.tv.screens.main
 
-import android.os.SystemClock
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
@@ -60,6 +59,7 @@ import coil.compose.AsyncImage
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.tv.util.drawerNavItemsFlow
 import dev.aaa1115910.bv.tv.util.LocalTvUiPerformanceProfile
+import dev.aaa1115910.bv.tv.util.LocalTvPreloadCoordinator
 import dev.aaa1115910.bv.tv.util.parseDrawerItemsOrder
 import dev.aaa1115910.bv.tv.util.TvUiPerformanceProfile
 import dev.aaa1115910.bv.util.Prefs
@@ -79,7 +79,6 @@ private class DrawerNavigationState(initialItem: DrawerItem) {
     var hasFocus: Boolean = false
     var isDirectionKeyHeld: Boolean = false
     var isRepeatingDirection: Boolean = false
-    var lastFocusChangedAtMillis: Long = 0L
     var commitJob: Job? = null
 }
 
@@ -98,6 +97,7 @@ fun DrawerContent(
     onFocusToContent: (DrawerItem) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
+    val preloadCoordinator = LocalTvPreloadCoordinator.current
     val drawerAnimationMillis = performanceProfile.drawerAnimationMillis
     val hasUserAvatar = isLogin && avatar.isNotBlank()
     val userDisplayName = if (isLogin) username.ifBlank { "用户" } else DrawerItem.User.displayName
@@ -116,40 +116,42 @@ fun DrawerContent(
     }
 
     fun commitDrawerItem(item: DrawerItem) {
-        if (!item.hasContentPanel || item == currentDrawerItem) return
+        if (!item.hasContentPanel) return
+        // Also dispatch a return to the displayed page: a different page may still be
+        // preparing, and the new selection must cancel that pending transition.
         onDrawerItemChanged(item)
     }
 
-    fun remainingDrawerAnimationMillis(): Long {
-        val elapsed = SystemClock.uptimeMillis() - navigationState.lastFocusChangedAtMillis
-        return (drawerAnimationMillis - elapsed).coerceAtLeast(0L)
-    }
-
-    fun scheduleDrawerCommit(
-        item: DrawerItem,
-        afterCommit: (() -> Unit)? = null,
-    ) {
+    fun scheduleDrawerCommit(item: DrawerItem) {
         cancelPendingDrawerCommit()
         if (!item.hasContentPanel) return
 
         val commitDelay = if (navigationState.isRepeatingDirection) {
             performanceProfile.drawerRepeatSettleMillis
         } else {
-            remainingDrawerAnimationMillis()
+            0L
+        }
+
+        if (commitDelay == 0L) {
+            if (navigationState.hasFocus && navigationState.focusedItem == item) {
+                commitDrawerItem(item)
+            }
+            return
         }
 
         navigationState.commitJob = scope.launch {
             delay(commitDelay)
             if (!navigationState.hasFocus || navigationState.focusedItem != item) return@launch
             commitDrawerItem(item)
-            afterCommit?.invoke()
             navigationState.commitJob = null
         }
     }
 
     fun onDrawerItemFocused(item: DrawerItem) {
+        if (navigationState.focusedItem != item) {
+            preloadCoordinator.notifyUserInteraction()
+        }
         navigationState.focusedItem = item
-        navigationState.lastFocusChangedAtMillis = SystemClock.uptimeMillis()
         if (navigationState.hasFocus) {
             when {
                 // 首次 KeyDown 时无法预知用户会不会长按，因此等待 KeyUp 再提交。
@@ -164,10 +166,14 @@ fun DrawerContent(
 
     fun focusToContent() {
         val targetItem = navigationState.focusedItem
+        cancelPendingDrawerCommit()
+        if (!targetItem.hasContentPanel) return
+        navigationState.isDirectionKeyHeld = false
         navigationState.isRepeatingDirection = false
-        scheduleDrawerCommit(targetItem) {
-            onFocusToContent(targetItem)
-        }
+        // Right is an explicit destination choice. MainScreen waits for page readiness
+        // before moving focus; there is no need to wait for the rail's color animation.
+        commitDrawerItem(targetItem)
+        onFocusToContent(targetItem)
     }
 
     SideEffect(currentDrawerItem, isNavigationFocused) {
@@ -212,6 +218,9 @@ fun DrawerContent(
             .focusGroup()
             .focusRestorer(currentDrawerFocusRequester)
             .onPreviewKeyEvent { keyEvent ->
+                if (keyEvent.isKeyDown()) {
+                    preloadCoordinator.notifyUserInteraction()
+                }
                 if (keyEvent.isDpadLeft()) {
                     return@onPreviewKeyEvent true
                 }
@@ -243,9 +252,12 @@ fun DrawerContent(
                 navigationState.hasFocus = it.hasFocus
                 isNavigationFocused = it.hasFocus
                 if (it.hasFocus) {
+                    preloadCoordinator.notifyUserInteraction()
                     scheduleDrawerCommit(navigationState.focusedItem)
                 } else {
                     cancelPendingDrawerCommit()
+                    navigationState.isDirectionKeyHeld = false
+                    navigationState.isRepeatingDirection = false
                 }
             },
         verticalArrangement = Arrangement.SpaceBetween
@@ -448,7 +460,7 @@ private fun DrawerNavigationItem(
 ) {
     var hasFocus by remember { mutableStateOf(false) }
     val focusedInNavigation = isNavigationFocused && hasFocus
-    val iconTint by animateColorAsState(
+    val iconTint = animateColorAsState(
         targetValue = if (focusedInNavigation) {
             MaterialTheme.colorScheme.surface
         } else {
@@ -476,7 +488,7 @@ private fun DrawerNavigationItem(
             Icon(
                 imageVector = item.displayIcon,
                 contentDescription = null,
-                tint = iconTint
+                tint = iconTint.value
             )
         },
         label = {
