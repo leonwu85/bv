@@ -1758,18 +1758,29 @@ class VideoPlayerV3ViewModel(
     suspend fun clearOfflineCacheTask(): Result<String> =
         offlineVideoCacheService.clearTask(currentAid, currentCid)
 
-    fun playOfflineCache(): Result<String> {
+    suspend fun playOfflineCache(): Result<String> = withContext(Dispatchers.Main.immediate) {
         if (isLive) {
-            return Result.failure(IllegalStateException("直播没有离线缓存"))
+            return@withContext Result.failure(IllegalStateException("直播没有离线缓存"))
         }
         val aid = currentAid
         val cid = currentCid
+        val playbackSessionToken = vodPlaybackSessionToken
         if (aid <= 0L || cid <= 0L) {
-            return Result.failure(IllegalStateException("视频信息不完整"))
+            return@withContext Result.failure(IllegalStateException("视频信息不完整"))
         }
-        if (offlineVideoCacheService.getCompletedPlaybackSource(aid, cid) == null) {
-            return Result.failure(IllegalStateException("当前分P尚未缓存完成"))
+        val hasCompletedCache = withContext(Dispatchers.IO) {
+            offlineVideoCacheService.getCompletedPlaybackSource(aid, cid) != null
         }
+        if (
+            isLive || !isVodPlaybackSessionActive(playbackSessionToken) ||
+            currentAid != aid || currentCid != cid
+        ) {
+            return@withContext Result.failure(IllegalStateException("播放内容已切换，请重试"))
+        }
+        if (!hasCompletedCache) {
+            return@withContext Result.failure(IllegalStateException("当前分P尚未缓存完成"))
+        }
+        // 参数求值也会访问播放器，必须和切源一起在主线程执行。
         loadPlayUrl(
             avid = aid,
             cid = cid,
@@ -1780,7 +1791,7 @@ class VideoPlayerV3ViewModel(
             forceStartPlayback = true,
             preferOfflineCache = true
         )
-        return Result.success("正在播放离线缓存")
+        Result.success("正在播放离线缓存")
     }
 
     private fun applyVodPlaybackSource(
