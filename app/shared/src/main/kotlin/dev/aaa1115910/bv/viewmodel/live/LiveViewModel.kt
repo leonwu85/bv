@@ -3,6 +3,7 @@ package dev.aaa1115910.bv.viewmodel.live
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -139,7 +140,10 @@ class LiveViewModel(
     /**
      * 当前分区的直播间列表
      */
-    val roomList = mutableStateListOf<LiveRoomItem>()
+    // Cached area pages are immutable snapshots. Switching areas swaps a reference instead
+    // of clearing and copying every room on the UI thread.
+    var roomList by mutableStateOf<List<LiveRoomItem>>(emptyList(), referentialEqualityPolicy())
+        private set
 
     // ==================== 通用状态 ====================
 
@@ -495,6 +499,7 @@ class LiveViewModel(
 
         val areaContextKey = buildAreaContextKey(area.parentId, area.id)
         val targetPage = if (refresh) 1 else currentPage
+        val previousRooms = roomList
         val requestVersion = ++areaRequestVersion
         areaLoading = true
 
@@ -507,23 +512,16 @@ class LiveViewModel(
                     pageSize = 30
                 )
                 if (response.code == 0) {
+                    val mergedRooms = mergeLiveRoomPage(previousRooms, response.data.list, refresh)
                     withContext(Dispatchers.Main) {
                         if (requestVersion != areaRequestVersion) return@withContext
                         if (getCurrentAreaContextKey() != areaContextKey) return@withContext
 
-                        val incomingRooms = response.data.list.distinctBy { it.roomId }
-                        if (refresh) {
-                            roomList.clear()
-                            roomList.addAll(incomingRooms)
-                        } else {
-                            val existingIds = roomList.map { it.roomId }.toHashSet()
-                            val newRooms = incomingRooms.filter { it.roomId !in existingIds }
-                            roomList.addAll(newRooms)
-                        }
+                        roomList = mergedRooms
                         hasMore = response.data.list.size >= 30
                         currentPage = if (hasMore) targetPage + 1 else targetPage
                         areaRoomCache[areaContextKey] = AreaRoomCache(
-                            rooms = roomList.toList(),
+                            rooms = mergedRooms,
                             nextPage = currentPage,
                             hasMore = hasMore
                         )
@@ -642,13 +640,17 @@ class LiveViewModel(
             areaJob?.cancel()
             areaRequestVersion++
             areaLoading = false
-            roomList.clear()
-            roomList.addAll(cache.rooms)
+            roomList = cache.rooms
             currentPage = cache.nextPage
             hasMore = cache.hasMore
             logger.info { "Restore cached rooms for area ${area.name}, size=${cache.rooms.size}, nextPage=${cache.nextPage}" }
             return
         }
+        // Never display the previous area's rooms under the newly selected tab while
+        // its first request is pending, or paginate using the previous area's viewport.
+        roomList = emptyList()
+        currentPage = 1
+        hasMore = true
         loadRooms(refresh = true)
     }
 
@@ -668,7 +670,7 @@ class LiveViewModel(
             areaJob?.cancel()
             areaRequestVersion++
             areaLoading = false
-            roomList.clear()
+            roomList = emptyList()
             hasMore = false
             currentPage = 1
         }
