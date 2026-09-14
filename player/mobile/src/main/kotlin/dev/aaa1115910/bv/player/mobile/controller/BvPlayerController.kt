@@ -433,8 +433,10 @@ fun BvPlayerControllerVideoContent(
 
     val onLongPress: () -> Unit = {
         Log.i("BvPlayerController", "Screen long press")
-        is2xPlaying = true
-        onChangeSpeed(2f)
+        if (!videoPlayerConfigData.isLive) {
+            is2xPlaying = true
+            onChangeSpeed(2f)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val vibrator = context.getSystemService(Vibrator::class.java)
             vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK))
@@ -444,7 +446,7 @@ fun BvPlayerControllerVideoContent(
     val onLongPressEnd: (speed: Float) -> Unit = { oldSpeed ->
         Log.i("BvPlayerController", "Screen long press end")
         is2xPlaying = false
-        onChangeSpeed(oldSpeed)
+        if (!videoPlayerConfigData.isLive) onChangeSpeed(oldSpeed)
     }
 
     val onDoubleTap: () -> Unit = {
@@ -542,6 +544,7 @@ fun BvPlayerControllerVideoContent(
                     .fillMaxSize()
                     .detectPlayerGestures(
                         enableSafetyArea = isFullScreen,
+                        enableLongPress = !videoPlayerConfigData.isLive,
                         currentSpeed = videoPlayerConfigData.currentVideoSpeed,
                         onTap = onTap,
                         onLongPress = onLongPress,
@@ -699,6 +702,7 @@ private fun BvPlayerControllerSettingsContent(
 
 fun Modifier.detectPlayerGestures(
     enableSafetyArea: Boolean,
+    enableLongPress: Boolean,
     currentSpeed: Float,
     onTap: () -> Unit,
     onLongPress: () -> Unit,
@@ -710,6 +714,9 @@ fun Modifier.detectPlayerGestures(
     onDragEnd: (volumeMove: Float, brightnessMove: Float, seekMove: Float) -> Unit,
 ): Modifier = composed {
     val currentSpeedState = rememberUpdatedState(currentSpeed)
+    val longPressEnabled = rememberUpdatedState(enableLongPress)
+    val startLongPress = rememberUpdatedState(onLongPress)
+    val endLongPress = rememberUpdatedState(onLongPressEnd)
     var oldPlaySpeed by remember { mutableFloatStateOf(1f) }
     var componentWidth by remember { mutableIntStateOf(0) }
     var componentHeight by remember { mutableIntStateOf(0) }
@@ -731,18 +738,23 @@ fun Modifier.detectPlayerGestures(
                 onTap()
             },
             onLongPress = {
-                onLongPress()
-                oldPlaySpeed = currentSpeedState.value
-                longPressing = true
+                if (longPressEnabled.value) {
+                    oldPlaySpeed = currentSpeedState.value
+                    longPressing = true
+                    startLongPress.value()
+                }
             },
             onDoubleTap = {
                 if (longPressing) return@detectTapGestures
                 onDoubleTap()
             },
             onPress = {
-                tryAwaitRelease()
-                if (longPressing) onLongPressEnd(oldPlaySpeed)
-                longPressing = false
+                try {
+                    tryAwaitRelease()
+                } finally {
+                    if (longPressing) endLongPress.value(oldPlaySpeed)
+                    longPressing = false
+                }
             }
         )
     }

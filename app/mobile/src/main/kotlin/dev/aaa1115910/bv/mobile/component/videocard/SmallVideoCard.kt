@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -46,7 +47,9 @@ fun SmallVideoCard(
     onClick: () -> Unit = {},
     managementActionLabel: String? = null,
     onManagementAction: (() -> Unit)? = null,
+    showMoreMenu: Boolean = true,
 ) {
+    val showDanmakuCount = data.playString.isEmpty() || LocalDensity.current.fontScale <= 1.2f
     Card(
         modifier = modifier,
         onClick = onClick,
@@ -108,11 +111,13 @@ fun SmallVideoCard(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
+                        modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         if (data.playString != "") {
                             Row(
+                                modifier = Modifier.weight(1f, fill = false),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
@@ -123,14 +128,18 @@ fun SmallVideoCard(
                                     tint = Color.White
                                 )
                                 Text(
+                                    modifier = Modifier.weight(1f, fill = false),
                                     text = data.playString,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
-                        if (data.danmakuString != "") {
+                        if (data.danmakuString != "" && showDanmakuCount) {
                             Row(
+                                modifier = Modifier.weight(1f, fill = false),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
@@ -141,17 +150,22 @@ fun SmallVideoCard(
                                     tint = Color.White
                                 )
                                 Text(
+                                    modifier = Modifier.weight(1f, fill = false),
                                     text = data.danmakuString,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
                     }
                     Text(
+                        modifier = Modifier.padding(start = 4.dp),
                         text = data.timeString,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White
+                        color = Color.White,
+                        maxLines = 1
                     )
                 }
             }
@@ -170,11 +184,13 @@ fun SmallVideoCard(
                         minLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    VideoCardMoreMenu(
-                        data = data,
-                        managementActionLabel = managementActionLabel,
-                        onManagementAction = onManagementAction
-                    )
+                    if (showMoreMenu) {
+                        VideoCardMoreMenu(
+                            data = data,
+                            managementActionLabel = managementActionLabel,
+                            onManagementAction = onManagementAction
+                        )
+                    }
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically

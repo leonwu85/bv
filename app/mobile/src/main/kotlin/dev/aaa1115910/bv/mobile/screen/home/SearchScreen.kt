@@ -78,6 +78,8 @@ import dev.aaa1115910.bv.util.Partition
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.viewmodel.search.SearchInputViewModel
 import dev.aaa1115910.bv.viewmodel.search.SearchResultViewModel
+import dev.aaa1115910.bv.mobile.util.openBiliContent
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
@@ -100,8 +102,7 @@ fun SearchScreen(
     }
 
     val onSearch: (String) -> Unit = {
-        searchResultViewModel.keyword = it
-        searchResultViewModel.update()
+        searchResultViewModel.submit(it)
         searchInputViewModel.addSearchHistory(it)
     }
 
@@ -163,6 +164,10 @@ fun SearchScreen(
         trendingRankingError = searchInputViewModel.trendingRankingError,
         updateKeyword = updateKeyword,
         onSearch = onSearch,
+        onOpenLink = { openBiliContent(context, it) },
+        aggregateSearchResult = searchResultViewModel.allSearchResult.aggregateItems,
+        searchError = searchResultViewModel.error(searchResultViewModel.searchType),
+        onRetry = { searchResultViewModel.loadMore(searchResultViewModel.searchType, retry = true) },
         onDeleteHistory = searchInputViewModel::deleteSearchHistoryByKeyword,
         onClearHistories = searchInputViewModel::deleteAllSearchHistories,
         onRefreshHotwords = searchInputViewModel::refreshHotwords,
@@ -211,6 +216,10 @@ fun SearchContent(
     trendingRankingError: String? = null,
     updateKeyword: (String) -> Unit = {},
     onSearch: (String) -> Unit = {},
+    onOpenLink: suspend (String) -> Boolean = { false },
+    aggregateSearchResult: List<SearchTypeResult.SearchTypeResultItem> = emptyList(),
+    searchError: String? = null,
+    onRetry: () -> Unit = {},
     onDeleteHistory: (String) -> Unit = {},
     onClearHistories: () -> Unit = {},
     onRefreshHotwords: () -> Unit = {},
@@ -252,24 +261,28 @@ fun SearchContent(
         updateKeyword(textFieldState.text.toString())
     }
 
-    val onSearchKeyword: (String) -> Unit = {
-        val keyword = it.trim()
+    var searchJob by remember { mutableStateOf<Job?>(null) }
+    val onSearchKeyword: (String) -> Unit = { input ->
+        val keyword = input.trim()
         if (keyword.isNotEmpty()) {
-            onSearch(keyword)
-            val currentRoute = navController.currentDestination?.route
-            if (currentRoute != "searchResult") {
-                searchResultSourceRoute = currentRoute ?: "searchInput"
-                navController.navigate("searchResult")
-            }
-            textFieldState.setTextAndPlaceCursorAtEnd(keyword)
-            scope.launch {
-                // 等到 searchBar 移动到顶部再收起
-                delay(500)
+            searchJob?.cancel()
+            searchJob = scope.launch {
+                if (!onOpenLink(keyword)) {
+                    onSearch(keyword)
+                    val currentRoute = navController.currentDestination?.route
+                    if (currentRoute != "searchResult") {
+                        searchResultSourceRoute = currentRoute ?: "searchInput"
+                        navController.navigate("searchResult")
+                    }
+                    textFieldState.setTextAndPlaceCursorAtEnd(keyword)
+                    delay(500)
+                }
                 searchBarState.animateToCollapsed()
             }
         }
     }
     val onBackToSearchInput: () -> Unit = {
+        searchJob?.cancel()
         val popped = navController.popBackStack("searchInput", inclusive = false)
         if (!popped && navController.currentDestination?.route != "searchInput") {
             navController.navigate("searchInput")
@@ -283,6 +296,7 @@ fun SearchContent(
         }
     }
     val onBackFromSearchResult: () -> Unit = {
+        searchJob?.cancel()
         if (searchResultSourceRoute == "searchTrendingRanking") {
             val popped = navController.popBackStack("searchTrendingRanking", inclusive = false)
             if (!popped && navController.currentDestination?.route != "searchTrendingRanking") {
@@ -306,7 +320,7 @@ fun SearchContent(
             searchBarState = searchBarState,
             textFieldState = textFieldState,
             onSearch = onSearchKeyword,
-            placeholder = { Text(text = "在此处输入文字") },
+            placeholder = { Text(text = "搜索或粘贴链接") },
             trailingIcon = {
                 val keyword = textFieldState.text.toString()
                 Row {
@@ -390,6 +404,10 @@ fun SearchContent(
             }
             composable("searchResult") {
                 SearchResultContent(
+                    aggregateSearchResult = aggregateSearchResult,
+                    searchError = searchError,
+                    onRetry = onRetry,
+                    onOpenActivity = { scope.launch { onOpenLink(it.url) } },
                     modifier = Modifier.fillMaxSize(),
                     searchBarState = searchBarState,
                     textFieldState = textFieldState,
@@ -608,7 +626,7 @@ private fun SearchBarResultCompatPreview() {
             searchBarState = rememberSearchBarState(),
             textFieldState = rememberTextFieldState(),
             onSearch = {},
-            placeholder = { Text(text = "在此处输入文字") },
+            placeholder = { Text(text = "搜索或粘贴链接") },
         )
     }
 
@@ -642,7 +660,7 @@ private fun SearchBarResultDockedPreview() {
             searchBarState = rememberSearchBarState(),
             textFieldState = rememberTextFieldState(),
             onSearch = {},
-            placeholder = { Text(text = "在此处输入文字") },
+            placeholder = { Text(text = "搜索或粘贴链接") },
         )
     }
 

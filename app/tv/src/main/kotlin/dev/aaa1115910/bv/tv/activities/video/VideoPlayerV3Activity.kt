@@ -115,7 +115,8 @@ class VideoPlayerV3Activity : TvComponentActivity() {
             upFace: String = "",
             pubTime: String = "",
             audioOnlyMode: Boolean = false,
-            preferOfflineCache: Boolean = false
+            preferOfflineCache: Boolean = false,
+            initialSeekPositionMs: Long? = null
         ) {
             // 获取当前内存信息并打印到控制台
             val runtime = Runtime.getRuntime()
@@ -140,6 +141,7 @@ class VideoPlayerV3Activity : TvComponentActivity() {
                     putExtra("title", title)
                     putExtra("partTitle", partTitle)
                     putExtra("played", played)
+                    initialSeekPositionMs?.let { putExtra("initialSeekPositionMs", it) }
                     putExtra("fromSeason", fromSeason)
                     putExtra("subType", subType)
                     putExtra("epid", epid)
@@ -360,7 +362,8 @@ class VideoPlayerV3Activity : TvComponentActivity() {
                 cid = cid,
                 epid = epid,
                 seasonId = seasonId,
-                preferOfflineCache = preferOfflineCache
+                preferOfflineCache = preferOfflineCache,
+                initialSeekPositionMs = intent.getLongExtra("initialSeekPositionMs", -1).takeIf { it >= 0 }
             )
         }
     }

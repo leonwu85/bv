@@ -17,11 +17,12 @@ class UpInfoActivity : TvComponentActivity() {
     // LinkedHashMap 保持插入顺序：最早插入的条目位于 entrySet().iterator().next()
     private val activityByMid = LinkedHashMap<Long, WeakReference<UpInfoActivity>>()
 
-        fun actionStart(context: Context, mid: Long, name: String, face: String) {
+        fun actionStart(context: Context, mid: Long, name: String, face: String, fromViewAid: Long = 0) {
             if (mid <= 0) return
             context.startActivity(
                 Intent(context, UpInfoActivity::class.java).apply {
                     putExtra("mid", mid)
+                    putExtra("fromViewAid", fromViewAid)
                     putExtra("name", name)
                     putExtra("face", face)
                 }

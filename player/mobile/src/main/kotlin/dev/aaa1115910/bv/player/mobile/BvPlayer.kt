@@ -850,6 +850,7 @@ fun BvPlayer(
                 }
             },
             onChangeSpeed = { speed ->
+                if (isLive) return@BvPlayerController
                 currentPlaySpeed = speed
                 onChangeSpeed(speed)
                 videoPlayer.speed = speed

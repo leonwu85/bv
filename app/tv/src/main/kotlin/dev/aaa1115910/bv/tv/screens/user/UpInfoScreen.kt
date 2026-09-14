@@ -59,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -147,12 +148,16 @@ fun UpSpaceScreen(
     val logger = KotlinLogging.logger { }
     var selectedTab by remember { mutableStateOf(TvUpSpaceTab.Home) }
     var contentHasFocus by remember { mutableStateOf(false) }
+    var headerCollapsedByDpad by remember { mutableStateOf(false) }
+    var consumingCollapseKey by remember { mutableStateOf(false) }
+    var pendingVideoControlsFocus by remember { mutableStateOf(false) }
     var isFollowing by remember { mutableStateOf(false) }
     var isLongPress by remember { mutableStateOf(false) }
     var suppressHomeTabBringIntoView by remember { mutableStateOf(false) }
     val homeFocusRequester = remember { FocusRequester() }
     val dynamicFocusRequester = remember { FocusRequester() }
     val videoFocusRequester = remember { FocusRequester() }
+    val videoControlsFocusRequester = remember { FocusRequester() }
     val tabFocusRequester = remember { FocusRequester() }
     val homeGridState = rememberLazyGridState()
     val dynamicGridState = rememberLazyStaggeredGridState()
@@ -170,7 +175,7 @@ fun UpSpaceScreen(
 
     val headerCollapsed by remember {
         derivedStateOf {
-            contentHasFocus && when (selectedTab) {
+            headerCollapsedByDpad || contentHasFocus && when (selectedTab) {
                 TvUpSpaceTab.Home -> homeGridState.isScrolledPastTop()
                 TvUpSpaceTab.Dynamic -> dynamicGridState.isScrolledPastTop()
                 TvUpSpaceTab.Video -> videoGridState.isScrolledPastTop()
@@ -180,6 +185,15 @@ fun UpSpaceScreen(
 
     val followStateMap by FollowStateManager.followStateMap.collectAsState()
 
+    LaunchedEffect(selectedTab, pendingVideoControlsFocus) {
+        if (selectedTab == TvUpSpaceTab.Video && pendingVideoControlsFocus) {
+            // A quick Right → Down can arrive before the video's toolbar is composed.
+            withFrameNanos { }
+            videoControlsFocusRequester.requestFocus()
+            pendingVideoControlsFocus = false
+        }
+    }
+
     LaunchedEffect(Unit) {
         val intent = activity.intent
         if (intent.hasExtra("mid")) {
@@ -188,6 +202,7 @@ fun UpSpaceScreen(
             val face = intent.getStringExtra("face").orEmpty()
             selectedTab = TvUpSpaceTab.Home
             contentHasFocus = false
+            userSpaceViewModel.fromViewAid = intent.getLongExtra("fromViewAid", 0)
             userSpaceViewModel.initialize(mid = mid, name = name, face = face)
             userSpaceViewModel.selectTab(UserSpaceTab.Home)
             focusHomeTabWithoutScrolling()
@@ -246,6 +261,8 @@ fun UpSpaceScreen(
 
     fun selectTab(tab: TvUpSpaceTab) {
         if (selectedTab == tab) return
+        pendingVideoControlsFocus = false
+        headerCollapsedByDpad = false
         selectedTab = tab
         when (tab) {
             TvUpSpaceTab.Home -> userSpaceViewModel.selectTab(UserSpaceTab.Home)
@@ -256,6 +273,7 @@ fun UpSpaceScreen(
 
     fun refreshSelectedTab() {
         contentHasFocus = false
+        headerCollapsedByDpad = false
         scope.launch {
             when (selectedTab) {
                 TvUpSpaceTab.Home -> homeGridState.scrollToItemIfAvailable(0)
@@ -268,6 +286,7 @@ fun UpSpaceScreen(
 
     fun refreshSpace() {
         contentHasFocus = false
+        headerCollapsedByDpad = false
         scope.launch {
             when (selectedTab) {
                 TvUpSpaceTab.Home -> homeGridState.scrollToItemIfAvailable(0)
@@ -281,6 +300,20 @@ fun UpSpaceScreen(
     Scaffold(
         modifier = modifier
             .onPreviewKeyEvent {
+                if (it.key == Key.DirectionDown) {
+                    if (it.type == KeyEventType.KeyUp && consumingCollapseKey) {
+                        consumingCollapseKey = false
+                        return@onPreviewKeyEvent true
+                    }
+                    if (it.type == KeyEventType.KeyDown) {
+                        if (consumingCollapseKey) return@onPreviewKeyEvent true
+                        if (contentHasFocus && !headerCollapsed) {
+                            headerCollapsedByDpad = true
+                            consumingCollapseKey = true
+                            return@onPreviewKeyEvent true
+                        }
+                    }
+                }
                 val isDpadCenter = listOf(Key.Enter, Key.DirectionCenter).contains(it.key)
                 if (isDpadCenter && it.type == KeyEventType.KeyDown) {
                     isLongPress = it.nativeKeyEvent.repeatCount > 0
@@ -288,7 +321,12 @@ fun UpSpaceScreen(
                 false
             },
         topBar = {
-            Column {
+            Column(Modifier.onFocusChanged {
+                if (it.hasFocus) {
+                    contentHasFocus = false
+                    headerCollapsedByDpad = false
+                }
+            }) {
                 UpSpaceHeader(
                     viewModel = userSpaceViewModel,
                     collapsed = headerCollapsed,
@@ -331,10 +369,15 @@ fun UpSpaceScreen(
                     selectedTab = selectedTab,
                     headerCollapsed = headerCollapsed,
                     focusRequester = tabFocusRequester,
+                    onVideoTabDown = {
+                        selectTab(TvUpSpaceTab.Video)
+                        pendingVideoControlsFocus = true
+                    },
                     suppressBringIntoView = suppressHomeTabBringIntoView,
                     onSelectTab = ::selectTab,
                     onTabFocused = {
                         contentHasFocus = false
+                        headerCollapsedByDpad = false
                     },
                     onRefreshSelectedTab = ::refreshSelectedTab
                 )
@@ -391,6 +434,8 @@ fun UpSpaceScreen(
                     gridState = videoGridState,
                     firstItemFocusRequester = videoFocusRequester,
                     tabFocusRequester = tabFocusRequester,
+                    controlsFocusRequester = videoControlsFocusRequester,
+                    onControlsFocused = { contentHasFocus = false },
                     onContentFocused = {
                         contentHasFocus = true
                     },
@@ -789,6 +834,7 @@ private fun UpSpaceTabRow(
     selectedTab: TvUpSpaceTab,
     headerCollapsed: Boolean,
     focusRequester: FocusRequester,
+    onVideoTabDown: () -> Unit,
     suppressBringIntoView: Boolean,
     onSelectTab: (TvUpSpaceTab) -> Unit,
     onTabFocused: () -> Unit,
@@ -830,7 +876,15 @@ private fun UpSpaceTabRow(
         ) {
             tabs.forEach { tab ->
                 Tab(
-                    modifier = if (tab == selectedTab) Modifier.focusRequester(focusRequester) else Modifier,
+                    modifier = (if (tab == selectedTab) Modifier.focusRequester(focusRequester) else Modifier)
+                        .onPreviewKeyEvent { event ->
+                            if (tab == TvUpSpaceTab.Video && event.key == Key.DirectionDown) {
+                                if (event.type == KeyEventType.KeyDown) onVideoTabDown()
+                                true
+                            } else {
+                                false
+                            }
+                        },
                     selected = tab == selectedTab,
                     onFocus = {
                         onTabFocused()
@@ -1107,6 +1161,8 @@ private fun UpSpaceVideoContent(
     gridState: LazyGridState,
     firstItemFocusRequester: FocusRequester,
     tabFocusRequester: FocusRequester,
+    controlsFocusRequester: FocusRequester,
+    onControlsFocused: () -> Unit,
     onContentFocused: () -> Unit,
     onReturnToTab: () -> Unit,
     isLongPress: Boolean,
@@ -1114,59 +1170,98 @@ private fun UpSpaceVideoContent(
     onLoadMore: () -> Unit
 ) {
     val padding = 40.dp
+    val scope = rememberCoroutineScope()
+    var focusedVideoId by remember { mutableStateOf<Long?>(null) }
+    val focusedVideoIndex = viewModel.tvSpaceVideos.indexOfFirst { it.avid == focusedVideoId }.coerceAtLeast(0)
+    var videoQuery by remember { mutableStateOf(viewModel.videoOrder to viewModel.locatingAid) }
 
-    when {
-        viewModel.tvSpaceVideos.isEmpty() && viewModel.videoLoading -> LoadingBox()
-        viewModel.tvSpaceVideos.isEmpty() -> EmptyBox(text = "暂无投稿")
-        else -> ProvideListBringIntoViewSpec {
-            LazyVerticalGrid(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .backToTab(tabFocusRequester, onReturnToTab),
-                columns = GridCells.Fixed(Prefs.gridColumns),
-                state = gridState,
-                contentPadding = PaddingValues(
-                    start = padding,
-                    top = 24.dp,
-                    end = padding,
-                    bottom = 32.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-                horizontalArrangement = Arrangement.spacedBy(18.dp)
-            ) {
-                itemsIndexed(
-                    items = viewModel.tvSpaceVideos,
-                    key = { index, video -> "$index:${video.bvid.ifBlank { video.avid.toString() }}" }
-                ) { index, video ->
-                    val itemModifier = Modifier
-                        .then(if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier)
-                        .then(
-                            if (index < Prefs.gridColumns) {
-                                Modifier.focusUpToTab(tabFocusRequester, onReturnToTab)
-                            } else {
-                                Modifier
-                            }
-                        )
-                    SmallVideoCard(
-                        modifier = itemModifier,
-                        data = video,
-                        onClick = {
-                            if (!isLongPress) onOpenVideo(video.avid, video.title)
-                        },
-                        onFocus = {
-                            onContentFocused()
-                            if (index + 12 > viewModel.tvSpaceVideos.size) onLoadMore()
-                        }
-                    )
-                }
-                if (viewModel.videoLoading) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        LoadingLine()
+    LaunchedEffect(viewModel.videoOrder, viewModel.locatingAid) {
+        val query = viewModel.videoOrder to viewModel.locatingAid
+        if (videoQuery != query) {
+            videoQuery = query
+            focusedVideoId = null
+            gridState.scrollToItem(0)
+        }
+    }
+
+    Column {
+        UserSpaceVideoControls(viewModel,
+            focusRequester = controlsFocusRequester,
+            onUp = {
+                onReturnToTab()
+                tabFocusRequester.requestFocus()
+            },
+            onDown = {
+                if (viewModel.tvSpaceVideos.isNotEmpty()) scope.launch {
+                    if (gridState.layoutInfo.visibleItemsInfo.none { it.index == focusedVideoIndex }) {
+                        gridState.scrollToItem(focusedVideoIndex)
+                        withFrameNanos { }
                     }
+                    firstItemFocusRequester.requestFocus()
                 }
-                if (viewModel.noMore) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        EndLine(text = "没有更多投稿了")
+            },
+            onFocused = onControlsFocused,
+            onLoadPrevious = {
+                val index = gridState.firstVisibleItemIndex
+                val offset = gridState.firstVisibleItemScrollOffset
+                viewModel.loadPreviousVideos { added ->
+                    if (added > 0) scope.launch { gridState.scrollToItem(index + added, offset) }
+                }
+            }
+        )
+        Box(Modifier.weight(1f)) {
+            when {
+                viewModel.tvSpaceVideos.isEmpty() && viewModel.videoLoading -> LoadingBox()
+                viewModel.tvSpaceVideos.isEmpty() -> EmptyBox(text = "暂无投稿")
+                else -> ProvideListBringIntoViewSpec {
+                    LazyVerticalGrid(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .backToTab(tabFocusRequester, onReturnToTab),
+                        columns = GridCells.Fixed(Prefs.gridColumns),
+                        state = gridState,
+                        contentPadding = PaddingValues(
+                            start = padding,
+                            top = 24.dp,
+                            end = padding,
+                            bottom = 32.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(18.dp),
+                        horizontalArrangement = Arrangement.spacedBy(18.dp)
+                    ) {
+                        itemsIndexed(
+                            items = viewModel.tvSpaceVideos,
+                            key = { _, video -> "video:${video.avid}" }
+                        ) { index, video ->
+                            val itemModifier = Modifier
+                                .then(if (index == focusedVideoIndex) Modifier.focusRequester(firstItemFocusRequester) else Modifier)
+                                .then(if (index < Prefs.gridColumns) Modifier.focusProperties {
+                                    up = controlsFocusRequester
+                                } else Modifier)
+
+                            SmallVideoCard(
+                                modifier = itemModifier,
+                                data = video,
+                                onClick = {
+                                    if (!isLongPress) onOpenVideo(video.avid, video.title)
+                                },
+                                onFocus = {
+                                    focusedVideoId = video.avid
+                                    onContentFocused()
+                                    if (index + 12 > viewModel.tvSpaceVideos.size) onLoadMore()
+                                }
+                            )
+                        }
+                        if (viewModel.videoLoading) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                LoadingLine()
+                            }
+                        }
+                        if (viewModel.noMore) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                EndLine(text = "没有更多投稿了")
+                            }
+                        }
                     }
                 }
             }

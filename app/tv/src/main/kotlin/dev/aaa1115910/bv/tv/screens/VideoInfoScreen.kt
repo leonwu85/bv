@@ -968,7 +968,8 @@ fun VideoInfoScreen(
                                                     context,
                                                     mid = videoDetail.author.mid,
                                                     name = videoDetail.author.name,
-                                                    face = videoDetail.author.face
+                                                    face = videoDetail.author.face,
+                                                    fromViewAid = videoDetail.aid
                                                 )
                                             },
                                             shape = ClickableSurfaceDefaults.shape(

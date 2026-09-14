@@ -1,5 +1,8 @@
 package dev.aaa1115910.bv.mobile.screen
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -18,14 +22,17 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,8 +62,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
 import dev.aaa1115910.bv.R
@@ -96,6 +111,7 @@ fun FavoriteScreen(
         }
     }
 
+    BackHandler(enabled = favoriteViewModel.selectionMode) { favoriteViewModel.toggleSelectionMode() }
     FavoriteContent(
         modifier = modifier,
         listState = listState,
@@ -110,19 +126,25 @@ fun FavoriteScreen(
         operating = favoriteViewModel.operating,
         onSearchQueryChange = favoriteViewModel::updateSearchQuery,
         onOrderChange = favoriteViewModel::selectOrder,
-        onClickTab = { folderMetadata ->
-            if (favoriteViewModel.currentFavoriteFolderMetadata?.id != folderMetadata.id) {
-                favoriteViewModel.currentFavoriteFolderMetadata = folderMetadata
-                favoriteViewModel.updateFolderItems(force = true)
-            }
+        batchControls = { FavoriteTransferControls(favoriteViewModel) },
+        selectionMode = favoriteViewModel.selectionMode,
+        selectedIds = favoriteViewModel.selectedIds,
+        onToggleSelection = favoriteViewModel::toggleSelectionMode,
+        onSelectAllLoaded = favoriteViewModel::selectAllLoaded,
+        onClickTab = favoriteViewModel::selectFolder,
+        onClickVideo = { video ->
+            if (favoriteViewModel.selectionMode) favoriteViewModel.toggleSelected(video.avid)
+            else if (!favoriteViewModel.operating) VideoPlayerActivity.actionStart(context, video = video)
         },
-        onClickVideo = { video -> VideoPlayerActivity.actionStart(context, video = video) },
         onRemoveVideo = { pendingRemove = it },
         onAddFolder = { showCreateFolder = true },
         onEditFolder = { showEditFolder = true },
         onCleanFolder = { showCleanFolder = true },
         onDeleteFolder = { showDeleteFolder = true },
-        onBack = { (context as Activity).finish() }
+        onBack = {
+            if (favoriteViewModel.selectionMode) favoriteViewModel.toggleSelectionMode()
+            else (context as Activity).finish()
+        }
     )
 
     pendingRemove?.let { video ->
@@ -208,11 +230,15 @@ private fun FavoriteContent(
     onEditFolder: () -> Unit,
     onCleanFolder: () -> Unit,
     onDeleteFolder: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    batchControls: @Composable () -> Unit = {},
+    selectionMode: Boolean = false,
+    selectedIds: Set<Long> = emptySet(),
+    onToggleSelection: () -> Unit = {},
+    onSelectAllLoaded: () -> Unit = {}
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
     var showSearch by remember { mutableStateOf(false) }
-    var showSortMenu by remember { mutableStateOf(false) }
     var showFolderMenu by remember { mutableStateOf(false) }
 
     fun closeSearch() {
@@ -220,91 +246,101 @@ private fun FavoriteContent(
         onSearchQueryChange("")
     }
 
-    BackHandler(enabled = showSearch, onBack = ::closeSearch)
+    BackHandler(enabled = showSearch && !selectionMode, onBack = ::closeSearch)
+    val allLoadedSelected = favorites.isNotEmpty() && favorites.all { it.avid in selectedIds }
 
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.title_mobile_activity_favorite)) },
+                    title = {
+                        Text(if (selectionMode) "已选 ${selectedIds.size} 项" else stringResource(R.string.title_mobile_activity_favorite),
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    },
                     navigationIcon = {
-                        IconButton(onClick = { if (showSearch) closeSearch() else onBack() }) {
-                            Icon(Icons.AutoMirrored.Default.ArrowBack, contentDescription = "返回")
+                        IconButton(
+                            onClick = { if (showSearch && !selectionMode) closeSearch() else onBack() },
+                            enabled = !selectionMode || !operating
+                        ) {
+                            Icon(if (selectionMode) Icons.Rounded.Close else Icons.AutoMirrored.Default.ArrowBack,
+                                contentDescription = if (selectionMode) "完成选择" else "返回")
                         }
                     },
                     actions = {
-                        IconButton(onClick = { if (showSearch) closeSearch() else showSearch = true }) {
-                            Icon(Icons.Default.Search, contentDescription = "搜索收藏")
-                        }
-                        Box {
-                            IconButton(onClick = { showSortMenu = true }) {
-                                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "排序")
+                        if (selectionMode) {
+                            TextButton(onClick = onSelectAllLoaded, enabled = !operating && favorites.isNotEmpty()) {
+                                Text(if (allLoadedSelected) "取消全选" else "全选已加载")
                             }
-                            DropdownMenu(
-                                expanded = showSortMenu,
-                                onDismissRequest = { showSortMenu = false }
-                            ) {
-                                FavoriteOrder.entries.forEach { order ->
-                                    DropdownMenuItem(
-                                        text = { Text(order.displayName()) },
-                                        trailingIcon = { if (order == selectedOrder) Text("✓") },
-                                        onClick = {
-                                            showSortMenu = false
-                                            onOrderChange(order)
-                                        }
-                                    )
+                        } else {
+                            IconButton(onClick = { if (showSearch) closeSearch() else showSearch = true }) {
+                                Icon(Icons.Default.Search, contentDescription = "搜索收藏")
+                            }
+                            TextButton(onClick = onToggleSelection, enabled = !operating && favorites.isNotEmpty()) {
+                                Text("管理")
+                            }
+                            Box {
+                                IconButton(
+                                    onClick = { showFolderMenu = true },
+                                    enabled = !operating
+                                ) {
+                                    Icon(Icons.Default.MoreVert, contentDescription = "收藏夹管理")
                                 }
-                            }
-                        }
-                        IconButton(onClick = onAddFolder, enabled = !operating) {
-                            Icon(Icons.Default.Add, contentDescription = "新建收藏夹")
-                        }
-                        Box {
-                            IconButton(
-                                onClick = { showFolderMenu = true },
-                                enabled = currentFolder != null && !operating
-                            ) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "收藏夹管理")
-                            }
-                            DropdownMenu(
-                                expanded = showFolderMenu,
-                                onDismissRequest = { showFolderMenu = false }
-                            ) {
-                                if (currentFolder?.isDefault == false) {
+                                DropdownMenu(
+                                    expanded = showFolderMenu,
+                                    onDismissRequest = { showFolderMenu = false }
+                                ) {
                                     DropdownMenuItem(
-                                        text = { Text("编辑收藏夹") },
-                                        leadingIcon = { Icon(Icons.Default.Edit, null) },
-                                        onClick = {
-                                            showFolderMenu = false
-                                            onEditFolder()
-                                        }
+                                        text = { Text("新建收藏夹") },
+                                        leadingIcon = { Icon(Icons.Default.Add, null) },
+                                        onClick = { showFolderMenu = false; onAddFolder() }
                                     )
-                                }
-                                DropdownMenuItem(
-                                    text = { Text("清理失效内容") },
-                                    onClick = {
-                                        showFolderMenu = false
-                                        onCleanFolder()
+                                    HorizontalDivider()
+                                    FavoriteOrder.entries.forEach { order ->
+                                        DropdownMenuItem(
+                                            text = { Text(order.displayName()) },
+                                            trailingIcon = { if (order == selectedOrder) Icon(Icons.Rounded.Check, null) },
+                                            onClick = { showFolderMenu = false; onOrderChange(order) },
+                                            enabled = currentFolder != null
+                                        )
                                     }
-                                )
-                                if (currentFolder?.isDefault == false) {
+                                    if (currentFolder != null) HorizontalDivider()
+                                    if (currentFolder?.isDefault == false) {
+                                        DropdownMenuItem(
+                                            text = { Text("编辑收藏夹") },
+                                            leadingIcon = { Icon(Icons.Default.Edit, null) },
+                                            onClick = {
+                                                showFolderMenu = false
+                                                onEditFolder()
+                                            }
+                                        )
+                                    }
                                     DropdownMenuItem(
-                                        text = { Text("删除收藏夹") },
-                                        leadingIcon = { Icon(Icons.Default.Delete, null) },
+                                        text = { Text("清理失效内容") },
+                                        enabled = currentFolder != null,
                                         onClick = {
                                             showFolderMenu = false
-                                            onDeleteFolder()
+                                            onCleanFolder()
                                         }
                                     )
+                                    if (currentFolder?.isDefault == false) {
+                                        DropdownMenuItem(
+                                            text = { Text("删除收藏夹") },
+                                            leadingIcon = { Icon(Icons.Default.Delete, null) },
+                                            onClick = {
+                                                showFolderMenu = false
+                                                onDeleteFolder()
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
                     },
-                    scrollBehavior = scrollBehavior
+                    scrollBehavior = scrollBehavior.takeUnless { selectionMode }
                 )
 
-                if (showSearch) {
+                if (showSearch && !selectionMode) {
                     OutlinedTextField(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -322,6 +358,7 @@ private fun FavoriteContent(
                         favoriteFolders.forEachIndexed { index, folder ->
                             Tab(
                                 selected = selectedTabIndex == index,
+                                enabled = !operating && !selectionMode,
                                 onClick = { onClickTab(folder) }
                             ) {
                                 Box(
@@ -341,7 +378,8 @@ private fun FavoriteContent(
                     HorizontalDivider()
                 }
             }
-        }
+        },
+        bottomBar = batchControls
     ) { innerPadding ->
         if (favorites.isEmpty()) {
             Box(
@@ -355,7 +393,7 @@ private fun FavoriteContent(
             }
         } else {
             LazyVerticalGrid(
-                modifier = Modifier.padding(top = innerPadding.calculateTopPadding()),
+                modifier = Modifier.padding(innerPadding),
                 state = listState,
                 columns = if (windowSize.widthSizeClass == WindowWidthSizeClass.Compact) {
                     GridCells.Fixed(2)
@@ -367,12 +405,34 @@ private fun FavoriteContent(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 itemsIndexed(favorites, key = { _, item -> item.avid }) { _, data ->
-                    SmallVideoCard(
-                        data = data,
-                        onClick = { onClickVideo(data) },
-                        managementActionLabel = "移出当前收藏夹",
-                        onManagementAction = { onRemoveVideo(data) }
-                    )
+                    Box {
+                        SmallVideoCard(
+                            modifier = Modifier
+                                .then(if (data.avid in selectedIds) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.medium) else Modifier)
+                                .semantics {
+                                    if (selectionMode) {
+                                        role = Role.Checkbox
+                                        toggleableState = if (data.avid in selectedIds) ToggleableState.On else ToggleableState.Off
+                                        stateDescription = if (data.avid in selectedIds) "已选择" else "未选择"
+                                    }
+                                },
+                            data = data,
+                            showMoreMenu = !selectionMode,
+                            onClick = { onClickVideo(data) },
+                            managementActionLabel = if (selectionMode) null else "移出当前收藏夹",
+                            onManagementAction = if (selectionMode) null else ({ if (!operating) onRemoveVideo(data) })
+                        )
+                        if (selectionMode) {
+                            Checkbox(
+                                checked = data.avid in selectedIds,
+                                onCheckedChange = null,
+                                modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
+                                    .size(24.dp).clearAndSetSemantics { },
+                                colors = CheckboxDefaults.colors(uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                            )
+                        }
+                    }
                 }
             }
         }

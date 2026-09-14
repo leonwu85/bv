@@ -1,5 +1,8 @@
 package dev.aaa1115910.bv.tv.screens.search
 
+import dev.aaa1115910.bv.tv.util.openBiliContent
+import dev.aaa1115910.biliapi.entity.search.searchKey
+import androidx.tv.material3.Button
 import android.content.Context
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -108,6 +111,7 @@ fun SearchResultScreen(
     var searchKeyword by remember { mutableStateOf("") }
 
     val searchResult = when (searchResultViewModel.searchType) {
+        SearchType.All -> searchResultViewModel.allSearchResult
         SearchType.Video -> searchResultViewModel.videoSearchResult
         SearchType.MediaBangumi -> searchResultViewModel.mediaBangumiSearchResult
         SearchType.MediaFt -> searchResultViewModel.mediaFtSearchResult
@@ -123,7 +127,7 @@ fun SearchResultScreen(
     val selectedPartition = searchResultViewModel.selectedPartition
     val selectedChildPartition = searchResultViewModel.selectedChildPartition
     val rowSize = when (searchResultViewModel.searchType) {
-        SearchType.Video -> Prefs.gridColumns
+        SearchType.All, SearchType.Video -> Prefs.gridColumns
         SearchType.MediaBangumi, SearchType.MediaFt -> Prefs.gridColumns + 2
         SearchType.BiliUser -> Prefs.gridColumns - 1
         SearchType.LiveRoom, SearchType.Article -> Prefs.gridColumns
@@ -168,6 +172,7 @@ fun SearchResultScreen(
                 )
             }
 
+            is SearchTypeResult.Activity -> scope.launch { openBiliContent(context, resultItem.url) }
             else -> {}
         }
     }
@@ -177,8 +182,8 @@ fun SearchResultScreen(
     }
 
     val onLongClickSearchResultItem = {
-        if (searchResultViewModel.searchType == SearchType.Video) {
-            if (Prefs.apiType == ApiType.Web) showFilter = true
+        if (searchResultViewModel.searchType in listOf(SearchType.All, SearchType.Video)) {
+            if (searchResultViewModel.searchType == SearchType.All || Prefs.apiType == ApiType.Web) showFilter = true
         }
     }
 
@@ -189,7 +194,7 @@ fun SearchResultScreen(
             val enableProxy = intent.getBooleanExtra("enableProxy", false)
             if (searchKeyword == "") activity.finish()
             searchResultViewModel.enableProxySearchResult = enableProxy
-            searchResultViewModel.keyword = searchKeyword
+            searchResultViewModel.submit(searchKeyword)
         } else {
             activity.finish()
         }
@@ -198,8 +203,9 @@ fun SearchResultScreen(
     LaunchedEffect(
         selectedOrder, selectedDuration, selectedPartition, selectedChildPartition
     ) {
-        logger.fInfo { "Start update search result because filter updated" }
-        searchResultViewModel.update()
+        if (searchResultViewModel.keyword.isNotBlank()) {
+            searchResultViewModel.applyVideoFilters(selectedOrder, selectedDuration, selectedPartition, selectedChildPartition)
+        }
     }
 
     LaunchedEffect(currentIndex) {
@@ -254,7 +260,7 @@ fun SearchResultScreen(
                 Column(
                     horizontalAlignment = Alignment.End,
                 ) {
-                    if (searchResultViewModel.searchType == SearchType.Video) {
+                    if (searchResultViewModel.searchType in listOf(SearchType.All, SearchType.Video)) {
                         Text(
                             text = stringResource(R.string.filter_dialog_open_tip),
                             style = MaterialTheme.typography.labelSmall,
@@ -290,8 +296,8 @@ fun SearchResultScreen(
                 }
 
                 // Pill 形状标签栏 + 筛选按钮
-                val showFilterButton = searchResultViewModel.searchType == SearchType.Video &&
-                        Prefs.apiType == ApiType.Web
+                val showFilterButton = searchResultViewModel.searchType == SearchType.All ||
+                        (searchResultViewModel.searchType == SearchType.Video && Prefs.apiType == ApiType.Web)
                 val hasActiveFilter = selectedOrder != SearchFilterOrderType.ComprehensiveSort ||
                         selectedDuration != SearchFilterDuration.All ||
                         selectedPartition != null
@@ -383,6 +389,11 @@ fun SearchResultScreen(
                     }
                 }
 
+                searchResultViewModel.error(searchResult.type)?.let { error ->
+                    Button(onClick = { searchResultViewModel.loadMore(searchResult.type, retry = true) }, modifier = Modifier.padding(horizontal = 24.dp)) {
+                        Text("$error · 重试", maxLines = 2)
+                    }
+                }
                 // 网格区域
                 ProvideListBringIntoViewSpec(padding = 26.dp) {
                     val padding = dimensionResource(TvR.dimen.grid_padding) / 2
@@ -395,6 +406,7 @@ fun SearchResultScreen(
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
                     ) {
                         val items = when (searchResult.type) {
+                            SearchType.All -> searchResult.aggregateItems
                             SearchType.Video -> searchResult.videos
                             SearchType.MediaBangumi -> searchResult.mediaBangumis
                             SearchType.MediaFt -> searchResult.mediaFts
@@ -432,12 +444,12 @@ fun SearchResultScreen(
                                 }
                                 false
                             },
-                            columns = GridCells.Fixed(rowSize),
+                            columns = GridCells.Fixed(rowSize.coerceAtLeast(1)),
                             contentPadding = PaddingValues(padding),
                             verticalArrangement = Arrangement.spacedBy(spacedBy),
                             horizontalArrangement = Arrangement.spacedBy(spacedBy)
                         ) {
-                            itemsIndexed(items = items) { index, searchResultItem ->
+                            itemsIndexed(items = items, key = { _, item -> item.searchKey() }) { index, searchResultItem ->
                                 SearchResultListItem(
                                     searchResult = searchResultItem,
                                     onClick = { onClickResult(searchResultItem) },
@@ -539,13 +551,21 @@ private fun SearchResultListItem(
             )
         }
 
-        else -> {
-
+        is SearchTypeResult.Activity -> Surface(
+            modifier = modifier.onFocusChanged { if (it.isFocused) onFocus() },
+            onClick = onClick, onLongClick = onLongClick
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text("直播活动", style = MaterialTheme.typography.labelMedium)
+                Text(searchResult.title.removeHtmlTags(), maxLines = 3)
+            }
         }
+        else -> Unit
     }
 }
 
 fun SearchType.getDisplayName(context: Context) = when (this) {
+    SearchType.All -> context.getString(R.string.search_result_type_name_all)
     SearchType.Video -> context.getString(R.string.search_result_type_name_video)
     SearchType.MediaBangumi -> context.getString(R.string.search_result_type_name_media_bangumi)
     SearchType.MediaFt -> context.getString(R.string.search_result_type_name_media_ft)

@@ -7,6 +7,11 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.aaa1115910.biliapi.entity.BiliContentLink
+import dev.aaa1115910.biliapi.entity.user.SpaceVideoOrder
+import dev.aaa1115910.biliapi.entity.user.SpaceVideoData
+import dev.aaa1115910.biliapi.entity.user.mergePage
+import kotlinx.coroutines.CancellationException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.aaa1115910.biliapi.entity.season.FollowingSeason
@@ -90,7 +95,20 @@ class UserSpaceViewModel(
     var appRelation by mutableIntStateOf(0)
     var isFollowedByUp by mutableStateOf<Int?>(null)
 
-    private var page = SpaceVideoPage()
+    private var page by mutableStateOf(SpaceVideoPage())
+    private var videoGeneration = 0
+    private var cursorMode = false
+    var videoOrder by mutableStateOf(SpaceVideoOrder.PubDate)
+        private set
+    var videoError by mutableStateOf<String?>(null)
+        private set
+    var locatingAid by mutableStateOf<Long?>(null)
+        private set
+    var fromViewAid by mutableLongStateOf(0L)
+    val hasPreviousVideos get() = page.hasPrevious
+    private var failedPrevious = false
+    val retryLoadsPrevious get() = failedPrevious
+
     private var updatingVideo = false
     private var currentDynamicPage = 0
     private var dynamicHistoryOffset: String? = null
@@ -433,33 +451,75 @@ class UserSpaceViewModel(
         }
     }
 
-    private suspend fun loadMoreVideosInternal() {
-        if (updatingVideo || noMore || upMid <= 0L) return
-        logger.fInfo { "Updating up [mid=$upMid] space videos from page $page" }
+    private suspend fun loadMoreVideosInternal() = withContext(Dispatchers.Main.immediate) {
+        requestVideos()
+    }
+
+    fun changeVideoOrder() {
+        videoOrder = if (videoOrder == SpaceVideoOrder.PubDate) SpaceVideoOrder.Click else SpaceVideoOrder.PubDate
+        resetVideos()
+        requestVideos()
+    }
+
+    fun locateVideo(input: String) {
+        val aid = (BiliContentLink.parse(input) as? BiliContentLink.Video)?.aid
+        if (aid == null) {
+            videoError = "请输入视频的 av 号、BV 号或链接"
+            return
+        }
+        resetVideos()
+        cursorMode = true
+        locatingAid = aid
+        selectedTab = UserSpaceTab.Video
+        requestVideos(anchorAid = aid)
+    }
+
+    fun loadPreviousVideos(onLoaded: (Int) -> Unit = {}) = requestVideos(previous = true, retry = true, onLoaded = onLoaded)
+    fun retryVideos() = requestVideos(previous = failedPrevious, retry = true,
+        anchorAid = locatingAid?.takeIf { spaceVideos.isEmpty() })
+
+    private fun requestVideos(previous: Boolean = false, anchorAid: Long? = null, retry: Boolean = false, onLoaded: (Int) -> Unit = {}) {
+        if (updatingVideo || (!retry && videoError != null) || upMid <= 0 || (anchorAid == null && if (previous) !page.hasPrevious else !page.hasNext)) return
+        val generation = videoGeneration
+        val mid = upMid
+        val requestedPage = page
+        val order = videoOrder
+        val api = if (cursorMode) dev.aaa1115910.biliapi.entity.ApiType.App else Prefs.apiType
         updatingVideo = true
         videoLoading = true
-        runCatching {
-            val spaceVideoData = userRepository.getSpaceVideos(
-                mid = upMid,
-                page = page,
-                preferApiType = Prefs.apiType
-            )
-            withContext(Dispatchers.Main) {
-                spaceVideos.addAll(spaceVideoData.videos)
-                spaceVideoData.videos.forEach { spaceVideoItem ->
-                    tvSpaceVideos.add(
-                        spaceVideoItem.toVideoCardData()
-                    )
+        videoError = null
+        failedPrevious = previous
+        viewModelScope.launch {
+            try {
+                val response = withContext(Dispatchers.IO) {
+                    userRepository.getSpaceVideos(mid, order, requestedPage, api, previous, anchorAid)
                 }
-                page = spaceVideoData.page
+                if (generation != videoGeneration || mid != upMid) return@launch
+                if (anchorAid != null && response.videos.none { it.aid == anchorAid }) {
+                    error("未在该 UP 投稿中找到目标视频")
+                }
+                val oldIds = spaceVideos.map { it.aid }.toSet()
+                val merged = SpaceVideoData(spaceVideos.toList(), page).mergePage(response, previous)
+                val added = merged.videos.filter { it.aid !in oldIds }
+                if (previous) {
+                    spaceVideos.addAll(0, added)
+                    tvSpaceVideos.addAll(0, added.map { it.toVideoCardData() })
+                } else {
+                    spaceVideos.addAll(added)
+                    tvSpaceVideos.addAll(added.map { it.toVideoCardData() })
+                }
+                page = merged.page
+                onLoaded(added.size)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (generation == videoGeneration) videoError = e.localizedMessage ?: "加载投稿失败"
+            } finally {
+                if (generation == videoGeneration) {
+                    updatingVideo = false
+                    videoLoading = false
+                }
             }
-            logger.fInfo { "Update up space videos success" }
-        }.onFailure {
-            logger.fInfo { "Update up space videos failed: ${it.stackTraceToString()}" }
-        }
-        withContext(Dispatchers.Main) {
-            updatingVideo = false
-            videoLoading = false
         }
     }
 
@@ -572,12 +632,8 @@ class UserSpaceViewModel(
             appRelation = 0
             isFollowedByUp = null
         }
-        tvSpaceVideos.clear()
-        spaceVideos.clear()
+        resetVideos()
         dynamicItems.clear()
-        page = SpaceVideoPage()
-        updatingVideo = false
-        videoLoading = false
         currentDynamicPage = 0
         dynamicHistoryOffset = null
         dynamicUpdateBaseline = null
@@ -613,6 +669,11 @@ class UserSpaceViewModel(
     }
 
     private fun resetVideos() {
+        videoGeneration++
+        cursorMode = false
+        locatingAid = null
+        videoError = null
+        failedPrevious = false
         tvSpaceVideos.clear()
         spaceVideos.clear()
         page = SpaceVideoPage()

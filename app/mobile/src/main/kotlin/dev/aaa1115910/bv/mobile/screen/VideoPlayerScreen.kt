@@ -609,9 +609,13 @@ fun VideoPlayerScreen(
             .takeIf { it.isNotBlank() }
             ?.let { "https://www.bilibili.com/video/$it" }
             ?: "https://www.bilibili.com/video/av${detail.aid}"
+        val part = detail.pages.indexOfFirst { it.cid == playerViewModel.currentCid } + 1
+        val shareUrl = Uri.parse(url).buildUpon().apply {
+            if (part > 1) appendQueryParameter("p", part.toString())
+        }.build().toString()
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, "${detail.title} $url")
+            putExtra(Intent.EXTRA_TEXT, "${detail.title} $shareUrl")
         }
         context.startActivity(Intent.createChooser(intent, "分享视频"))
     }
@@ -1357,7 +1361,7 @@ fun VideoPlayerScreen(
                                                         launchVideoAction { videoDetailViewModel.toggleUpFollow() }
                                                     },
                                                     onUpClick = { mid, name ->
-                                                        UserSpaceActivity.actionStart(context, mid, name)
+                                                        UserSpaceActivity.actionStart(context, mid, name, fromViewAid = playerViewModel.currentAid)
                                                     }
                                                 )
                                             }
@@ -1561,7 +1565,7 @@ fun VideoPlayerScreen(
                                     launchVideoAction { videoDetailViewModel.toggleUpFollow() }
                                 },
                                 onUpClick = { mid, name ->
-                                    UserSpaceActivity.actionStart(context, mid, name)
+                                    UserSpaceActivity.actionStart(context, mid, name, fromViewAid = playerViewModel.currentAid)
                                 },
                                 backgroundColor = MaterialTheme.colorScheme.surfaceContainer
                             )

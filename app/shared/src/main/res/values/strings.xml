@@ -978,4 +978,5 @@
     <!-- Dynamic Page Style -->
     <string name="dynamic_style_new">新版（带分类）</string>
     <string name="dynamic_style_legacy">旧版（无分类）</string>
+    <string name="search_result_type_name_all">综合</string>
 </resources>

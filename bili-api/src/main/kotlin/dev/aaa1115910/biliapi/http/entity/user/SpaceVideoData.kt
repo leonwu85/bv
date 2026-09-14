@@ -179,7 +179,8 @@ data class AppSpaceVideoData(
     val lastWatchedLocator: LastWatchedLocator,
     @SerialName("has_next")
     val hasNext: Boolean,
-    val hasPre: Boolean = false
+    @SerialName("has_prev")
+    val hasPrev: Boolean = false
 ) {
     /**
      * 排序方式

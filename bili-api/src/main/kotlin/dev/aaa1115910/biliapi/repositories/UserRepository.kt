@@ -639,9 +639,11 @@ class UserRepository(
         mid: Long,
         order: SpaceVideoOrder = SpaceVideoOrder.PubDate,
         page: SpaceVideoPage = SpaceVideoPage(),
-        preferApiType: ApiType = ApiType.Web
+        preferApiType: ApiType = ApiType.Web,
+        previous: Boolean = false,
+        anchorAid: Long? = null
     ): SpaceVideoData {
-        return when (preferApiType) {
+        return when (if (previous || anchorAid != null) ApiType.App else preferApiType) {
             ApiType.Web -> {
                 val webSpaceVideoData = BiliHttpApi.getWebUserSpaceVideos(
                     mid = mid,
@@ -657,10 +659,12 @@ class UserRepository(
             ApiType.App -> {
                 val appSpaceVideoData = BiliHttpApi.getAppUserSpaceVideos(
                     mid = mid,
-                    lastAvid = page.lastAvid,
+                    lastAvid = anchorAid ?: if (previous) page.firstAvid else page.lastAvid,
                     order = order.value,
-                    ts = System.currentTimeMillis(),
-                    accessKey = authRepository.accessToken ?: ""
+                    ts = System.currentTimeMillis() / 1000,
+                    accessKey = authRepository.accessToken ?: "",
+                    sort = if (previous) "asc" else null,
+                    includeCursor = anchorAid != null
                 ).getResponseData()
                 SpaceVideoData.fromAppSpaceVideoData(appSpaceVideoData)
             }

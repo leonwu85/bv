@@ -86,6 +86,7 @@ data class VideoLaunchArgs(
     val danmaku: Int,
     val pubTime: String,
     val liveWatchedNum: Int,
+    val initialSeekPositionMs: Long? = null,
 ) {
     companion object {
         fun fromIntent(intent: Intent): VideoLaunchArgs {
@@ -109,7 +110,8 @@ data class VideoLaunchArgs(
                 play = intent.getLongExtra("play", 0L),
                 danmaku = intent.getIntExtra("danmaku", 0),
                 pubTime = intent.getStringExtra("pubTime") ?: "",
-                liveWatchedNum = intent.getIntExtra("liveWatchedNum", 0)
+                liveWatchedNum = intent.getIntExtra("liveWatchedNum", 0),
+                initialSeekPositionMs = intent.getLongExtra("initialSeekPositionMs", -1).takeIf { it >= 0 }
             )
         }
     }
@@ -163,6 +165,7 @@ class VideoPlayerActivity : ComponentActivity() {
             seasonId: Int? = null,
             playOfflineCache: Boolean = false,
             resumeHistory: Boolean = true,
+            initialSeekPositionMs: Long? = null,
         ) {
             context.startActivity(
                 Intent(context, VideoPlayerActivity::class.java).apply {
@@ -173,6 +176,7 @@ class VideoPlayerActivity : ComponentActivity() {
                     putExtra("fromToView", fromToView)
                     putExtra("playOfflineCache", playOfflineCache)
                     putExtra("resumeHistory", resumeHistory)
+                    initialSeekPositionMs?.let { putExtra("initialSeekPositionMs", it) }
                     putExtra("cover", cover)
                     putExtra("title", title)
                     putExtra("partTitle", partTitle)
@@ -830,6 +834,7 @@ class VideoPlayerActivity : ComponentActivity() {
                     cid = target.cid,
                     epid = target.epid,
                     seasonId = target.seasonId,
+                    initialSeekPositionMs = launchArgs.initialSeekPositionMs,
                     forceStartPlayback = launchArgs.playOfflineCache,
                     preferOfflineCache = launchArgs.playOfflineCache
                 )

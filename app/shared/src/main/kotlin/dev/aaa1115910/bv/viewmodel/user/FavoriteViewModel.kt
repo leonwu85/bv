@@ -20,6 +20,9 @@ import dev.aaa1115910.bv.util.fWarn
 import dev.aaa1115910.bv.util.swapList
 import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
+import dev.aaa1115910.biliapi.entity.FavoriteTransferMode
+import dev.aaa1115910.biliapi.entity.FavoriteTransferRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -53,6 +56,86 @@ class FavoriteViewModel(
     var updatingFolderItems by mutableStateOf(false)
     var operating by mutableStateOf(false)
         private set
+
+    var selectionMode by mutableStateOf(false)
+        private set
+    var selectedIds by mutableStateOf<Set<Long>>(emptySet())
+        private set
+    var transferError by mutableStateOf<String?>(null)
+        private set
+    val transferTargets get() = favoriteFolderMetadataList.filter {
+        it.id != currentFavoriteFolderMetadata?.id && it.mid == Prefs.uid
+    }
+
+    fun selectFolder(folder: FavoriteFolderMetadata) {
+        if (operating || folder.id == currentFavoriteFolderMetadata?.id) return
+        currentFavoriteFolderMetadata = folder
+        updateFolderItems(force = true)
+    }
+
+    fun toggleSelectionMode() {
+        if (operating) return
+        selectionMode = !selectionMode
+        selectedIds = emptySet()
+        transferError = null
+    }
+
+    fun toggleSelected(id: Long) {
+        if (operating || favorites.none { it.avid == id }) return
+        selectionMode = true
+        selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
+    }
+
+    fun selectAllLoaded() {
+        if (operating) return
+        val loaded = favorites.map { it.avid }.toSet()
+        selectedIds = if (selectedIds.containsAll(loaded)) emptySet() else loaded
+    }
+
+    private fun clearSelection() {
+        selectionMode = false
+        selectedIds = emptySet()
+        transferError = null
+    }
+
+    fun transferSelected(targetId: Long, mode: FavoriteTransferMode) {
+        if (operating || updatingFolders || selectedIds.isEmpty() || transferTargets.none { it.id == targetId }) return
+        val source = currentFavoriteFolderMetadata ?: return
+        if (source.mid != Prefs.uid) return
+        val request = FavoriteTransferRequest(source.id, targetId,
+            favorites.filter { it.avid in selectedIds }.map { it.avid to FavoriteItemType.Video })
+        filterJob?.cancel()
+        updateJob?.cancel()
+        itemsGeneration++
+        updatingFolderItems = false
+        operating = true
+        transferError = null
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { favoriteRepository.transferResources(request, mode) }
+                if (mode == FavoriteTransferMode.Move && currentFavoriteFolderMetadata?.id == source.id) {
+                    val moved = request.resourcesInDisplayOrder.map { it.first }.toSet()
+                    favorites.removeAll { it.avid in moved }
+                    val index = favoriteFolderMetadataList.indexOfFirst { it.id == source.id }
+                    if (index >= 0) {
+                        favoriteFolderMetadataList[index] = source.copy(mediaCount = (source.mediaCount - moved.size).coerceAtLeast(0))
+                        currentFavoriteFolderMetadata = favoriteFolderMetadataList[index]
+                    }
+                }
+                clearSelection()
+                (if (mode == FavoriteTransferMode.Copy) "已复制到目标收藏夹" else "已移动到目标收藏夹").toast(context)
+                // Reload server counts and restart offset pagination after a move.
+                operating = false
+                updateFoldersInfo(source.id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                transferError = e.localizedMessage ?: "批量操作失败，请重试"
+            } finally {
+                operating = false
+            }
+        }
+    }
 
     init {
         if (!DeviceUtil.isTvDevice()) {
@@ -95,7 +178,7 @@ class FavoriteViewModel(
     private var itemsGeneration = 0
 
     fun updateSearchQuery(value: String) {
-        if (searchQuery == value) return
+        if (operating || searchQuery == value) return
         searchQuery = value
         filterJob?.cancel()
         if (value.isBlank()) {
@@ -109,13 +192,15 @@ class FavoriteViewModel(
     }
 
     fun selectOrder(value: FavoriteOrder) {
-        if (selectedOrder == value) return
+        if (operating || selectedOrder == value) return
         selectedOrder = value
         updateFolderItems(force = true)
     }
 
     fun updateFolderItems(force: Boolean = false) {
+        if (operating) return
         if (force) {
+            clearSelection()
             updateJob?.cancel()
             itemsGeneration++
             resetPageNumber()
@@ -155,7 +240,7 @@ class FavoriteViewModel(
                 }
                 withContext(Dispatchers.Main) {
                     if (generation != itemsGeneration) return@withContext
-                    favorites.addAll(newItems)
+                    favorites.addAll(newItems.filter { item -> favorites.none { it.avid == item.avid } })
                     hasMore = favoriteFolderData.hasMore
                     pageNumber++
                 }
@@ -257,6 +342,7 @@ class FavoriteViewModel(
     }
 
     fun clearData() {
+        clearSelection()
         updateJob?.cancel()
         filterJob?.cancel()
         itemsGeneration++

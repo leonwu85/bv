@@ -10,10 +10,11 @@ import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 
 class UserSpaceActivity : ComponentActivity() {
     companion object {
-        fun actionStart(context: Context, mid: Long, name: String) {
+        fun actionStart(context: Context, mid: Long, name: String, fromViewAid: Long = 0) {
             context.startActivity(
                 Intent(context, UserSpaceActivity::class.java).apply {
                     putExtra("mid", mid)
+                    putExtra("fromViewAid", fromViewAid)
                     putExtra("name", name)
                 }
             )

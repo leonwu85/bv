@@ -1,5 +1,7 @@
 package dev.aaa1115910.biliapi.repositories
 
+import dev.aaa1115910.biliapi.entity.FavoriteTransferRequest
+import dev.aaa1115910.biliapi.entity.FavoriteTransferMode
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.FavoriteFolderData
 import dev.aaa1115910.biliapi.entity.FavoriteFolderMetadata
@@ -231,6 +233,14 @@ class FavoriteRepository(
     suspend fun deleteFavoriteFolder(mediaId: Long) {
         BiliHttpApi.deleteFavoriteFolders(
             mediaIds = listOf(mediaId),
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录")
+        ).requireSuccess()
+    }
+
+    suspend fun transferResources(request: FavoriteTransferRequest, mode: FavoriteTransferMode) {
+        BiliHttpApi.transferFavoriteResources(
+            request = request, mode = mode, mid = authRepository.mid ?: error("账号未登录"),
             csrf = authRepository.biliJct ?: error("账号未登录"),
             sessData = authRepository.sessionData ?: error("账号未登录")
         ).requireSuccess()

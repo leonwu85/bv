@@ -27,10 +27,27 @@ data class SpaceVideoData(
                     .map { SpaceVideo.fromSpaceVideoItem(it) },
                 page = SpaceVideoPage(
                     hasNext = appSpaceVideoData.hasNext,
+                    hasPrevious = appSpaceVideoData.hasPrev,
+                    firstAvid = appSpaceVideoData.item.firstOrNull()?.param?.toLongOrNull() ?: 0,
                     lastAvid = appSpaceVideoData.item.lastOrNull()?.param?.toLong() ?: 0
                 )
             )
     }
+}
+
+/** Cursor pages are already in display order, including responses requested with sort=asc. */
+fun SpaceVideoData.mergePage(incoming: SpaceVideoData, previous: Boolean): SpaceVideoData {
+    val existingIds = videos.map { it.aid }.toSet()
+    val added = incoming.videos.distinctBy { it.aid }.filter { it.aid !in existingIds }
+    val mergedPage = if (previous) page.copy(
+        firstAvid = incoming.page.firstAvid.takeIf { it > 0 } ?: page.firstAvid,
+        hasPrevious = incoming.page.hasPrevious && added.isNotEmpty()
+    ) else incoming.page.copy(
+        firstAvid = if (videos.isEmpty()) incoming.page.firstAvid else page.firstAvid,
+        hasPrevious = if (videos.isEmpty()) incoming.page.hasPrevious else page.hasPrevious,
+        hasNext = incoming.page.hasNext && added.isNotEmpty()
+    )
+    return SpaceVideoData(if (previous) added + videos else videos + added, mergedPage)
 }
 
 data class SpaceVideo(
@@ -99,5 +116,7 @@ data class SpaceVideoPage(
     val nextWebPageSize: Int = 20,
     val nextWebPageNumber: Int = 1,
     // app
-    val lastAvid: Long = 0
+    val lastAvid: Long = 0,
+    val firstAvid: Long = 0,
+    val hasPrevious: Boolean = false
 )

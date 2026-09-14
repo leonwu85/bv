@@ -66,6 +66,10 @@ import dev.aaa1115910.bv.tv.component.search.SoftKeyboard
 import dev.aaa1115910.bv.ui.theme.BVTheme
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.viewmodel.search.SearchInputViewModel
+import dev.aaa1115910.bv.tv.util.openBiliContent
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
 private enum class SearchInputFocusLayer {
@@ -90,10 +94,20 @@ fun SearchInputScreen(
 
     var focusLayer by remember { mutableStateOf<SearchInputFocusLayer?>(null) }
 
-    val onSearch: (String) -> Unit = { keyword ->
-        SearchResultActivity.actionStart(context, keyword, enableProxy)
-        searchInputViewModel.keyword = keyword
-        searchInputViewModel.addSearchHistory(keyword)
+    val scope = rememberCoroutineScope()
+    var searchJob by remember { mutableStateOf<Job?>(null) }
+    val onSearch: (String) -> Unit = { input ->
+        val keyword = input.trim()
+        if (keyword.isNotEmpty()) {
+            searchJob?.cancel()
+            searchJob = scope.launch {
+                if (!openBiliContent(context, keyword)) {
+                    SearchResultActivity.actionStart(context, keyword, enableProxy)
+                    searchInputViewModel.keyword = keyword
+                    searchInputViewModel.addSearchHistory(keyword)
+                }
+            }
+        }
     }
 
     BackHandler(enabled = focusLayer != null) {
@@ -359,9 +373,9 @@ private fun SearchHotwords(
                 SearchKeyword(
                     modifier = Modifier,
                     index = index + 1,
-                    keyword = hotword.showName,
+                    keyword = hotword.displayName,
                     leadingIcon = hotword.icon ?: "",
-                    onClick = { onSearch(hotword.showName) }
+                    onClick = { onSearch(hotword.keyword) }
                 )
             }
         }

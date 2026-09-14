@@ -72,6 +72,24 @@ object BiliHttpProxyApi {
         }
     }
 
+    suspend fun searchAll(
+        keyword: String,
+        sessData: String?,
+        buvid3: String?
+    ): BiliResponse<kotlinx.serialization.json.JsonObject> {
+        val response = checkNotNull(client) { "代理未初始化" }.get("/x/web-interface/wbi/search/all/v2") {
+            parameter("keyword", keyword)
+            parameter("page", 1)
+            parameter("page_size", 20)
+            val cookies = listOfNotNull(sessData?.let { "SESSDATA=$it" }, buvid3?.let { "buvid3=$it" })
+            if (cookies.isNotEmpty()) header("Cookie", cookies.joinToString(";"))
+            header("Referer", "https://search.bilibili.com/")
+        }
+        val text = response.bodyAsText()
+        checkForVVoucher(text)
+        return json.decodeFromString(text)
+    }
+
     /**
      * 检查响应体是否包含风控 v_voucher。
      * 与 [BiliHttpApi] 保持一致，代理 playurl 命中 voucher 时抛 [VVoucherException]。

@@ -112,6 +112,7 @@ import dev.aaa1115910.biliapi.http.util.signWbi
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.retry
 import io.ktor.client.plugins.HttpRequestRetry
 import io.ktor.client.plugins.UserAgent
 import io.ktor.client.plugins.compression.ContentEncoding
@@ -1841,6 +1842,26 @@ object BiliHttpApi {
     }.body()
 
     /** 清理收藏夹内已经失效的内容。 */
+    suspend fun transferFavoriteResources(
+        request: dev.aaa1115910.biliapi.entity.FavoriteTransferRequest,
+        mode: dev.aaa1115910.biliapi.entity.FavoriteTransferMode,
+        mid: Long,
+        csrf: String,
+        sessData: String
+    ): BiliResponseWithoutData = client.post("/x/v3/fav/resource/${mode.apiValue}") {
+        retry { maxRetries = 0 }
+        header("Cookie", "SESSDATA=$sessData;")
+        header("Referer", "https://www.bilibili.com/")
+        setBody(FormDataContent(Parameters.build {
+            append("src_media_id", request.sourceId.toString())
+            append("tar_media_id", request.targetId.toString())
+            append("resources", request.resources)
+            append("mid", mid.toString())
+            append("platform", "web")
+            append("csrf", csrf)
+        }))
+    }.body()
+
     suspend fun cleanFavoriteFolder(
         mediaId: Long,
         csrf: String,
@@ -2466,12 +2487,20 @@ object BiliHttpApi {
         lastAvid: Long,
         order: String = "pubdate",
         ts: Long,
-        accessKey: String
+        accessKey: String,
+        sort: String? = null,
+        includeCursor: Boolean = false
     ): BiliResponse<AppSpaceVideoData> =
         client.get("https://app.bilibili.com/x/v2/space/archive/cursor") {
             parameter("vmid", mid)
             parameter("aid", lastAvid)
             parameter("order", order)
+            parameter("build", 8430300)
+            parameter("ps", 20)
+            parameter("mobi_app", "android")
+            parameter("platform", "android")
+            sort?.let { parameter("sort", it) }
+            if (includeCursor) parameter("include_cursor", true)
             parameter("ts", ts)
             parameter("access_key", accessKey)
         }.body()
@@ -2915,15 +2944,26 @@ object BiliHttpApi {
         tid: Int? = null,
         order: String? = null,
         duration: Int? = null,
-        buvid3: String? = null
-    ): BiliResponse<SearchResultData> = client.get("/x/web-interface/wbi/search/all/v2") {
-        parameter("keyword", keyword)
-        parameter("page", page)
-        tid?.let { parameter("tids", it) }
-        order?.let { parameter("order", it) }
-        duration?.let { parameter("duration", it) }
-        header("Cookie", "buvid3=$buvid3;")
-    }.body()
+        buvid3: String? = null,
+        sessData: String? = null
+    ): BiliResponse<kotlinx.serialization.json.JsonObject> {
+        val response = client.get("/x/web-interface/wbi/search/all/v2") {
+            parameter("keyword", keyword)
+            parameter("page", page)
+            parameter("page_size", 20)
+            parameter("platform", "pc")
+            parameter("web_location", 1430654)
+            tid?.let { parameter("tids", it) }
+            order?.let { parameter("order", it) }
+            duration?.let { parameter("duration", it) }
+            appendWebCookie(sessData = sessData, buvid3 = buvid3)
+            header("Origin", "https://search.bilibili.com")
+            header("Referer", "https://search.bilibili.com/")
+        }
+        val text = response.bodyAsText()
+        checkForVVoucher(text)
+        return json.decodeFromString(text)
+    }
 
     /**
      * 分类搜索与[keyword]相关的[type]类型的相关结果

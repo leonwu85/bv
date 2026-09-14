@@ -145,6 +145,7 @@ fun UserSpaceScreen(
     LaunchedEffect(Unit) {
         val intent = (context as Activity).intent
         if (intent.hasExtra("mid")) {
+            userSpaceViewModel.fromViewAid = intent.getLongExtra("fromViewAid", 0)
             userSpaceViewModel.initialize(
                 mid = intent.getLongExtra("mid", 0),
                 name = intent.getStringExtra("name").orEmpty(),
@@ -307,7 +308,18 @@ fun UserSpaceScreen(
 
                     UserSpaceTab.Video -> userSpaceVideoContent(
                         viewModel = userSpaceViewModel,
-                        onClickVideo = { openSpaceVideo(context, it) }
+                        onClickVideo = { openSpaceVideo(context, it) },
+                        onLoadPrevious = {
+                            val oldIndex = listState.firstVisibleItemIndex
+                            val oldOffset = listState.firstVisibleItemScrollOffset
+                            val controls = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "video-controls" }
+                            val anchorIndex = controls?.let { it.index + 1 } ?: oldIndex
+                            userSpaceViewModel.loadPreviousVideos { added ->
+                                if (added > 0) scope.launch {
+                                    listState.scrollToItem(anchorIndex + added, if (controls == null) oldOffset else 0)
+                                }
+                            }
+                        }
                     )
 
                     UserSpaceTab.Favorite -> userSpaceFavoriteContent(
@@ -719,14 +731,16 @@ private fun LazyListScope.userSpaceDynamicContent(
 
 private fun LazyListScope.userSpaceVideoContent(
     viewModel: UserSpaceViewModel,
-    onClickVideo: (SpaceVideo) -> Unit
+    onClickVideo: (SpaceVideo) -> Unit,
+    onLoadPrevious: () -> Unit
 ) {
+    item(key = "video-controls") { UserSpaceVideoControls(viewModel, onLoadPrevious) }
     if (viewModel.spaceVideos.isEmpty() && viewModel.videoLoading) {
         item { UserSpaceLoading() }
     } else if (viewModel.spaceVideos.isEmpty()) {
-        item { UserSpaceEmpty(text = "暂无投稿") }
+        if (viewModel.videoError == null) item { UserSpaceEmpty(text = "暂无投稿") }
     } else {
-        items(viewModel.spaceVideos) { video ->
+        items(viewModel.spaceVideos, key = { "video:${it.aid}" }) { video ->
             UpSpaceVideoItem(
                 spaceVideo = video,
                 onClick = onClickVideo

@@ -78,6 +78,7 @@ import dev.aaa1115910.biliapi.entity.ugc.toSmartDate
 import dev.aaa1115910.biliapi.repositories.SearchFilterDuration
 import dev.aaa1115910.biliapi.repositories.SearchFilterOrderType
 import dev.aaa1115910.biliapi.repositories.SearchType
+import dev.aaa1115910.biliapi.entity.search.searchKey
 import dev.aaa1115910.biliapi.repositories.SearchTypeResult
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.carddata.SeasonCardData
@@ -133,12 +134,16 @@ fun SearchResultContent(
     onOpenPgc: (Int) -> Unit,
     onOpenUser: (SearchTypeResult.User) -> Unit,
     onOpenLiveRoom: (SearchTypeResult.LiveRoom) -> Unit,
-    onOpenArticle: (SearchTypeResult.Article) -> Unit
+    onOpenArticle: (SearchTypeResult.Article) -> Unit,
+    aggregateSearchResult: List<SearchTypeResult.SearchTypeResultItem> = emptyList(),
+    searchError: String? = null,
+    onRetry: () -> Unit = {},
+    onOpenActivity: (SearchTypeResult.Activity) -> Unit = {}
 ) {
     val context = LocalContext.current
     val windowSize = calculateWindowSizeClass(context as Activity).widthSizeClass
     var showVideoFilter by remember { mutableStateOf(false) }
-    val videoFilterAvailable = canFilterVideo && searchType == SearchType.Video
+    val videoFilterAvailable = searchType == SearchType.All || (canFilterVideo && searchType == SearchType.Video)
 
     BackHandler(onBack = onBackToSearchInput)
 
@@ -270,48 +275,61 @@ fun SearchResultContent(
                 MaterialTheme.shapes.large
             },
         ) {
-            when (searchType) {
-                SearchType.Video -> VideoSearchResult(
-                    videoList = videoSearchResult,
-                    isLoading = isLoading,
-                    onLoadMore = { onLoadMore(SearchType.Video) },
-                    onClickVideo = onOpenUgc
-                )
+            Column {
+                if (searchError != null) {
+                    TextButton(onClick = onRetry) { Text("$searchError · 点击重试") }
+                }
+                Box(Modifier.weight(1f)) {
+                    when (searchType) {
+                        SearchType.All -> AggregateSearchResult(
+                            results = aggregateSearchResult, isLoading = isLoading,
+                            onLoadMore = { if (searchError == null) onLoadMore(SearchType.All) },
+                            onOpenUgc = onOpenUgc, onOpenPgc = onOpenPgc, onOpenUser = onOpenUser,
+                            onOpenActivity = onOpenActivity
+                        )
+                        SearchType.Video -> VideoSearchResult(
+                            videoList = videoSearchResult,
+                            isLoading = isLoading,
+                            onLoadMore = { onLoadMore(SearchType.Video) },
+                            onClickVideo = onOpenUgc
+                        )
 
-                SearchType.MediaBangumi -> PgcSearchResult(
-                    pgcList = mediaBangumiSearchResult,
-                    isLoading = isLoading,
-                    onLoadMore = { onLoadMore(SearchType.MediaBangumi) },
-                    onClickPgc = onOpenPgc
-                )
+                        SearchType.MediaBangumi -> PgcSearchResult(
+                            pgcList = mediaBangumiSearchResult,
+                            isLoading = isLoading,
+                            onLoadMore = { onLoadMore(SearchType.MediaBangumi) },
+                            onClickPgc = onOpenPgc
+                        )
 
-                SearchType.MediaFt -> PgcSearchResult(
-                    pgcList = mediaFtSearchResult,
-                    isLoading = isLoading,
-                    onLoadMore = { onLoadMore(SearchType.MediaFt) },
-                    onClickPgc = onOpenPgc
-                )
+                        SearchType.MediaFt -> PgcSearchResult(
+                            pgcList = mediaFtSearchResult,
+                            isLoading = isLoading,
+                            onLoadMore = { onLoadMore(SearchType.MediaFt) },
+                            onClickPgc = onOpenPgc
+                        )
 
-                SearchType.BiliUser -> BiliUserSearchResult(
-                    biliUserList = biliUserSearchResult,
-                    isLoading = isLoading,
-                    onLoadMore = { onLoadMore(SearchType.BiliUser) },
-                    onClickUser = onOpenUser
-                )
+                        SearchType.BiliUser -> BiliUserSearchResult(
+                            biliUserList = biliUserSearchResult,
+                            isLoading = isLoading,
+                            onLoadMore = { onLoadMore(SearchType.BiliUser) },
+                            onClickUser = onOpenUser
+                        )
 
-                SearchType.LiveRoom -> LiveRoomSearchResult(
-                    liveRoomList = liveRoomSearchResult,
-                    isLoading = isLoading,
-                    onLoadMore = { onLoadMore(SearchType.LiveRoom) },
-                    onClickLiveRoom = onOpenLiveRoom
-                )
+                        SearchType.LiveRoom -> LiveRoomSearchResult(
+                            liveRoomList = liveRoomSearchResult,
+                            isLoading = isLoading,
+                            onLoadMore = { onLoadMore(SearchType.LiveRoom) },
+                            onClickLiveRoom = onOpenLiveRoom
+                        )
 
-                SearchType.Article -> ArticleSearchResult(
-                    articles = articleSearchResult,
-                    isLoading = isLoading,
-                    onLoadMore = { onLoadMore(SearchType.Article) },
-                    onClickArticle = onOpenArticle
-                )
+                        SearchType.Article -> ArticleSearchResult(
+                            articles = articleSearchResult,
+                            isLoading = isLoading,
+                            onLoadMore = { onLoadMore(SearchType.Article) },
+                            onClickArticle = onOpenArticle
+                        )
+                    }
+                }
             }
         }
     }
@@ -1108,6 +1126,7 @@ private fun LiveRoomTextContent(
 
 @Composable
 private fun SearchType.displayName(): String = when (this) {
+    SearchType.All -> stringResource(R.string.search_result_type_name_all)
     SearchType.Video -> stringResource(R.string.search_result_type_name_video)
     SearchType.MediaBangumi -> stringResource(R.string.search_result_type_name_media_bangumi)
     SearchType.MediaFt -> stringResource(R.string.search_result_type_name_media_ft)
@@ -1146,4 +1165,44 @@ private fun formatLongCount(count: Long): String = when {
     count >= 100_000_000L -> String.format("%.1f亿", count / 100_000_000.0)
     count >= 10_000L -> String.format("%.1f万", count / 10_000.0)
     else -> count.toString()
+}
+
+@Composable
+private fun AggregateSearchResult(
+    results: List<SearchTypeResult.SearchTypeResultItem>, isLoading: Boolean,
+    onLoadMore: () -> Unit, onOpenUgc: (Long) -> Unit, onOpenPgc: (Int) -> Unit,
+    onOpenUser: (SearchTypeResult.User) -> Unit, onOpenActivity: (SearchTypeResult.Activity) -> Unit
+) {
+    if (results.isEmpty()) {
+        SearchResultEmptyContent(isLoading = isLoading)
+        return
+    }
+    val state = rememberLazyListState()
+    state.OnBottomReached(loading = isLoading, loadMore = onLoadMore)
+    LazyColumn(state = state, modifier = Modifier.fillMaxSize()) {
+        items(results, key = { it.searchKey() }) { item ->
+            when (item) {
+                is SearchTypeResult.Video -> UgcListItem(
+                    data = VideoCardData(avid = item.aid, bvid = item.bvid,
+                        title = item.title.removeHtmlTags(), cover = item.cover, play = item.play,
+                        danmaku = item.danmaku, upName = item.author, upId = item.upId,
+                        upFace = item.upFace, time = item.duration * 1000L,
+                        pubTime = item.pubDate.toLong().toSmartDate()),
+                    onClick = { onOpenUgc(item.aid) })
+                is SearchTypeResult.Pgc -> PgcListItem(pgc = item, onClick = { onOpenPgc(item.seasonId) })
+                is SearchTypeResult.User -> UserSearchListItem(user = item, onClick = { onOpenUser(item) })
+                is SearchTypeResult.Activity -> Surface(onClick = { onOpenActivity(item) }) {
+                    Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AsyncImage(model = item.cover, contentDescription = null, modifier = Modifier.size(96.dp, 60.dp))
+                        Column {
+                            Text(item.title.removeHtmlTags(), maxLines = 2)
+                            Text("直播活动", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+                else -> Unit
+            }
+        }
+        if (isLoading) item { CircularProgressIndicator(Modifier.padding(16.dp)) }
+    }
 }

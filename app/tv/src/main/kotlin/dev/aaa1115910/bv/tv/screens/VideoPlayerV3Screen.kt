@@ -1063,7 +1063,8 @@ fun VideoPlayerV3Screen(
                         context,
                         mid = playerViewModel.upId,
                         name = playerViewModel.upName,
-                        face = playerViewModel.upFace
+                        face = playerViewModel.upFace,
+                        fromViewAid = if (playerViewModel.isLive) 0 else playerViewModel.currentAid
                     )
                 },
                 onShowDanmakuChange = {
