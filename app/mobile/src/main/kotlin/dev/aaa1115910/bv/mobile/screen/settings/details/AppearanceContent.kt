@@ -34,6 +34,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
@@ -74,6 +75,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -82,6 +84,7 @@ import coil.compose.AsyncImage
 import dev.aaa1115910.bv.entity.ThemeType
 import dev.aaa1115910.bv.mobile.settings.MobilePrefs
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
+import dev.aaa1115910.bv.mobile.theme.LocalVideoCardBlurBackgroundEnabled
 import dev.aaa1115910.bv.mobile.theme.MobileThemePalette
 import dev.aaa1115910.bv.mobile.theme.mobilePreviewColorScheme
 import dev.aaa1115910.bv.mobile.R as MobileR
@@ -93,6 +96,7 @@ fun AppearanceContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val videoCardBlurBackgroundEnabled = LocalVideoCardBlurBackgroundEnabled.current
     val themeType by MobilePrefs.themeTypeFlow.collectAsState(initial = MobilePrefs.themeType)
     val seedColor by MobilePrefs.seedColorFlow.collectAsState(initial = MobilePrefs.seedColor)
     val themePalette by MobilePrefs.themePaletteFlow.collectAsState(initial = MobilePrefs.themePalette)
@@ -194,6 +198,15 @@ fun AppearanceContent(
                         resetCustomFont(context)
                         fontInstallError = null
                     }
+                )
+            }
+        }
+
+        item {
+            ScrollSectionCard(title = "视频卡片", icon = Icons.Rounded.Image) {
+                VideoCardBackgroundRow(
+                    checked = videoCardBlurBackgroundEnabled,
+                    onCheckedChange = { MobilePrefs.videoCardBlurBackgroundEnabled = it }
                 )
             }
         }
@@ -969,6 +982,33 @@ private fun PaletteOptionRow(
                 tint = MaterialTheme.colorScheme.primary
             )
         }
+    }
+}
+
+@Composable
+private fun VideoCardBackgroundRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = "模糊背景", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = "将视频封面作为卡片背景，关闭后使用纯色背景",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 

@@ -194,7 +194,7 @@ enum class MobileSettings(
     val title: String,
     val summary: String? = null
 ) {
-    Appearance(title = "外观设置", summary = "主题模式、动态取色、主色"),
+    Appearance(title = "外观设置", summary = "主题、字体、背景、视频卡片"),
     AudioVideo(title = "音视频设置", summary = "画质音质、CDN、解码"),
     Play(title = "播放设置", summary = "播放行为、弹幕、直播"),
     Mpv(title = "MPV 设置", summary = "超分、输出、硬解与缓存参数"),

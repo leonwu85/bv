@@ -408,7 +408,7 @@ private fun FavoriteContent(
                     Box {
                         SmallVideoCard(
                             modifier = Modifier
-                                .then(if (data.avid in selectedIds) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.medium) else Modifier)
+                                .then(if (data.avid in selectedIds) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small) else Modifier)
                                 .semantics {
                                     if (selectionMode) {
                                         role = Role.Checkbox
@@ -418,6 +418,7 @@ private fun FavoriteContent(
                                 },
                             data = data,
                             showMoreMenu = !selectionMode,
+                            enableUpNavigation = !selectionMode,
                             onClick = { onClickVideo(data) },
                             managementActionLabel = if (selectionMode) null else "移出当前收藏夹",
                             onManagementAction = if (selectionMode) null else ({ if (!operating) onRemoveVideo(data) })
@@ -426,7 +427,7 @@ private fun FavoriteContent(
                             Checkbox(
                                 checked = data.avid in selectedIds,
                                 onCheckedChange = null,
-                                modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
                                     .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
                                     .size(24.dp).clearAndSetSemantics { },
                                 colors = CheckboxDefaults.colors(uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant)

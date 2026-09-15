@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
@@ -42,6 +43,8 @@ import dev.aaa1115910.bv.mobile.settings.MobilePrefs
 import dev.aaa1115910.bv.mobile.settings.MobileRuntime
 import dev.aaa1115910.bv.mobile.R as MobileR
 import java.io.File
+
+val LocalVideoCardBlurBackgroundEnabled = compositionLocalOf { true }
 
 @Composable
 fun BVMobileTheme(
@@ -114,6 +117,13 @@ fun BVMobileTheme(
     } else {
         MobilePrefs.darkThemeBackgroundEnabledFlow.collectAsState(initial = MobilePrefs.darkThemeBackgroundEnabled)
     }
+    val videoCardBlurBackgroundEnabled by if (view.isInEditMode) {
+        remember { androidx.compose.runtime.mutableStateOf(true) }
+    } else {
+        remember { MobilePrefs.videoCardBlurBackgroundEnabledFlow }.collectAsState(
+            initial = remember { MobilePrefs.videoCardBlurBackgroundEnabled }
+        )
+    }
     val fontSizeLevel by if (view.isInEditMode) {
         androidx.compose.runtime.remember {
             androidx.compose.runtime.mutableStateOf(MobilePrefs.STANDARD_FONT_SIZE_LEVEL)
@@ -180,7 +190,10 @@ fun BVMobileTheme(
         shapes = mobileShapes,
         typography = typography,
     ) {
-        CompositionLocalProvider(LocalDensity provides appDensity) {
+        CompositionLocalProvider(
+            LocalDensity provides appDensity,
+            LocalVideoCardBlurBackgroundEnabled provides videoCardBlurBackgroundEnabled
+        ) {
             MobileThemeBackground(
                 resolvedDarkTheme = resolvedDarkTheme,
                 customBackgroundUri = if (resolvedDarkTheme) darkBackgroundUri else lightBackgroundUri,

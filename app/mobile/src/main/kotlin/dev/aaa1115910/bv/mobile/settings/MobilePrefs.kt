@@ -127,6 +127,13 @@ object MobilePrefs {
     val darkThemeBackgroundEnabledFlow: Flow<Boolean>
         get() = dsm.getPreferenceFlow(MobilePrefKeys.darkThemeBackgroundEnabledRequest)
 
+    var videoCardBlurBackgroundEnabled: Boolean
+        get() = read(MobilePrefKeys.videoCardBlurBackgroundEnabledRequest)
+        set(value) = write(MobilePrefKeys.videoCardBlurBackgroundEnabledKey, value)
+
+    val videoCardBlurBackgroundEnabledFlow: Flow<Boolean>
+        get() = dsm.getPreferenceFlow(MobilePrefKeys.videoCardBlurBackgroundEnabledRequest)
+
     var fontSizeLevel: Int
         get() = sanitizeFontSizeLevel(read(MobilePrefKeys.fontSizeLevelRequest))
         set(value) = write(MobilePrefKeys.fontSizeLevelKey, sanitizeFontSizeLevel(value))
@@ -533,6 +540,7 @@ object MobilePrefKeys {
     val lightThemeBackgroundEnabledKey = booleanPreferencesKey("mobile_theme_light_background_enabled")
     val darkThemeBackgroundUriKey = stringPreferencesKey("mobile_theme_dark_background_uri")
     val darkThemeBackgroundEnabledKey = booleanPreferencesKey("mobile_theme_dark_background_enabled")
+    val videoCardBlurBackgroundEnabledKey = booleanPreferencesKey("mobile_video_card_blur_background_enabled")
     val fontSizeLevelKey = intPreferencesKey("mobile_font_size_level")
     val customFontPathKey = stringPreferencesKey("mobile_custom_font_path")
     val customFontNameKey = stringPreferencesKey("mobile_custom_font_name")
@@ -618,6 +626,7 @@ object MobilePrefKeys {
     val lightThemeBackgroundEnabledRequest = PreferenceRequest(lightThemeBackgroundEnabledKey, true)
     val darkThemeBackgroundUriRequest = PreferenceRequest(darkThemeBackgroundUriKey, "")
     val darkThemeBackgroundEnabledRequest = PreferenceRequest(darkThemeBackgroundEnabledKey, true)
+    val videoCardBlurBackgroundEnabledRequest = PreferenceRequest(videoCardBlurBackgroundEnabledKey, true)
     val fontSizeLevelRequest = PreferenceRequest(fontSizeLevelKey, MobilePrefs.STANDARD_FONT_SIZE_LEVEL)
     val customFontPathRequest = PreferenceRequest(customFontPathKey, "")
     val customFontNameRequest = PreferenceRequest(customFontNameKey, "")
