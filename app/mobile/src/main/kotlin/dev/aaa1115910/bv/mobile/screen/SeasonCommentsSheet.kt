@@ -21,7 +21,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +51,7 @@ import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.mobile.component.ImagePreviewerActions
 import dev.aaa1115910.bv.mobile.component.reply.Comments
 import dev.aaa1115910.bv.mobile.component.reply.ReplySheetScaffold
+import dev.aaa1115910.bv.mobile.component.reply.rememberReplySheetScaffoldState
 import dev.aaa1115910.bv.mobile.util.saveImageToGallery
 import dev.aaa1115910.bv.util.swapList
 import dev.aaa1115910.bv.util.toast
@@ -88,16 +88,7 @@ internal fun SeasonCommentsSheet(
         initialValue = SheetValue.Hidden,
         enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
     )
-    val replyBottomSheetState = rememberBottomSheetState(
-        initialValue = SheetValue.PartiallyExpanded,
-        enabledValues = setOf(
-            SheetValue.PartiallyExpanded,
-            SheetValue.Expanded
-        )
-    )
-    val replySheetState = rememberBottomSheetScaffoldState(
-        bottomSheetState = replyBottomSheetState
-    )
+    val replySheetState = rememberReplySheetScaffoldState()
 
     val pictures = remember { mutableStateListOf<Picture>() }
     val previewerState = rememberPreviewerState(

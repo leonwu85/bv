@@ -3,6 +3,7 @@ package dev.aaa1115910.bv.mobile.component.reply
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -20,6 +21,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -104,7 +107,7 @@ fun ReplySheetScaffold(
         nextPage = CommentReplyPage()
     }
 
-    val sheetExpanded by remember {
+    val sheetExpanded by remember(sheetState) {
         derivedStateOf {
             sheetState.bottomSheetState.currentValue == SheetValue.Expanded
         }
@@ -137,22 +140,12 @@ fun ReplySheetScaffold(
         sheetState.bottomSheetState.currentValue == SheetValue.Expanded &&
                 !(previewerState.canClose || previewerState.animating)
     ) {
-        scope.launch { sheetState.bottomSheetState.partialExpand() }
+        scope.launch { sheetState.bottomSheetState.hide() }
     }
 
-    BottomSheetScaffold(
-        modifier = modifier
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .clip(
-                MaterialTheme.shapes.extraLarge.copy(
-                    bottomStart = CornerSize(0.dp),
-                    bottomEnd = CornerSize(0.dp)
-                )
-            ),
-        scaffoldState = sheetState,
-        // 0.dp 会在 lookahead 的瞬时空布局中只生成 Hidden 锚点，
-        // 与正在展开的 Expanded 目标冲突。保留一个不可感知的有效折叠锚点。
-        sheetPeekHeight = 1.dp,
+    ReplySheetLayout(
+        modifier = modifier,
+        sheetState = sheetState,
         sheetContent = {
             LazyColumn(
                 modifier = Modifier.fillMaxHeight(),
@@ -219,6 +212,45 @@ fun ReplySheetScaffold(
                 }
             }
         }
+    ) {
+        content()
+    }
+}
+
+/** Replies are either hidden or fully expanded; there is no persistent peek content. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun rememberReplySheetScaffoldState(): BottomSheetScaffoldState =
+    rememberBottomSheetScaffoldState(
+        bottomSheetState = rememberBottomSheetState(
+            initialValue = SheetValue.Hidden,
+            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
+        )
+    )
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ReplySheetLayout(
+    sheetState: BottomSheetScaffoldState,
+    modifier: Modifier = Modifier,
+    sheetContent: @Composable ColumnScope.() -> Unit,
+    content: @Composable () -> Unit,
+) {
+    BottomSheetScaffold(
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clip(
+                MaterialTheme.shapes.extraLarge.copy(
+                    bottomStart = CornerSize(0.dp),
+                    bottomEnd = CornerSize(0.dp)
+                )
+            ),
+        scaffoldState = sheetState,
+        // A PartiallyExpanded state makes Material3's snackbar placement read requireOffset()
+        // before anchors exist during layout changes. Hidden/Expanded avoids that path and
+        // also gives an empty layout a valid Hidden anchor; a 1.dp peek cannot guarantee this.
+        sheetPeekHeight = 0.dp,
+        sheetContent = sheetContent,
     ) {
         content()
     }

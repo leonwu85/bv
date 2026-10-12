@@ -128,7 +128,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetState
-import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -215,6 +214,7 @@ import dev.aaa1115910.bv.mobile.component.player.rememberHighEnergyProgressData
 import dev.aaa1115910.bv.mobile.component.reply.CommentItem
 import dev.aaa1115910.bv.mobile.component.reply.CommentVoteCard
 import dev.aaa1115910.bv.mobile.component.reply.ReplySheetScaffold
+import dev.aaa1115910.bv.mobile.component.reply.rememberReplySheetScaffoldState
 import dev.aaa1115910.bv.mobile.dlna.DlnaCastDialog
 import dev.aaa1115910.bv.mobile.dlna.DlnaCastSession
 import dev.aaa1115910.bv.mobile.dlna.DlnaControlDialog
@@ -529,16 +529,7 @@ fun VideoPlayerScreen(
         pageCount = { pictures.size },
         getKey = { pictures[it].key }
     )
-    val replyBottomSheetState = rememberBottomSheetState(
-        initialValue = SheetValue.PartiallyExpanded,
-        enabledValues = setOf(
-            SheetValue.PartiallyExpanded,
-            SheetValue.Expanded,
-        ),
-    )
-    val replySheetState = rememberBottomSheetScaffoldState(
-        bottomSheetState = replyBottomSheetState
-    )
+    val replySheetState = rememberReplySheetScaffoldState()
     var replyDraftTarget by remember { mutableStateOf<ReplyDraftTarget?>(null) }
     var liveDanmakuDraft by remember { mutableStateOf("") }
     var liveDanmakuSelection by remember { mutableStateOf(EmoteTextSelection.Zero) }
