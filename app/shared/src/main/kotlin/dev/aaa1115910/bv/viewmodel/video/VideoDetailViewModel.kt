@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.viewmodel.video
 
+import androidx.annotation.MainThread
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -87,6 +88,25 @@ class VideoDetailViewModel(
     var userActionUpdating by mutableStateOf(false)
     var favoriteFoldersLoading by mutableStateOf(false)
     private var supplementalDetailJob: Job? = null
+
+    /** Drop the previous page before loading another one in the same Activity. */
+    @MainThread
+    fun clearDetail() {
+        supplementalDetailJob?.cancel()
+        supplementalDetailJob = null
+        videoDetail = null
+        state = VideoInfoState.Loading
+        relatedVideos.clear()
+        favoriteFolders.clear()
+        favoriteFolderIds.clear()
+        upOwnerStats = null
+        upFollowing = null
+        upRelationLoading = false
+        inToView = false
+        userActionUpdating = false
+        favoriteFoldersLoading = false
+        videoInfoRepository.replacePlaybackContext(emptyList(), emptyList(), null)
+    }
 
     suspend fun loadDetail(aid: Long, fromPgcSeason: Boolean = false, withUserActions: Boolean = true) {
         supplementalDetailJob?.cancel()

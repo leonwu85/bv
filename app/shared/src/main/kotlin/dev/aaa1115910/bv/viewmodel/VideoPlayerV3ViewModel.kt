@@ -709,6 +709,7 @@ class VideoPlayerV3ViewModel(
 
     // 点播播放地址主动刷新
     private var vodPlayUrlRefreshJob: Job? = null
+    private var vodLoadJob: Job? = null
     private var vodPlayUrlRefreshToken by mutableLongStateOf(0L)
     private var vodPlaybackSessionToken by mutableLongStateOf(0L)
     private var pendingVodPlaybackSource: PendingVodPlaybackSource? = null
@@ -1323,6 +1324,71 @@ class VideoPlayerV3ViewModel(
         }
     }
 
+    @androidx.annotation.MainThread
+    fun vodPositionForNavigation(): Long? = pendingVodPlaybackSource?.startPositionMs
+        ?: videoPlayer?.currentPosition?.coerceAtLeast(0L)
+
+    /** Retain one player, but no media data or in-flight work from the previous detail page. */
+    @androidx.annotation.MainThread
+    fun prepareForVideoNavigation() {
+        vodLoadJob?.cancel()
+        vodLoadJob = null
+        beginVodPlaybackSession()
+        invalidatePreparedAutoPlayTarget()
+        resetVodBufferRecovery()
+        pendingVodPlaybackSource = null
+        manualVodPlaybackRequested = false
+        resolvedVodStartPositionMs = 0L
+        hasResolvedVodStartPosition = false
+        resolvedVodStartPositionSessionToken = 0L
+        sponsorSegmentsJob?.cancel()
+        sponsorSegments = emptyList()
+        currentSponsorSegment = null
+        showSponsorBlockTip = false
+        danmakuLoadJob?.cancel()
+        danmakuCatchUpJob?.cancel()
+        danmakuLoadToken += 1
+        danmakuLoadSession = null
+        danmakuData.clear()
+        resetResolvedDanmakuMask(clearMasks = true)
+        danmakuPlayer?.release()
+        danmakuPlayer = null
+        videoPlayer?.stop()
+        playData = null
+        videoShot = null
+        clipInfoList = emptyList()
+        viewPoints = emptyList()
+        availableQuality.clear()
+        availableVideoCodec.clear()
+        availableAudio.clear()
+        availableSubtitle.clear()
+        clearSubtitleState(SubtitleSlot.Primary, invalidateRequest = true)
+        clearSubtitleState(SubtitleSlot.Secondary, invalidateRequest = true)
+        subtitleMetadataCid = -1L
+        mutedSubtitlePolicy.resetForVideo()
+        currentAid = 0L
+        currentCid = 0L
+        currentEpid = 0
+        currentInteractiveNodeId = 0L
+        currentInteractiveEdgeId = 0L
+        showInteractiveOptionDialog = false
+        interactiveOptionsLoading = false
+        interactiveOptionsFromQuestions = false
+        currentVideoWidth = 0
+        currentVideoHeight = 0
+        currentPlaybackOffline = false
+        lastPlayed = 0
+        needPay = false
+        showBuffering = false
+        loadState = RequestState.Ready
+        playerIconIdle = ""
+        playerIconMoving = ""
+        isVerticalVideo = false
+        like = 0
+        coin = 0
+        favorite = 0
+    }
+
     fun loadPlayUrl(
         avid: Long,
         cid: Long,
@@ -1376,6 +1442,7 @@ class VideoPlayerV3ViewModel(
     ) {
         val manualPlaybackRequestedBeforeInitialLoad =
             vodPlaybackSessionToken == 0L && manualVodPlaybackRequested
+        vodLoadJob?.cancel()
         val playbackSessionToken = beginVodPlaybackSession()
         sponsorSegmentsJob?.cancel()
         sponsorSegments = emptyList()
@@ -1442,7 +1509,8 @@ class VideoPlayerV3ViewModel(
         }
         epid?.let { this.epid = it }
         seasonId?.let { this.seasonId = it }
-        viewModelScope.launch(Dispatchers.Default) {
+        vodLoadJob = viewModelScope.launch(Dispatchers.Default) {
+            ensureVodPlaybackSessionActive(playbackSessionToken)
             addLogs("加载视频中")
             ensureDanmakuPlayer()
             addLogs("弹幕引擎已就绪")
@@ -1480,6 +1548,7 @@ class VideoPlayerV3ViewModel(
                 preparedPlayData = preparedPlayData,
                 preferOfflineCache = preferOfflineCache,
             )
+            ensureVodPlaybackSessionActive(playbackSessionToken)
             if (playUrlLoaded && !useOfflinePlaybackSource) {
                 launch {
                     updateViewPoints(

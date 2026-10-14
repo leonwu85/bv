@@ -231,6 +231,13 @@ object MobilePrefs {
         get() = read(MobilePrefKeys.currentPlaySpeedRequest)
         set(value) = write(MobilePrefKeys.currentPlaySpeedKey, value)
 
+    var relatedVideoBackNavigation: Boolean
+        get() = read(MobilePrefKeys.relatedVideoBackNavigationRequest)
+        set(value) = write(MobilePrefKeys.relatedVideoBackNavigationKey, value)
+
+    val relatedVideoBackNavigationFlow: Flow<Boolean>
+        get() = dsm.getPreferenceFlow(MobilePrefKeys.relatedVideoBackNavigationRequest)
+
     var autoPlay: Boolean
         get() = read(MobilePrefKeys.autoPlayRequest)
         set(value) = write(MobilePrefKeys.autoPlayKey, value)
@@ -574,6 +581,7 @@ object MobilePrefKeys {
     val defaultVideoCodecKey = intPreferencesKey("mobile_default_video_codec")
     val secondVideoCodecKey = intPreferencesKey("mobile_second_video_codec")
     val currentPlaySpeedKey = floatPreferencesKey("mobile_current_play_speed")
+    val relatedVideoBackNavigationKey = booleanPreferencesKey("mobile_related_video_back_navigation")
     val autoPlayKey = booleanPreferencesKey("mobile_player_auto_play")
     val enableTunnelingKey = booleanPreferencesKey("mobile_enable_tunneling")
     val enableMobileTunnelingKey = booleanPreferencesKey("mobile_enable_mobile_tunneling")
@@ -666,6 +674,7 @@ object MobilePrefKeys {
     val defaultVideoCodecRequest = PreferenceRequest(defaultVideoCodecKey, VideoCodec.HEVC.ordinal)
     val secondVideoCodecRequest = PreferenceRequest(secondVideoCodecKey, VideoCodec.AVC.ordinal)
     val currentPlaySpeedRequest = PreferenceRequest(currentPlaySpeedKey, 1f)
+    val relatedVideoBackNavigationRequest = PreferenceRequest(relatedVideoBackNavigationKey, false)
     val autoPlayRequest = PreferenceRequest(autoPlayKey, true)
     val enableTunnelingRequest = PreferenceRequest(enableTunnelingKey, false)
     val enableMobileTunnelingRequest = PreferenceRequest(enableMobileTunnelingKey, false)

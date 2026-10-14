@@ -333,7 +333,8 @@ fun VideoPlayerScreen(
     isInPictureInPictureMode: Boolean = false,
     pictureInPictureSupported: Boolean = false,
     onEnterPictureInPicture: () -> Unit = {},
-    onPlayPgcEpisode: (Episode) -> Unit = {}
+    onPlayPgcEpisode: (Episode) -> Unit = {},
+    onBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1029,7 +1030,7 @@ fun VideoPlayerScreen(
                                 autoRotateSuppressed = true
                                 isVideoFullscreen = false
                             },
-                            onBack = { (context as Activity).finish() },
+                            onBack = onBack,
                             onChangeResolution = { code, afterChange ->
                                 scope.launch(Dispatchers.IO) {
                                     if (playerViewModel.isLive) {

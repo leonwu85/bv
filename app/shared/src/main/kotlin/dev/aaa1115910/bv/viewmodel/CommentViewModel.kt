@@ -29,6 +29,7 @@ import dev.aaa1115910.bv.util.fInfo
 import dev.aaa1115910.bv.util.isExpectedNetworkFailure
 import dev.aaa1115910.bv.util.toast
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -43,6 +44,9 @@ class CommentViewModel(
     companion object {
         val logger = KotlinLogging.logger {}
     }
+
+    @Volatile
+    private var commentTargetVersion = 0L
 
     var commentId = 0L
     var commentType = 0L
@@ -91,8 +95,17 @@ class CommentViewModel(
     fun setCommentTarget(commentId: Long, commentType: Long) {
         if (commentId <= 0L || commentType <= 0L) return
         if (this.commentId == commentId && this.commentType == commentType) return
+        clearCommentTarget()
         this.commentId = commentId
         this.commentType = commentType
+    }
+
+    @MainThread
+    fun clearCommentTarget() {
+        commentTargetVersion += 1
+        commentId = 0L
+        commentType = 0L
+        sendingComment = false
         nextCommentPage = CommentPage()
         hasMoreComments = true
         refreshingComments = false
@@ -110,9 +123,11 @@ class CommentViewModel(
     }
 
     suspend fun loadMoreComment() {
+        val requestVersion = commentTargetVersion
         if (commentId <= 0L || commentType <= 0L) {
             logger.warn { "Skip loading comments for invalid target: commentId=$commentId, commentType=$commentType" }
             withContext(Dispatchers.Main) {
+                if (requestVersion != commentTargetVersion) return@withContext
                 updatingComments = false
                 refreshingComments = false
             }
@@ -120,14 +135,17 @@ class CommentViewModel(
         }
         if (updatingComments) return
         withContext(Dispatchers.Main) {
+            if (requestVersion != commentTargetVersion) return@withContext
             updatingComments = true
         }
         if (!hasMoreComments) {
             withContext(Dispatchers.Main) {
+                if (requestVersion != commentTargetVersion) return@withContext
                 updatingComments = false
             }
             delay(300)
             withContext(Dispatchers.Main) {
+                if (requestVersion != commentTargetVersion) return@withContext
                 refreshingComments = false
             }
             return
@@ -142,17 +160,18 @@ class CommentViewModel(
                 sort = commentSort,
                 preferApiType = Prefs.apiType
             )
-            nextCommentPage = commentsData.nextPage
-            hasMoreComments = commentsData.hasNext
-            if (isFirstPage) {
-                commentVote = commentsData.vote
-            }
             withContext(Dispatchers.Main.immediate) {
+                if (requestVersion != commentTargetVersion) return@withContext
+                nextCommentPage = commentsData.nextPage
+                hasMoreComments = commentsData.hasNext
+                if (isFirstPage) commentVote = commentsData.vote
                 comments.addAll(commentsData.comments.withoutBlockedUsers(localUserBlocks.blocked.value))
             }
         }.onFailure {
+            if (it is CancellationException) throw it
             logger.fException(it) { "Load more comments failed" }
             withContext(Dispatchers.Main) {
+                if (requestVersion != commentTargetVersion) return@withContext
                 val message = if (it.isExpectedNetworkFailure()) {
                     "网络连接失败，请稍后重试"
                 } else {
@@ -162,10 +181,12 @@ class CommentViewModel(
             }
         }
         withContext(Dispatchers.Main) {
+            if (requestVersion != commentTargetVersion) return@withContext
             updatingComments = false
         }
         delay(300)
         withContext(Dispatchers.Main) {
+            if (requestVersion != commentTargetVersion) return@withContext
             refreshingComments = false
         }
     }
@@ -187,9 +208,12 @@ class CommentViewModel(
     }
 
     suspend fun loadMoreReplies() {
+        val requestVersion = commentTargetVersion
+        val requestRootId = rpid
         if (commentId <= 0L || commentType <= 0L || rpid <= 0L) {
             logger.warn { "Skip loading replies for invalid target: commentId=$commentId, commentType=$commentType, rpid=$rpid" }
             withContext(Dispatchers.Main) {
+                if (requestVersion != commentTargetVersion || requestRootId != rpid) return@withContext
                 updatingReplies = false
                 refreshingReplies = false
             }
@@ -197,14 +221,17 @@ class CommentViewModel(
         }
         if (updatingReplies) return
         withContext(Dispatchers.Main) {
+            if (requestVersion != commentTargetVersion || requestRootId != rpid) return@withContext
             updatingReplies = true
         }
         if (!hasMoreReplies) {
             withContext(Dispatchers.Main) {
+                if (requestVersion != commentTargetVersion || requestRootId != rpid) return@withContext
                 updatingReplies = false
             }
             delay(300)
             withContext(Dispatchers.Main) {
+                if (requestVersion != commentTargetVersion || requestRootId != rpid) return@withContext
                 refreshingReplies = false
             }
             return
@@ -219,21 +246,25 @@ class CommentViewModel(
                 sort = replySort,
                 preferApiType = Prefs.apiType
             )
-            nextCommentReplyPage = commentRepliesData.nextPage
-            hasMoreReplies = commentRepliesData.hasNext
             withContext(Dispatchers.Main.immediate) {
+                if (requestVersion != commentTargetVersion || requestRootId != rpid) return@withContext
+                nextCommentReplyPage = commentRepliesData.nextPage
+                hasMoreReplies = commentRepliesData.hasNext
                 if (replyRootComment == null) replyRootComment = commentRepliesData.rootComment
                     ?.takeUnless { localUserBlocks.isBlocked(it.mid) }
                 replies.addAll(commentRepliesData.replies.withoutBlockedUsers(localUserBlocks.blocked.value))
             }
         }.onFailure {
+            if (it is CancellationException) throw it
             logger.fException(it) { "Load more replies failed" }
         }
         withContext(Dispatchers.Main) {
+            if (requestVersion != commentTargetVersion || requestRootId != rpid) return@withContext
             updatingReplies = false
         }
         delay(300)
         withContext(Dispatchers.Main) {
+            if (requestVersion != commentTargetVersion || requestRootId != rpid) return@withContext
             refreshingReplies = false
         }
     }

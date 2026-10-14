@@ -15,12 +15,15 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Rational
 import androidx.activity.ComponentActivity
+import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.annotation.MainThread
 import androidx.annotation.RequiresApi
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
@@ -44,6 +47,7 @@ import dev.aaa1115910.bv.mobile.screen.VideoPlayerScreen
 import dev.aaa1115910.bv.mobile.settings.MobilePrefs
 import dev.aaa1115910.bv.mobile.settings.MobileRuntime
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
+import dev.aaa1115910.bv.player.entity.RequestState
 import dev.aaa1115910.bv.player.entity.PlayerDefaultStartPosition
 import dev.aaa1115910.bv.player.VideoPlayerOptions
 import dev.aaa1115910.bv.player.impl.exo.ExoPlayerFactory
@@ -65,6 +69,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 data class VideoLaunchArgs(
@@ -121,6 +127,9 @@ data class VideoLaunchArgs(
 
 class VideoPlayerActivity : ComponentActivity() {
     companion object {
+        private const val EXTRA_FROM_RECOMMENDATION = "fromRecommendation"
+        private const val STATE_DETAIL_HISTORY = "videoDetailHistory"
+        private const val STATE_CURRENT_DETAIL = "currentVideoDetail"
         private const val ACTION_PIP_PLAYBACK_CONTROL =
             "dev.aaa1115910.bv.mobile.action.PIP_PLAYBACK_CONTROL"
         private const val EXTRA_PIP_PLAYBACK_CONTROL = "pip_playback_control"
@@ -170,10 +179,12 @@ class VideoPlayerActivity : ComponentActivity() {
             playOfflineCache: Boolean = false,
             resumeHistory: Boolean = true,
             initialSeekPositionMs: Long? = null,
+            fromRecommendation: Boolean = false,
         ) {
             context.startActivity(
                 Intent(context, VideoPlayerActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    putExtra(EXTRA_FROM_RECOMMENDATION, fromRecommendation)
                     putExtra("aid", aid)
                     putExtra("cid", cid)
                     putExtra("fromSeason", fromSeason)
@@ -329,7 +340,8 @@ class VideoPlayerActivity : ComponentActivity() {
                 play = relatedVideo.view.coerceAtLeast(0L),
                 danmaku = relatedVideo.danmaku.coerceAtLeast(0),
                 pubTime = relatedVideo.pubTime.orEmpty(),
-                epid = relatedVideo.epid
+                epid = relatedVideo.epid,
+                fromRecommendation = true
             )
         }
 
@@ -367,6 +379,8 @@ class VideoPlayerActivity : ComponentActivity() {
     private var pipActionReceiverRegistered = false
     private var pgcEpisodeRefreshJob: Job? = null
     private var vodLaunchJob: Job? = null
+    private val detailHistory = VideoDetailHistory()
+    private var detailGeneration by mutableIntStateOf(0)
 
     private val pictureInPictureSupported: Boolean
         get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
@@ -403,23 +417,45 @@ class VideoPlayerActivity : ComponentActivity() {
             }
         }
 
+        if (MobilePrefs.relatedVideoBackNavigation) {
+            savedInstanceState?.getString(STATE_DETAIL_HISTORY)?.let { saved ->
+                runCatching { Json.decodeFromString<List<VideoDetailHistoryEntry>>(saved) }
+                    .onSuccess(detailHistory::restore)
+            }
+        }
+        savedInstanceState?.getString(STATE_CURRENT_DETAIL)?.let { saved ->
+            runCatching { Json.decodeFromString<VideoDetailHistoryEntry>(saved) }
+                .getOrNull()?.takeIf { it.isValid }?.let { setIntent(it.toIntent()) }
+        }
+        // Registered before Compose: fullscreen, preview and sheet handlers keep priority.
+        onBackPressedDispatcher.addCallback(this) { navigateBackFromDetail() }
+        lifecycleScope.launch {
+            MobilePrefs.relatedVideoBackNavigationFlow.collect { enabled ->
+                if (!enabled) detailHistory.clear()
+            }
+        }
+
         val launchArgs = VideoLaunchArgs.fromIntent(intent)
         initVideoPlayer(launchArgs = launchArgs)
         if (!launchArgs.isLive) initDanmakuPlayer()
         setContent {
             val windowSizeClass = calculateWindowSizeClass(this)
             BVMobileTheme(themeBackgroundEnabled = !activityPlayerViewModel.isLive) {
-                VideoPlayerScreen(
-                    playerViewModel = activityPlayerViewModel,
-                    commentVideModel = activityCommentViewModel,
-                    seasonVideModel = activitySeasonViewModel,
-                    videoDetailViewModel = activityVideoDetailViewModel,
-                    windowSizeClass = windowSizeClass,
-                    isInPictureInPictureMode = pipModeActive,
-                    pictureInPictureSupported = pictureInPictureSupported,
-                    onEnterPictureInPicture = ::enterPlayerPictureInPicture,
-                    onPlayPgcEpisode = ::playPgcEpisode
-                )
+                // Dispose previous page UI/coroutines instead of retaining compositions per entry.
+                key(detailGeneration) {
+                    VideoPlayerScreen(
+                        playerViewModel = activityPlayerViewModel,
+                        commentVideModel = activityCommentViewModel,
+                        seasonVideModel = activitySeasonViewModel,
+                        videoDetailViewModel = activityVideoDetailViewModel,
+                        windowSizeClass = windowSizeClass,
+                        isInPictureInPictureMode = pipModeActive,
+                        pictureInPictureSupported = pictureInPictureSupported,
+                        onEnterPictureInPicture = ::enterPlayerPictureInPicture,
+                        onPlayPgcEpisode = ::playPgcEpisode,
+                        onBack = { onBackPressedDispatcher.onBackPressed() }
+                    )
+                }
             }
         }
     }
@@ -590,8 +626,37 @@ class VideoPlayerActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.getBooleanExtra("mediaSessionReturn", false)) return
-        setIntent(intent)
+        val current = currentDetailEntry()
+        val next = VideoLaunchArgs.fromIntent(intent).toHistoryEntry()
+        val fromRecommendation = intent.getBooleanExtra(EXTRA_FROM_RECOMMENDATION, false)
+        // Ignore repeated taps on the current recommendation, including while it is loading.
+        if (fromRecommendation && current != null && next != null && current.isSameVideo(next)) return
+        detailHistory.recordNavigation(
+            current = current,
+            next = next,
+            enabled = MobilePrefs.relatedVideoBackNavigation,
+            fromRecommendation = fromRecommendation
+        )
+        openDetail(intent)
+    }
 
+    private fun navigateBackFromDetail() {
+        val previous = detailHistory.pop(enabled = MobilePrefs.relatedVideoBackNavigation)
+        if (previous == null) {
+            finish()
+        } else {
+            openDetail(previous.toIntent())
+        }
+    }
+
+    private fun openDetail(intent: Intent) {
+        vodLaunchJob?.cancel()
+        pgcEpisodeRefreshJob?.cancel()
+        if (!playerViewModel.isLive) playerViewModel.prepareForVideoNavigation()
+        videoDetailViewModel.clearDetail()
+        commentViewModel.clearCommentTarget()
+        detailGeneration += 1
+        setIntent(intent)
         val launchArgs = VideoLaunchArgs.fromIntent(intent)
         logger.fInfo { "Handle new video player intent: isLive=${launchArgs.isLive}" }
         if (playerViewModel.videoPlayer == null) {
@@ -609,6 +674,57 @@ class VideoPlayerActivity : ComponentActivity() {
 
         if (!launchArgs.isLive) initDanmakuPlayer()
         parseIntent(launchArgs)
+    }
+
+    private fun VideoLaunchArgs.toHistoryEntry(): VideoDetailHistoryEntry? {
+        if (isLive) return null
+        return VideoDetailHistoryEntry(
+            aid = aid, cid = cid, epid = epid, seasonId = seasonId,
+            fromSeason = fromSeason, fromToView = fromToView,
+            playOfflineCache = playOfflineCache, resumeHistory = resumeHistory,
+            positionMs = initialSeekPositionMs
+        ).takeIf { it.isValid }
+    }
+
+    private fun currentDetailEntry(): VideoDetailHistoryEntry? {
+        val launch = VideoLaunchArgs.fromIntent(intent)
+        val entry = launch.toHistoryEntry() ?: return null
+        // Before playback resolves, use the pending launch, never the previous video's IDs.
+        if (playerViewModel.currentAid <= 0L || playerViewModel.isLive) return entry
+        return entry.copy(
+            aid = playerViewModel.currentAid,
+            cid = playerViewModel.currentCid,
+            epid = playerViewModel.epid.takeIf { it > 0 },
+            seasonId = playerViewModel.seasonId.takeIf { it > 0 },
+            fromSeason = playerViewModel.fromSeason,
+            playOfflineCache = playerViewModel.currentPlaybackOffline || launch.playOfflineCache,
+            resumeHistory = false,
+            positionMs = if (playerViewModel.loadState == RequestState.Success) {
+                playerViewModel.vodPositionForNavigation()
+            } else {
+                launch.initialSeekPositionMs
+            }
+        )
+    }
+
+    private fun VideoDetailHistoryEntry.toIntent(): Intent =
+        Intent(this@VideoPlayerActivity, VideoPlayerActivity::class.java).apply {
+            putExtra("aid", aid)
+            putExtra("cid", cid)
+            epid?.let { putExtra("epid", it) }
+            seasonId?.let { putExtra("seasonId", it) }
+            putExtra("fromSeason", fromSeason)
+            putExtra("fromToView", fromToView)
+            putExtra("playOfflineCache", playOfflineCache)
+            putExtra("resumeHistory", resumeHistory)
+            positionMs?.let { putExtra("initialSeekPositionMs", it) }
+        }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        if (!MobilePrefs.relatedVideoBackNavigation) detailHistory.clear()
+        outState.putString(STATE_DETAIL_HISTORY, Json.encodeToString(detailHistory.snapshot()))
+        currentDetailEntry()?.let { outState.putString(STATE_CURRENT_DETAIL, Json.encodeToString(it)) }
+        super.onSaveInstanceState(outState)
     }
 
     private fun initVideoPlayer(launchArgs: VideoLaunchArgs) {
@@ -1027,14 +1143,12 @@ class VideoPlayerActivity : ComponentActivity() {
             unregisterReceiver(pictureInPictureActionReceiver)
             pipActionReceiverRegistered = false
         }
-        super.onDestroy()
-        playerViewModel.videoPlayer?.release()
-        playerViewModel.liveDanmakuPlayer?.release()
-        if (isFinishing) {
-            playerViewModel.videoPlayer = null
-            playerViewModel.danmakuPlayer = null
-            playerViewModel.liveDanmakuPlayer = null
+        if (isChangingConfigurations && !playerViewModel.isLive) {
+            playerViewModel.prepareForVideoNavigation()
         }
+        super.onDestroy()
+        // A retained ViewModel must not keep a released player across Activity recreation.
+        releasePlayerForRelaunch()
     }
 
     override fun onPause() {

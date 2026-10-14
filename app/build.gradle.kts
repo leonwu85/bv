@@ -96,6 +96,67 @@ abstract class Android14ApiCompatClassVisitorFactory :
     }
 }
 
+/**
+ * The bundled akdanmaku AAR can leave its action thread blocked in Semaphore.acquire() when its
+ * View is detached during a video switch. release() stops frame callbacks and quits the Looper,
+ * but neither operation wakes that wait. Wake it after quitSafely(), while started is already
+ * false, so the pending frame returns and the thread can exit before release() joins it.
+ * Keep this compatibility fix here until the bundled AAR contains the upstream fix.
+ */
+abstract class DanmakuReleaseClassVisitorFactory :
+    AsmClassVisitorFactory<InstrumentationParameters.None> {
+
+    override fun isInstrumentable(classData: ClassData): Boolean =
+        classData.className == "com.kuaishou.akdanmaku.ui.DanmakuPlayer"
+
+    override fun createClassVisitor(
+        classContext: ClassContext,
+        nextClassVisitor: ClassVisitor,
+    ): ClassVisitor = object : ClassVisitor(Opcodes.ASM9, nextClassVisitor) {
+        private var wakeupInjected = false
+
+        override fun visitMethod(
+            access: Int,
+            name: String?,
+            descriptor: String?,
+            signature: String?,
+            exceptions: Array<out String>?,
+        ): MethodVisitor {
+            val delegate = super.visitMethod(access, name, descriptor, signature, exceptions)
+            if (name != "release" || descriptor != "()V") return delegate
+            return object : MethodVisitor(Opcodes.ASM9, delegate) {
+                override fun visitMethodInsn(
+                    opcode: Int,
+                    owner: String,
+                    name: String,
+                    descriptor: String,
+                    isInterface: Boolean,
+                ) {
+                    super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
+                    if (opcode == Opcodes.INVOKEVIRTUAL && owner == "android/os/HandlerThread" &&
+                        name == "quitSafely" && descriptor == "()Z"
+                    ) {
+                        super.visitVarInsn(Opcodes.ALOAD, 0)
+                        super.visitMethodInsn(
+                            Opcodes.INVOKESPECIAL,
+                            "com/kuaishou/akdanmaku/ui/DanmakuPlayer",
+                            "releaseSemaphore",
+                            "()V",
+                            false,
+                        )
+                        wakeupInjected = true
+                    }
+                }
+            }
+        }
+
+        override fun visitEnd() {
+            check(wakeupInjected) { "akdanmaku release() changed; re-check the render-thread shutdown fix" }
+            super.visitEnd()
+        }
+    }
+}
+
 val appVersion = AppConfiguration.resolveVersion(rootProject.projectDir)
 val googleServicesAvailable = AppConfiguration.isGoogleServicesAvailable(rootProject.projectDir)
 
@@ -235,6 +296,10 @@ androidComponents {
     onVariants(selector().all()) { variant ->
         variant.instrumentation.transformClassesWith(
             Android14ApiCompatClassVisitorFactory::class.java,
+            InstrumentationScope.ALL,
+        ) {}
+        variant.instrumentation.transformClassesWith(
+            DanmakuReleaseClassVisitorFactory::class.java,
             InstrumentationScope.ALL,
         ) {}
         variant.instrumentation.setAsmFramesComputationMode(FramesComputationMode.COPY_FRAMES)

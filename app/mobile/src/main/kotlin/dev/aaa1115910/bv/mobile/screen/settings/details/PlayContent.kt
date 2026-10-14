@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.mobile.activities.VideoDetailHistory
 import dev.aaa1115910.bv.mobile.component.preferences.items.radioPreference
 import dev.aaa1115910.bv.mobile.component.preferences.items.switchPreference
 import dev.aaa1115910.bv.mobile.component.preferences.preferenceGroups
@@ -44,6 +45,12 @@ fun PlayContent(
                 )
             },
             "播放" to {
+                switchPreference(
+                    title = "推荐视频逐级返回",
+                    summary = "点击推荐视频后，返回可回到上一个详情页。最多保留最近 ${VideoDetailHistory.MAX_ENTRIES} 次跳转，返回时重新加载并恢复播放进度",
+                    prefReq = MobilePrefKeys.relatedVideoBackNavigationRequest,
+                    onCheckedChange = { true }
+                )
                 switchPreference(
                     title = "高能进度条",
                     summary = "在进度条上方显示弹幕热度趋势",
