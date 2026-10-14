@@ -89,8 +89,10 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerSeekState
 import dev.aaa1115910.bv.player.entity.VideoPlayerStateData
 import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.player.seekbar.SeekMoveState
+import dev.aaa1115910.bv.player.seekbar.buildViewPointTimeline
 import dev.aaa1115910.bv.player.shared.R
 import dev.aaa1115910.bv.player.tv.VideoSeekBar
+import dev.aaa1115910.bv.player.tv.component.AutoSizeButtonText
 import coil.compose.AsyncImage
 import dev.aaa1115910.bv.player.tv.theme.PlayerColors
 import dev.aaa1115910.bv.util.formatHourMinSec
@@ -258,6 +260,7 @@ fun ControllerBottomBar(
     ) -> Unit = { _, _, _, _ -> },
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
+    onSeekToPosition: (Long) -> Unit = {},
     availableSubtitleTracks: List<Subtitle> = emptyList(),
     currentSubtitleId: Long,
     onSubtitleChange: (Long) -> Unit,
@@ -491,6 +494,10 @@ fun ControllerBottomBar(
     }
 
     val seekbarFocusRequester = remember { FocusRequester() }
+    val segmentFocusRequester = remember { FocusRequester() }
+    val viewPointTimeline = remember(videoPlayerConfigData.viewPoints, seekData.duration, isLive) {
+        if (isLive) emptyList() else buildViewPointTimeline(videoPlayerConfigData.viewPoints, seekData.duration)
+    }
     var seekbarHasFocus by remember { mutableStateOf(false) }
 
     val statString by remember {
@@ -927,7 +934,7 @@ fun ControllerBottomBar(
                 .padding(start = 32.dp, bottom = ControllerActionRowBottomPadding.scaledBy(controllerPanelScale))
                 .offset(y = ControllerActionRowOffset.scaledBy(controllerPanelScale))
                 .focusProperties {
-                    down = seekbarFocusRequester
+                    down = if (viewPointTimeline.isNotEmpty()) segmentFocusRequester else seekbarFocusRequester
                 },
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1040,6 +1047,23 @@ fun ControllerBottomBar(
             }
         }
 
+        if (viewPointTimeline.isNotEmpty()) {
+            ViewPointSegmentBar(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 36.dp, vertical = 4.dp)
+                    .focusRequester(segmentFocusRequester)
+                    .focusProperties {
+                        up = firstActionFocusRequester
+                        down = seekbarFocusRequester
+                    },
+                segments = viewPointTimeline,
+                positionMs = seekData.position,
+                onSeekToPosition = onSeekToPosition,
+                scale = controllerPanelScale * panelConfig.seekBarScale,
+            )
+        }
+
         // ── Row 1: 进度条 ──
         VideoSeekBar(
             modifier = Modifier
@@ -1056,7 +1080,7 @@ fun ControllerBottomBar(
                     seekbarHasFocus = it.isFocused
                 }
                 .focusProperties {
-                    up = firstActionFocusRequester
+                    up = if (viewPointTimeline.isNotEmpty()) segmentFocusRequester else firstActionFocusRequester
                     down = focusRequesters[orderedButtons.firstOrNull()?.id ?: "settings"]
                         ?: FocusRequester()
                 }
@@ -1082,7 +1106,8 @@ fun ControllerBottomBar(
             playedTrackBrush = seekBarPlayedTrackBrush,
             showThumb = false,
             trackBottomMargin = ControllerSeekBarTrackBottomMargin.scaledBy(controllerPanelScale * panelConfig.seekBarScale),
-            trackHeightScale = panelConfig.seekBarScale
+            trackHeightScale = panelConfig.seekBarScale,
+            viewPoints = videoPlayerConfigData.viewPoints,
         )
 
         // ── Row 2: 功能按钮 ──
@@ -1136,14 +1161,11 @@ fun ControllerBottomBar(
                     )
                 ) {
                     if (button.text != null) {
-                        Text(
+                        AutoSizeButtonText(
                             text = button.text,
-                            style = MaterialTheme.typography.titleMedium,
                             color = button.tint,
                             fontWeight = button.fontWeight,
                             modifier = Modifier
-                                .fillMaxSize()
-                                .wrapContentSize(Alignment.Center)
                                 .ifElse(
                                     button.scale != 1f,
                                     Modifier.scale(button.scale)

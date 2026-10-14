@@ -8,10 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.darkColorScheme
 import dev.aaa1115910.biliapi.entity.video.Subtitle
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerClockState
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
@@ -32,6 +30,9 @@ import dev.aaa1115910.bv.player.entity.LocalVideoPlayerSeekThumbData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerClockState
+import dev.aaa1115910.bv.player.entity.VideoPlayerConfigData
+import dev.aaa1115910.bv.player.entity.VideoPlayerSeekState
+import dev.aaa1115910.bv.player.entity.VideoPlayerViewPoint
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekThumbData
 import dev.aaa1115910.bv.player.entity.VideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.VideoRotation
@@ -79,6 +80,7 @@ fun ControllerVideoInfo(
     ) -> Unit = { _, _, _, _ -> },
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
+    onSeekToPosition: (Long) -> Unit = {},
     onSubtitleChange: (Subtitle) -> Unit,
     onLoadNextVideo: (Boolean) -> Unit,
     onLoadPrevVideo: () -> Unit = {},
@@ -190,6 +192,7 @@ fun ControllerVideoInfo(
                 userActionButtonContent = userActionButtonContent,
                 onSeekBack = onSeekBack,
                 onSeekForward = onSeekForward,
+                onSeekToPosition = onSeekToPosition,
                 availableSubtitleTracks = videoPlayerConfigData.availableSubtitleTracks,
                 currentSubtitleId = videoPlayerConfigData.currentSubtitleId,
                 onSubtitleChange = { id ->
@@ -232,7 +235,46 @@ data class ControlButton(
 @Preview(device = "id:tv_1080p")
 @Composable
 private fun ControllerVideoInfoPreview() {
-    var show by remember { mutableStateOf(true) }
+    ControllerVideoInfoPreviewContent(emptyList())
+}
+
+@Preview(device = "id:tv_1080p")
+@Composable
+private fun SegmentedControllerVideoInfoPreview() {
+    ControllerVideoInfoPreviewContent(listOf(
+        VideoPlayerViewPoint(0, 80, "开场"),
+        VideoPlayerViewPoint(80, 235, "设计与背景"),
+        VideoPlayerViewPoint(235, 236, "过渡"),
+        VideoPlayerViewPoint(236, 590, "从第一代产品到今天：设计理念与关键技术的演进"),
+        VideoPlayerViewPoint(610, 900, "实际体验"),
+        VideoPlayerViewPoint(900, 1234, "总结"),
+    ))
+}
+
+@Composable
+private fun CompactControllerVideoInfoPreview() {
+    ControllerVideoInfoPreviewContent(emptyList(), functionRowScale = 0.5f)
+}
+
+@Preview(device = "id:tv_1080p")
+@Composable
+private fun LongTitleShortSegmentsPreview() {
+    ControllerVideoInfoPreviewContent(listOf(
+        VideoPlayerViewPoint(0, 234, "开场与背景"),
+        VideoPlayerViewPoint(234, 235, "只有一秒的关键提示：从第一代产品到今天，回顾设计理念、核心技术与使用体验的变化，以及那些容易被忽略却直接影响日常使用的细节"),
+        VideoPlayerViewPoint(235, 238, "三秒补充说明：多个长标题连续出现时，分段宽度仍然应该忠实对应视频时长"),
+        VideoPlayerViewPoint(238, 248, "十秒快速总结：长标题需要保持清晰，同时不能覆盖相邻章节或挤压进度条"),
+        VideoPlayerViewPoint(248, 270, "二十二秒的对照分段：检查截断、省略号与焦点提示"),
+        VideoPlayerViewPoint(270, 1234, "正文与总结"),
+    ))
+}
+
+@Composable
+private fun ControllerVideoInfoPreviewContent(
+    viewPoints: List<VideoPlayerViewPoint>,
+    functionRowScale: Float = 1f,
+) {
+    val seekState = remember { VideoPlayerSeekState(1_234_000L, 234_000L, 60) }
 
     val clockState = VideoPlayerClockState(hour = 12, minute = 30, second = 30)
     CompositionLocalProvider(
@@ -245,21 +287,24 @@ private fun ControllerVideoInfoPreview() {
             pubTime = "2025-08-05"
         ),
         LocalVideoPlayerClockState provides clockState,
+        LocalVideoPlayerSeekState provides seekState,
+        LocalVideoPlayerConfigData provides VideoPlayerConfigData(viewPoints = viewPoints),
         LocalVideoPlayerSeekThumbData provides VideoPlayerSeekThumbData(
             idleIcon = "",
             movingIcon = ""
         )
     ) {
-        MaterialTheme {
+        MaterialTheme(colorScheme = darkColorScheme()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.White),
+                    .background(Color.DarkGray),
             )
             ControllerVideoInfo(
                 modifier = Modifier.fillMaxSize(),
-                show = show,
+                show = true,
                 playSpeed = 1.25f,
+                bottomControlPanelConfig = PlayerBottomControlPanelConfig(functionRowScale = functionRowScale),
                 onHideInfo = {},
                 onPlay = {},
                 onPause = {},
@@ -273,8 +318,9 @@ private fun ControllerVideoInfoPreview() {
                 onOpenSetting = {},
                 onLoopPlayModeChange = {},
                 onRotationChange = {},
-                onSeekBack = {},
-                onSeekForward = {},
+                onSeekBack = { seekState.position = (seekState.position - 10_000L).coerceAtLeast(0L) },
+                onSeekForward = { seekState.position = (seekState.position + 10_000L).coerceAtMost(seekState.duration) },
+                onSeekToPosition = { seekState.position = it },
                 onSubtitleChange = {},
                 onLoadNextVideo = {}
             )

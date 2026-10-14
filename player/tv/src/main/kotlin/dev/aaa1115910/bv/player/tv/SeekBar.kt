@@ -13,10 +13,9 @@ import androidx.compose.material3.SliderColors
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
@@ -31,6 +30,8 @@ import androidx.tv.material3.Text
 import androidx.tv.material3.darkColorScheme
 import dev.aaa1115910.bv.player.seekbar.SeekBarThumb
 import dev.aaa1115910.bv.player.seekbar.SeekMoveState
+import dev.aaa1115910.bv.player.entity.VideoPlayerViewPoint
+import dev.aaa1115910.bv.player.seekbar.buildViewPointTimeline
 import dev.aaa1115910.bv.player.tv.theme.PlayerColors
 import dev.aaa1115910.bv.util.formatHourMinSec
 import kotlin.math.max
@@ -51,6 +52,7 @@ fun VideoSeekBar(
     thumbSize: Dp = 48.dp,
     trackBottomMargin: Dp = 8.dp,
     trackHeightScale: Float = 1f,
+    viewPoints: List<VideoPlayerViewPoint> = emptyList(),
 ) {
     VideoSeekBar(
         modifier = modifier,
@@ -76,7 +78,8 @@ fun VideoSeekBar(
         isFocused = isFocused,
         thumbSize = thumbSize,
         trackBottomMargin = trackBottomMargin,
-        trackHeightScale = trackHeightScale
+        trackHeightScale = trackHeightScale,
+        viewPoints = viewPoints,
     )
 }
 
@@ -95,7 +98,9 @@ private fun VideoSeekBar(
     thumbSize: Dp = 48.dp,
     trackBottomMargin: Dp = 8.dp,
     trackHeightScale: Float = 1f,
+    viewPoints: List<VideoPlayerViewPoint> = emptyList(),
 ) {
+    val segments = remember(viewPoints, duration) { buildViewPointTimeline(viewPoints, duration) }
     val targetBarHeight = if (isFocused) 12.dp else 6.dp
     val barHeight by animateDpAsState(
         targetValue = (targetBarHeight.value * trackHeightScale.coerceAtLeast(0.1f)).dp,
@@ -130,37 +135,20 @@ private fun VideoSeekBar(
                     .fillMaxWidth()
                     .height(barHeight)
             ) {
-                val cornerRadius = CornerRadius(size.height / 2, size.height / 2)
-                val progressFraction = if (duration > 0) (position.toFloat() / duration) else 0f
-                val bufferedFraction = max(progressFraction, bufferedPercentage / 100f)
+                val progressFraction = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
+                val bufferedFraction = max(progressFraction, (bufferedPercentage / 100f).coerceIn(0f, 1f))
 
-                // 未播放轨道
-                drawRoundRect(
-                    color = PlayerColors.seekBarTrack,
-                    topLeft = Offset.Zero,
-                    size = size,
-                    cornerRadius = cornerRadius
-                )
-
-                // 已缓冲轨道
-                drawRoundRect(
-                    color = PlayerColors.seekBarBuffered,
-                    topLeft = Offset.Zero,
-                    size = Size(size.width * bufferedFraction, size.height),
-                    cornerRadius = cornerRadius
-                )
-
-                // 已播放轨道 (渐变)
-                drawRoundRect(
-                    brush = playedTrackBrush,
-                    topLeft = Offset.Zero,
-                    size = Size(size.width * progressFraction, size.height),
-                    cornerRadius = cornerRadius
+                drawSegmentedTrack(
+                    duration = duration,
+                    progressFraction = progressFraction,
+                    bufferedFraction = bufferedFraction,
+                    segments = segments,
+                    playedTrackBrush = playedTrackBrush,
                 )
 
                 // 焦点时显示白色圆形 Thumb
-                if (isFocused && duration > 0) {
-                    val thumbRadius = 8f
+                if (isFocused && duration > 0 && size.width > 0) {
+                    val thumbRadius = minOf(4.dp.toPx(), size.width / 2)
                     val thumbCenterX = (size.width * progressFraction).coerceIn(thumbRadius, size.width - thumbRadius)
                     drawCircle(
                         color = PlayerColors.seekBarThumb,
@@ -175,7 +163,7 @@ private fun VideoSeekBar(
                     .constrainAs(thumbIcon) {
                         start.linkTo(
                             parent.start,
-                            (width - thumbSize) * (position / max(duration.toFloat(), 1f))
+                            (width - thumbSize).coerceAtLeast(0.dp) * (position / max(duration.toFloat(), 1f)).coerceIn(0f, 1f)
                         )
                         bottom.linkTo(seek.bottom)
                         top.linkTo(seek.top)
@@ -184,6 +172,7 @@ private fun VideoSeekBar(
             if (showPosition) {
                 Text(
                     text = position.formatHourMinSec(),
+                    color = PlayerColors.textPrimary,
                     modifier = Modifier.constrainAs(positionText) {
                         start.linkTo(thumbIcon.start)
                         end.linkTo(thumbIcon.end)

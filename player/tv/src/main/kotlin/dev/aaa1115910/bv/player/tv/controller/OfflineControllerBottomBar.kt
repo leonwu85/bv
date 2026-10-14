@@ -67,6 +67,7 @@ import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import dev.aaa1115910.bv.player.tv.component.AutoSizeButtonText
 import coil.compose.AsyncImage
 import dev.aaa1115910.bv.player.entity.PlayerBottomControlPanelButtonIds
 import dev.aaa1115910.bv.player.entity.PlayerBottomControlPanelConfig
@@ -529,14 +530,10 @@ private fun OfflineFunctionButton(
         )
     ) {
         when {
-            button.text != null -> Text(
+            button.text != null -> AutoSizeButtonText(
                 text = button.text,
-                style = MaterialTheme.typography.titleMedium,
                 color = Color.White.copy(alpha = 0.8f),
                 fontWeight = FontWeight.Normal,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .wrapContentSize(Alignment.Center)
             )
             button.painterId != null -> Icon(
                 modifier = Modifier

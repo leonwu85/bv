@@ -2,6 +2,7 @@ package dev.aaa1115910.bv.player.tv.controller
 
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -32,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -65,6 +67,8 @@ import dev.aaa1115910.bv.player.entity.PlayerBottomControlPanelConfig
 import dev.aaa1115910.bv.player.entity.VideoListItem
 import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.player.seekbar.SeekMoveState
+import dev.aaa1115910.bv.player.seekbar.buildViewPointTimeline
+import dev.aaa1115910.bv.player.tv.drawSegmentedTrack
 import dev.aaa1115910.bv.player.shared.BuildConfig
 import dev.aaa1115910.bv.player.shared.R
 import dev.aaa1115910.bv.util.fInfo
@@ -923,6 +927,11 @@ fun VideoPlayerController(
                     }
                 },
                 onSubtitleChange = onSubtitleChange,
+                onSeekToPosition = { position ->
+                    goTime = position.coerceIn(0L, videoPlayerSeekState.duration.coerceAtLeast(0L))
+                    onGoTime(goTime)
+                    if (!videoPlayer.isPlaying) onPlay()
+                },
                 onLoadNextVideo = onLoadNextVideo,
                 onLoadPrevVideo = onLoadPrevVideo,
                 commentPanelVisible = commentPanelVisible,
@@ -1006,7 +1015,26 @@ fun VideoPlayerController(
                 }
             }
             
-            LinearProgressIndicator(
+            val timeline = remember(videoPlayerConfigData.viewPoints, videoPlayerSeekState.duration) {
+                buildViewPointTimeline(videoPlayerConfigData.viewPoints, videoPlayerSeekState.duration)
+            }
+            if (timeline.isNotEmpty()) {
+                Canvas(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(3.dp)
+                ) {
+                    drawSegmentedTrack(
+                        duration = videoPlayerSeekState.duration,
+                        progressFraction = throttledProgress,
+                        bufferedFraction = 0f,
+                        segments = timeline,
+                        playedTrackBrush = SolidColor(bottomProgressBarColor),
+                        trackColor = Color.Black.copy(alpha = 0.2f),
+                    )
+                }
+            } else LinearProgressIndicator(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()

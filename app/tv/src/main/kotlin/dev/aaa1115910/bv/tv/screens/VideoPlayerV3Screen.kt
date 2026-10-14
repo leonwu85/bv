@@ -510,6 +510,7 @@ fun VideoPlayerV3Screen(
             enableStartPositionSwitch = Prefs.playerEnableStartPositionSwitch,
             debugDanmakuMaskDownsample180p = Prefs.debugDanmakuMaskDownsample180p,
             clipInfoList = playerViewModel.clipInfoList,
+            viewPoints = playerViewModel.viewPoints,
             skipPgcIntroOutro = Prefs.skipPgcIntroOutro,
             isLive = playerViewModel.isLive,
             availableLiveQualities = playerViewModel.availableLiveQualities.toList(),
