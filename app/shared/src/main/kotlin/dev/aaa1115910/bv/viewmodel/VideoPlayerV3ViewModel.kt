@@ -101,6 +101,7 @@ import dev.aaa1115910.bv.player.entity.LiveStreamLine
 import dev.aaa1115910.bv.player.entity.VideoListInteractiveNode
 import dev.aaa1115910.bv.player.entity.VideoListItemData
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisode
+import dev.aaa1115910.bv.player.entity.findNextVideoListItem
 import dev.aaa1115910.bv.player.entity.VideoPlayerViewPoint
 import dev.aaa1115910.bv.player.entity.VideoRotation
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
@@ -5405,47 +5406,23 @@ class VideoPlayerV3ViewModel(
     }
 
     private fun playNextVideoInList(loop: Boolean = false) {
-        if (isInteractivePlayback || availableVideoList.any { it is VideoListInteractiveNode }) {
+        val videoList = availableVideoList.toList()
+        if (isInteractivePlayback || videoList.any { it is VideoListInteractiveNode }) {
             logger.info { "Interactive branches detected, skip auto playing next branch" }
             return
         }
-        val currentIndex = availableVideoList
-            .indexOfFirst {
-                when (it) {
-                    is VideoListItemData -> it.cid == currentCid
-                    else -> false
-                }
-            }
-        if (currentIndex + 1 < availableVideoList.size) {
-            val nextVideos = availableVideoList.subList(
-                currentIndex + 1,
-                availableVideoList.size
-            )
-            val nextVideo =
-                nextVideos.firstOrNull { it is VideoListItemData }!! as VideoListItemData
-            logger.info { "Play next video: $nextVideo" }
-            partTitle = nextVideo.title
-            loadPlayUrl(
-                avid = nextVideo.aid,
-                cid = nextVideo.cid!!,
-                epid = nextVideo.epid,
-                seasonId = nextVideo.seasonId,
-                continuePlayNext = true
-            )
-        } else if (loop) {
-            //loop to first
-            val firstVideo =
-                availableVideoList.firstOrNull { it is VideoListItemData }!! as VideoListItemData
-            logger.info { "Loop to first video: $firstVideo" }
-            partTitle = firstVideo.title
-            loadPlayUrl(
-                avid = firstVideo.aid,
-                cid = firstVideo.cid!!,
-                epid = firstVideo.epid,
-                seasonId = firstVideo.seasonId,
-                continuePlayNext = true
-            )
-        }
+        val nextVideo = videoList.findNextVideoListItem(currentVideoCid = currentCid, loop = loop)
+            ?: return
+        val nextCid = nextVideo.cid ?: return
+        logger.info { "Play next video: $nextVideo" }
+        partTitle = nextVideo.title
+        loadPlayUrl(
+            avid = nextVideo.aid,
+            cid = nextCid,
+            epid = nextVideo.epid,
+            seasonId = nextVideo.seasonId,
+            continuePlayNext = true
+        )
     }
     
     /**
