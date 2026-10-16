@@ -1,13 +1,13 @@
 [versions]
 agp = "9.2.1"
-baselineprofile = "1.5.0-alpha07"
+baselineprofile = "1.5.0"
 firebase-crashlytics = "3.0.7"
 gms = "4.5.0"
-koin-compiler = "1.1.0"
-kotlin = "2.4.10"
+koin-compiler = "1.2.1"
+kotlin = "2.4.21"
 ksp = "2.3.9"
 protobuf = "0.10.0"
-versions = "0.59.0"
+versions = "0.66.0"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
