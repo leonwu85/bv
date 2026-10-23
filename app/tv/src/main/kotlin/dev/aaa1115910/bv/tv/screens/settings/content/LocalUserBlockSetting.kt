@@ -10,6 +10,11 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.*
+import dev.aaa1115910.bv.BVApp
+import dev.aaa1115910.bv.util.PrefKeys
+import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
+import dev.aaa1115910.bv.tv.component.settings.SettingNumberListItem
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -32,6 +37,11 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun LocalUserBlockSetting(viewModel: LocalUserBlockViewModel = koinViewModel()) {
     val ids by viewModel.blocked.collectAsState()
+    val scope = rememberCoroutineScope()
+    val dsm = BVApp.dataStoreManager
+    val pure by dsm.getPreferenceFlow(PrefKeys.commentPureMentionRequest).collectAsState(false)
+    val limit by dsm.getPreferenceFlow(PrefKeys.commentMentionLimitRequest).collectAsState(0)
+    val copy by dsm.getPreferenceFlow(PrefKeys.commentCopyIntroRequest).collectAsState(false)
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
     val inputFocus = remember { FocusRequester() }
@@ -41,6 +51,13 @@ fun LocalUserBlockSetting(viewModel: LocalUserBlockViewModel = koinViewModel()) 
         addFocus.requestFocus()
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item { Text("评论过滤") }
+        item { SettingSwitchListItem(title = "过滤纯 @ 评论", supportText = "仅隐藏只包含用户提及的评论", checked = pure,
+            onCheckedChange = { scope.launch { dsm.editPreference(PrefKeys.commentPureMentionKey, it) } }) }
+        item { SettingNumberListItem(title = "过滤 @ 人数达到阈值的评论", supportText = "0 表示关闭", value = limit.toDouble(), maxValue = 30.0,
+            onValueChange = { scope.launch { dsm.editPreference(PrefKeys.commentMentionLimitKey, it.toInt()) } }) }
+        item { SettingSwitchListItem(title = "过滤完整复制视频简介的评论", supportText = "只匹配完整简介，保留部分引用", checked = copy,
+            onCheckedChange = { scope.launch { dsm.editPreference(PrefKeys.commentCopyIntroKey, it) } }) }
         item { Text("本地屏蔽 · ${ids.size} 个 UID") }
         item { Text("无需登录。过滤推荐、搜索、动态、评论和相关推荐。支持合并导入与复制导出。") }
         item {

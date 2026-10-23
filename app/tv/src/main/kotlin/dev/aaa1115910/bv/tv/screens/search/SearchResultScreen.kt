@@ -100,6 +100,14 @@ fun SearchResultScreen(
     modifier: Modifier = Modifier,
     searchResultViewModel: SearchResultViewModel = koinViewModel()
 ) {
+    searchResultViewModel.verification?.let { pending ->
+        dev.aaa1115910.bv.tv.component.GeetestTvVerifyDialog(
+            gt = pending.gt, challenge = pending.challenge,
+            onDismiss = searchResultViewModel::cancelVerification,
+            onRefreshChallenge = searchResultViewModel::refreshVerification,
+            onResult = { searchResultViewModel.verify(it.challenge, it.validate, it.seccode, it.sourceChallenge) }
+        )
+    }
     val context = LocalContext.current
     val activity = requireTvActivity()
     val scope = rememberCoroutineScope()

@@ -79,7 +79,8 @@ class CommentRepository(
         commentId: Long,
         page: CommentReplyPage = CommentReplyPage(),
         sort: CommentSort = CommentSort.Hot,
-        preferApiType: ApiType = ApiType.Web
+        preferApiType: ApiType = ApiType.Web,
+        targetReplyId: Long? = null
     ): CommentRepliesData {
         when (preferApiType) {
             ApiType.Web -> {
@@ -102,6 +103,7 @@ class CommentRepository(
                         this.oid = commentId
                         this.type = type
                         root = rpid
+                        targetReplyId?.let { this.rpid = it }
                         mode = when (sort) {
                             CommentSort.Hot -> Mode.MAIN_LIST_HOT
                             CommentSort.HotAndTime -> Mode.DEFAULT

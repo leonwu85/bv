@@ -533,6 +533,17 @@ private fun UserSpaceHeader(
                         }
                     )
                 }
+                FilledTonalButton(onClick = { dev.aaa1115910.bv.mobile.activities.OpusSpaceActivity.actionStart(context, viewModel.upMid) }) { Text("图文与文集") }
+                if (viewModel.appSpaceData?.medal != 0) FilledTonalButton(enabled = !viewModel.medalLoading, onClick = {
+                    viewModel.loadMedal { name ->
+                        if (name == null) "暂无粉丝勋章或查询失败".toast(context)
+                        else {
+                            (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                                .setPrimaryClip(android.content.ClipData.newPlainText("粉丝勋章", name))
+                            "粉丝勋章：$name，已复制".toast(context)
+                        }
+                    }
+                }) { Text(viewModel.medalName?.let { "勋章：$it" } ?: "粉丝勋章") }
                 if (viewModel.upMid != Prefs.uid) {
                     FilledTonalButton(
                         onClick = {

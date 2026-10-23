@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.AnnotatedString
@@ -47,6 +48,14 @@ fun ArticleContent(
     ) {
         paragraphs.forEachIndexed { index, paragraph ->
             when (paragraph) {
+                is ArticleParagraph.QuoteParagraph -> {
+                    ArticleContent(
+                        modifier = Modifier.fillMaxWidth().drawBehind {
+                            drawRect(linkColor, size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height))
+                        }.padding(start = 16.dp, top = 8.dp, bottom = 8.dp),
+                        paragraphs = paragraph.children
+                    )
+                }
                 is ArticleParagraph.TextParagraph -> {
                     TextParagraphContent(
                         paragraph = paragraph,

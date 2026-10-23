@@ -75,13 +75,15 @@ object BiliHttpProxyApi {
     suspend fun searchAll(
         keyword: String,
         sessData: String?,
-        buvid3: String?
+        buvid3: String?,
+        gaiaVtoken: String? = null
     ): BiliResponse<kotlinx.serialization.json.JsonObject> {
         val response = checkNotNull(client) { "代理未初始化" }.get("/x/web-interface/wbi/search/all/v2") {
             parameter("keyword", keyword)
+            gaiaVtoken?.takeIf { it.isNotBlank() }?.let { parameter("gaia_vtoken", it) }
             parameter("page", 1)
             parameter("page_size", 20)
-            val cookies = listOfNotNull(sessData?.let { "SESSDATA=$it" }, buvid3?.let { "buvid3=$it" })
+            val cookies = listOfNotNull(sessData?.let { "SESSDATA=$it" }, buvid3?.let { "buvid3=$it" }, gaiaVtoken?.let { "x-bili-gaia-vtoken=$it" })
             if (cookies.isNotEmpty()) header("Cookie", cookies.joinToString(";"))
             header("Referer", "https://search.bilibili.com/")
         }
@@ -219,9 +221,12 @@ object BiliHttpProxyApi {
         duration: Int? = null,
         sessData: String? = null,
         dedeUserID: Long? = null,
-        buvid3: String? = null
-    ): BiliResponse<SearchResultData> = client?.get("/x/web-interface/wbi/search/type") {
+        buvid3: String? = null,
+        gaiaVtoken: String? = null
+    ): BiliResponse<SearchResultData> {
+        val response = checkNotNull(client) { "代理未初始化" }.get("/x/web-interface/wbi/search/type") {
         parameter("keyword", keyword)
+            gaiaVtoken?.takeIf { it.isNotBlank() }?.let { parameter("gaia_vtoken", it) }
         parameter("search_type", type)
         parameter("page", page)
         tid?.let { parameter("tids", it) }
@@ -231,9 +236,14 @@ object BiliHttpProxyApi {
         sessData?.let { cookieParts.add("SESSDATA=$it") }
         dedeUserID?.let { cookieParts.add("DedeUserID=$it") }
         buvid3?.let { cookieParts.add("buvid3=$it") }
+            gaiaVtoken?.takeIf { it.isNotBlank() }?.let { cookieParts.add("x-bili-gaia-vtoken=$it") }
         if (cookieParts.isNotEmpty()) {
             header("Cookie", cookieParts.joinToString(";") + ";")
         }
         header("referer", "https://search.bilibili.com/")
-    }?.body() ?: throw IllegalStateException("no proxy server")
+    }
+        val text = response.bodyAsText()
+        checkForVVoucher(text)
+        return json.decodeFromString(text)
+    }
 }

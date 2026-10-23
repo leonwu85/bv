@@ -199,7 +199,7 @@ enum class MobileSettings(
     Play(title = "播放设置", summary = "播放行为、弹幕、直播"),
     Mpv(title = "MPV 设置", summary = "超分、输出、硬解与缓存参数"),
     SponsorBlock(title = "广告助手", summary = "广告片段识别、自动或手动跳过"),
-    LocalUserBlock(title = "本地屏蔽", summary = "屏蔽 UID、导入与导出"),
+    LocalUserBlock(title = "评论与屏蔽", summary = "评论过滤、屏蔽 UID、导入与导出"),
     Advance(title = "更多设置", summary = "接口"),
     Debug(title = "调试", "播放器信息显示"),
     About(title = "关于", summary = "版本和项目说明");

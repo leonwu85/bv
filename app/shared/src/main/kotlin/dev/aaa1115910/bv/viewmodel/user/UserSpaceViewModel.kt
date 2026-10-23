@@ -55,12 +55,29 @@ class UserSpaceViewModel(
     private val userRepository: UserRepository,
     private val favoriteRepository: FavoriteRepository,
     private val seasonRepository: SeasonRepository,
-    private val localUserBlocks: LocalUserBlockRepository
+    private val localUserBlocks: LocalUserBlockRepository,
+    private val opusRepository: dev.aaa1115910.biliapi.repositories.OpusRepository
 ) : ViewModel() {
     companion object {
         private val logger = KotlinLogging.logger { }
     }
 
+    var medalName by mutableStateOf<String?>(null)
+    var medalLoading by mutableStateOf(false)
+    fun loadMedal(onResult: (String?) -> Unit) {
+        medalName?.let { onResult(it); return }
+        if (medalLoading) return
+        val mid = upMid
+        medalLoading = true
+        viewModelScope.launch {
+            try {
+                val name = opusRepository.medal(mid)
+                if (upMid == mid) { medalName = name; onResult(name) }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { if (upMid == mid) onResult(null) }
+            finally { if (upMid == mid) medalLoading = false }
+        }
+    }
     var upFace by mutableStateOf("")
     var upName by mutableStateOf("")
     var sign by mutableStateOf("") // 个性签名
@@ -217,6 +234,8 @@ class UserSpaceViewModel(
     fun initialize(mid: Long, name: String, face: String = "") {
         if (upMid == mid && (userInfo != null || userCardInfo != null || profileLoading)) return
         upMid = mid
+        medalName = null
+        medalLoading = false
         isLocallyBlocked = localUserBlocks.isBlocked(mid)
         upName = name
         upFace = face

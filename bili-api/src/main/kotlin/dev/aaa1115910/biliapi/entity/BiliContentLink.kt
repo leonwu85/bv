@@ -1,16 +1,18 @@
 package dev.aaa1115910.biliapi.entity
 
+import dev.aaa1115910.biliapi.entity.reply.CommentAnchor
 import java.net.URI
 import java.net.URLDecoder
 import dev.aaa1115910.biliapi.util.AvBvConverter
 
 sealed interface BiliContentLink {
-    data class Video(val aid: Long, val page: Int = 1, val cid: Long? = null, val positionMs: Long? = null) : BiliContentLink
+    data class Video(val aid: Long, val page: Int = 1, val cid: Long? = null, val positionMs: Long? = null, val commentAnchor: CommentAnchor? = null) : BiliContentLink
     data class Season(val episodeId: Int? = null, val seasonId: Int? = null) : BiliContentLink
     data class Live(val roomId: Int) : BiliContentLink
     data class LiveActivity(val url: String) : BiliContentLink
     data class User(val mid: Long) : BiliContentLink
-    data class Dynamic(val id: String) : BiliContentLink
+    data class Dynamic(val id: String, val commentAnchor: CommentAnchor? = null) : BiliContentLink
+    data class Article(val id: Long, val commentAnchor: CommentAnchor? = null) : BiliContentLink
 
     companion object {
         private val av = Regex("av([1-9][0-9]*)", RegexOption.IGNORE_CASE)
@@ -26,6 +28,13 @@ sealed interface BiliContentLink {
                 val pair = item.split('=', limit = 2)
                 if (pair.size != 2) null else pair[0] to URLDecoder.decode(pair[1], "UTF-8")
             }.toMap()
+            fun positive(key: String) = query[key]?.toLongOrNull()?.takeIf { it > 0 }
+            val anchor = (positive("comment_root_id") ?: positive("root")
+                ?: uri.fragment?.removePrefix("reply")?.toLongOrNull()?.takeIf { it > 0 })?.let {
+                CommentAnchor(it, positive("comment_secondary_id") ?: positive("anchor"))
+            }
+            fun dynamic(id: String) = Dynamic(id, anchor)
+            fun article(id: String) = id.removePrefix("cv").toLongOrNull()?.takeIf { it > 0 }?.let { Article(it, anchor) }
             fun video(id: Long) = Video(
                 aid = id,
                 page = query["p"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1,
@@ -33,7 +42,8 @@ sealed interface BiliContentLink {
                 positionMs = (query["start_progress"] ?: query["dm_progress"])
                     ?.toLongOrNull()?.takeIf { it >= 0 }
                     ?: query["t"]?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }
-                        ?.times(1000)?.toLong()
+                        ?.times(1000)?.toLong(),
+                commentAnchor = anchor
             )
             fun season(value: String?): Season? = when {
                 value?.startsWith("ep") == true -> value.drop(2).toIntOrNull()?.takeIf { it > 0 }?.let { Season(episodeId = it) }
@@ -44,9 +54,25 @@ sealed interface BiliContentLink {
                 return when (host) {
                     "video" -> (parts.firstOrNull()?.let(::videoId)
                         ?: parts.firstOrNull()?.toLongOrNull()?.takeIf { it > 0 })?.let(::video)
+                    "comment" -> {
+                        val type = parts.getOrNull(1)?.toLongOrNull() ?: return null
+                        val oid = parts.getOrNull(2)?.toLongOrNull()?.takeIf { it > 0 } ?: return null
+                        val root = parts.getOrNull(3)?.toLongOrNull()?.takeIf { it > 0 } ?: return null
+                        val target = CommentAnchor(root, positive("anchor") ?: positive("comment_secondary_id"), oid, type)
+                        when (type) {
+                            1L -> Video(oid, commentAnchor = target)
+                            17L -> Dynamic(oid.toString(), target)
+                            else -> when (val source = query["enterUri"]?.takeUnless { it.startsWith("bilibili://comment") }?.let(::parse)) {
+                                is Dynamic -> source.copy(commentAnchor = target)
+                                is Article -> source.copy(commentAnchor = target)
+                                else -> if (type == 12L) Article(oid, target) else null
+                            }
+                        }
+                    }
+                    "article" -> parts.firstOrNull()?.let(::article)
                     "space" -> parts.firstOrNull()?.toLongOrNull()?.takeIf { it > 0 }?.let(::User)
                     "live" -> parts.lastOrNull()?.toIntOrNull()?.takeIf { it > 0 }?.let(::Live)
-                    "following", "opus" -> parts.lastOrNull()?.takeIf { it.toLongOrNull()?.let { id -> id > 0 } == true }?.let(::Dynamic)
+                    "following", "opus" -> parts.lastOrNull()?.takeIf { it.toLongOrNull()?.let { id -> id > 0 } == true }?.let(::dynamic)
                     "pgc", "bangumi" -> season(parts.lastOrNull()) ?: when (parts.getOrNull(parts.lastIndex - 1)) {
                         "ep" -> parts.lastOrNull()?.toIntOrNull()?.takeIf { it > 0 }?.let { Season(episodeId = it) }
                         "season", "ss" -> parts.lastOrNull()?.toIntOrNull()?.takeIf { it > 0 }?.let { Season(seasonId = it) }
@@ -56,15 +82,28 @@ sealed interface BiliContentLink {
                 }
             }
             if (!isBilibiliHost(host)) return null
+            if (parts.take(3) == listOf("h5", "comment", "sub")) {
+                val oid = positive("oid") ?: return null
+                val target = anchor ?: return null
+                return when (positive("pageType") ?: 1L) {
+                    1L -> Video(oid, commentAnchor = target.copy(oid = oid, type = 1))
+                    12L -> Article(oid, target.copy(oid = oid, type = 12))
+                    17L -> Dynamic(oid.toString(), target.copy(oid = oid, type = 17))
+                    else -> query["enterUri"]?.let(::parse)?.let { source ->
+                        (source as? Dynamic)?.copy(commentAnchor = target.copy(oid = oid, type = positive("pageType")))
+                    }
+                }
+            }
             when (host) {
                 "live.bilibili.com" -> parts.lastOrNull()?.toIntOrNull()?.takeIf { it > 0 }?.let(::Live)
                     ?: uri.takeIf { parts.firstOrNull() == "blackboard" }?.let { LiveActivity(it.toString()) }
                 "space.bilibili.com" -> parts.firstOrNull()?.toLongOrNull()?.takeIf { it > 0 }?.let(::User)
-                "t.bilibili.com" -> parts.firstOrNull()?.takeIf { it.toLongOrNull()?.let { id -> id > 0 } == true }?.let(::Dynamic)
+                "t.bilibili.com" -> parts.firstOrNull()?.takeIf { it.toLongOrNull()?.let { id -> id > 0 } == true }?.let(::dynamic)
                 else -> when {
+                    parts.firstOrNull() == "read" -> parts.getOrNull(1)?.let(::article)
                     parts.firstOrNull() == "video" -> parts.getOrNull(1)?.let(::videoId)?.let(::video)
                     parts.take(2) == listOf("bangumi", "play") -> season(parts.getOrNull(2))
-                    parts.firstOrNull() == "opus" -> parts.getOrNull(1)?.takeIf { it.toLongOrNull()?.let { id -> id > 0 } == true }?.let(::Dynamic)
+                    parts.firstOrNull() == "opus" -> parts.getOrNull(1)?.takeIf { it.toLongOrNull()?.let { id -> id > 0 } == true }?.let(::dynamic)
                     else -> null
                 }
             }

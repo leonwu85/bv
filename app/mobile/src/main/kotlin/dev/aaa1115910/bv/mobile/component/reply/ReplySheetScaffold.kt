@@ -54,6 +54,7 @@ import org.koin.compose.getKoin
 fun ReplySheetScaffold(
     modifier: Modifier = Modifier,
     aid: Long,
+    description: String = "",
     rpid: Long,
     repliesCount: Int,
     sheetState: BottomSheetScaffoldState,
@@ -70,6 +71,7 @@ fun ReplySheetScaffold(
     var nextPage by remember { mutableStateOf(CommentReplyPage()) }
     var comment by remember { mutableStateOf<Comment?>(null) }
     val replies = remember { mutableStateListOf<Comment>() }
+    val visibleComments = dev.aaa1115910.bv.util.rememberFilteredComments(replies, description)
     var sort by remember { mutableStateOf(CommentSort.Time) }
     var hasNext by remember { mutableStateOf(true) }
     var loading by remember { mutableStateOf(false) }
@@ -196,7 +198,7 @@ fun ReplySheetScaffold(
                     }
                 }
 
-                items(items = replies) { reply ->
+                items(items = visibleComments) { reply ->
                     CommentItem(
                         comment = reply,
                         previewerState = previewerState,
@@ -207,6 +209,13 @@ fun ReplySheetScaffold(
                     )
                 }
 
+                if (replies.size > visibleComments.size && hasNext && !loading) {
+                    item {
+                        TextButton(onClick = { loadMoreReply() }, modifier = Modifier.fillMaxWidth()) {
+                            Text("部分回复已过滤 · 继续加载")
+                        }
+                    }
+                }
                 item {
                     Spacer(modifier = Modifier.navigationBarsPadding())
                 }

@@ -113,6 +113,9 @@ import dev.aaa1115910.bv.util.DeviceUtil
 import dev.aaa1115910.bv.util.MergedDanmakuEntry
 import dev.aaa1115910.bv.util.MutedSubtitlePolicy
 import dev.aaa1115910.bv.util.NetworkUtil
+import dev.aaa1115910.bv.util.MediaQualitySelector
+import dev.aaa1115910.bv.util.selectAudioTrack
+import dev.aaa1115910.bv.util.playableAudioTracks
 import dev.aaa1115910.bv.util.PlaybackPreferenceSelector
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.SubtitleLanguagePreference
@@ -1610,7 +1613,7 @@ class VideoPlayerV3ViewModel(
         return true
     }
 
-    suspend fun cacheCurrentVideo(): Result<String> {
+    suspend fun cacheCurrentVideo(preferredAudio: Audio = Prefs.offlineAudio): Result<String> {
         if (isLive) {
             return Result.failure(IllegalStateException("直播暂不支持离线缓存"))
         }
@@ -1634,7 +1637,7 @@ class VideoPlayerV3ViewModel(
             )
         } ?: return Result.failure(IllegalStateException("视频地址尚未加载完成"))
 
-        return cacheVideoTarget(target, settings.defaultOfflineCacheQuality)
+        return cacheVideoTarget(target, settings.defaultOfflineCacheQuality, preferredAudio)
     }
 
     suspend fun cacheVideoPage(
@@ -1663,7 +1666,8 @@ class VideoPlayerV3ViewModel(
 
     suspend fun cacheVideoTarget(
         target: OfflineVideoCacheTarget,
-        preferredQuality: Resolution
+        preferredQuality: Resolution,
+        preferredAudio: Audio = Prefs.offlineAudio
     ): Result<String> {
         if (isLive) {
             return Result.failure(IllegalStateException("直播暂不支持离线缓存"))
@@ -1682,7 +1686,7 @@ class VideoPlayerV3ViewModel(
         }
 
         return offlineVideoCacheService.enqueue(
-            buildOfflineCacheTaskRequest(target, preferredQuality)
+            buildOfflineCacheTaskRequest(target, preferredQuality, preferredAudio)
         )
     }
 
@@ -1705,7 +1709,7 @@ class VideoPlayerV3ViewModel(
                 tryLook1080P = settings.tryLook1080P,
             ).requireOfflineCacheStreams("WBI")
                 .dashVideos
-                .mapNotNull { video -> Resolution.entries.find { it.code == video.quality } }
+                .mapNotNull { video -> Resolution.fromCode(video.quality) }
                 .distinct()
                 .sortedByDescending { it.code }
                 .ifEmpty { throw IllegalStateException("该视频没有可缓存画质") }
@@ -1714,7 +1718,8 @@ class VideoPlayerV3ViewModel(
 
     fun cacheVideoTargets(
         targets: List<OfflineVideoCacheTarget>,
-        preferredQuality: Resolution
+        preferredQuality: Resolution,
+        preferredAudio: Audio = Prefs.offlineAudio
     ): Result<String> {
         if (isLive) {
             return Result.failure(IllegalStateException("直播暂不支持离线缓存"))
@@ -1732,7 +1737,7 @@ class VideoPlayerV3ViewModel(
 
         uniqueTargets.forEach { target ->
             offlineVideoCacheService.enqueue(
-                buildOfflineCacheTaskRequest(target, preferredQuality)
+                buildOfflineCacheTaskRequest(target, preferredQuality, preferredAudio)
             ).onFailure {
                 logger.fException(it) {
                     "Add offline cache target failed: [aid=${target.aid}, cid=${target.cid}]"
@@ -1745,16 +1750,13 @@ class VideoPlayerV3ViewModel(
     private fun buildOfflineCacheTaskRequest(
         target: OfflineVideoCacheTarget,
         preferredQuality: Resolution,
+        preferredAudio: Audio,
     ) = OfflineVideoCacheTaskRequest(
         target = target,
         preferredQuality = preferredQuality,
         tryLook1080P = settings.tryLook1080P,
         videoCodecPreferences = offlineCacheCodecCandidates(currentVideoCodec),
-        preferredAudio = PlaybackPreferenceSelector.selectAudio(
-            isCellular = isCellularPlaybackNetwork(),
-            defaultAudio = settings.defaultAudio,
-            cellularAudio = settings.defaultCellularAudio
-        )
+        preferredAudio = preferredAudio
     )
 
     fun offlineCacheStateOf(aid: Long, cid: Long): OfflineVideoCacheTaskState =
@@ -2047,7 +2049,7 @@ class VideoPlayerV3ViewModel(
 
             //读取清晰度
             val resolutionList = mutableListOf<Resolution>()
-            playData.dashVideos.forEach {
+            playData.dashVideos.filter { it.baseUrl.isNotBlank() }.forEach {
                 Resolution.fromCode(it.quality)?.let { resolution ->
                     if (!resolutionList.contains(resolution)) resolutionList.add(resolution)
                 }
@@ -2057,7 +2059,7 @@ class VideoPlayerV3ViewModel(
             // 直接不提供这些档位，避免用户以为“开了 HDR”
             val player = videoPlayer
             if (player != null && !player.supportsHdrOutput) {
-                val hdrResolutions = resolutionList.filter { it == Resolution.RHdr || it == Resolution.RDolby }
+                val hdrResolutions = resolutionList.filter { it.isHdr }
                 if (hdrResolutions.isNotEmpty() && resolutionList.size > hdrResolutions.size) {
                     resolutionList.removeAll(hdrResolutions)
                     logger.fInfo { "Hide HDR resolutions for player without HDR output: $hdrResolutions" }
@@ -2074,22 +2076,7 @@ class VideoPlayerV3ViewModel(
             ensureVodPlaybackSessionActive(playbackSessionToken)
 
             //读取音频
-            val audioList = mutableListOf<Audio>()
-            playData.dashAudios.forEach {
-                Audio.fromCode(it.codecId)?.let { audio ->
-                    if (!audioList.contains(audio)) audioList.add(audio)
-                }
-            }
-            playData.dolby?.let {
-                Audio.fromCode(it.codecId)?.let { audio ->
-                    audioList.add(audio)
-                }
-            }
-            playData.flac?.let {
-                Audio.fromCode(it.codecId)?.let { audio ->
-                    audioList.add(audio)
-                }
-            }
+            val audioList = playData.playableAudioTracks().mapNotNull { Audio.fromCode(it.codecId) }
 
             logger.fInfo { "Video available audio: $audioList" }
             availableAudio.swapListWithMainContext(audioList)
@@ -2129,10 +2116,7 @@ class VideoPlayerV3ViewModel(
             }
 
             val preferredQuality = targetQuality ?: defaultQualityToUse
-            val selectedQuality = resolutionList.find { it == preferredQuality }
-                ?: resolutionList.sortedByDescending { it.code }
-                    .firstOrNull { it.code < preferredQuality.code }
-                ?: resolutionList.lastOrNull()
+            val selectedQuality = MediaQualitySelector.video(resolutionList, preferredQuality)
             withContext(Dispatchers.Main) {
                 if (isVodPlaybackSessionActive(playbackSessionToken) && selectedQuality != null) {
                     currentQuality = selectedQuality
@@ -2145,15 +2129,7 @@ class VideoPlayerV3ViewModel(
                 cellularAudio = settings.defaultCellularAudio
             )
             if (audioList.isNotEmpty()) {
-                val selectedAudio = when {
-                    audioList.contains(preferredAudio) -> preferredAudio
-                    preferredAudio == Audio.ADolbyAtmos && audioList.contains(Audio.AHiRes) -> Audio.AHiRes
-                    preferredAudio == Audio.AHiRes && audioList.contains(Audio.ADolbyAtmos) -> Audio.ADolbyAtmos
-                    audioList.contains(Audio.A192K) -> Audio.A192K
-                    audioList.contains(Audio.A132K) -> Audio.A132K
-                    audioList.contains(Audio.A64K) -> Audio.A64K
-                    else -> audioList.first()
-                }
+                val selectedAudio = MediaQualitySelector.audio(audioList, preferredAudio)!!
                 withContext(Dispatchers.Main) {
                     if (isVodPlaybackSessionActive(playbackSessionToken)) {
                         currentAudio = selectedAudio
@@ -2916,22 +2892,21 @@ class VideoPlayerV3ViewModel(
                 }
             }
         }
-        val selectedVideoItem = videoItem ?: playableVideos.firstOrNull()
+        val fallbackQuality = MediaQualitySelector.video(playableVideos.mapNotNull { Resolution.fromCode(it.quality) }, Resolution.fromCode(qn) ?: currentQuality)
+        val selectedVideoItem = videoItem ?: playableVideos.firstOrNull { it.quality == fallbackQuality?.code }
         val muxedVideo = selectedVideoItem?.takeIf { it.isMuxed }
-        val playableAudios = playData!!.dashAudios.filter { it.baseUrl.isNotBlank() }
-        val dolbyAudio = playData!!.dolby?.takeIf { it.baseUrl.isNotBlank() }
-        val flacAudio = playData!!.flac?.takeIf { it.baseUrl.isNotBlank() }
-        val audioItem = playableAudios.find { it.codecId == audio.code }
-            ?: dolbyAudio.takeIf { it?.codecId == audio.code }
-            ?: flacAudio.takeIf { it?.codecId == audio.code }
-            ?: playableAudios.minByOrNull { it.codecId }
-            ?: dolbyAudio
-            ?: flacAudio
+        val audioItem = playData!!.selectAudioTrack(audio)
         val source = selectVodPlaybackSource(selectedVideoItem, audioItem, mediaMode) ?: run {
             logger.fError { "Failed to get a playable video or audio URL" }
             errorMessage = "获取播放地址失败"
             loadState = RequestState.Failed
             return
+        }
+        withContext(Dispatchers.Main.immediate) {
+            if (isVodPlaybackSessionActive(playbackSessionToken)) {
+                selectedVideoItem?.quality?.let { Resolution.fromCode(it) }?.let { currentQuality = it }
+                audioItem?.codecId?.let { Audio.fromCode(it) }?.let { currentAudio = it }
+            }
         }
         val effectiveMediaMode = source.mediaMode
         val audioOnlyMode = effectiveMediaMode == PlaybackMediaMode.AudioOnly

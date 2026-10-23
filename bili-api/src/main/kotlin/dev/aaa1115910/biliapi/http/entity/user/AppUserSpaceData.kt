@@ -10,6 +10,7 @@ import kotlinx.serialization.json.doubleOrNull
 
 @Serializable
 data class AppUserSpaceData(
+    val medal: Int? = null,
     val images: AppUserSpaceImages? = null,
     val card: AppUserSpaceCard? = null,
     val elec: AppUserSpaceElec? = null,

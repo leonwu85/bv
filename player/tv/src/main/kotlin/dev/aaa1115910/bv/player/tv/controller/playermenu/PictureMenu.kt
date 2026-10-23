@@ -85,7 +85,7 @@ fun PictureMenuList(
         videoPlayerConfigData.availableResolutions.sortedByDescending { it.code }
     }
     val audioList = remember(videoPlayerConfigData.availableAudio) {
-        videoPlayerConfigData.availableAudio.sortedBy { it.ordinal }
+        videoPlayerConfigData.availableAudio.sortedBy { it.rank }
     }
 
     Row(

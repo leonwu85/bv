@@ -979,5 +979,5 @@
     <string name="dynamic_style_new">新版（带分类）</string>
     <string name="dynamic_style_legacy">旧版（无分类）</string>
     <string name="search_result_type_name_all">综合</string>
-    <string name="settings_item_local_user_block">本地屏蔽</string>
+    <string name="settings_item_local_user_block">评论与屏蔽</string>
 </resources>

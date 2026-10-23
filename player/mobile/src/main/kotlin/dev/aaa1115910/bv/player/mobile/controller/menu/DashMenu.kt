@@ -231,7 +231,7 @@ fun AudioContent(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             videoPlayerConfigData.availableAudio
-                .sortedByDescending { it.ordinal }
+                .sortedByDescending { it.rank }
                 .forEach { audio ->
                     ChipItem(
                         text = audio.getDisplayName(context),

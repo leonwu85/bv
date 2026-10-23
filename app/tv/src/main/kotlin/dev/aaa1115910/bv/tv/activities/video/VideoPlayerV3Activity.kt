@@ -1,5 +1,10 @@
 package dev.aaa1115910.bv.tv.activities.video
 
+import dev.aaa1115910.biliapi.entity.reply.CommentAnchor
+import dev.aaa1115910.bv.util.putCommentAnchor
+import dev.aaa1115910.bv.util.commentAnchor
+import dev.aaa1115910.bv.tv.component.reply.CommentLinkDialog
+
 import dev.aaa1115910.bv.player.PlayerMediaSession
 import android.content.Context
 import android.content.Intent
@@ -117,7 +122,8 @@ class VideoPlayerV3Activity : TvComponentActivity() {
             pubTime: String = "",
             audioOnlyMode: Boolean = false,
             preferOfflineCache: Boolean = false,
-            initialSeekPositionMs: Long? = null
+            initialSeekPositionMs: Long? = null,
+            commentAnchor: CommentAnchor? = null
         ) {
             // 获取当前内存信息并打印到控制台
             val runtime = Runtime.getRuntime()
@@ -143,6 +149,7 @@ class VideoPlayerV3Activity : TvComponentActivity() {
                     putExtra("partTitle", partTitle)
                     putExtra("played", played)
                     initialSeekPositionMs?.let { putExtra("initialSeekPositionMs", it) }
+                    putCommentAnchor(commentAnchor)
                     putExtra("fromSeason", fromSeason)
                     putExtra("subType", subType)
                     putExtra("epid", epid)
@@ -228,6 +235,7 @@ class VideoPlayerV3Activity : TvComponentActivity() {
                 forceDark = true
             ) {
                 VideoPlayerV3Screen()
+                intent.commentAnchor()?.let { CommentLinkDialog(it, videoId = intent.getLongExtra("avid", 0)) }
             }
         }
     }

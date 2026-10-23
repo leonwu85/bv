@@ -563,6 +563,7 @@ private fun UpSpaceHeader(
             }
             HeaderActions(
                 viewModel = viewModel,
+                collapsed = collapsed,
                 isFollowing = isFollowing,
                 onFollowClick = onFollowClick,
                 onLiveClick = onLiveClick,
@@ -712,6 +713,7 @@ private fun HeaderBadge(
 @Composable
 private fun HeaderActions(
     viewModel: UserSpaceViewModel,
+    collapsed: Boolean,
     isFollowing: Boolean,
     onFollowClick: () -> Unit,
     onLiveClick: () -> Unit,
@@ -726,6 +728,7 @@ private fun HeaderActions(
         else -> "关注"
     }
 
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -778,6 +781,30 @@ private fun HeaderActions(
             containerColor = Color.White.copy(alpha = 0.16f),
             onClick = onRefreshClick
         )
+    }
+    if (!collapsed) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        HeaderActionButton(
+            modifier = Modifier.width(112.dp), text = "图文与文集",
+            containerColor = Color.White.copy(alpha = 0.16f),
+            onClick = { dev.aaa1115910.bv.tv.activities.OpusSpaceActivity.actionStart(context, viewModel.upMid) }
+        )
+        if (viewModel.appSpaceData?.medal != 0) HeaderActionButton(
+            modifier = Modifier.width(128.dp),
+            text = viewModel.medalName?.let { "勋章：$it" } ?: "粉丝勋章",
+            enabled = !viewModel.medalLoading,
+            containerColor = Color.White.copy(alpha = 0.16f),
+            onClick = {
+                viewModel.loadMedal { name ->
+                    if (name == null) "暂无粉丝勋章或查询失败".toast(context)
+                    else {
+                        (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                            .setPrimaryClip(android.content.ClipData.newPlainText("粉丝勋章", name))
+                        "粉丝勋章：$name，已复制".toast(context)
+                    }
+                }
+            }
+        )
+    }
     }
 }
 

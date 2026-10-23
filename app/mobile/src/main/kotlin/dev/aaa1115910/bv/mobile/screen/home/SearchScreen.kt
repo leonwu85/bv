@@ -91,6 +91,7 @@ fun SearchScreen(
     searchInputViewModel: SearchInputViewModel = koinViewModel(),
     searchResultViewModel: SearchResultViewModel = koinViewModel()
 ) {
+    dev.aaa1115910.bv.mobile.component.search.SearchVerification(searchResultViewModel)
     val context = LocalContext.current
     val windowSizeClass = calculateWindowSizeClass(context as Activity)
     val windowSize = windowSizeClass.widthSizeClass

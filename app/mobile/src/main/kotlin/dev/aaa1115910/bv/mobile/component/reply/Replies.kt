@@ -51,6 +51,7 @@ fun Replies(
     onReplyComment: (Comment, Long) -> Unit = { _, _ -> },
 ) {
     val listState = rememberLazyListState()
+    val visibleComments = dev.aaa1115910.bv.util.rememberFilteredComments(replies)
     val pullToRefreshState = rememberPullToRefreshState()
 
     val shouldLoadMore by remember {
@@ -120,7 +121,7 @@ fun Replies(
                 }
             }
 
-            itemsIndexed(items = replies) { _, reply ->
+            itemsIndexed(items = visibleComments) { _, reply ->
                 CommentItem(
                     comment = reply,
                     previewerState = previewerState,
@@ -128,6 +129,14 @@ fun Replies(
                     showReplies = false,
                     onReply = { onReplyComment(it, rootComment?.rpid ?: it.rpid) }
                 )
+            }
+
+            if (replies.size > visibleComments.size && !(isLoading || isRefreshing)) {
+                item {
+                    TextButton(onClick = onLoadMoreReplies, modifier = Modifier.fillMaxWidth()) {
+                        Text("部分回复已过滤 · 继续加载")
+                    }
+                }
             }
 
             if (replies.isEmpty() && !(isLoading || isRefreshing)) {

@@ -39,6 +39,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -115,6 +116,7 @@ fun CommentPanel(
     oid: Long,
     type: Long = 1L,
     onHide: () -> Unit,
+    description: String = "",
     embedded: Boolean = false,
     episodes: List<Episode> = emptyList(),
     sections: List<Section> = emptyList(),
@@ -131,7 +133,8 @@ fun CommentPanel(
     val density = LocalDensity.current
     val context = LocalContext.current
 
-    val comments = remember { mutableStateListOf<Comment>() }
+    val rawComments = remember { mutableStateListOf<Comment>() }
+    val comments by rememberUpdatedState(dev.aaa1115910.bv.util.rememberFilteredComments(rawComments, description))
     val translatingCommentIds = remember { mutableStateListOf<Long>() }
     var loading by remember { mutableStateOf(false) }
     var currentPage by remember { mutableStateOf(CommentPage()) }
@@ -229,9 +232,9 @@ fun CommentPanel(
     }
 
     fun updateComment(updatedComment: Comment) {
-        val commentIndex = comments.indexOfFirst { it.rpid == updatedComment.rpid }
+        val commentIndex = rawComments.indexOfFirst { it.rpid == updatedComment.rpid }
         if (commentIndex >= 0) {
-            comments[commentIndex] = updatedComment
+            rawComments[commentIndex] = updatedComment
         }
         if (selectedRootComment?.rpid == updatedComment.rpid) {
             selectedRootComment = updatedComment
@@ -305,7 +308,7 @@ fun CommentPanel(
         loading = true
         error = null
         if (reset) {
-            comments.clear()
+            rawComments.clear()
             currentPage = CommentPage()
             hasNext = true
         }
@@ -324,9 +327,9 @@ fun CommentPanel(
             if (!commentLoadOwner.owns(requestGeneration)) return
 
             if (reset) {
-                comments.clear()
+                rawComments.clear()
             }
-            comments.appendDistinctBy(data.comments) { it.rpid }
+            rawComments.appendDistinctBy(data.comments) { it.rpid }
             currentPage = data.nextPage
             hasNext = data.hasNext
             loadedCommentOid = targetOid
@@ -516,7 +519,7 @@ fun CommentPanel(
                             commentLoadOwner.invalidate()
                             loadedCommentOid = null
                             loading = false
-                            comments.clear()
+                            rawComments.clear()
                             currentPage = CommentPage()
                             hasNext = true
                             error = null
@@ -649,13 +652,18 @@ fun CommentPanel(
                                     .focusRequester(focusRequester)
                                     .focusable()
                             ) {
+                                Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "暂无评论",
+                                    text = if (rawComments.isEmpty()) "暂无评论" else "本页评论已过滤",
                                     color = Color.White.copy(alpha = 0.5f),
-                                    modifier = Modifier
-                                        .align(Alignment.Center)
-                                        .padding(16.dp)
+                                    modifier = Modifier.padding(16.dp)
                                 )
+                                if (rawComments.isNotEmpty() && hasNext) {
+                                    androidx.tv.material3.Button(onClick = { scope.launch { loadComments(false, currentOid) } }) {
+                                        Text("加载更多")
+                                    }
+                                }
+                                }
                             }
                         } else {
                             LazyColumn(
@@ -801,6 +809,8 @@ fun CommentPanel(
     // 子评论浮窗
     if (selectedRootComment != null) {
         SubCommentPanel(
+            type = type,
+            description = description,
             modifier = if (embedded) modifier else Modifier,
             show = showSubCommentPanel,
             oid = currentOid,

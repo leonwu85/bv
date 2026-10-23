@@ -254,6 +254,7 @@ import dev.aaa1115910.bv.player.mobile.BvPlayer
 import dev.aaa1115910.bv.mobile.component.player.rememberMediaMuteState
 import dev.aaa1115910.bv.player.mobile.LocalVideoHighEnergyState
 import dev.aaa1115910.bv.player.mobile.VideoHighEnergyState
+import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.RequestState
 import dev.aaa1115910.bv.settings.PlayerSettingsProvider
@@ -590,11 +591,11 @@ fun VideoPlayerScreen(
             }
         }
     }
-    val launchOfflineCache: (OfflineVideoCacheTarget, Resolution) -> Unit = launchOfflineCache@{ target, quality ->
+    val launchOfflineCache: (OfflineVideoCacheTarget, Resolution, Audio) -> Unit = launchOfflineCache@{ target, quality, audio ->
         if (offlineCacheDialogLoading) return@launchOfflineCache
         offlineCacheDialogLoading = true
         scope.launch(Dispatchers.IO) {
-            val result = playerViewModel.cacheVideoTarget(target, quality)
+            val result = playerViewModel.cacheVideoTarget(target, quality, audio)
             withContext(Dispatchers.Main) {
                 offlineCacheDialogLoading = false
                 result
@@ -603,8 +604,8 @@ fun VideoPlayerScreen(
             }
         }
     }
-    val launchOfflineCacheAll: (List<OfflineVideoCacheTarget>, Resolution) -> Unit = { targets, quality ->
-        val result = playerViewModel.cacheVideoTargets(targets, quality)
+    val launchOfflineCacheAll: (List<OfflineVideoCacheTarget>, Resolution, Audio) -> Unit = { targets, quality, audio ->
+        val result = playerViewModel.cacheVideoTargets(targets, quality, audio)
         result
             .onSuccess {
                 showOfflineCacheDialog = false
@@ -1291,6 +1292,7 @@ fun VideoPlayerScreen(
                     if (windowSizeClass.widthSizeClass != WindowWidthSizeClass.Expanded) {
                     // 小屏幕下的视频详情推荐/评论
                     ReplySheetScaffold(
+        description = videoDetailViewModel.videoDetail?.description.orEmpty(),
                         aid = commentVideModel.commentId,
                         rpid = commentVideModel.rpid,
                         repliesCount = commentVideModel.rpCount,
@@ -1484,6 +1486,7 @@ fun VideoPlayerScreen(
                                         VideoComments(
                                             previewerState = previewerState,
                                             comments = commentVideModel.comments,
+                                            description = videoDetailViewModel.videoDetail?.description.orEmpty(),
                                             vote = commentVideModel.commentVote,
                                             commentSort = commentVideModel.commentSort,
                                             refreshingComments = commentVideModel.refreshingComments,
@@ -1775,6 +1778,7 @@ fun VideoPlayerScreen(
                         modifier = Modifier.padding(end = 12.dp)
                     ) {
                         ReplySheetScaffold(
+        description = videoDetailViewModel.videoDetail?.description.orEmpty(),
                             modifier = Modifier,
                             aid = commentVideModel.commentId,
                             rpid = commentVideModel.rpid,
@@ -1788,6 +1792,7 @@ fun VideoPlayerScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 previewerState = previewerState,
                                 comments = commentVideModel.comments,
+                                            description = videoDetailViewModel.videoDetail?.description.orEmpty(),
                                 vote = commentVideModel.commentVote,
                                 commentSort = commentVideModel.commentSort,
                                 refreshingComments = commentVideModel.refreshingComments,
@@ -2646,12 +2651,14 @@ private fun OfflineCacheBottomSheet(
     loading: Boolean,
     cacheStateOf: (Long, Long) -> OfflineVideoCacheTaskState,
     onDismiss: () -> Unit,
-    onCacheOne: (OfflineVideoCacheTarget, Resolution) -> Unit,
-    onCacheAll: (List<OfflineVideoCacheTarget>, Resolution) -> Unit,
+    onCacheOne: (OfflineVideoCacheTarget, Resolution, Audio) -> Unit,
+    onCacheAll: (List<OfflineVideoCacheTarget>, Resolution, Audio) -> Unit,
     onOpenCachePage: () -> Unit
 ) {
     if (!show) return
 
+    var selectedAudio by remember(show) { mutableStateOf(Prefs.offlineAudio) }
+    var showAudioMenu by remember { mutableStateOf(false) }
     var selectedQuality by remember(show, currentQuality) { mutableStateOf(currentQuality) }
     var showQualityMenu by remember { mutableStateOf(false) }
     var showCacheAllConfirm by remember { mutableStateOf(false) }
@@ -2681,7 +2688,7 @@ private fun OfflineCacheBottomSheet(
                     text = if (cacheableTargets.isEmpty()) {
                         "当前列表没有可添加的缓存任务"
                     } else {
-                        "将以 ${selectedQuality.getDisplayName(context)} 作为最高画质添加 ${cacheableTargets.size} 个缓存任务。"
+                        "将以 ${selectedQuality.getDisplayName(context)} 和 ${selectedAudio.getDisplayName(context)} 音质添加 ${cacheableTargets.size} 个缓存任务。"
                     }
                 )
             },
@@ -2690,7 +2697,7 @@ private fun OfflineCacheBottomSheet(
                     enabled = cacheableTargets.isNotEmpty(),
                     onClick = {
                         showCacheAllConfirm = false
-                        onCacheAll(cacheableTargets, selectedQuality)
+                        onCacheAll(cacheableTargets, selectedQuality, selectedAudio)
                     }
                 ) {
                     Text(text = "缓存全部")
@@ -2795,6 +2802,18 @@ private fun OfflineCacheBottomSheet(
                 }
             }
 
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("缓存音质", style = MaterialTheme.typography.bodyMedium)
+                Box {
+                    TextButton(onClick = { showAudioMenu = true }, enabled = !loading) { Text(selectedAudio.getDisplayName(context)) }
+                    DropdownMenu(expanded = showAudioMenu, onDismissRequest = { showAudioMenu = false }) {
+                        Audio.entries.sortedBy { it.rank }.forEach { audio ->
+                            DropdownMenuItem(text = { Text(audio.getDisplayName(context)) }, onClick = { selectedAudio = audio; showAudioMenu = false })
+                        }
+                    }
+                }
+                Text("音轨不可用时自动降级", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             HorizontalDivider()
 
             if (items.isEmpty()) {
@@ -2825,7 +2844,7 @@ private fun OfflineCacheBottomSheet(
                             item = item,
                             state = cacheStateOf(item.target.aid, item.target.cid),
                             loading = loading,
-                            onCache = { onCacheOne(item.target, selectedQuality) }
+                            onCache = { onCacheOne(item.target, selectedQuality, selectedAudio) }
                         )
                     }
                 }
@@ -4913,6 +4932,7 @@ fun VideoComments(
     modifier: Modifier = Modifier,
     previewerState: ImagePreviewerState,
     comments: List<Comment>,
+    description: String = "",
     vote: CommentVote? = null,
     commentSort: CommentSort,
     refreshingComments: Boolean,
@@ -4924,6 +4944,7 @@ fun VideoComments(
     onReplyComment: (Comment) -> Unit,
     onShowReplies: (rpId: Long, repliesCount: Int) -> Unit
 ) {
+    val visibleComments = dev.aaa1115910.bv.util.rememberFilteredComments(comments, description)
     val listState = rememberLazyListState()
     val pullRefreshState = rememberPullRefreshState(refreshingComments, { onRefreshComments() })
 
@@ -4997,7 +5018,7 @@ fun VideoComments(
                     }
                 }
 
-                itemsIndexed(items = comments) { _, comment ->
+                itemsIndexed(items = visibleComments) { _, comment ->
                     Box {
                         CommentItem(
                             comment = comment,
@@ -5008,6 +5029,13 @@ fun VideoComments(
                                 onShowReplies(rpId, comment.repliesCount)
                             }
                         )
+                    }
+                }
+                if (comments.size > visibleComments.size && !refreshingComments) {
+                    item {
+                        TextButton(onClick = onLoadMoreComments, modifier = Modifier.fillMaxWidth()) {
+                            Text("部分评论已过滤 · 继续加载")
+                        }
                     }
                 }
                 item {

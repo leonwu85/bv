@@ -33,6 +33,9 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 object BiliLiveHttpApi {
+    suspend fun getMasterInfo(uid: Long): BiliResponse<kotlinx.serialization.json.JsonObject> =
+        client.get("/live_user/v1/Master/info") { parameter("uid", uid) }.body()
+
     private var endPoint: String = ""
     private lateinit var client: HttpClient
     private val logger = KotlinLogging.logger { }

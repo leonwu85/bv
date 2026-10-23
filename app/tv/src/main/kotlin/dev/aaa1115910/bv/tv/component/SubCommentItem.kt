@@ -155,6 +155,7 @@ fun SubCommentItem(
 @Composable
 fun SubCommentRootItem(
     comment: Comment,
+    modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -166,7 +167,7 @@ fun SubCommentRootItem(
     Surface(
         onClick = { /* 右键展开/收起 */ },
         onLongClick = onLongClick,
-        modifier = Modifier
+        modifier = modifier
             .focusRequester(focusRequester)
             .onPreviewKeyEvent { event ->
                 when {

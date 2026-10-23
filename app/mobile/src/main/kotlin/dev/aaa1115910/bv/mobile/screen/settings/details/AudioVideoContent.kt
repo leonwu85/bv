@@ -98,6 +98,10 @@ fun AudioVideoContent(
                     onCheckedChange = { true }
                 )
             },
+            "离线缓存" to {
+                radioPreference(title = "缓存音质", prefReq = dev.aaa1115910.bv.util.PrefKeys.offlineAudioRequest,
+                    values = Audio.entries.sortedBy { it.rank }.associate { it.code to it.getDisplayName(context) })
+            },
             "画质/音质" to {
                 radioPreference(
                     title = "默认画质",

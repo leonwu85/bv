@@ -29,6 +29,7 @@ fun AdvanceContent(
         modifier = modifier,
         contentPadding = PaddingValues(horizontal = 18.dp)
     ) {
+        item { dev.aaa1115910.bv.component.BackupSettings() }
         preferenceGroups(
             "接口" to {
                 radioPreference(

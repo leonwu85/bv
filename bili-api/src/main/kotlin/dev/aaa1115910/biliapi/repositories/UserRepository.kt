@@ -924,11 +924,11 @@ class UserRepository(
                     sessData = authRepository.sessionData ?: ""
                 ).getResponseData()
                 // 从 articleView 的 opus.content.paragraphs 获取段落
-                parseOpusParagraphs(articleData.opus?.content?.paragraphs ?: emptyList())
+                dev.aaa1115910.biliapi.entity.user.OpusParagraphParser.parse(articleData.opus?.content?.paragraphs ?: emptyList())
             } else {
                 // 从 modules 列表中找到 MODULE_TYPE_CONTENT 类型的模块
                 val contentModule = responseData.item?.modules?.find { it.moduleType == "MODULE_TYPE_CONTENT" }
-                parseOpusParagraphs(contentModule?.moduleContent?.paragraphs ?: emptyList())
+                dev.aaa1115910.biliapi.entity.user.OpusParagraphParser.parse(contentModule?.moduleContent?.paragraphs ?: emptyList())
             }
 
             OpusDetailResult(
@@ -944,71 +944,6 @@ class UserRepository(
     /**
      * 解析 Opus 段落数据
      */
-    private fun parseOpusParagraphs(paragraphs: List<OpusParagraph>): List<ArticleParagraph> {
-        return paragraphs.mapNotNull { para ->
-            when (para.paraType) {
-                1 -> { // TEXT
-                    val nodes = para.text?.nodes?.mapNotNull { node ->
-                        parseOpusTextNode(node)
-                    } ?: emptyList()
-                    if (nodes.isNotEmpty()) {
-                        ArticleParagraph.TextParagraph(nodes = nodes)
-                    } else null
-                }
-                2 -> { // PICTURES
-                    val pictures = para.pic?.pics?.map { pic ->
-                        ArticlePicture(
-                            url = pic.url ?: "",
-                            width = pic.width ?: 0,
-                            height = pic.height ?: 0
-                        )
-                    } ?: emptyList()
-                    if (pictures.isNotEmpty()) {
-                        ArticleParagraph.PicturesParagraph(pictures = pictures)
-                    } else null
-                }
-                3 -> { // LINE
-                    val picture = para.line?.pic?.let { pic ->
-                        ArticlePicture(
-                            url = pic.url ?: "",
-                            width = pic.width ?: 0,
-                            height = pic.height ?: 0
-                        )
-                    }
-                    ArticleParagraph.LineParagraph(picture = picture)
-                }
-                else -> null
-            }
-        }
-    }
-
-    /**
-     * 解析 Opus 文本节点
-     */
-    private fun parseOpusTextNode(node: OpusTextNode): ArticleTextNode? {
-        return when {
-            node.emote != null -> ArticleTextNode(
-                text = node.emote.text ?: node.rawText,
-                type = TextNodeType.Emoji,
-                emojiUrl = node.emote.iconUrl
-            )
-            node.rich != null -> ArticleTextNode(
-                text = node.rich.text ?: node.rawText,
-                type = TextNodeType.Link,
-                linkUrl = node.rich.jumpUrl
-            )
-            node.word != null -> ArticleTextNode(
-                text = node.word.words ?: node.rawText,
-                type = TextNodeType.Plain,
-                isBold = node.word.style?.bold ?: false,
-                isItalic = node.word.style?.italic ?: false
-            )
-            else -> if (node.rawText.isNotBlank()) {
-                ArticleTextNode(text = node.rawText, type = TextNodeType.Plain)
-            } else null
-        }
-    }
-
     suspend fun getFollowedUsers(
         mid: Long,
         preferApiType: ApiType = ApiType.Web

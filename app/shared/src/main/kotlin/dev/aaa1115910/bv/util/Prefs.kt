@@ -255,6 +255,10 @@ object Prefs {
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefCurrentPlaySpeedRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefCurrentPlaySpeedKey, value) }
 
+    var offlineAudio: Audio
+        get() = runBlocking { Audio.fromCode(dsm.getPreferenceFlow(PrefKeys.offlineAudioRequest).first()) ?: Audio.A192K }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.offlineAudioKey, value.code) }
+
     var defaultAudio: Audio
         get() = runBlocking {
             Audio.fromCode(dsm.getPreferenceFlow(PrefKeys.prefDefaultAudioRequest).first())
@@ -1084,6 +1088,15 @@ internal object TvTunnelingDefaultMigration {
 }
 
 object PrefKeys {
+    val commentPureMentionKey = booleanPreferencesKey("comment_filter_pure_mention")
+    val commentMentionLimitKey = intPreferencesKey("comment_filter_mention_limit")
+    val commentCopyIntroKey = booleanPreferencesKey("comment_filter_copy_intro")
+    val offlineAudioKey = intPreferencesKey("offline_audio")
+    val commentPureMentionRequest = PreferenceRequest(commentPureMentionKey, false)
+    val commentMentionLimitRequest = PreferenceRequest(commentMentionLimitKey, 0)
+    val commentCopyIntroRequest = PreferenceRequest(commentCopyIntroKey, false)
+    val offlineAudioRequest = PreferenceRequest(offlineAudioKey, Audio.A192K.code)
+
     val prefIsLoginKey = booleanPreferencesKey("il")
     val prefUidKey = longPreferencesKey("uid")
     val prefSidKey = stringPreferencesKey("sid")

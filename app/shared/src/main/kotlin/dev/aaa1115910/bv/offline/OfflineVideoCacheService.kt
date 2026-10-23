@@ -19,6 +19,7 @@ import dev.aaa1115910.biliapi.repositories.AuthRepository
 import dev.aaa1115910.biliapi.repositories.VideoPlayRepository
 import dev.aaa1115910.biliapi.util.AvBvConverter
 import dev.aaa1115910.bv.BVApp
+import dev.aaa1115910.bv.util.selectAudioTrack
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoCodec
@@ -662,7 +663,7 @@ class OfflineVideoCacheService(
 
         val selectedQuality = OfflineCacheQualitySelector.select(
             availableQualities = playData.dashVideos.mapNotNull { video ->
-                Resolution.entries.find { it.code == video.quality }
+                Resolution.fromCode(video.quality)
             },
             preferredQuality = taskRequest.preferredQuality,
         ) ?: throw IllegalStateException("未找到可缓存的视频画质")
@@ -672,7 +673,7 @@ class OfflineVideoCacheService(
             videoCandidates.find { codec.matchesCodecString(it.codecs) }
         } ?: videoCandidates.firstOrNull()
         ?: throw IllegalStateException("未找到可缓存的视频流")
-        val audioItem = playData.selectAudioForOfflineCache(taskRequest.preferredAudio)
+        val audioItem = playData.selectAudioTrack(taskRequest.preferredAudio)
             ?: throw IllegalStateException("未找到可缓存的音频流")
 
         val existing = readEntry(entryDir(target.aid, target.cid))
@@ -704,8 +705,7 @@ class OfflineVideoCacheService(
             cover = target.cover,
             upName = target.upName,
             quality = videoItem.quality,
-            qualityText = Resolution.entries
-                .find { it.code == videoItem.quality }
+            qualityText = Resolution.fromCode(videoItem.quality)
                 ?.getDisplayName(BVApp.context)
                 ?: "清晰度 ${videoItem.quality}",
             videoCodecId = videoItem.codecId,
@@ -732,15 +732,6 @@ class OfflineVideoCacheService(
             )
         }
         return this
-    }
-
-    private fun PlayData.selectAudioForOfflineCache(preferredAudio: Audio): DashAudio? {
-        return dashAudios.find { it.codecId == preferredAudio.code }
-            ?: dolby.takeIf { it?.codecId == preferredAudio.code }
-            ?: flac.takeIf { it?.codecId == preferredAudio.code }
-            ?: dashAudios.minByOrNull { it.codecId }
-            ?: dolby
-            ?: flac
     }
 
     private suspend fun download(taskRequest: OfflineVideoCacheTaskRequest) {

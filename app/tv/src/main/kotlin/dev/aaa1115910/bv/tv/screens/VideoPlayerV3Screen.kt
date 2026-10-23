@@ -193,6 +193,15 @@ fun VideoPlayerV3Screen(
     var autoActionTipVisible by remember { mutableStateOf(false) }
     var autoActionTipText by remember { mutableStateOf("") }
 
+    var cacheAudioAction by remember { mutableStateOf<((dev.aaa1115910.bv.player.entity.Audio) -> Unit)?>(null) }
+    var cacheAudioDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
+    cacheAudioAction?.let { action ->
+        dev.aaa1115910.bv.tv.component.OfflineAudioDialog(
+            onDismiss = { cacheAudioAction = null; cacheAudioDismiss?.invoke() },
+            onConfirm = { audio -> cacheAudioAction = null; action(audio) }
+        )
+    }
+
     // 评论面板状态
     var showCommentPanel by remember { mutableStateOf(false) }
 
@@ -204,6 +213,16 @@ fun VideoPlayerV3Screen(
     var showDescriptionDialog by remember { mutableStateOf(false) }
     var videoDescription by remember(currentAid) { mutableStateOf("") }
     var descriptionLoaded by remember(currentAid) { mutableStateOf(false) }
+    LaunchedEffect(showCommentPanel, currentAid) {
+        if (showCommentPanel && currentAid > 0 && !descriptionLoaded) {
+            try {
+                val info = withContext(Dispatchers.IO) { BiliHttpApi.getVideoInfo(bv = dev.aaa1115910.biliapi.util.AvBvConverter.av2bv(currentAid)).getResponseData() }
+                videoDescription = info.desc
+                descriptionLoaded = true
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { /* Leave filtering inactive when the intro is unavailable. */ }
+        }
+    }
 
     var selectedAutoPlayRelatedVideo by remember(playerViewModel.currentCid) {
         mutableStateOf<VideoCardData?>(null)
@@ -605,6 +624,7 @@ fun VideoPlayerV3Screen(
                                 playerViewModel.currentQuality >= Resolution.R4K &&
                                 playerViewModel.currentQuality !in setOf(
                                     Resolution.RHdr,
+                                    Resolution.RHdrVivid,
                                     Resolution.RDolby,
                                 ),
                         showRelatedButton = !playerViewModel.fromSeason &&
@@ -1147,6 +1167,8 @@ fun VideoPlayerV3Screen(
                                     }
                                     else -> {
                                         onPauseAutoHide(true)
+                                        cacheAudioDismiss = { onPauseAutoHide(false) }
+                                        cacheAudioAction = { audio ->
                                         scope.launch(Dispatchers.IO) {
                                             if (cacheState.status == OfflineVideoCacheStatus.Failed) {
                                                 val clearResult = playerViewModel.clearOfflineCacheTask()
@@ -1159,7 +1181,7 @@ fun VideoPlayerV3Screen(
                                                     return@launch
                                                 }
                                             }
-                                            val result = playerViewModel.cacheCurrentVideo()
+                                            val result = playerViewModel.cacheCurrentVideo(audio)
                                             withContext(Dispatchers.Main) {
                                                 onPauseAutoHide(false)
                                                 result.fold(
@@ -1167,6 +1189,7 @@ fun VideoPlayerV3Screen(
                                                     onFailure = { (it.localizedMessage ?: "缓存失败").toast(context) }
                                                 )
                                             }
+                                        }
                                         }
                                     }
                                 }
@@ -1396,6 +1419,7 @@ fun VideoPlayerV3Screen(
                 CommentPanel(
                     show = showCommentPanel,
                     oid = playerViewModel.currentAid,
+                    description = videoDescription,
                     onHide = { showCommentPanel = false }
                 )
             }
@@ -1450,6 +1474,7 @@ fun VideoPlayerV3Screen(
                             .fillMaxHeight(),
                         show = splitPanelVisible,
                         oid = playerViewModel.currentAid,
+                    description = videoDescription,
                         onHide = { showCommentPanel = false },
                         embedded = true
                     )

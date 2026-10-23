@@ -33,7 +33,9 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -70,6 +72,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import org.koin.compose.getKoin
 
 /**
@@ -91,16 +94,26 @@ fun SubCommentPanel(
     rootId: Long,
     rootComment: Comment,
     onHide: () -> Unit,
-    embedded: Boolean = false
+    embedded: Boolean = false,
+    type: Long = 1L,
+    description: String = "",
+    targetReplyId: Long? = null,
+    initialData: dev.aaa1115910.biliapi.entity.reply.CommentRepliesData? = null,
+    locateRoot: Boolean = false
 ) {
     val commentRepository: CommentRepository = getKoin().get()
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
+    val targetFocusRequester = remember { FocusRequester() }
+    val rootFocusRequester = remember { FocusRequester() }
+    var anchorFocused by remember(rootId, targetReplyId) { mutableStateOf(false) }
     val density = LocalDensity.current
     val context = LocalContext.current
 
-    val replies = remember { mutableStateListOf<Comment>() }
+    val rawComments = remember { mutableStateListOf<Comment>() }
+    val filteredReplies = dev.aaa1115910.bv.util.rememberFilteredComments(rawComments, description)
+    val replies by rememberUpdatedState(if (targetReplyId != null) rawComments.toList() else filteredReplies)
     val translatingReplyIds = remember { mutableStateListOf<Long>() }
     var focusedCommentIndex by remember { mutableStateOf(0) }
     var loading by remember { mutableStateOf(false) }
@@ -122,9 +135,9 @@ fun SubCommentPanel(
     }
 
     fun updateReply(updatedReply: Comment) {
-        val replyIndex = replies.indexOfFirst { it.rpid == updatedReply.rpid }
+        val replyIndex = rawComments.indexOfFirst { it.rpid == updatedReply.rpid }
         if (replyIndex >= 0) {
-            replies[replyIndex] = updatedReply
+            rawComments[replyIndex] = updatedReply
         }
     }
 
@@ -172,7 +185,7 @@ fun SubCommentPanel(
         loading = true
         error = null
         if (reset) {
-            replies.clear()
+            rawComments.clear()
             translatingReplyIds.clear()
             focusedCommentIndex = 0
             currentPage = CommentReplyPage()
@@ -181,21 +194,22 @@ fun SubCommentPanel(
 
         try {
             val page = if (reset) CommentReplyPage() else currentPage
-            val data = commentRepository.getCommentReplies(
+            val data = initialData.takeIf { reset } ?: commentRepository.getCommentReplies(
                 rpid = targetRootId,
-                type = 1L,
+                type = type,
                 commentId = targetOid,
                 page = page,
-                preferApiType = Prefs.apiType
+                preferApiType = if (targetReplyId != null || initialData != null) ApiType.App else Prefs.apiType,
+                targetReplyId = targetReplyId.takeIf { reset }
             )
 
             currentCoroutineContext().ensureActive()
             if (!replyLoadOwner.owns(requestGeneration)) return
 
             if (reset) {
-                replies.clear()
+                rawComments.clear()
             }
-            replies.appendDistinctBy(data.replies) { it.rpid }
+            rawComments.appendDistinctBy(data.replies) { it.rpid }
             currentPage = data.nextPage
             hasNext = data.hasNext
             loadedReplyKey = targetRootId to targetOid
@@ -225,16 +239,28 @@ fun SubCommentPanel(
         if (!show) {
             replyLoadOwner.invalidate()
             loading = false
+            anchorFocused = false
         }
     }
 
     // 显示后请求焦点
-    LaunchedEffect(show, rootId) {
-        if (show) {
+    LaunchedEffect(show, rootId, replies.size, loadedReplyKey, error) {
+        if (show && !anchorFocused && (loadedReplyKey == (rootId to oid) || error != null)) {
+            val index = replies.indexOfFirst { it.rpid == targetReplyId }
+            if (locateRoot) {
+                anchorFocused = rootFocusRequester.requestFocusWithRetry()
+                return@LaunchedEffect
+            }
+            if (index >= 0) {
+                listState.scrollToItem(index)
+                snapshotFlow { listState.layoutInfo.visibleItemsInfo.any { it.key == targetReplyId } }.first { it }
+                anchorFocused = targetFocusRequester.requestFocusWithRetry()
+                return@LaunchedEffect
+            }
             delay(300)
             focusRequester.requestFocusWithRetry()
             delay(80)
-            focusRequester.requestFocusWithRetry()
+            anchorFocused = focusRequester.requestFocusWithRetry()
         }
     }
 
@@ -297,12 +323,16 @@ fun SubCommentPanel(
                 ) {
                     // 根评论（只读显示，右键展开/收起）
                     SubCommentRootItem(
+                        modifier = Modifier.focusRequester(rootFocusRequester),
                         comment = rootComment,
                         onLongClick = {
                             showCommentImagePreview(rootComment.pictures, 0)
                         }
                     )
 
+                    if (targetReplyId != null && !loading && loadedReplyKey != null && replies.none { it.rpid == targetReplyId }) {
+                        Text("目标回复已删除或暂不可见")
+                    }
                     // 分隔线
                     Divider(
                         color = Color.White.copy(alpha = 0.2f),
@@ -334,13 +364,18 @@ fun SubCommentPanel(
                                 .focusRequester(focusRequester)
                                 .focusable()
                         ) {
+                            Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "暂无回复",
+                                text = if (rawComments.isEmpty()) "暂无回复" else "本页回复已过滤",
                                 color = Color.White.copy(alpha = 0.5f),
-                                modifier = Modifier
-                                    .align(Alignment.Center)
-                                    .padding(16.dp)
+                                modifier = Modifier.padding(16.dp)
                             )
+                            if (rawComments.isNotEmpty() && hasNext) {
+                                androidx.tv.material3.Button(onClick = { scope.launch { loadReplies(false, rootId, oid) } }) {
+                                    Text("加载更多")
+                                }
+                            }
+                            }
                         }
                     } else {
                         LazyColumn(
@@ -410,6 +445,7 @@ fun SubCommentPanel(
                                     comment = reply,
                                     isTranslating = translatingReplyIds.contains(reply.rpid),
                                     modifier = Modifier
+                                        .then(if (reply.rpid == targetReplyId) Modifier.focusRequester(targetFocusRequester) else Modifier)
                                         .fillMaxWidth()
                                         .onFocusChanged { focusState ->
                                             if (focusState.hasFocus) {

@@ -1,5 +1,10 @@
 package dev.aaa1115910.bv.mobile.activities
 
+import dev.aaa1115910.biliapi.entity.reply.CommentAnchor
+import dev.aaa1115910.bv.util.putCommentAnchor
+import dev.aaa1115910.bv.util.commentAnchor
+import dev.aaa1115910.bv.mobile.component.reply.CommentLinkDialog
+
 import android.app.PictureInPictureParams
 import android.app.PendingIntent
 import android.app.RemoteAction
@@ -179,6 +184,7 @@ class VideoPlayerActivity : ComponentActivity() {
             playOfflineCache: Boolean = false,
             resumeHistory: Boolean = true,
             initialSeekPositionMs: Long? = null,
+            commentAnchor: CommentAnchor? = null,
             fromRecommendation: Boolean = false,
         ) {
             context.startActivity(
@@ -192,6 +198,7 @@ class VideoPlayerActivity : ComponentActivity() {
                     putExtra("playOfflineCache", playOfflineCache)
                     putExtra("resumeHistory", resumeHistory)
                     initialSeekPositionMs?.let { putExtra("initialSeekPositionMs", it) }
+                    putCommentAnchor(commentAnchor)
                     putExtra("cover", cover)
                     putExtra("title", title)
                     putExtra("partTitle", partTitle)
@@ -455,6 +462,7 @@ class VideoPlayerActivity : ComponentActivity() {
                         onPlayPgcEpisode = ::playPgcEpisode,
                         onBack = { onBackPressedDispatcher.onBackPressed() }
                     )
+                    intent.commentAnchor()?.let { CommentLinkDialog(it, videoId = intent.getLongExtra("aid", 0)) }
                 }
             }
         }

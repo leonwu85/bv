@@ -45,6 +45,10 @@ fun StorageSetting(
     val scope = rememberCoroutineScope()
     val logger = KotlinLogging.logger { }
 
+    var showAudio by remember { mutableStateOf(false) }
+    var audio by remember { mutableStateOf(dev.aaa1115910.bv.util.Prefs.offlineAudio) }
+    if (showAudio) dev.aaa1115910.bv.tv.component.OfflineAudioDialog(onDismiss = { showAudio = false },
+        onConfirm = { audio = it; dev.aaa1115910.bv.util.Prefs.offlineAudio = it; showAudio = false })
     var loading by remember { mutableStateOf(false) }
     var imageCacheSize by remember { mutableLongStateOf(0L) }
     var updateCacheSize by remember { mutableLongStateOf(0L) }
@@ -136,7 +140,9 @@ fun StorageSetting(
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                item {
+                item { dev.aaa1115910.bv.component.BackupSettings(tv = true) }
+        item { SettingListItem(title = "缓存音质", supportText = "独立于在线播放音质", valueText = audio.getDisplayName(context), onClick = { showAudio = true }) }
+        item {
                     SettingListItem(
                         title = stringResource(R.string.settings_storage_image_cache),
                         supportText = if (loading) stringResource(R.string.settings_storage_calculating)

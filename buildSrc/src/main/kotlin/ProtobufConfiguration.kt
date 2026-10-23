@@ -9,6 +9,7 @@ object ProtobufConfiguration {
         "bilibili/app/card/v1/common.proto",
         "bilibili/app/card/v1/single.proto",
         "bilibili/app/dynamic/v2/dynamic.proto",
+        "bilibili/app/dynamic/v2/opus.proto",
         "bilibili/app/im/v1/im.proto",
         "bilibili/app/interfaces/v1/history.proto",
         "bilibili/app/interfaces/v1/search.proto",

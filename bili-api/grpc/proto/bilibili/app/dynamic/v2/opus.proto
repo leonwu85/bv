@@ -7,7 +7,10 @@ option java_multiple_files = true;
 import "bilibili/app/archive/middleware/v1/preload.proto";
 import "bilibili/app/dynamic/v2/dynamic.proto";
 
+import "bilibili/pagination/pagination.proto";
+
 service Opus {
+  rpc OpusSpaceFlow (OpusSpaceFlowReq) returns (OpusSpaceFlowResp);
   //
   rpc OpusDetail (OpusDetailReq) returns (OpusDetailResp);
 }
@@ -57,4 +60,41 @@ enum OpusType {
   OPUS_TYPE_ARTICLE = 1;
   OPUS_TYPE_NOTE = 2;
   OPUS_TYPE_WORD = 3;
+}
+
+// Space flow fields used by the UP opus browser; unknown server fields remain forward compatible.
+message OpusSpaceFlowReq {
+  int64 host_mid = 1;
+  int32 local_time = 2;
+  bilibili.pagination.Pagination pagination = 3;
+  string filter_type = 4;
+}
+message OpusSpaceFlowResp {
+  repeated OpusFlowItem item_list = 1;
+  bilibili.pagination.PaginationReply next_page = 2;
+  SectionOpusCollection host_up_opus_collection = 3;
+}
+message OpusFlowItem {
+  int32 item_type = 1;
+  int64 oid = 2;
+  Extend extend = 3;
+  FlowItemOpus flow_item_opus = 4;
+}
+message FlowItemOpus {
+  MdlDynDrawItem cover_pic = 1;
+  CoverIconWithText bottom_left_text1 = 3;
+  CoverIconWithText bottom_left_text2 = 4;
+  Paragraph text_paragraph = 5;
+  VideoBadge top_right_badge = 6;
+  MdlDynDrawItem dark_cover_pic = 7;
+}
+message SectionOpusCollection {
+  string title = 1;
+  repeated OpusCollectionWithCover all_collections = 2;
+}
+message OpusCollectionWithCover {
+  OpusCollection collection_info = 1;
+  string cover_pic = 2;
+  CoverIconWithText cover_bottom_text = 3;
+  string sub_title_text = 4;
 }

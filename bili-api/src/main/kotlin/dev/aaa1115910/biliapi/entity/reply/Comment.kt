@@ -64,6 +64,7 @@ data class Comment(
     val pictures: List<Picture>,
     val replies: List<Comment>,
     val repliesCount: Int,
+    val mentions: Map<String, Long> = emptyMap(),
     val action: Int = 0,
     val like: Long = 0,
     val translatedContent: List<String> = emptyList(),
@@ -93,6 +94,7 @@ data class Comment(
         fun fromReply(reply: dev.aaa1115910.biliapi.http.entity.reply.CommentData.Reply): Comment {
             return Comment(
                 rpid = reply.rpid,
+                mentions = reply.content.atNameToMid,
                 mid = reply.mid,
                 oid = reply.oid.toLong(),
                 type = reply.type,
@@ -119,6 +121,7 @@ data class Comment(
             val translatedContent = mapTranslatedGrpcContent(reply)
             return Comment(
                 rpid = reply.id,
+                mentions = reply.content.atNameToMidMap,
                 mid = reply.mid,
                 oid = reply.oid,
                 type = reply.type,

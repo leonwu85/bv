@@ -1479,7 +1479,7 @@ private fun bilibili.app.dynamic.v2.DynamicItem.getParagraphModule() =
  * 段落类型枚举
  */
 enum class ParagraphType {
-    Text, Pictures, Line, Unknown
+    Text, Pictures, Line, Quote, Unknown
 }
 
 /**
@@ -1503,6 +1503,11 @@ sealed class ArticleParagraph {
     data class PicturesParagraph(
         override val type: ParagraphType = ParagraphType.Pictures,
         val pictures: List<ArticlePicture>
+    ) : ArticleParagraph()
+
+    data class QuoteParagraph(
+        val children: List<ArticleParagraph>,
+        override val type: ParagraphType = ParagraphType.Quote
     ) : ArticleParagraph()
 
     data class LineParagraph(

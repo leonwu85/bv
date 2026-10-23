@@ -141,9 +141,9 @@ class SearchRepository(
             val filtered = tid != null || order != SearchFilterOrderType.ComprehensiveSort || duration != SearchFilterDuration.All
             if (page.nextPageForWeb == 1 && !filtered) {
                 val data = if (enableProxy) {
-                    BiliHttpProxyApi.searchAll(keyword, authRepository.sessionData, authRepository.buvid3)
+                    BiliHttpProxyApi.searchAll(keyword, authRepository.sessionData, authRepository.buvid3, authRepository.gaiaVtoken)
                 } else {
-                    BiliHttpApi.searchAll(keyword = keyword, sessData = authRepository.sessionData, buvid3 = authRepository.buvid3)
+                    BiliHttpApi.searchAll(keyword = keyword, sessData = authRepository.sessionData, buvid3 = authRepository.buvid3, gaiaVtoken = authRepository.gaiaVtoken)
                 }.getResponseData()
                 return parseSearchAggregate(data)
             }
@@ -169,6 +169,7 @@ class SearchRepository(
                         sessData = authRepository.sessionData,
                         dedeUserID = authRepository.mid,
                         buvid3 = authRepository.buvid3,
+                        gaiaVtoken = authRepository.gaiaVtoken,
                     )
                 } else {
                     BiliHttpApi.searchType(
@@ -181,6 +182,7 @@ class SearchRepository(
                         sessData = authRepository.sessionData,
                         dedeUserID = authRepository.mid,
                         buvid3 = authRepository.buvid3,
+                        gaiaVtoken = authRepository.gaiaVtoken,
                     )
                 }.getResponseData()
                 SearchTypeResult.fromSearchTypeResult(response)

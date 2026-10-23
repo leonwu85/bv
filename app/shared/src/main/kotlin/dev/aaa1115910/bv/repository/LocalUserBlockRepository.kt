@@ -38,6 +38,9 @@ class LocalUserBlockRepository {
         added
     }
 
+    @Synchronized
+    fun replace(ids: Set<Long>): Result<Unit> = runCatching { require(ids.all { it > 0 }); save(ids) }
+
     fun export(): String = blocked.value.sorted().joinToString("\n")
 
     private fun read(): Set<Long> = runCatching {

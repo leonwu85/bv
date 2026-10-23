@@ -43,6 +43,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
@@ -1186,48 +1187,7 @@ fun DynamicArticle(
         if (articleParagraphs.isEmpty()) {
             Text(text = article.text)
         } else {
-            articleParagraphs.forEach { paragraph ->
-                when (paragraph) {
-                    is ArticleParagraph.TextParagraph -> {
-                        Text(
-                            text = paragraph.nodes.joinToString("") { it.text },
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-
-                    is ArticleParagraph.PicturesParagraph -> {
-                        DynamicPictures(
-                            pictures = paragraph.pictures.map { picture ->
-                                Picture(
-                                    url = picture.url,
-                                    width = picture.width,
-                                    height = picture.height,
-                                    key = picture.url.ifBlank { UUID.randomUUID().toString() }
-                                )
-                            },
-                            previewerState = previewerState,
-                            onShowPreviewer = onShowPreviewer
-                        )
-                    }
-
-                    is ArticleParagraph.LineParagraph -> {
-                        paragraph.picture?.let { picture ->
-                            DynamicPictures(
-                                pictures = listOf(
-                                    Picture(
-                                        url = picture.url,
-                                        width = picture.width,
-                                        height = picture.height,
-                                        key = picture.url.ifBlank { UUID.randomUUID().toString() }
-                                    )
-                                ),
-                                previewerState = previewerState,
-                                onShowPreviewer = onShowPreviewer
-                            )
-                        }
-                    }
-                }
-            }
+            ArticleParagraphContent(articleParagraphs, previewerState, onShowPreviewer)
         }
         if (articleParagraphs.isEmpty() && article.coverPictures.isNotEmpty()) {
             DynamicPictures(
@@ -1753,5 +1713,65 @@ private fun DynamicArticleItemPreview() {
                 dynamicItem = exampleDynamicArticleData
             )
         }
+    }
+}
+
+@Composable
+private fun ArticleParagraphContent(
+    paragraphs: List<ArticleParagraph>,
+    previewerState: ImagePreviewerState,
+    onShowPreviewer: (List<Picture>, () -> Unit) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            paragraphs.forEach { paragraph ->
+                when (paragraph) {
+                    is ArticleParagraph.QuoteParagraph -> {
+                        val quoteColor = MaterialTheme.colorScheme.primary
+                        Column(Modifier.fillMaxWidth().drawBehind {
+                            drawRect(quoteColor, size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height))
+                        }.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)) {
+                            ArticleParagraphContent(paragraph.children, previewerState, onShowPreviewer)
+                        }
+                    }
+                    is ArticleParagraph.TextParagraph -> {
+                        Text(
+                            text = paragraph.nodes.joinToString("") { it.text },
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+
+                    is ArticleParagraph.PicturesParagraph -> {
+                        DynamicPictures(
+                            pictures = paragraph.pictures.map { picture ->
+                                Picture(
+                                    url = picture.url,
+                                    width = picture.width,
+                                    height = picture.height,
+                                    key = picture.url.ifBlank { UUID.randomUUID().toString() }
+                                )
+                            },
+                            previewerState = previewerState,
+                            onShowPreviewer = onShowPreviewer
+                        )
+                    }
+
+                    is ArticleParagraph.LineParagraph -> {
+                        paragraph.picture?.let { picture ->
+                            DynamicPictures(
+                                pictures = listOf(
+                                    Picture(
+                                        url = picture.url,
+                                        width = picture.width,
+                                        height = picture.height,
+                                        key = picture.url.ifBlank { UUID.randomUUID().toString() }
+                                    )
+                                ),
+                                previewerState = previewerState,
+                                onShowPreviewer = onShowPreviewer
+                            )
+                        }
+                    }
+                }
+            }
     }
 }

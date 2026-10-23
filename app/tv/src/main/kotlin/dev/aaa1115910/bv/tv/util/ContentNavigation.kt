@@ -28,13 +28,20 @@ suspend fun openBiliContent(context: Context, text: String): Boolean {
                 requireNotNull(page) { "链接指定的分 P 不存在" }
                 VideoPlayerV3Activity.actionStart(context, avid = link.aid, cid = page.cid,
                     title = info.title, partTitle = page.part, fromSeason = false,
-                    played = 0, initialSeekPositionMs = link.positionMs)
+                    played = 0, initialSeekPositionMs = link.positionMs, commentAnchor = link.commentAnchor)
             }
             is BiliContentLink.Season -> SeasonInfoActivity.actionStart(context, epId = link.episodeId, seasonId = link.seasonId)
             is BiliContentLink.Live -> VideoPlayerV3Activity.actionStartLive(context, roomId = link.roomId, title = "")
             is BiliContentLink.LiveActivity -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url)))
             is BiliContentLink.User -> UpInfoActivity.actionStart(context, link.mid, "", "")
-            is BiliContentLink.Dynamic -> DynamicDetailActivity.actionStart(context, link.id)
+            is BiliContentLink.Article -> {
+                val article = withContext(Dispatchers.IO) { BiliHttpApi.getArticleView(link.id.toString(), dev.aaa1115910.bv.util.Prefs.sessData).getResponseData() }
+                val opusId = article.opus?.opusId
+                if (opusId != null && opusId > 0) DynamicDetailActivity.actionStart(context, opusId.toString(),
+                    link.commentAnchor?.copy(oid = link.id, type = 12))
+                else dev.aaa1115910.bv.tv.activities.ArticleActivity.actionStart(context, link.id, link.commentAnchor)
+            }
+            is BiliContentLink.Dynamic -> DynamicDetailActivity.actionStart(context, link.id, link.commentAnchor)
         }
     } catch (e: CancellationException) {
         throw e

@@ -9,6 +9,9 @@ import dev.aaa1115910.bv.entity.db.UserDB
 
 @Dao
 interface UserDao {
+    @Query("DELETE FROM user")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM user")
     suspend fun getAll(): List<UserDB>
 

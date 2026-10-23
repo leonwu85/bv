@@ -1338,6 +1338,13 @@ object BiliHttpApi {
      * @param cvId 传统专栏 ID (cvid)
      * @param sessData 用户会话数据
      */
+    suspend fun getArticleCollection(id: Long, sessData: String? = null): BiliResponse<kotlinx.serialization.json.JsonObject> =
+        client.get("/x/article/list/web/articles") {
+            parameter("id", id)
+            parameter("web_location", "333.1400")
+            appendWebCookie(sessData = sessData)
+        }.body()
+
     suspend fun getArticleView(
         cvId: String,
         sessData: String = ""
@@ -2938,10 +2945,12 @@ object BiliHttpApi {
         order: String? = null,
         duration: Int? = null,
         buvid3: String? = null,
-        sessData: String? = null
+        sessData: String? = null,
+        gaiaVtoken: String? = null
     ): BiliResponse<kotlinx.serialization.json.JsonObject> {
         val response = client.get("/x/web-interface/wbi/search/all/v2") {
             parameter("keyword", keyword)
+            gaiaVtoken?.takeIf { it.isNotBlank() }?.let { parameter("gaia_vtoken", it) }
             parameter("page", page)
             parameter("page_size", 20)
             parameter("platform", "pc")
@@ -2949,7 +2958,7 @@ object BiliHttpApi {
             tid?.let { parameter("tids", it) }
             order?.let { parameter("order", it) }
             duration?.let { parameter("duration", it) }
-            appendWebCookie(sessData = sessData, buvid3 = buvid3)
+            appendWebCookie(sessData = sessData, buvid3 = buvid3, gaiaVtoken = gaiaVtoken)
             header("Origin", "https://search.bilibili.com")
             header("Referer", "https://search.bilibili.com/")
         }
@@ -2971,10 +2980,12 @@ object BiliHttpApi {
         duration: Int? = null,
         sessData: String? = null,
         dedeUserID: Long? = null,
-        buvid3: String? = null
+        buvid3: String? = null,
+        gaiaVtoken: String? = null
     ): BiliResponse<SearchResultData> {
         val response = client.get("/x/web-interface/wbi/search/type") {
             parameter("keyword", keyword)
+            gaiaVtoken?.takeIf { it.isNotBlank() }?.let { parameter("gaia_vtoken", it) }
             parameter("search_type", type)
             parameter("page", page)
             tid?.let { parameter("tids", it) }
@@ -2984,19 +2995,16 @@ object BiliHttpApi {
             sessData?.let { cookieParts.add("SESSDATA=$it") }
             dedeUserID?.let { cookieParts.add("DedeUserID=$it") }
             buvid3?.let { cookieParts.add("buvid3=$it") }
+            gaiaVtoken?.takeIf { it.isNotBlank() }?.let { cookieParts.add("x-bili-gaia-vtoken=$it") }
             if (cookieParts.isNotEmpty()) {
                 header("Cookie", cookieParts.joinToString(";") + ";")
             }
             header("referer", "https://search.bilibili.com/")
         }
 
-        return try {
-            response.body()
-        } catch (e: Exception) {
-            val responseText = response.bodyAsText()
-            println("searchType 序列化失败，原始响应内容: $responseText")
-            throw e
-        }
+        val text = response.bodyAsText()
+        checkForVVoucher(text)
+        return json.decodeFromString(text)
     }
 
     /** 获取番剧首页数据 */

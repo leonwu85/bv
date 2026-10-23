@@ -116,8 +116,12 @@ data class OpusParagraph(
     val text: OpusTextParagraph? = null,
     val pic: OpusPicParagraph? = null,
     val line: OpusLineParagraph? = null,
+    val blockquote: OpusBlockquote? = null,
     val format: OpusParagraphFormat? = null
 )
+
+@Serializable
+data class OpusBlockquote(val children: List<OpusParagraph> = emptyList())
 
 @Serializable
 data class OpusParagraphFormat(
@@ -152,6 +156,7 @@ data class OpusTextNode(
 data class OpusWord(
     val words: String? = null,
     @SerialName("font_size")
+    @Serializable(with = OpusDimensionSerializer::class)
     val fontSize: Int? = null,
     val style: OpusStyle? = null
 )
@@ -193,8 +198,11 @@ data class OpusPicParagraph(
 @Serializable
 data class OpusPic(
     val url: String? = null,
+    @Serializable(with = OpusDimensionSerializer::class)
     val width: Int? = null,
+    @Serializable(with = OpusDimensionSerializer::class)
     val height: Int? = null,
+    @Serializable(with = OpusSizeSerializer::class)
     val size: Double? = null,
     @SerialName("live_url")
     val liveUrl: String? = null
@@ -210,6 +218,8 @@ data class OpusLineParagraph(
 @Serializable
 data class OpusLinePic(
     val url: String? = null,
+    @Serializable(with = OpusDimensionSerializer::class)
     val width: Int? = null,
+    @Serializable(with = OpusDimensionSerializer::class)
     val height: Int? = null
 )
