@@ -308,19 +308,11 @@ fun SeasonInfoScreen(
         showCommentPanel = true
     }
 
-    val getCommentAid = {
-        val lastEpId = seasonViewModel.lastPlayProgress?.lastEpId
-        if (lastEpId != null) {
-            // 查找最后播放的剧集
-            seasonViewModel.seasonData?.episodes?.find { it.id == lastEpId }?.aid
-                ?: seasonViewModel.seasonData?.sections?.mapNotNull { section ->
-                    section.episodes.find { it.id == lastEpId }?.aid
-                }?.firstOrNull()
-        } else {
-            // 没有播放记录，使用第一集
-            seasonViewModel.seasonData?.episodes?.firstOrNull()?.aid
-        } ?: 0L
+    val progress = seasonViewModel.lastPlayProgress
+    val playbackTarget = remember(seasonViewModel.seasonData, progress, seasonViewModel.epId) {
+        seasonViewModel.seasonData?.playbackTarget(progress?.lastEpId, seasonViewModel.epId)
     }
+    val getCommentAid = { playbackTarget?.episode?.aid ?: 0L }
 
     LaunchedEffect(Unit) {
         videoInfoRepository.relatedVideos.clear()
@@ -412,18 +404,9 @@ fun SeasonInfoScreen(
         val seasonData = seasonViewModel.seasonData!!
         val accessState = seasonAccessState ?: SeasonAccessState()
 
-        val heroBackgroundCover = remember(seasonData, seasonViewModel.lastPlayProgress) {
-            seasonData.seasons.find { it.seasonId == seasonData.seasonId }?.horizontalCover
-                ?: run {
-                    val lastEpId = seasonViewModel.lastPlayProgress?.lastEpId
-                    if (lastEpId != null) {
-                        seasonData.episodes.find { it.id == lastEpId }?.cover
-                            ?: seasonData.sections.flatMap { it.episodes }.find { it.id == lastEpId }?.cover
-                    } else null
-                }
-                ?: seasonData.episodes.lastOrNull()?.cover
-                ?: seasonData.cover
-        }
+        val heroBackgroundCover = seasonData.seasons.find { it.seasonId == seasonData.seasonId }?.horizontalCover
+            ?: playbackTarget?.episode?.cover?.takeIf { it.isNotBlank() }
+            ?: seasonData.cover
 
         Box(
             modifier = modifier
@@ -508,11 +491,8 @@ fun SeasonInfoScreen(
                             styles = seasonData.styles,
                             newEpDesc = seasonData.newEpDesc,
                             description = seasonData.description,
-                            lastPlayedIndex = seasonViewModel.lastPlayProgress?.lastEpId ?: -1,
-                            lastPlayedTitle = generateEpisodeTitle(
-                                seasonData.episodes.find { it.id == seasonViewModel.lastPlayProgress?.lastEpId },
-                                seasonData.title
-                            ),
+                            lastPlayedIndex = progress?.lastEpId?.takeIf { playbackTarget?.resume == true } ?: -1,
+                            lastPlayedTitle = generateEpisodeTitle(playbackTarget?.episode, seasonData.title),
                             following = seasonViewModel.isFollowing,
                             isPublished = seasonData.publish.isPublished,
                             publishDate = seasonData.publish.publishDate,
@@ -520,69 +500,16 @@ fun SeasonInfoScreen(
                             seasonCount = seasonData.seasons.size,
                             showOpenVipButton = accessState.showOpenVipButton,
                         showPayButton = accessState.showPayButton,
-                        onPlay = {
-                                logger.fInfo { "Click play button" }
-                                var playAid = -1L
-                                var playCid = -1L
-                                val playEpid: Int
-                                var episodeList: List<Episode> = emptyList()
-                                if (seasonViewModel.lastPlayProgress == null) {
-                                    logger.fInfo { "Didn't find any play record" }
-                                    playAid = seasonViewModel.seasonData?.episodes?.first()?.aid ?: -1
-                                    playCid = seasonViewModel.seasonData?.episodes?.first()?.cid ?: -1
-                                    playEpid = seasonViewModel.seasonData?.episodes?.first()?.id ?: -1
-                                    if (playCid == -1L) {
-                                        R.string.season_no_feature_film.toast(context)
-                                    } else {
-                                        episodeList =
-                                            seasonViewModel.seasonData?.episodes ?: emptyList()
-                                    }
+                            onPlay = {
+                                if (playbackTarget == null) {
+                                    R.string.season_no_feature_film.toast(context)
                                 } else {
-                                    logger.fInfo { "Find play record: ${seasonViewModel.lastPlayProgress}" }
-                                    playEpid = seasonViewModel.lastPlayProgress!!.lastEpId
-                                    seasonViewModel.seasonData?.episodes?.forEach {
-                                        if (it.id == playEpid) {
-                                            playAid = it.aid
-                                            playCid = it.cid
-                                            episodeList =
-                                                seasonViewModel.seasonData?.episodes ?: emptyList()
-                                        }
-                                    }
-                                    if (playCid == -1L) {
-                                        seasonViewModel.seasonData?.sections?.forEach { section ->
-                                            section.episodes.forEach {
-                                                if (it.id == playEpid) {
-                                                    playAid = it.aid
-                                                    playCid = it.cid
-                                                    episodeList = section.episodes
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if (playCid == -1L) {
-                                        logger.fInfo { "Can't find cid" }
-                                        "无法判断最后播放的剧集".toast(context)
-                                    }
-                                }
-
-                                logger.fInfo { "Play aid: $playAid, cid: $playCid" }
-                                val lastEpId = seasonViewModel.lastPlayProgress?.lastEpId
-                                val ep = seasonViewModel.seasonData?.episodes?.find { it.id == lastEpId }
-                                    ?: seasonViewModel.seasonData?.episodes?.find { it.cid == playCid }
-                                if (playCid != -1L) {
-                                    onClickVideo(
-                                        playAid,
-                                        playCid,
-                                        playEpid,
-                                        generateEpisodeTitle(ep, seasonViewModel.seasonData!!.title),
-                                        seasonViewModel.lastPlayProgress?.lastTime ?: 0
-                                    )
-
-                                    val partVideoList = episodeList.mapIndexed { index, episode ->
+                                    val ep = playbackTarget.episode
+                                    val partVideoList = playbackTarget.group.mapIndexed { index, episode ->
                                         VideoListPgcEpisode(
                                             aid = episode.aid,
                                             cid = episode.cid,
-                                            epid = episode.id,
+                                            epid = episode.epid ?: episode.id,
                                             seasonId = seasonViewModel.seasonData?.seasonId,
                                             title = seasonViewModel.seasonData!!.title,
                                             partTitle = runCatching {
@@ -597,6 +524,11 @@ fun SeasonInfoScreen(
                                     }
                                     videoInfoRepository.videoList.clear()
                                     videoInfoRepository.videoList.addAll(partVideoList)
+                                    onClickVideo(
+                                        ep.aid, ep.cid, ep.epid ?: ep.id,
+                                        generateEpisodeTitle(ep, seasonData.title),
+                                        if (playbackTarget.resume) progress?.lastTime ?: 0 else 0
+                                    )
                                 }
                             },
                             onClickFollow = onClickFollow,

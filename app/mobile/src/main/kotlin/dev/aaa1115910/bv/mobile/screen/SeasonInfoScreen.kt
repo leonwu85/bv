@@ -151,13 +151,11 @@ fun SeasonInfoScreen(
     val seasonData = seasonViewModel.seasonData
     val allEpisodes = remember(seasonData) { seasonData?.allEpisodes().orEmpty() }
     val lastPlayProgress = seasonViewModel.lastPlayProgress
-    val historyEpisode = remember(allEpisodes, lastPlayProgress) {
-        allEpisodes.findEpisode(lastPlayProgress?.lastEpId)
+    val target = remember(seasonData, lastPlayProgress, seasonViewModel.epId) {
+        seasonData?.playbackTarget(lastPlayProgress?.lastEpId, seasonViewModel.epId)
     }
-    val requestedEpisode = remember(allEpisodes, seasonViewModel.epId) {
-        allEpisodes.findEpisode(seasonViewModel.epId)
-    }
-    val primaryEpisode = historyEpisode ?: requestedEpisode ?: allEpisodes.firstOrNull()
+    val primaryEpisode = target?.episode
+    val historyEpisode = primaryEpisode.takeIf { target?.resume == true }
 
     val appBarTransition by remember(seasonData, listState, appBarThreshold) {
         derivedStateOf {

@@ -37,6 +37,25 @@ data class SeasonDetail(
     val sections: List<Section> = emptyList(),
     var playerIcon: PlayerIcon? = null
 ) {
+    data class PlaybackTarget(val episode: Episode, val group: List<Episode>, val resume: Boolean)
+
+    fun playbackTarget(historyId: Int?, requestedId: Int?): PlaybackTarget? {
+        val groups = (listOf(episodes) + sections.map { it.episodes }).map { group ->
+            // A zero CID can still be resolved by opening the video details by aid.
+            group.filter { it.aid > 0 && it.cid >= 0 }
+        }
+        fun find(id: Int?, resume: Boolean): PlaybackTarget? {
+            if (id == null || id <= 0) return null
+            for (group in groups) {
+                val episode = group.firstOrNull { it.id == id || it.epid == id } ?: continue
+                return PlaybackTarget(episode, group, resume)
+            }
+            return null
+        }
+        return find(historyId, true) ?: find(requestedId, false)
+            ?: groups.firstOrNull { it.isNotEmpty() }?.let { PlaybackTarget(it.first(), it, false) }
+    }
+
     companion object {
         fun fromSeasonData(seasonData: WebSeasonData): SeasonDetail {
             return SeasonDetail(
