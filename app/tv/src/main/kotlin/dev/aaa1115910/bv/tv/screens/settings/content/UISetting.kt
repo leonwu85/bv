@@ -66,6 +66,7 @@ import dev.aaa1115910.bv.tv.util.NavItemConfig
 import dev.aaa1115910.bv.tv.util.parseDrawerItemsOrderToConfig
 import dev.aaa1115910.bv.tv.util.parseNavItemsOrderToConfig
 import dev.aaa1115910.bv.tv.util.parseUgcNavItemsOrderToConfig
+import dev.aaa1115910.bv.tv.render.LocalTvUiDensity
 import dev.aaa1115910.bv.tv.render.TvUiRenderMode
 import dev.aaa1115910.bv.tv.render.TvUiRenderSettings
 import dev.aaa1115910.bv.ui.theme.BVTheme
@@ -91,7 +92,7 @@ fun UISetting(
     var showDynamicPageStyleDialog by remember { mutableStateOf(false) }
     var showDynamicDefaultTabDialog by remember { mutableStateOf(false) }
     var showTvUiRenderModeDialog by remember { mutableStateOf(false) }
-    val density by Prefs.densityFlow.collectAsState(context.resources.displayMetrics.widthPixels / 960f)
+    val density = LocalTvUiDensity.current.preference
     val themeType by Prefs.themeTypeFlow.collectAsState(Prefs.themeType)
     val enableMainUiAnimation by Prefs.enableMainUiAnimationFlow.collectAsState(Prefs.enableMainUiAnimation)
     val collapseVideoInfoRelatedVideos by Prefs.collapseVideoInfoRelatedVideosFlow.collectAsState(
@@ -256,7 +257,7 @@ fun UISetting(
         show = showDensityDialog,
         onHideDialog = { showDensityDialog = false },
         density = density,
-        onDensityChange = { Prefs.density = it }
+        onDensityChange = Prefs::setDensity
     )
 
     ThemeTypeDialog(
@@ -381,9 +382,8 @@ fun UIDensityDialog(
     density: Float,
     onDensityChange: (Float) -> Unit
 ) {
-    val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
-    val defaultDensity by remember { mutableFloatStateOf(context.resources.displayMetrics.widthPixels / 960f) }
+    val defaultDensity = LocalTvUiDensity.current.defaultRenderDensity
 
     LaunchedEffect(show) {
         if (show) focusRequester.requestFocusWithRetry()

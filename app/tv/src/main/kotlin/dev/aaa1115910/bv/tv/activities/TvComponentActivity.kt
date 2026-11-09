@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import dev.aaa1115910.bv.tv.render.ProvideTvUiDensity
 import dev.aaa1115910.bv.tv.render.TV_UI_TARGET_HEIGHT_PX
 import dev.aaa1115910.bv.tv.render.TV_UI_TARGET_WIDTH_PX
 import dev.aaa1115910.bv.tv.render.TvUiRenderPath
@@ -40,6 +41,7 @@ abstract class TvComponentActivity : ComponentActivity() {
 
     fun setContent(content: @Composable () -> Unit) {
         val pipeline = TvUiRenderPipeline.resolve(this)
+        val tvContent: @Composable () -> Unit = { ProvideTvUiDensity(pipeline.uiWidthPx, content) }
         logger.info {
             "TV UI render path=${pipeline.renderPath}, " +
                 "physical=${pipeline.physicalWidthPx}x${pipeline.physicalHeightPx}, " +
@@ -49,15 +51,15 @@ abstract class TvComponentActivity : ComponentActivity() {
             Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
             pipeline.renderPath == TvUiRenderPath.Native
         ) {
-            setNativeComposeContent(content)
+            setNativeComposeContent(tvContent)
             return
         }
 
         uiSurfaceHost = TvUiSurfaceHost(
             activity = this,
             physicalSize = IntSize(pipeline.physicalWidthPx, pipeline.physicalHeightPx),
-            onFallback = { setNativeComposeContent(content) },
-        ).also { it.attach(content) }
+            onFallback = { setNativeComposeContent(tvContent) },
+        ).also { it.attach(tvContent) }
     }
 
     private fun setNativeComposeContent(content: @Composable () -> Unit) {

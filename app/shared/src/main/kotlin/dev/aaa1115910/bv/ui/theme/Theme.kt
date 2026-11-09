@@ -13,10 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.tv.material3.MaterialTheme
@@ -34,9 +31,7 @@ fun BVTheme(
     forceDark: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val context = LocalContext.current
     val activity = LocalActivity.current
-    val fontScale = LocalDensity.current.fontScale
     val view = LocalView.current
 
     val themeType = if (view.isInEditMode) ThemeType.Auto
@@ -82,11 +77,6 @@ fun BVTheme(
         }
     }
 
-    val density = if (view.isInEditMode)
-        LocalDensity.current.density
-    else
-        Prefs.densityFlow.collectAsState(context.resources.displayMetrics.widthPixels / 960f).value
-
     val showFps by remember { mutableStateOf(if (!view.isInEditMode) Prefs.showFps else false) }
 
     MaterialTheme(
@@ -98,8 +88,7 @@ fun BVTheme(
             typography = typographyCommon
         ) {
             CompositionLocalProvider(
-                LocalRippleConfiguration provides null,
-                LocalDensity provides Density(density = density, fontScale = fontScale)
+                LocalRippleConfiguration provides null
             ) {
                 androidx.compose.material3.Surface(color = Color.Transparent) {
                     Surface(

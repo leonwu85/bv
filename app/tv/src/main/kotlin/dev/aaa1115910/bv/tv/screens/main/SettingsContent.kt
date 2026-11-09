@@ -34,6 +34,7 @@ import dev.aaa1115910.bv.tv.activities.settings.SettingsActivity
 import dev.aaa1115910.bv.tv.component.settings.SettingListItem
 import dev.aaa1115910.bv.tv.component.settings.SettingListItemWithDialog
 import dev.aaa1115910.bv.tv.component.settings.SettingSwitchListItem
+import dev.aaa1115910.bv.tv.render.LocalTvUiDensity
 import dev.aaa1115910.bv.tv.screens.settings.SettingsMenuNavItem
 import dev.aaa1115910.bv.tv.screens.settings.content.DrawerNavItemsEditDialog
 import dev.aaa1115910.bv.tv.screens.settings.content.GridColumnsDialog
@@ -54,7 +55,7 @@ fun SettingsContent(
     val currentVersion = remember { "${BuildConfig.VERSION_NAME}.${BuildConfig.BUILD_TYPE}" }
 
     // UI setting states
-    val density by Prefs.densityFlow.collectAsState(context.resources.displayMetrics.widthPixels / 960f)
+    val density = LocalTvUiDensity.current.preference
     val themeType by Prefs.themeTypeFlow.collectAsState(Prefs.themeType)
     var gridColumns by remember { mutableStateOf(Prefs.gridColumns) }
     var defaultResolution by remember { mutableStateOf(Prefs.defaultQuality) }
@@ -227,7 +228,7 @@ fun SettingsContent(
         show = showDensityDialog,
         onHideDialog = { showDensityDialog = false },
         density = density,
-        onDensityChange = { Prefs.density = it }
+        onDensityChange = Prefs::setDensity
     )
     ThemeTypeDialog(
         show = showThemeTypeDialog,

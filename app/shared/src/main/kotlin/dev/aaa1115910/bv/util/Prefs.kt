@@ -49,6 +49,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.runBlocking
 import java.util.Date
@@ -569,10 +570,9 @@ object Prefs {
         }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefPlayerTypeKey, value.ordinal) }
 
-    val densityFlow: Flow<Float> get() = dsm.getPreferenceFlow(PrefKeys.prefDensityRequest)
-    var density: Float
-        get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefDensityRequest).first() }
-        set(value) = runBlocking { dsm.editPreference(PrefKeys.prefDensityKey, value) }
+    val customDensityFlow: Flow<Float?> get() = dsm.preferenceFlow.map { it[PrefKeys.prefDensityKey] }
+
+    fun setDensity(value: Float) = runBlocking { dsm.editPreference(PrefKeys.prefDensityKey, value) }
 
     var accessToken: String
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefAccessTokenRequest).first() }
@@ -1280,12 +1280,6 @@ object PrefKeys {
     val prefBuvidRequest = PreferenceRequest(prefBuvidKey, "")
     val prefBuvid3Request = PreferenceRequest(prefBuvid3Key, "")
     val prefPlayerTypeRequest = PreferenceRequest(prefPlayerTypeKey, PlayerType.Media3.ordinal)
-    val prefDensityRequest =
-        PreferenceRequest(
-            prefDensityKey,
-            runCatching { BVApp.context.resources.displayMetrics.widthPixels / 960f }
-                .getOrDefault(2f)
-        )
     val prefAccessTokenRequest = PreferenceRequest(prefAccessTokenKey, "")
     val prefRefreshTokenRequest = PreferenceRequest(prefRefreshTokenKey, "")
     val prefApiTypeRequest = PreferenceRequest(prefApiTypeKey, 0)
