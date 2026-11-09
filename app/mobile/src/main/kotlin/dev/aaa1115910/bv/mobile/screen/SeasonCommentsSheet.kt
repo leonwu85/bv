@@ -192,6 +192,7 @@ internal fun SeasonCommentsSheet(
                             comments = commentViewModel.comments,
                             vote = commentViewModel.commentVote,
                             commentSort = commentViewModel.commentSort,
+                            hasMore = commentViewModel.hasMoreComments,
                             isLoading = commentViewModel.updatingComments,
                             isRefreshing = commentViewModel.refreshingComments,
                             onLoadMoreComments = {

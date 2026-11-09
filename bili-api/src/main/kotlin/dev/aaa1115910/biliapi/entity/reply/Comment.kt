@@ -2,6 +2,11 @@ package dev.aaa1115910.biliapi.entity.reply
 
 import bilibili.main.community.reply.v1.Content as GrpcContent
 import bilibili.main.community.reply.v1.TranslationSwitch
+import dev.aaa1115910.biliapi.http.entity.reply.CommentData
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.decodeFromJsonElement
 import dev.aaa1115910.biliapi.entity.Picture
 
 data class CommentsData(
@@ -11,24 +16,44 @@ data class CommentsData(
     val vote: CommentVote? = null
 ) {
     companion object {
-        fun fromCommentData(commentData: dev.aaa1115910.biliapi.http.entity.reply.CommentData): CommentsData {
+        private val pinnedReplyJson = Json {
+            ignoreUnknownKeys = true
+            coerceInputValues = true
+        }
+
+        fun fromCommentData(commentData: CommentData): CommentsData {
             val nextOffset = commentData.cursor.paginationReply?.nextOffset
+            val pins = listOfNotNull(commentData.top.upper, commentData.top.admin, commentData.top.vote) +
+                (commentData.topReplies as? JsonArray).orEmpty()
+            val pinnedReplies = pins.mapNotNull { item ->
+                try {
+                    pinnedReplyJson.decodeFromJsonElement<CommentData.Reply>(item)
+                } catch (_: SerializationException) {
+                    null
+                }
+            }
             return CommentsData(
-                comments = commentData.replies.map { Comment.fromReply(it) },
+                comments = (pinnedReplies + commentData.replies).distinctBy { it.rpid }.map(Comment::fromReply),
                 nextPage = CommentPage(
                     nextWebPage = commentData.cursor.paginationReply?.nextOffset ?: ""
                 ),
-                hasNext = commentData.cursor.isEnd.not() && nextOffset != null
+                hasNext = commentData.cursor.isEnd.not() && !nextOffset.isNullOrBlank()
             )
         }
 
         fun fromMainListReply(mainListReply: bilibili.main.community.reply.v1.MainListReply): CommentsData {
             return CommentsData(
-                comments = mainListReply.repliesList.map { Comment.fromReplyInfo(it) },
+                comments = buildList {
+                    if (mainListReply.hasUpTop()) add(mainListReply.upTop)
+                    if (mainListReply.hasAdminTop()) add(mainListReply.adminTop)
+                    if (mainListReply.hasVoteTop()) add(mainListReply.voteTop)
+                    addAll(mainListReply.topRepliesList)
+                    addAll(mainListReply.repliesList)
+                }.distinctBy { it.id }.map(Comment::fromReplyInfo),
                 nextPage = CommentPage(
                     nextAppPage = mainListReply.paginationReply.nextOffset
                 ),
-                hasNext = mainListReply.cursor.isEnd.not(),
+                hasNext = !mainListReply.cursor.isEnd && mainListReply.paginationReply.nextOffset.isNotBlank(),
                 vote = mainListReply
                     .takeIf { it.hasVoteCard() }
                     ?.voteCard

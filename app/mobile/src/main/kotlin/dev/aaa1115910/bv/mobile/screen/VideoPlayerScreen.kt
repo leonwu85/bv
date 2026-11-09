@@ -1426,15 +1426,17 @@ fun VideoPlayerScreen(
                                             vote = commentVideModel.commentVote,
                                             commentSort = commentVideModel.commentSort,
                                             refreshingComments = commentVideModel.refreshingComments,
+                                            hasMore = commentVideModel.hasMoreComments,
+                                            loading = commentVideModel.updatingComments,
                                             onLoadMoreComments = {
-                                                scope.launch(Dispatchers.IO) { commentVideModel.loadMoreComment() }
+                                                scope.launch(Dispatchers.IO) { commentVideModel.loadMoreComment(videoDetailViewModel.videoDetail?.description.orEmpty()) }
                                             },
                                             onRefreshComments = {
-                                                scope.launch(Dispatchers.IO) { commentVideModel.refreshComments() }
+                                                scope.launch(Dispatchers.IO) { commentVideModel.refreshComments(videoDetailViewModel.videoDetail?.description.orEmpty()) }
                                             },
                                             onSwitchCommentSort = {
                                                 scope.launch(Dispatchers.IO) {
-                                                    commentVideModel.switchCommentSort(it)
+                                                    commentVideModel.switchCommentSort(it, videoDetailViewModel.videoDetail?.description.orEmpty())
                                                 }
                                             },
                                             onShowPreviewer = setPreviewerPictures,
@@ -1732,15 +1734,17 @@ fun VideoPlayerScreen(
                                 vote = commentVideModel.commentVote,
                                 commentSort = commentVideModel.commentSort,
                                 refreshingComments = commentVideModel.refreshingComments,
+                                hasMore = commentVideModel.hasMoreComments,
+                                loading = commentVideModel.updatingComments,
                                 onLoadMoreComments = {
-                                    scope.launch(Dispatchers.IO) { commentVideModel.loadMoreComment() }
+                                    scope.launch(Dispatchers.IO) { commentVideModel.loadMoreComment(videoDetailViewModel.videoDetail?.description.orEmpty()) }
                                 },
                                 onRefreshComments = {
-                                    scope.launch(Dispatchers.IO) { commentVideModel.refreshComments() }
+                                    scope.launch(Dispatchers.IO) { commentVideModel.refreshComments(videoDetailViewModel.videoDetail?.description.orEmpty()) }
                                 },
                                 onSwitchCommentSort = {
                                     scope.launch(Dispatchers.IO) {
-                                        commentVideModel.switchCommentSort(it)
+                                        commentVideModel.switchCommentSort(it, videoDetailViewModel.videoDetail?.description.orEmpty())
                                     }
                                 },
                                 onShowPreviewer = setPreviewerPictures,
@@ -4872,6 +4876,8 @@ fun VideoComments(
     vote: CommentVote? = null,
     commentSort: CommentSort,
     refreshingComments: Boolean,
+    hasMore: Boolean,
+    loading: Boolean,
     onLoadMoreComments: () -> Unit,
     onRefreshComments: () -> Unit,
     onSwitchCommentSort: (CommentSort) -> Unit,
@@ -4967,10 +4973,10 @@ fun VideoComments(
                         )
                     }
                 }
-                if (comments.size > visibleComments.size && !refreshingComments) {
+                if (hasMore && !loading && !refreshingComments) {
                     item {
                         TextButton(onClick = onLoadMoreComments, modifier = Modifier.fillMaxWidth()) {
-                            Text("部分评论已过滤 · 继续加载")
+                            Text("加载更多评论")
                         }
                     }
                 }

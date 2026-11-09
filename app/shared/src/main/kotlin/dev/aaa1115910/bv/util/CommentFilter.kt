@@ -3,6 +3,7 @@ package dev.aaa1115910.bv.util
 import androidx.compose.runtime.*
 import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.bv.BVApp
+import kotlinx.coroutines.flow.first
 
 /** Operates on the original text and server mention metadata, never translated content. */
 data class CommentFilter(val pureMention: Boolean = false, val mentionLimit: Int = 0, val copyIntro: Boolean = false) {
@@ -20,6 +21,15 @@ data class CommentFilter(val pureMention: Boolean = false, val mentionLimit: Int
     fun apply(comments: List<Comment>, description: String = ""): List<Comment> = comments
         .filterNot { hides(it, description) }
         .map { if (it.replies.isEmpty()) it else it.copy(replies = apply(it.replies, description)) }
+}
+
+suspend fun currentCommentFilter(): CommentFilter {
+    val prefs = BVApp.dataStoreManager.preferenceFlow.first()
+    return CommentFilter(
+        pureMention = prefs[PrefKeys.commentPureMentionKey] ?: false,
+        mentionLimit = prefs[PrefKeys.commentMentionLimitKey] ?: 0,
+        copyIntro = prefs[PrefKeys.commentCopyIntroKey] ?: false
+    )
 }
 
 @Composable

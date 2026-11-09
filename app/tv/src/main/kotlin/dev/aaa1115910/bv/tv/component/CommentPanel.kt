@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -71,7 +72,10 @@ import coil.request.ImageRequest
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.reply.Comment
-import dev.aaa1115910.biliapi.entity.reply.CommentPage
+import dev.aaa1115910.biliapi.entity.reply.CommentPager
+import dev.aaa1115910.bv.repository.LocalUserBlockRepository
+import dev.aaa1115910.bv.repository.withoutBlockedUsers
+import dev.aaa1115910.bv.util.currentCommentFilter
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
 import dev.aaa1115910.biliapi.entity.video.season.Episode
 import dev.aaa1115910.biliapi.entity.video.season.Section
@@ -124,6 +128,8 @@ fun CommentPanel(
     onEpisodeChange: ((Episode) -> Unit)? = null
 ) {
     val commentRepository: CommentRepository = getKoin().get()
+    val blocks: LocalUserBlockRepository = getKoin().get()
+    val blocked by blocks.blocked.collectAsState()
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
@@ -134,10 +140,12 @@ fun CommentPanel(
     val context = LocalContext.current
 
     val rawComments = remember { mutableStateListOf<Comment>() }
-    val comments by rememberUpdatedState(dev.aaa1115910.bv.util.rememberFilteredComments(rawComments, description))
+    val allowedComments = remember(rawComments.toList(), blocked) { rawComments.withoutBlockedUsers(blocked) }
+    val comments by rememberUpdatedState(dev.aaa1115910.bv.util.rememberFilteredComments(allowedComments, description))
     val translatingCommentIds = remember { mutableStateListOf<Long>() }
     var loading by remember { mutableStateOf(false) }
-    var currentPage by remember { mutableStateOf(CommentPage()) }
+    var pager by remember { mutableStateOf(CommentPager()) }
+    var needsContinue by remember { mutableStateOf(false) }
     var hasNext by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -302,26 +310,26 @@ fun CommentPanel(
 
     // 加载评论。由调用方 LaunchedEffect 直接持有，不再额外启动 composition scope job。
     suspend fun loadComments(reset: Boolean, targetOid: Long) {
-        if (!reset && loading) return
+        if (!reset && (loading || !hasNext)) return
 
         val requestGeneration = commentLoadOwner.claim()
         loading = true
         error = null
         if (reset) {
             rawComments.clear()
-            currentPage = CommentPage()
+            pager = CommentPager()
+            needsContinue = false
             hasNext = true
         }
 
         try {
-            val page = if (reset) CommentPage() else currentPage
-            val data = commentRepository.getComments(
-                id = targetOid,
-                type = type,
-                sort = CommentSort.Hot,
-                page = page,
-                preferApiType = Prefs.apiType
-            )
+            val requestPager = pager
+            val apiType = Prefs.apiType
+            val filter = currentCommentFilter()
+            val visible: (Comment) -> Boolean = { !blocks.isBlocked(it.mid) && !filter.hides(it, description) }
+            val data = requestPager.load(isVisible = visible) { page ->
+                commentRepository.getComments(targetOid, type, CommentSort.Hot, page, apiType)
+            }
 
             currentCoroutineContext().ensureActive()
             if (!commentLoadOwner.owns(requestGeneration)) return
@@ -330,7 +338,7 @@ fun CommentPanel(
                 rawComments.clear()
             }
             rawComments.appendDistinctBy(data.comments) { it.rpid }
-            currentPage = data.nextPage
+            needsContinue = data.hasNext && data.comments.none(visible)
             hasNext = data.hasNext
             loadedCommentOid = targetOid
         } catch (e: CancellationException) {
@@ -459,7 +467,7 @@ fun CommentPanel(
 
     // 懒加载：滚动到底部时加载更多
     LaunchedEffect(show, currentOid, isAtBottom, hasNext, comments.size) {
-        if (show && isAtBottom && hasNext && comments.isNotEmpty()) {
+        if (show && isAtBottom && hasNext && !needsContinue && comments.isNotEmpty()) {
             loadComments(reset = false, targetOid = currentOid)
         }
     }
@@ -520,7 +528,8 @@ fun CommentPanel(
                             loadedCommentOid = null
                             loading = false
                             rawComments.clear()
-                            currentPage = CommentPage()
+                            pager = CommentPager()
+                            needsContinue = false
                             hasNext = true
                             error = null
                                 // 切换剧集后将焦点移回评论列表
@@ -628,41 +637,24 @@ fun CommentPanel(
                         )
 
                         // 评论列表
-                        if (error != null) {
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth()
+                        if (error != null || (comments.isEmpty() && !loading)) {
+                            Column(
+                                modifier = Modifier.weight(1f).fillMaxWidth()
                                     .focusRequester(focusRequester)
-                                    .focusable()
+                                    .then(if (!hasNext && error == null) Modifier.focusable() else Modifier),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
                             ) {
+                                val emptyText = if (rawComments.isEmpty() && !hasNext) "暂无评论" else "本页没有可显示的评论"
                                 Text(
-                                    text = error ?: "加载失败",
-                                    color = Color.Red,
-                                    modifier = Modifier
-                                        .align(Alignment.Center)
-                                        .padding(16.dp)
-                                )
-                            }
-                        } else if (comments.isEmpty() && !loading) {
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth()
-                                    .focusRequester(focusRequester)
-                                    .focusable()
-                            ) {
-                                Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = if (rawComments.isEmpty()) "暂无评论" else "本页评论已过滤",
-                                    color = Color.White.copy(alpha = 0.5f),
+                                    text = error ?: emptyText,
+                                    color = if (error != null) Color.Red else Color.White.copy(alpha = 0.5f),
                                     modifier = Modifier.padding(16.dp)
                                 )
-                                if (rawComments.isNotEmpty() && hasNext) {
+                                if (hasNext) {
                                     androidx.tv.material3.Button(onClick = { scope.launch { loadComments(false, currentOid) } }) {
-                                        Text("加载更多")
+                                        Text(if (error != null) "重试" else "加载更多")
                                     }
-                                }
                                 }
                             }
                         } else {
@@ -694,7 +686,7 @@ fun CommentPanel(
                                                 val isFocusedOnLastComment = focusedCommentIndex == lastCommentIndex
 
                                                 // 只有最后一条评论已经获得焦点时，才阻止焦点继续移出列表
-                                                if (comments.isNotEmpty() && isLastCommentVisible && isFocusedOnLastComment) {
+                                                if (!needsContinue && comments.isNotEmpty() && isLastCommentVisible && isFocusedOnLastComment) {
                                                     true
                                                 } else {
                                                     val currentItemInfo = layoutInfo.visibleItemsInfo
@@ -778,6 +770,14 @@ fun CommentPanel(
                                         horizontalArrangement = Arrangement.Center
                                     ) {
                                         LoadingTip()
+                                    }
+                                }
+                            }
+
+                            if (needsContinue && !loading) {
+                                item {
+                                    androidx.tv.material3.Button(onClick = { scope.launch { loadComments(false, currentOid) } }) {
+                                        Text("继续加载")
                                     }
                                 }
                             }

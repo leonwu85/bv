@@ -60,8 +60,8 @@ class CommentRepository(
                                 CommentSort.HotAndTime -> Mode.DEFAULT
                                 CommentSort.Time -> Mode.MAIN_LIST_TIME
                             }
-                            pagination = feedPagination {
-                                offset = page.nextAppPage
+                            if (page.nextAppPage.isNotEmpty()) {
+                                pagination = feedPagination { offset = page.nextAppPage }
                             }
                         }
                     ) ?: throw IllegalStateException("Reply stub is not initialized")

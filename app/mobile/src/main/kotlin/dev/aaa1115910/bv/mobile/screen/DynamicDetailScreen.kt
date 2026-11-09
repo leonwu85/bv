@@ -377,6 +377,7 @@ fun DynamicDetailMobileContent(
                     comments = dynamicDetailState.comments,
                     vote = dynamicDetailState.commentVote,
                     commentSort = dynamicDetailState.commentSort,
+                    hasMore = dynamicDetailState.hasMoreComments,
                     isLoading = dynamicDetailState.isLoadingComments,
                     isRefreshing = dynamicDetailState.isRefreshingComments,
                     onLoadMoreComments = dynamicDetailState::loadMoreComments,
@@ -574,6 +575,7 @@ fun DynamicDetailScreenPadContent(
                         comments = dynamicDetailState.comments,
                         vote = dynamicDetailState.commentVote,
                         commentSort = dynamicDetailState.commentSort,
+                        hasMore = dynamicDetailState.hasMoreComments,
                         isLoading = dynamicDetailState.isLoadingComments,
                         isRefreshing = dynamicDetailState.isRefreshingComments,
                         onLoadMoreComments = dynamicDetailState::loadMoreComments,
@@ -938,7 +940,9 @@ fun rememberDynamicDetailState(
             dynamicDetailViewModel.loadArticleContent()
             dynamicDetailViewModel.dynamicItem?.let { item ->
                 if (item.commentId > 0L && item.commentType > 0L) {
-                    commentViewModel.setCommentTarget(item.commentId, item.commentType)
+                    withContext(Dispatchers.Main.immediate) {
+                        commentViewModel.setCommentTarget(item.commentId, item.commentType)
+                    }
                     commentViewModel.loadMoreComment()
                 }
             }
@@ -1027,6 +1031,7 @@ private fun CommentPart(
     comments: List<Comment>,
     vote: CommentVote? = null,
     commentSort: CommentSort,
+    hasMore: Boolean,
     isLoading: Boolean,
     isRefreshing: Boolean,
     onLoadMoreComments: () -> Unit,
@@ -1043,6 +1048,7 @@ private fun CommentPart(
         comments = comments,
         vote = vote,
         commentSort = commentSort,
+        hasMore = hasMore,
         isLoading = isLoading,
         isRefreshing = isRefreshing,
         onLoadMoreComments = onLoadMoreComments,

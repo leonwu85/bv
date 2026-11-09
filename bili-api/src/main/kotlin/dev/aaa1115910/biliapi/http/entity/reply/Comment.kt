@@ -19,7 +19,7 @@ data class CommentData(
     val esportsGradeCard: JsonElement? = null,
     val note: Int,
     val replies: List<Reply> = emptyList(),
-    val top: Top,
+    val top: Top = Top(),
     @SerialName("top_replies")
     val topReplies: JsonElement? = null,
     @SerialName("up_selection")

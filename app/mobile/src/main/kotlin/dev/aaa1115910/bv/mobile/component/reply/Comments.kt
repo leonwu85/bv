@@ -48,6 +48,7 @@ fun Comments(
     comments: List<Comment>,
     vote: CommentVote? = null,
     commentSort: CommentSort,
+    hasMore: Boolean,
     isLoading: Boolean,
     isRefreshing: Boolean,
     onLoadMoreComments: () -> Unit,
@@ -145,15 +146,15 @@ fun Comments(
                 }
             }
 
-            if (comments.size > visibleComments.size && !(isLoading || isRefreshing)) {
+            if (hasMore && !(isLoading || isRefreshing)) {
                 item {
                     TextButton(onClick = onLoadMoreComments, modifier = Modifier.fillMaxWidth()) {
-                        Text("部分评论已过滤 · 继续加载")
+                        Text("加载更多评论")
                     }
                 }
             }
 
-            if (comments.isEmpty() && !(isLoading || isRefreshing)) {
+            if (visibleComments.isEmpty() && !hasMore && !(isLoading || isRefreshing)) {
                 item {
                     Box(
                         modifier = Modifier

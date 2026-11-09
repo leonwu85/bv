@@ -13,7 +13,8 @@ import dev.aaa1115910.bv.repository.withoutBlockedUsers
 import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModel
 import dev.aaa1115910.biliapi.entity.reply.Comment
-import dev.aaa1115910.biliapi.entity.reply.CommentPage
+import dev.aaa1115910.biliapi.entity.reply.CommentPager
+import dev.aaa1115910.bv.util.currentCommentFilter
 import dev.aaa1115910.biliapi.entity.reply.CommentReplyPage
 import dev.aaa1115910.biliapi.entity.reply.CommentSort
 import dev.aaa1115910.biliapi.entity.reply.CommentVote
@@ -75,7 +76,7 @@ class CommentViewModel(
     var rpid by mutableLongStateOf(0L)
     var rpCount by mutableIntStateOf(0)
 
-    var nextCommentPage = CommentPage()
+    private var commentPager = CommentPager()
     var nextCommentReplyPage = CommentReplyPage()
 
     var commentSort by mutableStateOf(CommentSort.Hot)
@@ -106,7 +107,7 @@ class CommentViewModel(
         commentId = 0L
         commentType = 0L
         sendingComment = false
-        nextCommentPage = CommentPage()
+        commentPager = CommentPager()
         hasMoreComments = true
         refreshingComments = false
         updatingComments = false
@@ -122,89 +123,62 @@ class CommentViewModel(
         rpCount = 0
     }
 
-    suspend fun loadMoreComment() {
-        val requestVersion = commentTargetVersion
-        if (commentId <= 0L || commentType <= 0L) {
-            logger.warn { "Skip loading comments for invalid target: commentId=$commentId, commentType=$commentType" }
-            withContext(Dispatchers.Main) {
-                if (requestVersion != commentTargetVersion) return@withContext
-                updatingComments = false
-                refreshingComments = false
-            }
-            return
-        }
-        if (updatingComments) return
-        withContext(Dispatchers.Main) {
-            if (requestVersion != commentTargetVersion) return@withContext
-            updatingComments = true
-        }
-        if (!hasMoreComments) {
-            withContext(Dispatchers.Main) {
-                if (requestVersion != commentTargetVersion) return@withContext
-                updatingComments = false
-            }
-            delay(300)
-            withContext(Dispatchers.Main) {
-                if (requestVersion != commentTargetVersion) return@withContext
-                refreshingComments = false
-            }
-            return
-        }
-        logger.fInfo { "Load more comments: [commentId=$commentId, commentType=$commentType, page=$nextCommentPage]" }
-        val isFirstPage = comments.isEmpty()
-        runCatching {
-            val commentsData = commentRepository.getComments(
-                id = commentId,
-                type = commentType,
-                page = nextCommentPage,
-                sort = commentSort,
-                preferApiType = Prefs.apiType
+    suspend fun loadMoreComment(description: String = "") = withContext(Dispatchers.Main.immediate) {
+        if (commentId <= 0 || commentType <= 0 || updatingComments || !hasMoreComments) return@withContext
+        val pager = commentPager
+        val id = commentId
+        val type = commentType
+        val sort = commentSort
+        val apiType = Prefs.apiType
+        updatingComments = true
+        try {
+            val filter = currentCommentFilter()
+            val data = pager.load(
+                isVisible = { !localUserBlocks.isBlocked(it.mid) && !filter.hides(it, description) },
+                fetch = { page ->
+                    withContext(Dispatchers.IO) {
+                        commentRepository.getComments(id, type, sort, page, apiType)
+                    }
+                }
             )
-            withContext(Dispatchers.Main.immediate) {
-                if (requestVersion != commentTargetVersion) return@withContext
-                nextCommentPage = commentsData.nextPage
-                hasMoreComments = commentsData.hasNext
-                if (isFirstPage) commentVote = commentsData.vote
-                comments.addAll(commentsData.comments.withoutBlockedUsers(localUserBlocks.blocked.value))
+            if (commentPager === pager) {
+                hasMoreComments = data.hasNext
+                data.vote?.let { commentVote = it }
+                comments.addAll(data.comments.withoutBlockedUsers(localUserBlocks.blocked.value))
             }
-        }.onFailure {
-            if (it is CancellationException) throw it
-            logger.fException(it) { "Load more comments failed" }
-            withContext(Dispatchers.Main) {
-                if (requestVersion != commentTargetVersion) return@withContext
-                val message = if (it.isExpectedNetworkFailure()) {
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (commentPager === pager) {
+                logger.fException(error) { "Load more comments failed" }
+                val message = if (error.isExpectedNetworkFailure()) {
                     "网络连接失败，请稍后重试"
                 } else {
-                    it.localizedMessage ?: "未知错误"
+                    error.localizedMessage ?: "未知错误"
                 }
                 "加载评论失败：$message".toast(BVApp.context)
             }
-        }
-        withContext(Dispatchers.Main) {
-            if (requestVersion != commentTargetVersion) return@withContext
-            updatingComments = false
-        }
-        delay(300)
-        withContext(Dispatchers.Main) {
-            if (requestVersion != commentTargetVersion) return@withContext
-            refreshingComments = false
+        } finally {
+            if (commentPager === pager) {
+                updatingComments = false
+                refreshingComments = false
+            }
         }
     }
 
-    suspend fun switchCommentSort(newSort: CommentSort) {
-        logger.fInfo { "Switch comment sort to ${newSort.name}" }
+    suspend fun switchCommentSort(newSort: CommentSort, description: String = "") = withContext(Dispatchers.Main.immediate) {
         commentSort = newSort
-        refreshComments()
+        refreshComments(description)
     }
 
-    suspend fun refreshComments() {
-        refreshingComments = true
-        logger.fInfo { "refresh comments" }
-        nextCommentPage = CommentPage()
+    suspend fun refreshComments(description: String = "") = withContext(Dispatchers.Main.immediate) {
+        commentPager = CommentPager()
+        updatingComments = false
+        refreshingComments = commentId > 0 && commentType > 0
         hasMoreComments = true
         comments.clear()
         commentVote = null
-        loadMoreComment()
+        loadMoreComment(description)
     }
 
     suspend fun loadMoreReplies() {
