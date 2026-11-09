@@ -32,6 +32,9 @@ internal object VodCdnUrlSelector {
         "^https?://(?:(?:(?:\\d{1,3}\\.){3}\\d{1,3}|[^/]+\\.mcdn\\.bilivideo\\.(?:com|cn|net))(?::\\d{1,5})?/v\\d/resource)"
     )
 
+    fun isAkamaiUrl(url: String): Boolean =
+        parseUri(url)?.host?.equals(CdnService.Akamai.host, ignoreCase = true) == true
+
     fun select(
         urls: Iterable<String?>,
         cdnService: CdnService,
@@ -50,12 +53,20 @@ internal object VodCdnUrlSelector {
             return VodCdnSelection(candidates.first(), VodCdnSelectionReason.BaseUrl)
         }
 
+        if (cdnService == CdnService.Akamai) {
+            if (isAudio && disableAudioCdn) return select(candidates, CdnService.BackupUrl)
+            val url = candidates.firstOrNull(::isAkamaiUrl) ?: candidates.first()
+            val reason = if (url == candidates.first()) VodCdnSelectionReason.BaseUrl else VodCdnSelectionReason.BackupUrl
+            return VodCdnSelection(url, reason)
+        }
+
         var mcdnTf: String? = null
         var mcdnUpgcxcode: String? = null
         var last = ""
 
         candidates.forEach { url ->
             last = url
+            if (isAkamaiUrl(url)) return VodCdnSelection(url, VodCdnSelectionReason.UnchangedFallback)
 
             if (mirrorRegex.containsMatchIn(url)) {
                 val uri = parseUri(url)

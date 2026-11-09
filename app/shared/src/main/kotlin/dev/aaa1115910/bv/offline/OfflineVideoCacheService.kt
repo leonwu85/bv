@@ -6,6 +6,7 @@ import dev.aaa1115910.biliapi.entity.video.VideoDetail
 import dev.aaa1115910.biliapi.http.entity.video.ClipInfo
 import dev.aaa1115910.biliapi.http.SponsorBlockHttpApi
 import dev.aaa1115910.biliapi.repositories.VideoDetailRepository
+import dev.aaa1115910.bv.util.VodCdnUrlSelector
 import android.net.Uri
 import android.os.Build
 import androidx.compose.runtime.mutableStateListOf
@@ -1597,76 +1598,6 @@ class OfflineVideoCacheService(
         }.getOrDefault(false)
     }
 
-    private fun Iterable<String>.toOfflineDownloadUrls(): List<String> {
-        val rawUrls = map { it.trim() }
-            .filter { it.isNotBlank() }
-            .distinct()
-        val sourceUrls = rawUrls
-            .map { it.toHttpsDownloadUrl() }
-            .distinct()
-        if (sourceUrls.isEmpty()) return emptyList()
-
-        val primaryUrl = sourceUrls.selectOfflineCdnUrl()
-        return (listOf(primaryUrl) + sourceUrls + rawUrls)
-            .filter { it.isNotBlank() }
-            .distinct()
-    }
-
-    private fun List<String>.selectOfflineCdnUrl(): String {
-        var mcdnTf: String? = null
-        var mcdnUpgcxcode: String? = null
-        var last = first()
-
-        for (url in this) {
-            last = url
-            if (OFFLINE_MIRROR_CDN_REGEX.containsMatchIn(url)) {
-                val uri = Uri.parse(url)
-                if (uri.getQueryParameter("os") == "mcdn") {
-                    mcdnUpgcxcode = url
-                } else {
-                    return uri.toOfflineAliCdnUrl()
-                }
-            }
-            if (OFFLINE_MCDN_TF_REGEX.containsMatchIn(url)) {
-                mcdnTf = url
-                continue
-            }
-            if (url.contains("/upgcxcode/")) {
-                mcdnUpgcxcode = url
-                continue
-            }
-            if (url.contains("szbdyd.com")) {
-                val uri = Uri.parse(url)
-                val host = uri.getQueryParameter("xy_usource") ?: OFFLINE_DOWNLOAD_CDN_HOST
-                return uri.buildUpon()
-                    .scheme("https")
-                    .authority(host)
-                    .build()
-                    .toString()
-            }
-        }
-
-        return when {
-            mcdnUpgcxcode != null -> Uri.parse(mcdnUpgcxcode).toOfflineAliCdnUrl()
-            mcdnTf != null -> Uri.Builder()
-                .scheme("https")
-                .authority(OFFLINE_DOWNLOAD_PROXY_TF_HOST)
-                .appendQueryParameter("url", mcdnTf)
-                .build()
-                .toString()
-            else -> last
-        }
-    }
-
-    private fun String.toHttpsDownloadUrl(): String =
-        if (startsWith("http://")) "https://${removePrefix("http://")}" else this
-
-    private fun Uri.toOfflineAliCdnUrl(): String = buildUpon()
-        .scheme("https")
-        .authority(OFFLINE_DOWNLOAD_CDN_HOST)
-        .build()
-        .toString()
-
     private fun String.isTextResponse(): Boolean {
         val normalized = lowercase()
         return normalized.contains("text/html") ||
@@ -1683,8 +1614,6 @@ class OfflineVideoCacheService(
         private const val DANMAKU_FILE_NAME = "danmaku.json"
         private const val COVER_FILE_NAME = "cover.img"
         private const val UP_FACE_FILE_NAME = "up_face.img"
-        private const val OFFLINE_DOWNLOAD_CDN_HOST = "upos-sz-mirrorali.bilivideo.com"
-        private const val OFFLINE_DOWNLOAD_PROXY_TF_HOST = "proxy-tf-all-ws.bilivideo.com"
         private const val DOWNLOAD_USER_AGENT = "Dart/3.6 (dart:io)"
         private const val REFERER = "https://www.bilibili.com/"
         private const val PROGRESS_UPDATE_INTERVAL_MS = 500L
@@ -1696,11 +1625,76 @@ class OfflineVideoCacheService(
         private const val MIN_MEDIA_FILE_BYTES = 1024L
         private const val MP4_BOX_HEADER_SIZE = 8
         private val VALID_MP4_BOX_TYPES = setOf("ftyp", "styp", "sidx", "moof")
-        private val OFFLINE_MIRROR_CDN_REGEX = Regex(
-            """^https?://(?:upos-\w+-(?!302)\w+|(?:upos|proxy)-tf-[^/]+)\.(?:bilivideo|akamaized)\.(?:com|net)/upgcxcode"""
-        )
-        private val OFFLINE_MCDN_TF_REGEX = Regex(
-            """^https?://(?:(?:(?:\d{1,3}\.){3}\d{1,3}|[^/]+\.mcdn\.bilivideo\.(?:com|cn|net))(?::\d{1,5})?/v\d/resource)"""
-        )
     }
 }
+
+internal fun Iterable<String>.toOfflineDownloadUrls(): List<String> {
+    val original = map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+    if (original.isEmpty()) return emptyList()
+    val https = original.map {
+        if (it.startsWith("http://") && !VodCdnUrlSelector.isAkamaiUrl(it)) "https://" + it.removePrefix("http://") else it
+    }.distinct()
+    return (listOf(https.selectOfflineCdnUrl()) + https + original).distinct()
+}
+
+private fun List<String>.selectOfflineCdnUrl(): String {
+    var mcdnTf: String? = null
+    var mcdnUpgcxcode: String? = null
+    var last = first()
+
+    for (url in this) {
+        last = url
+        if (VodCdnUrlSelector.isAkamaiUrl(url)) return url
+        if (OFFLINE_MIRROR_CDN_REGEX.containsMatchIn(url)) {
+            val uri = Uri.parse(url)
+            if (uri.getQueryParameter("os") == "mcdn") {
+                mcdnUpgcxcode = url
+            } else {
+                return uri.toOfflineAliCdnUrl()
+            }
+        }
+        if (OFFLINE_MCDN_TF_REGEX.containsMatchIn(url)) {
+            mcdnTf = url
+            continue
+        }
+        if (url.contains("/upgcxcode/")) {
+            mcdnUpgcxcode = url
+            continue
+        }
+        if (url.contains("szbdyd.com")) {
+            val uri = Uri.parse(url)
+            val host = uri.getQueryParameter("xy_usource") ?: OFFLINE_DOWNLOAD_CDN_HOST
+            return uri.buildUpon()
+                .scheme("https")
+                .authority(host)
+                .build()
+                .toString()
+        }
+    }
+
+    return when {
+        mcdnUpgcxcode != null -> Uri.parse(mcdnUpgcxcode).toOfflineAliCdnUrl()
+        mcdnTf != null -> Uri.Builder()
+            .scheme("https")
+            .authority(OFFLINE_DOWNLOAD_PROXY_TF_HOST)
+            .appendQueryParameter("url", mcdnTf)
+            .build()
+            .toString()
+        else -> last
+    }
+}
+
+private fun Uri.toOfflineAliCdnUrl(): String = buildUpon()
+    .scheme("https")
+    .authority(OFFLINE_DOWNLOAD_CDN_HOST)
+    .build()
+    .toString()
+
+private const val OFFLINE_DOWNLOAD_CDN_HOST = "upos-sz-mirrorali.bilivideo.com"
+private const val OFFLINE_DOWNLOAD_PROXY_TF_HOST = "proxy-tf-all-ws.bilivideo.com"
+private val OFFLINE_MIRROR_CDN_REGEX = Regex(
+    """^https?://(?:upos-\w+-(?!302)\w+|(?:upos|proxy)-tf-[^/]+)\.(?:bilivideo|akamaized)\.(?:com|net)/upgcxcode"""
+)
+private val OFFLINE_MCDN_TF_REGEX = Regex(
+    """^https?://(?:(?:(?:\d{1,3}\.){3}\d{1,3}|[^/]+\.mcdn\.bilivideo\.(?:com|cn|net))(?::\d{1,5})?/v\d/resource)"""
+)
