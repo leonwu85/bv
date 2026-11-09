@@ -167,7 +167,7 @@ fun ControllerVideoInfo(
                 upName = videoPlayerVideoInfoData.upName,
                 upAvatar = videoPlayerVideoInfoData.upAvatar,
                 pubTime = videoPlayerVideoInfoData.pubTime,
-                isPlaying = videoPlayerStateData.isPlaying || videoPlayerStateData.isBuffering,
+                isPlaying = videoPlayerStateData.canPause,
                 isLoop = videoPlayerConfigData.isLoop,
                 showDanmaku = videoPlayerConfigData.showDanmaku,
                 onPlay = onPlay,

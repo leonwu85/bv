@@ -68,6 +68,7 @@ import dev.aaa1115910.bv.player.util.DanmakuMaskFinder
 import dev.aaa1115910.bv.player.util.DanmakuSpeedPolicy
 import dev.aaa1115910.bv.player.util.danmakuMaskBitmap
 import dev.aaa1115910.bv.player.util.renderMaskFrameToBitmap
+import dev.aaa1115910.bv.player.util.VodRebufferingTracker
 import dev.aaa1115910.bv.util.countDownTimer
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
@@ -129,7 +130,7 @@ fun BvPlayer(
     onExitFullScreen: () -> Unit,
     onBack: () -> Unit,
     onClearBackToHistoryData: () -> Unit,
-    onReloadDanmakuAfterSeek: (Long, Boolean) -> Unit = { _, _ -> },
+    onReloadDanmakuAfterSeek: (Long) -> Unit = {},
     onEnsureDanmakuCoverage: (Long) -> Unit = {},
     onRequestManualPlayback: () -> Boolean = { false },
     onChangeResolution: (Resolution, afterChange: suspend () -> Unit) -> Unit,
@@ -229,6 +230,9 @@ fun BvPlayer(
     var lastHeartbeatPosition by remember { mutableLongStateOf(0L) }
     var playbackStateCid by remember { mutableLongStateOf(videoPlayerConfigData.currentVideoCid) }
     var hasStartedPlaybackOnce by remember { mutableStateOf(false) }
+    val rebufferingTracker = remember(videoPlayer, videoPlayerConfigData.currentVideoCid) {
+        VodRebufferingTracker()
+    }
     // 最近一次 seek 的时间：seek 后紧跟的缓冲不算“再次缓冲”
     var lastSeekRequestAtMs by remember { mutableLongStateOf(0L) }
     var pendingDanmakuPlaySyncPosition by remember { mutableLongStateOf(-1L) }
@@ -257,7 +261,7 @@ fun BvPlayer(
 
 
     fun updatePlaybackProgress(position: Long, durationMs: Long, buffered: Int) {
-        if (isBuffering && (videoPlayer.isPlaying || position > currentPosition)) {
+        if (isBuffering && videoPlayer.isPlaying) {
             isBuffering = false
         }
         currentPosition = position
@@ -496,9 +500,7 @@ fun BvPlayer(
             updateVideoAspectRatio()
 
 
-            if (videoPlayerConfigData.autoPlay || isLive || hasStartedPlaybackOnce) {
-                videoPlayer.start()
-            }
+            if (isLive) videoPlayer.start()
 
             //reset default play speed
             logger.info { "Reset default play speed: ${videoPlayerConfigData.currentVideoSpeed}" }
@@ -516,6 +518,7 @@ fun BvPlayer(
 
         override fun onPlay() {
             logger.info { "onPlay" }
+            rebufferingTracker.onPlay(videoPlayer.currentPosition)
             val syncPosition = pendingDanmakuPlaySyncPosition.takeIf { it >= 0L }
                 ?: if (!hasStartedPlaybackOnce) {
                     if (initialPlaybackPositionMs > 0L) {
@@ -552,22 +555,27 @@ fun BvPlayer(
                 isBuffering = false
                 return
             }
+            rebufferingTracker.onPause()
             mDanmakuPlayer?.pause()
             isPlaying = false
+            isBuffering = false
             sendHeartbeat()
         }
 
         override fun onBuffering() {
             logger.info { "onBuffering" }
+            val position = videoPlayer.currentPosition.coerceAtLeast(0L)
             val shouldReportRebuffering =
-                hasStartedPlaybackOnce &&
+                rebufferingTracker.onBuffering(position) &&
+                    hasStartedPlaybackOnce &&
                     !isBuffering &&
                     !isLive &&
                     SystemClock.elapsedRealtime() - lastSeekRequestAtMs > SEEK_REBUFFERING_GRACE_MS
             isBuffering = true
+            isPlaying = false
             mDanmakuPlayer?.pause()
             if (shouldReportRebuffering) {
-                onRebufferingStarted(videoPlayer.currentPosition.coerceAtLeast(0L))
+                onRebufferingStarted(position)
             }
         }
 
@@ -610,14 +618,14 @@ fun BvPlayer(
             lastSeekRequestAtMs = SystemClock.elapsedRealtime()
             syncProcessedSponsorSegmentsForPosition(currentPosition)
             if (!isPlaying) pendingDanmakuPlaySyncPosition = currentPosition
-            onReloadDanmakuAfterSeek(currentPosition, isPlaying)
+            onReloadDanmakuAfterSeek(currentPosition)
         }
 
         override fun onSeekForward(seekForwardIncrementMs: Long) {
             lastSeekRequestAtMs = SystemClock.elapsedRealtime()
             syncProcessedSponsorSegmentsForPosition(currentPosition)
             if (!isPlaying) pendingDanmakuPlaySyncPosition = currentPosition
-            onReloadDanmakuAfterSeek(currentPosition, isPlaying)
+            onReloadDanmakuAfterSeek(currentPosition)
         }
 
     }
@@ -823,7 +831,7 @@ fun BvPlayer(
                 lastSeekRequestAtMs = SystemClock.elapsedRealtime()
                 syncProcessedSponsorSegmentsForPosition(position)
                 if (!isPlaying) pendingDanmakuPlaySyncPosition = position
-                onReloadDanmakuAfterSeek(position, isPlaying)
+                onReloadDanmakuAfterSeek(position)
                 videoPlayer.seekTo(position)
             },
             onChangeResolution = {

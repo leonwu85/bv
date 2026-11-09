@@ -112,9 +112,10 @@ class PlayerMediaSession(
                 if (engine.isPlaying) engine.speed else 0f,
                 SystemClock.elapsedRealtime()
             ).build())
-        val nextNotificationKey = "$nextMetadataKey:${engine.isPlaying}:$actions"
+        val canPause = engine.isPlaying || engine.isBuffering
+        val nextNotificationKey = "$nextMetadataKey:$canPause:$actions"
         if (notificationKey != nextNotificationKey) {
-            postNotification(engine.isPlaying)
+            postNotification(canPause)
             notificationKey = nextNotificationKey
         }
     }
@@ -126,7 +127,7 @@ class PlayerMediaSession(
         )).build()
 
     @android.annotation.SuppressLint("MissingPermission")
-    private fun postNotification(playing: Boolean) {
+    private fun postNotification(canPause: Boolean) {
         // MediaStyle notifications with a media session are exempt from POST_NOTIFICATIONS.
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(context, "bv-playback")
             else Notification.Builder(context)
@@ -135,14 +136,14 @@ class PlayerMediaSession(
             .setContentText(player.upName)
             .setOnlyAlertOnce(true)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
-            .setOngoing(playing)
+            .setOngoing(canPause)
         var count = 0
         if (!player.isLive) {
             builder.addAction(if (player.hasMediaPlaylistNeighbor(-1)) action(3, "上一集", android.R.drawable.ic_media_previous)
                 else action(5, "后退 10 秒", android.R.drawable.ic_media_rew))
             count++
         }
-        builder.addAction(if (playing) action(2, "暂停", android.R.drawable.ic_media_pause)
+        builder.addAction(if (canPause) action(2, "暂停", android.R.drawable.ic_media_pause)
             else action(1, "播放", android.R.drawable.ic_media_play))
         count++
         if (!player.isLive) {

@@ -108,7 +108,7 @@ fun FullscreenControllers(
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .noRippleClickable { },
-            isPlaying = videoPlayerStateData.isPlaying,
+            playerState = videoPlayerStateData,
             currentTime = videoPlayerSeekData.position,
             totalTime = videoPlayerSeekData.duration,
             bufferedSeekPosition = videoPlayerSeekData.bufferedPercentage,
@@ -244,7 +244,7 @@ private fun dev.aaa1115910.bv.player.entity.VideoPlayerVideoInfoData.displayTitl
 @Composable
 private fun BottomControllers(
     modifier: Modifier = Modifier,
-    isPlaying: Boolean,
+    playerState: VideoPlayerStateData,
     currentTime: Long,
     totalTime: Long,
     bufferedSeekPosition: Int,
@@ -273,7 +273,7 @@ private fun BottomControllers(
                     duration = totalTime,
                     position = currentTime,
                     bufferedPercentage = bufferedSeekPosition,
-                    playing = isPlaying,
+                    playing = playerState.isPlaying,
                     onPositionChange = { newPosition, isPressing ->
                         if (!isPressing) onSeekToPosition(newPosition)
                     }
@@ -304,9 +304,9 @@ private fun BottomControllers(
                                     modifier = Modifier
                                         .width(80.dp)
                                         .height(48.dp),
-                                    onClick = if (isPlaying) onPause else onPlay,
-                                    shape = if (isPlaying) MaterialTheme.shapes.medium else MaterialTheme.shapes.extraLarge,
-                                    colors = if (isPlaying) {
+                                    onClick = if (playerState.canPause) onPause else onPlay,
+                                    shape = if (playerState.canPause) MaterialTheme.shapes.medium else MaterialTheme.shapes.extraLarge,
+                                    colors = if (playerState.canPause) {
                                         iconButtonColors(
                                             containerColor = Color.Black.copy(0.6f),
                                             contentColor = Color.White
@@ -318,7 +318,7 @@ private fun BottomControllers(
                                         )
                                     }
                                 ) {
-                                    if (isPlaying) {
+                                    if (playerState.canPause) {
                                         Icon(
                                             imageVector = Icons.Rounded.Pause,
                                             contentDescription = null,

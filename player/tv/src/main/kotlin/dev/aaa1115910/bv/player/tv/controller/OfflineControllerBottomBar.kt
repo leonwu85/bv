@@ -339,7 +339,7 @@ fun BoxScope.OfflineControllerBottomBar(
                                 Key.DirectionLeft -> onSeekBack()
                                 Key.DirectionRight -> onSeekForward()
                                 Key.Enter, Key.DirectionCenter -> {
-                                    if (playerState.isPlaying) onPause() else onPlay()
+                                    if (playerState.canPause) onPause() else onPlay()
                                 }
                                 else -> return@onPreviewKeyEvent false
                             }

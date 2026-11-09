@@ -187,12 +187,12 @@ private fun BottomControllers(
                             start.linkTo(parent.start)
                             bottom.linkTo(parent.bottom)
                         },
-                    onClick = { if (videoPlayerStateData.isPlaying) onPause() else onPlay() },
+                    onClick = { if (videoPlayerStateData.canPause) onPause() else onPlay() },
                     colors = IconButtonDefaults.iconButtonColors(
                         contentColor = Color.White
                     )
                 ) {
-                    if (videoPlayerStateData.isPlaying) {
+                    if (videoPlayerStateData.canPause) {
                         Icon(
                             imageVector = Icons.Rounded.Pause,
                             contentDescription = null,

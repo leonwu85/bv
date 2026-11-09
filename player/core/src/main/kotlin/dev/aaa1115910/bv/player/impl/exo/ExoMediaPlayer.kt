@@ -325,7 +325,7 @@ class ExoMediaPlayer(
     override fun onPlaybackStateChanged(playbackState: Int) {
         when (playbackState) {
             Player.STATE_IDLE -> mPlayerEventListener?.onIdle()
-            Player.STATE_BUFFERING -> mPlayerEventListener?.onBuffering()
+            Player.STATE_BUFFERING -> if (isBuffering) mPlayerEventListener?.onBuffering()
             Player.STATE_READY -> {
                 mPlayerEventListener?.onReady()
                 dispatchVideoFrameRate(mPlayer?.videoFormat?.frameRate)
@@ -339,6 +339,12 @@ class ExoMediaPlayer(
         dispatchVideoFrameRate(mPlayer?.videoFormat?.frameRate)
     }
 
+    override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+        if (mPlayer?.playbackState == Player.STATE_BUFFERING) {
+            if (playWhenReady) mPlayerEventListener?.onBuffering() else mPlayerEventListener?.onPause()
+        }
+    }
+
     override fun onIsPlayingChanged(isPlaying: Boolean) {
         if (isPlaying) {
             mPlayerEventListener?.onPlay()
@@ -346,7 +352,7 @@ class ExoMediaPlayer(
             progressHandler.removeCallbacks(progressUpdateRunnable)
             progressHandler.post(progressUpdateRunnable)
         } else {
-            mPlayerEventListener?.onPause()
+            if (!isBuffering) mPlayerEventListener?.onPause()
             // 停止进度更新
             progressHandler.removeCallbacks(progressUpdateRunnable)
             dispatchProgress()

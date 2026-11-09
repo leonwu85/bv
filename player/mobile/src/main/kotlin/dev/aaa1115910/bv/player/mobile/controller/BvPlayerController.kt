@@ -438,8 +438,7 @@ fun BvPlayerControllerVideoContent(
             !videoPlayerStateData.isError
 
     //在手势触发的事件中，直接读取 isPlaying currentTime 参数都只会读取到错误的值，原因未知
-    var isPlaying by remember { mutableStateOf(videoPlayerStateData.isPlaying) }
-    LaunchedEffect(videoPlayerStateData.isPlaying) { isPlaying = videoPlayerStateData.isPlaying }
+    val canPause by rememberUpdatedState(videoPlayerStateData.canPause)
     var currentTime by remember { mutableStateOf(videoPlayerSeekData.position) }
     LaunchedEffect(videoPlayerSeekData.position) { currentTime = videoPlayerSeekData.position }
 
@@ -489,9 +488,9 @@ fun BvPlayerControllerVideoContent(
     val onDoubleTap: () -> Unit = {
         Log.i(
             "BvPlayerController",
-            "Screen double tap, isPlaying: $isPlaying"
+            "Screen double tap, canPause: $canPause"
         )
-        if (isPlaying) onPause() else onPlay()
+        if (canPause) onPause() else onPlay()
     }
 
     val onHorizontalDrag: (Float) -> Unit = { move ->

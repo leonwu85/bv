@@ -702,6 +702,7 @@ class VideoPlayerV3ViewModel(
     private var vodLoadJob: Job? = null
     private var vodPlayUrlRefreshToken by mutableLongStateOf(0L)
     private var vodPlaybackSessionToken by mutableLongStateOf(0L)
+    private var preparedVodSessionToken: Long? = null
     private var pendingVodPlaybackSource: PendingVodPlaybackSource? = null
     private var manualVodPlaybackRequested = false
     var resolvedVodStartPositionMs by mutableLongStateOf(0L)
@@ -1888,6 +1889,9 @@ class VideoPlayerV3ViewModel(
         if (!isVodPlaybackSessionActive(playbackSource.playbackSessionToken)) return
 
         val player = videoPlayer ?: return
+        // Initial and manual loads request playback. A refresh of the same session preserves pause.
+        val shouldPlay = startWhenReady || preparedVodSessionToken != playbackSource.playbackSessionToken ||
+            player.isPlaying || player.isBuffering
         vodSourceTransitionPending = true
         logger.info { "Video url: ${playbackSource.videoUrl}" }
         logger.info { "Audio url: ${playbackSource.audioUrl}" }
@@ -1901,10 +1905,9 @@ class VideoPlayerV3ViewModel(
         }
 
         player.prepare()
-        if (startWhenReady) {
-            player.start()
-        }
-        showBuffering = true
+        preparedVodSessionToken = playbackSource.playbackSessionToken
+        if (shouldPlay) player.start() else player.pause()
+        showBuffering = shouldPlay
     }
 
     private suspend fun updateViewPoints(
@@ -2846,10 +2849,7 @@ class VideoPlayerV3ViewModel(
             }
 
             pendingVodPlaybackSource = null
-            applyVodPlaybackSource(
-                playbackSource = playbackSource,
-                startWhenReady = !settings.autoPlay && manualVodPlaybackRequested,
-            )
+            applyVodPlaybackSource(playbackSource)
         }
 
         if (playUrlExpiresAt > 0L) {
@@ -3339,7 +3339,12 @@ class VideoPlayerV3ViewModel(
         trimLoadedDanmakuIds(this)
     }
 
-    fun reloadDanmakuAfterSeek(positionMs: Long, shouldPlay: Boolean) {
+    private fun DanmakuPlayer.syncToVideo(positionMs: Long) {
+        seekTo(positionMs)
+        if (videoPlayer?.isPlaying == true) start() else pause()
+    }
+
+    fun reloadDanmakuAfterSeek(positionMs: Long) {
         if (isLive || currentCid <= 0L) return
 
         val durationMs = playData?.timeLength
@@ -3368,12 +3373,7 @@ class VideoPlayerV3ViewModel(
                     reuseSegmentCache = true
                 )
                 withContext(Dispatchers.Main) {
-                    danmakuPlayer?.seekTo(positionMs)
-                    if (shouldPlay || videoPlayer?.isPlaying == true) {
-                        danmakuPlayer?.start()
-                    } else {
-                        danmakuPlayer?.pause()
-                    }
+                    danmakuPlayer?.syncToVideo(positionMs)
                 }
             }.onFailure {
                 if (it !is kotlinx.coroutines.CancellationException) {
@@ -3384,7 +3384,7 @@ class VideoPlayerV3ViewModel(
         }
     }
 
-    fun resyncDanmakuAfterPlayerBound(positionMs: Long, shouldPlay: Boolean) {
+    fun resyncDanmakuAfterPlayerBound(positionMs: Long) {
         if (isLive) return
 
         viewModelScope.launch(Dispatchers.Main.immediate) {
@@ -3404,14 +3404,9 @@ class VideoPlayerV3ViewModel(
                 } else {
                     positionMs.coerceAtLeast(0L)
                 }
-                player.seekTo(safePosition)
-                if (shouldPlay) {
-                    player.start()
-                } else {
-                    player.pause()
-                }
+                player.syncToVideo(safePosition)
                 logger.info {
-                    "Resynced danmaku after player bound, retained=${retainedItems.size}, positionMs=$safePosition, shouldPlay=$shouldPlay"
+                    "Resynced danmaku after player bound, retained=${retainedItems.size}, positionMs=$safePosition"
                 }
             }
         }
@@ -4098,10 +4093,7 @@ class VideoPlayerV3ViewModel(
             val playbackPositionMs = videoPlayer?.currentPosition
                 ?.takeIf { it > 0L }
                 ?: fallbackPositionMs
-            danmakuPlayer?.seekTo(playbackPositionMs)
-            if (videoPlayer?.isPlaying == true) {
-                danmakuPlayer?.start()
-            }
+            danmakuPlayer?.syncToVideo(playbackPositionMs)
             logger.info {
                 "Synced danmaku after initial data, positionMs=$playbackPositionMs, fallbackPositionMs=$fallbackPositionMs"
             }
@@ -5121,7 +5113,7 @@ class VideoPlayerV3ViewModel(
                 return
             }
             player.start()
-            if (isLive) resumeLiveDanmakuIfNeeded() else danmakuPlayer?.start()
+            if (isLive) resumeLiveDanmakuIfNeeded()
         } else {
             player.pause()
             if (isLive) stopLiveDanmaku() else danmakuPlayer?.pause()
@@ -5132,9 +5124,8 @@ class VideoPlayerV3ViewModel(
         val player = videoPlayer ?: return
         if (isLive || !player.isSeekable) return
         val position = boundedMediaSeek(positionMs, player.duration)
-        val wasPlaying = player.isPlaying
         player.seekTo(position)
-        reloadDanmakuAfterSeek(position, wasPlaying)
+        reloadDanmakuAfterSeek(position)
     }
 
     fun seekByExternalControls(offsetMs: Long) {

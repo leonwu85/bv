@@ -40,10 +40,12 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import androidx.tv.material3.darkColorScheme
+import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerPaymentData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
 import dev.aaa1115910.bv.player.tv.theme.PlayerColors
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import qrcode.QRCode
 import qrcode.color.DefaultColorFunction
@@ -75,11 +77,13 @@ fun PlayStateTips(
             }
         }
         if (videoPlayerStateData.isBuffering && !videoPlayerStateData.isError) {
-            BufferingTip(
-                modifier = Modifier
-                    .align(Alignment.Center),
-                speed = ""
-            )
+            val isLive = LocalVideoPlayerConfigData.current.isLive
+            var showTip by remember(isLive) { mutableStateOf(isLive) }
+            if (!isLive) LaunchedEffect(Unit) {
+                delay(350)
+                showTip = true
+            }
+            if (showTip) BufferingTip(modifier = Modifier.align(Alignment.Center), speed = "")
         }
         if (videoPlayerStateData.isError) {
             PlayErrorTip(

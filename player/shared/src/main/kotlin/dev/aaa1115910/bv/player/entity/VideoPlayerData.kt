@@ -113,7 +113,9 @@ data class VideoPlayerStateData(
     val exception: Exception? = null,
     val showBackToHistory: Boolean = false,
     val hasStartedPlaybackOnce: Boolean = false,
-)
+) {
+    val canPause: Boolean get() = isPlaying || isBuffering
+}
 
 data class VideoPlayerConfigData(
     val availableResolutions: List<Resolution> = emptyList(),

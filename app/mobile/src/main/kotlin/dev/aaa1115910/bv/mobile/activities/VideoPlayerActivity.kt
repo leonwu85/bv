@@ -510,10 +510,10 @@ class VideoPlayerActivity : ComponentActivity() {
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun buildPictureInPicturePlaybackAction(): RemoteAction {
-        val isPlaying = playerViewModel.videoPlayer?.isPlaying == true
-        val control = if (isPlaying) PIP_CONTROL_PAUSE else PIP_CONTROL_PLAY
-        val label = if (isPlaying) "暂停" else "播放"
-        val iconResource = if (isPlaying) {
+        val canPause = playerViewModel.videoPlayer?.let { it.isPlaying || it.isBuffering } == true
+        val control = if (canPause) PIP_CONTROL_PAUSE else PIP_CONTROL_PLAY
+        val label = if (canPause) "暂停" else "播放"
+        val iconResource = if (canPause) {
             android.R.drawable.ic_media_pause
         } else {
             android.R.drawable.ic_media_play

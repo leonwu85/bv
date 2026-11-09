@@ -223,8 +223,12 @@ class MpvMediaPlayer(
     }
 
     override fun start() {
+        val wasRequested = playWhenReady
         playWhenReady = true
-        if (!mediaLoaded) return
+        if (!mediaLoaded) {
+            if (!wasRequested && mediaLoading) dispatchBuffering()
+            return
+        }
         runMpv("start") {
             setPropertyBoolean("pause", false)
         }
@@ -232,11 +236,13 @@ class MpvMediaPlayer(
     }
 
     override fun pause() {
+        val wasLoading = playWhenReady && !mediaLoaded && loadRequested
         playWhenReady = false
         runMpv("pause") {
             setPropertyBoolean("pause", true)
         }
         updatePlayingState(false)
+        if (wasLoading) mPlayerEventListener?.onPause()
     }
 
     override fun stop() {
@@ -264,10 +270,10 @@ class MpvMediaPlayer(
     }
 
     override val isPlaying: Boolean
-        get() = _isPlaying
+        get() = _isPlaying && !pausedForCache
 
     override val isBuffering: Boolean
-        get() = _isPlaying && pausedForCache
+        get() = playWhenReady && (mediaLoading || (_isPlaying && pausedForCache))
 
     override val isSeekable: Boolean
         get() = _isSeekable
@@ -931,7 +937,7 @@ class MpvMediaPlayer(
         awaitingStartFile = false
         endDispatchedForCurrentMedia = false
         eofReachedForCurrentMedia = false
-        dispatchBuffering()
+        if (playWhenReady) dispatchBuffering()
     }
 
     private fun handleFileLoaded() {
@@ -1041,13 +1047,12 @@ class MpvMediaPlayer(
     private fun handlePropertyBoolean(property: String, value: Boolean) {
         if (released) return
         when (property) {
-            "pause" -> updatePlayingState(!value && mediaLoaded)
+            "pause" -> updatePlayingState(!value && playWhenReady && mediaLoaded)
             "paused-for-cache" -> {
+                if (pausedForCache == value) return
                 pausedForCache = value
-                if (value) {
-                    dispatchBuffering()
-                } else if (_isPlaying) {
-                    dispatchPlay()
+                if (_isPlaying) {
+                    if (value) dispatchBuffering() else dispatchPlay()
                 }
             }
             "eof-reached" -> if (value) {
@@ -1122,7 +1127,7 @@ class MpvMediaPlayer(
         if (_isPlaying == isPlaying) return
         _isPlaying = isPlaying
         if (isPlaying) {
-            dispatchPlay()
+            if (pausedForCache) dispatchBuffering() else dispatchPlay()
             startProgressUpdates()
         } else {
             stopProgressUpdates()
@@ -1136,7 +1141,7 @@ class MpvMediaPlayer(
      * 连续 [OVERLOAD_SAMPLES_REQUIRED] 个窗口丢帧占比 ≥ 50% 视为解码过载，上报一次供上层建议降低清晰度。
      */
     private fun sampleFrameDrops() {
-        if (!_isPlaying || !mediaLoaded || released) {
+        if (!isPlaying || !mediaLoaded || released) {
             frameDropBaselineValid = false
             overloadedSampleCount = 0
             return

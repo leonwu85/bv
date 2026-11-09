@@ -570,7 +570,7 @@ fun VideoPlayerController(
                             showInfo = !showInfo
                             return@onPreviewKeyEvent true
                         }
-                        if (videoPlayer.isPlaying)
+                        if (videoPlayerStateData.canPause)
                             onPause()
                         else if (videoPlayer.currentPosition >= videoPlayer.duration) {
                             goTime = 0
@@ -697,21 +697,21 @@ fun VideoPlayerController(
                     Key.MediaPlayPause -> {
                         if (it.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
                         logger.info { "[${it.key} press]" }
-                        if (videoPlayer.isPlaying) onPause() else onPlay()
+                        if (videoPlayerStateData.canPause) onPause() else onPlay()
                         return@onPreviewKeyEvent true
                     }
 
                     Key.MediaPlay -> {
                         if (it.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
                         logger.info { "[${it.key} press]" }
-                        if (!videoPlayer.isPlaying) onPlay()
+                        if (!videoPlayerStateData.canPause) onPlay()
                         return@onPreviewKeyEvent true
                     }
 
                     Key.MediaPause -> {
                         if (it.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
                         logger.info { "[${it.key} press]" }
-                        if (videoPlayer.isPlaying) onPause()
+                        if (videoPlayerStateData.canPause) onPause()
                         return@onPreviewKeyEvent true
                     }
 

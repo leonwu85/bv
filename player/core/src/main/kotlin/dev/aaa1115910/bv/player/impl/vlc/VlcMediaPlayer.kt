@@ -207,11 +207,14 @@ class VlcMediaPlayer(
     }
 
     override fun pause() {
+        val wasRequested = playRequested
         playRequested = false
+        cancelRebufferNotice()
         cancelEndOfStreamWatchdog()
         stopFreezeDetection()
         stopDecodeStatsMonitor()
         mediaPlayer?.pause()
+        if (wasRequested) notifyPause()
     }
 
     override fun stop() {
@@ -270,7 +273,7 @@ class VlcMediaPlayer(
     // ------------------------------------------------------------------------------------------
 
     override val isPlaying: Boolean
-        get() = mediaPlayer?.isPlaying == true
+        get() = playRequested && !isBuffering && mediaPlayer?.isPlaying == true
 
     override val isBuffering: Boolean
         get() = playRequested && (startupBuffering || isRebuffering || isSeeking)
@@ -348,7 +351,7 @@ class VlcMediaPlayer(
 
             MediaPlayer.Event.Paused -> {
                 // seek 期间的内部暂停不上报，避免暂停图标闪烁
-                if (!isSeeking) notifyPause()
+                if (playRequested && !isSeeking) notifyPause()
             }
 
             MediaPlayer.Event.Stopped -> {
@@ -436,7 +439,7 @@ class VlcMediaPlayer(
         if (isSeeking) return
 
         // 缓存尚未填满：保持缓冲状态，等待 Buffering 100% / TimeChanged 再上报就绪与播放
-        if (startupBuffering && cacheFillPercent < 100) {
+        if ((startupBuffering || isRebuffering) && cacheFillPercent < 100) {
             notifyBuffering()
             return
         }
@@ -458,13 +461,14 @@ class VlcMediaPlayer(
 
     /** VLC 每个缓冲百分比都会发事件，这里只在进入缓冲状态时上报一次 */
     private fun notifyBuffering() {
-        if (bufferingNotified) return
+        if (!playRequested || bufferingNotified) return
         bufferingNotified = true
         mPlayerEventListener?.onBuffering()
     }
 
     /** 上报播放中；VLC 在 prepare() 后会直接开始播放而不经过 start()，因此监控随播放状态启停 */
     private fun notifyPlay() {
+        if (!playRequested || isBuffering) return
         bufferingNotified = false
         startFreezeDetection()
         startDecodeStatsMonitor()
@@ -525,7 +529,8 @@ class VlcMediaPlayer(
             if (playing) {
                 // VLC 在播放中重缓冲时状态仍为 Playing，这里防抖后上报，避免短暂抖动导致 UI 闪烁
                 scheduleRebufferNotice()
-            } else {
+            } else if (playRequested) {
+                isRebuffering = true
                 notifyBuffering()
             }
         } else {
@@ -584,6 +589,7 @@ class VlcMediaPlayer(
         cancelSeek()
         val generation = ++seekGeneration
         isSeeking = true
+        isRebuffering = false
         seekCommandIssued = false
         seekTargetPosition = target
         lastKnownPositionMs = target
