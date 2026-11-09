@@ -39,8 +39,9 @@ sealed interface BiliContentLink {
                 aid = id,
                 page = query["p"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1,
                 cid = query["cid"]?.toLongOrNull()?.takeIf { it > 0 },
-                positionMs = (query["start_progress"] ?: query["dm_progress"])
-                    ?.toLongOrNull()?.takeIf { it >= 0 }
+                positionMs = query["start_progress"]?.toLongOrNull()?.takeIf { it >= 0 }
+                    ?: query["dm_progress"]?.toLongOrNull()?.takeIf { it >= 0 }
+                        ?.let { (it - 3_000L).coerceAtLeast(0) }
                     ?: query["t"]?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }
                         ?.times(1000)?.toLong(),
                 commentAnchor = anchor
