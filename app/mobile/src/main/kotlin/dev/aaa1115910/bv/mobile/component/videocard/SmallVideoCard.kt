@@ -2,7 +2,7 @@ package dev.aaa1115910.bv.mobile.component.videocard
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -22,7 +22,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -30,7 +29,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,7 +63,6 @@ import dev.aaa1115910.bv.mobile.theme.LocalVideoCardBlurBackgroundEnabled
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.resizedImageUrl
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SmallVideoCard(
     modifier: Modifier = Modifier,
@@ -74,9 +75,16 @@ fun SmallVideoCard(
 ) {
     val context = LocalContext.current
     val showDanmakuCount = data.playString.isEmpty() || LocalDensity.current.fontScale <= 1.2f
+    var menuExpanded by remember(data.avid, data.bvid, showMoreMenu) { mutableStateOf(false) }
+    val onShowMore: (() -> Unit)? = if (showMoreMenu) ({ menuExpanded = true }) else null
     Card(
-        modifier = modifier,
-        onClick = onClick,
+        modifier = modifier
+            .clip(MaterialTheme.shapes.small)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClickLabel = VideoCardMoreLabel,
+                onLongClick = onShowMore
+            ),
         shape = MaterialTheme.shapes.small,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceBright
@@ -100,6 +108,7 @@ fun SmallVideoCard(
                         modifier = Modifier.weight(1f),
                         data = data,
                         enableNavigation = enableUpNavigation,
+                        onLongClick = onShowMore,
                         onClick = {
                             UserSpaceActivity.actionStart(context, data.upId, data.upName)
                         }
@@ -111,6 +120,8 @@ fun SmallVideoCard(
                             VideoCardMoreMenu(
                                 modifier = Modifier.size(48.dp),
                                 data = data,
+                                expanded = menuExpanded,
+                                onExpandedChange = { menuExpanded = it },
                                 managementActionLabel = managementActionLabel,
                                 onManagementAction = onManagementAction
                             )
@@ -281,6 +292,7 @@ private fun SmallVideoCardAuthor(
     modifier: Modifier = Modifier,
     data: VideoCardData,
     enableNavigation: Boolean,
+    onLongClick: (() -> Unit)?,
     onClick: () -> Unit
 ) {
     val openSpaceLabel = stringResource(R.string.toview_menu_goto_up_space)
@@ -296,7 +308,9 @@ private fun SmallVideoCardAuthor(
         modifier = modifier
             .then(
                 if (enableNavigation && data.upId > 0L) {
-                    Modifier.clickable(
+                    Modifier.combinedClickable(
+                        onLongClickLabel = VideoCardMoreLabel,
+                        onLongClick = onLongClick,
                         onClickLabel = openSpaceLabel,
                         role = Role.Button,
                         onClick = onClick

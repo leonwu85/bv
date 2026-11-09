@@ -1,6 +1,7 @@
 package dev.aaa1115910.bv.mobile.component.videocard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,12 +45,15 @@ fun RelatedVideoItem(
     onClick: (RelatedVideo) -> Unit = {}
 ) {
     val videoCardData = relatedVideo.toVideoCardData()
-    Surface(
-        modifier = modifier,
-        onClick = { onClick(relatedVideo) },
-    ) {
+    var menuExpanded by remember(relatedVideo.aid) { mutableStateOf(false) }
+    Surface(modifier = modifier) {
         Row(
             modifier = Modifier
+                .combinedClickable(
+                    onClick = { onClick(relatedVideo) },
+                    onLongClickLabel = VideoCardMoreLabel,
+                    onLongClick = { menuExpanded = true }
+                )
                 .fillMaxWidth()
                 .height(97.dp)
                 .padding(8.dp),
@@ -96,7 +104,11 @@ fun RelatedVideoItem(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    VideoCardMoreMenu(data = videoCardData)
+                    VideoCardMoreMenu(
+                        data = videoCardData,
+                        expanded = menuExpanded,
+                        onExpandedChange = { menuExpanded = it }
+                    )
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

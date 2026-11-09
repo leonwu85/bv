@@ -1,6 +1,7 @@
 package dev.aaa1115910.bv.mobile.screen.home.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +46,7 @@ import dev.aaa1115910.biliapi.entity.ugc.UgcItem
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.entity.carddata.VideoCardFeedOption
 import dev.aaa1115910.bv.mobile.component.videocard.UpIcon
+import dev.aaa1115910.bv.mobile.component.videocard.VideoCardMoreLabel
 import dev.aaa1115910.bv.mobile.component.videocard.VideoCardMoreMenu
 import dev.aaa1115910.bv.util.ImageSize
 import dev.aaa1115910.bv.util.OnBottomReached
@@ -108,14 +114,19 @@ private fun PopularVideoListCard(
     compact: Boolean,
     onClick: () -> Unit
 ) {
+    var menuExpanded by remember(data.avid, data.bvid) { mutableStateOf(false) }
     Surface(
         modifier = modifier.fillMaxWidth(),
-        onClick = onClick,
         shape = MaterialTheme.shapes.small,
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Row(
             modifier = Modifier
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClickLabel = VideoCardMoreLabel,
+                    onLongClick = { menuExpanded = true }
+                )
                 .fillMaxWidth()
                 .height(if (compact) 112.dp else 104.dp)
                 .padding(6.dp),
@@ -171,7 +182,11 @@ private fun PopularVideoListCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    VideoCardMoreMenu(data = data)
+                    VideoCardMoreMenu(
+                        data = data,
+                        expanded = menuExpanded,
+                        onExpandedChange = { menuExpanded = it }
+                    )
                 }
 
                 Row(

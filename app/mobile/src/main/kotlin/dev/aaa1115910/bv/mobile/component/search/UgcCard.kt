@@ -2,6 +2,7 @@ package dev.aaa1115910.bv.mobile.component.search
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +39,7 @@ import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.mobile.component.videocard.SmallVideoCard
 import dev.aaa1115910.bv.mobile.component.videocard.UpIcon
+import dev.aaa1115910.bv.mobile.component.videocard.VideoCardMoreLabel
 import dev.aaa1115910.bv.mobile.component.videocard.VideoCardMoreMenu
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.util.ImageSize
@@ -56,11 +62,15 @@ fun UgcListItem(
     data: VideoCardData,
     onClick: () -> Unit = {}
 ) {
-    Surface(
-        onClick = onClick
-    ) {
+    var menuExpanded by remember(data.avid, data.bvid) { mutableStateOf(false) }
+    Surface(modifier = modifier) {
         Row(
-            modifier = modifier
+            modifier = Modifier
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClickLabel = VideoCardMoreLabel,
+                    onLongClick = { menuExpanded = true }
+                )
                 .fillMaxWidth()
                 .height(94.dp)
                 .padding(4.dp),
@@ -129,7 +139,11 @@ fun UgcListItem(
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleSmall
                     )
-                    VideoCardMoreMenu(data = data)
+                    VideoCardMoreMenu(
+                        data = data,
+                        expanded = menuExpanded,
+                        onExpandedChange = { menuExpanded = it }
+                    )
                 }
                 CompositionLocalProvider(
                     LocalTextStyle provides MaterialTheme.typography.bodySmall

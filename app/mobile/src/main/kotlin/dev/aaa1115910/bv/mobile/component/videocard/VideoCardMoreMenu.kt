@@ -52,10 +52,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 
+internal const val VideoCardMoreLabel = "更多"
+
 @Composable
 fun VideoCardMoreMenu(
     modifier: Modifier = Modifier,
     data: VideoCardData,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     managementActionLabel: String? = null,
     onManagementAction: (() -> Unit)? = null,
     toViewRepository: ToViewRepository = koinInject(),
@@ -67,7 +71,6 @@ fun VideoCardMoreMenu(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val bvid = data.resolvedBvid
-    var expanded by remember { mutableStateOf(false) }
     var showDislikeDialog by remember { mutableStateOf(false) }
     var showBlacklistDialog by remember { mutableStateOf(false) }
     var incognitoMode by remember { mutableStateOf(MobilePrefs.incognitoMode) }
@@ -101,24 +104,24 @@ fun VideoCardMoreMenu(
 
     IconButton(
         modifier = modifier.size(32.dp),
-        onClick = { expanded = true }
+        onClick = { onExpandedChange(true) }
     ) {
         Icon(
             imageVector = Icons.Rounded.MoreVert,
-            contentDescription = "更多"
+            contentDescription = VideoCardMoreLabel
         )
     }
 
     DropdownMenu(
         expanded = expanded,
-        onDismissRequest = { expanded = false }
+        onDismissRequest = { onExpandedChange(false) }
     ) {
         if (managementActionLabel != null && onManagementAction != null) {
             DropdownMenuItem(
                 text = { Text(text = managementActionLabel) },
                 leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null) },
                 onClick = {
-                    expanded = false
+                    onExpandedChange(false)
                     onManagementAction()
                 }
             )
@@ -128,7 +131,7 @@ fun VideoCardMoreMenu(
             leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },
             enabled = bvid.isNotBlank(),
             onClick = {
-                expanded = false
+                onExpandedChange(false)
                 copyText(context, "BV 号", bvid)
                 "已复制 $bvid".toast(context)
             }
@@ -137,7 +140,7 @@ fun VideoCardMoreMenu(
             text = { Text(text = "稍后再看") },
             leadingIcon = { Icon(Icons.Rounded.WatchLater, contentDescription = null) },
             onClick = {
-                expanded = false
+                onExpandedChange(false)
                 if (!requireLogin()) return@DropdownMenuItem
                 val bvid = data.resolvedBvid.takeIf { it.isNotBlank() }
                 val avid = data.avid.takeIf { it > 0L }
@@ -154,7 +157,7 @@ fun VideoCardMoreMenu(
             text = { Text(text = "访问：${data.upName}") },
             leadingIcon = { Icon(Icons.Rounded.AccountCircle, contentDescription = null) },
             onClick = {
-                expanded = false
+                onExpandedChange(false)
                 if (data.upId > 0L) {
                     UserSpaceActivity.actionStart(context, data.upId, data.upName)
                 } else {
@@ -166,7 +169,7 @@ fun VideoCardMoreMenu(
             text = { Text(text = "不感兴趣") },
             leadingIcon = { Icon(Icons.Outlined.ThumbDown, contentDescription = null) },
             onClick = {
-                expanded = false
+                onExpandedChange(false)
                 if (!requireLogin()) return@DropdownMenuItem
                 if (data.dislikeReasons.isNotEmpty() || data.feedbacks.isNotEmpty()) {
                     showDislikeDialog = true
@@ -187,7 +190,7 @@ fun VideoCardMoreMenu(
             leadingIcon = { Icon(Icons.Rounded.VisibilityOff, null) },
             enabled = data.upId > 0L,
             onClick = {
-                expanded = false
+                onExpandedChange(false)
                 runAction("已本地屏蔽，可在设置中解除") { localUserBlocks.add(data.upId).getOrThrow() }
             }
         )
@@ -195,7 +198,7 @@ fun VideoCardMoreMenu(
             text = { Text(text = "拉黑：${data.upName}") },
             leadingIcon = { Icon(Icons.Rounded.Block, contentDescription = null) },
             onClick = {
-                expanded = false
+                onExpandedChange(false)
                 if (!requireLogin()) return@DropdownMenuItem
                 if (data.upId > 0L) {
                     showBlacklistDialog = true
@@ -213,7 +216,7 @@ fun VideoCardMoreMenu(
                 )
             },
             onClick = {
-                expanded = false
+                onExpandedChange(false)
                 incognitoMode = !incognitoMode
                 MobilePrefs.incognitoMode = incognitoMode
                 (if (incognitoMode) "已进入无痕模式" else "已退出无痕模式").toast(context)
