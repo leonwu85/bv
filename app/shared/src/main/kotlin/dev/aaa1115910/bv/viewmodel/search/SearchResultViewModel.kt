@@ -10,6 +10,7 @@ import dev.aaa1115910.bv.repository.LocalUserBlockRepository
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.util.Partition
 import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.bv.viewmodel.acceptedGaiaToken
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,20 +37,17 @@ class SearchResultViewModel(
     private val jobs = mutableMapOf<SearchType, Job>()
     data class Verification(
         val type: SearchType, val query: String, val version: Int, val session: String?,
-        val token: String, val gt: String, val challenge: String
+        val voucher: String
     )
     var verification by mutableStateOf<Verification?>(null)
         private set
-    private var validating: Verification? = null
     private var refreshingVerification: Verification? = null
-    private var validationJob: Job? = null
     private val usedVouchers = mutableSetOf<String>()
-    private var registeringType: SearchType? = null
 
     private fun Verification.isCurrent() = keyword == query && (versions[type] ?: 0) == version && authRepository.sessionData == session
 
     fun cancelVerification() {
-        val pending = verification ?: validating
+        val pending = verification
         if (pending?.isCurrent() == true) {
             versions[pending.type] = pending.version + 1
             jobs.remove(pending.type)?.cancel()
@@ -57,66 +55,45 @@ class SearchResultViewModel(
             errors[pending.type] = "已取消验证，点击重试可重新验证"
         }
         verification = null
-        validating = null
         refreshingVerification = null
-        validationJob?.cancel()
     }
 
-    private suspend fun registerVerification(voucher: String, type: SearchType, query: String, version: Int) {
-        if (verification != null && verification !== refreshingVerification || registeringType != null) {
+    private fun requestVerification(voucher: String, type: SearchType, query: String, version: Int) {
+        if (verification != null && verification !== refreshingVerification) {
             errors[type] = "请先完成当前人机验证，再重试搜索"
             return
         }
-        val session = authRepository.sessionData
-        registeringType = type
-        try {
-            check(usedVouchers.add(voucher)) { "验证凭据已使用，请重新搜索获取新验证" }
-            val response = withContext(Dispatchers.IO) {
-                dev.aaa1115910.biliapi.http.BiliHttpApi.gaiaVgateRegister(voucher, session, authRepository.biliJct).getResponseData()
-            }
-            check(response.token.isNotBlank() && response.geetest.gt.isNotBlank() && response.geetest.challenge.isNotBlank()) { "验证申请失败" }
-            val pending = Verification(type, query, version, session, response.token, response.geetest.gt, response.geetest.challenge)
-            if (pending.isCurrent()) {
-                verification = pending
-                errors[type] = "请完成人机验证"
-            }
-        } catch (e: CancellationException) { throw e }
-        catch (e: Exception) { if (keyword == query && (versions[type] ?: 0) == version) errors[type] = e.localizedMessage ?: "验证申请失败，请重试" }
-        finally { if (registeringType == type) registeringType = null }
+        if (voucher.isBlank() || !usedVouchers.add(voucher)) {
+            errors[type] = "验证凭据已使用，请重新搜索获取新验证"
+            return
+        }
+        verification = Verification(type, query, version, authRepository.sessionData, voucher)
+        errors[type] = "请完成人机验证"
     }
 
-    fun verify(challenge: String, validate: String, seccode: String, sourceChallenge: String) {
+    fun onGaiaVerified(sourceVoucher: String, vtoken: String) {
         val pending = verification ?: return
-        if (!pending.isCurrent() || validating != null || refreshingVerification != null || sourceChallenge != pending.challenge ||
-            challenge.isBlank() || validate.isBlank() || seccode.isBlank()) return
-        validating = pending
+        if (!pending.isCurrent()) return
+        authRepository.gaiaVtoken = acceptedGaiaToken(pending.voucher, sourceVoucher, vtoken) ?: return
         verification = null
-        validationJob = viewModelScope.launch {
-            try {
-                val response = withContext(Dispatchers.IO) {
-                    dev.aaa1115910.biliapi.http.BiliHttpApi.gaiaVgateValidate(pending.token, challenge, validate, seccode,
-                        pending.session, authRepository.biliJct).getResponseData()
-                }
-                if (validating !== pending || !pending.isCurrent()) return@launch
-                check(response.isValid == 1 && response.griskId.isNotBlank()) { "验证未通过，请重试" }
-                authRepository.gaiaVtoken = response.griskId
-                validating = null
-                loadMore(pending.type, retry = true, allowVerification = false)
-            } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { if (pending.isCurrent()) errors[pending.type] = e.localizedMessage ?: "验证失败，请重试" }
-            finally { if (validating === pending) validating = null }
+        if (refreshingVerification === pending) {
+            jobs.remove(pending.type)?.cancel()
+            versions[pending.type] = pending.version + 1
+            updating[pending.type] = false
+            refreshingVerification = null
         }
+        loadMore(pending.type, retry = true, allowVerification = false)
     }
 
     suspend fun refreshVerification(): Boolean {
         val pending = verification ?: return false
-        if (!pending.isCurrent() || validating != null) return false
+        if (!pending.isCurrent()) return false
         if (refreshingVerification != null) return false
         refreshingVerification = pending
         return try {
             loadMore(pending.type, retry = true)
             jobs[pending.type]?.join()
-            verification?.let { it.isCurrent() && it.challenge != pending.challenge } == true
+            verification?.let { it.isCurrent() && it.voucher != pending.voucher } == true
         } finally { if (refreshingVerification === pending) refreshingVerification = null }
     }
 
@@ -189,7 +166,7 @@ class SearchResultViewModel(
     }
 
     private fun resetState(type: SearchType) {
-        if (verification?.type == type || validating?.type == type) cancelVerification()
+        if (verification?.type == type) cancelVerification()
         jobs.remove(type)?.cancel()
         versions[type] = (versions[type] ?: 0) + 1
         results[type] = SearchResult(type)
@@ -243,7 +220,7 @@ class SearchResultViewModel(
             } catch (e: Exception) {
                 if ((versions[type] ?: 0) == version && keyword == query) {
                     if (e is dev.aaa1115910.biliapi.http.entity.VVoucherException && allowVerification) {
-                        registerVerification(e.vVoucher, type, query, version)
+                        requestVerification(e.vVoucher, type, query, version)
                     } else errors[type] = if (e is dev.aaa1115910.biliapi.http.entity.VVoucherException)
                         "验证后搜索仍受限，请稍后重试" else e.localizedMessage ?: "搜索失败，请重试"
                 }

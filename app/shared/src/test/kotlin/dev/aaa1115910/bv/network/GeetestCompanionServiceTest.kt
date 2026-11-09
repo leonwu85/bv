@@ -15,8 +15,7 @@ class GeetestCompanionServiceTest {
     fun concurrentResultPostsNotifyTvOnlyOnce() {
         val callbackCount = AtomicInteger()
         val session = GeetestCompanionService.createSession(
-            gt = "gt",
-            challenge = "challenge",
+            request = CaptchaRequest.Geetest("gt", "challenge"),
             onResult = { callbackCount.incrementAndGet() },
         )
         val workerCount = 24
@@ -28,9 +27,7 @@ class GeetestCompanionServiceTest {
                 start.await()
                 GeetestCompanionService.completeSession(
                     id = session.id,
-                    challenge = "result-challenge",
-                    validate = "validate",
-                    seccode = "seccode",
+                    payload = CaptchaAnswer.Geetest("result-challenge", "validate", "seccode"),
                 )
             }
         }

@@ -101,7 +101,7 @@ import dev.aaa1115910.bv.player.tv.controller.OnlineViewerCountTip
 import dev.aaa1115910.bv.player.tv.controller.SkipTip
 import dev.aaa1115910.bv.player.tv.controller.TripleLikeTip
 import dev.aaa1115910.bv.tv.activities.video.UpInfoActivity
-import dev.aaa1115910.bv.tv.component.GeetestTvVerifyDialog
+import dev.aaa1115910.bv.tv.component.GaiaTvVerifyDialog
 import dev.aaa1115910.bv.tv.component.InteractiveOptionDialog
 import dev.aaa1115910.bv.tv.component.LiveDanmakuSplitPanel
 import dev.aaa1115910.bv.tv.component.LiveDanmakuSplitVideoBottomBarHeight
@@ -1512,18 +1512,10 @@ fun VideoPlayerV3Screen(
         }
 
         // 风控 Geetest：本机十字光标 / 手机扫码代验证
-        if (playerViewModel.showGeetestDialog) {
-            GeetestTvVerifyDialog(
-                gt = playerViewModel.geetestGt,
-                challenge = playerViewModel.geetestChallenge,
-                onResult = { result ->
-                    playerViewModel.onGeetestResult(
-                        challenge = result.challenge,
-                        sourceChallenge = result.sourceChallenge,
-                        validate = result.validate,
-                        seccode = result.seccode,
-                    )
-                },
+        if (playerViewModel.showGeetestDialog) playerViewModel.gaiaVoucher?.let { voucher ->
+            GaiaTvVerifyDialog(
+                voucher = voucher,
+                onVerified = playerViewModel::onGaiaVerified,
                 onDismiss = {
                     playerViewModel.onGeetestCancelled()
                 },

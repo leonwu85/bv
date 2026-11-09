@@ -19,19 +19,8 @@ internal fun reserveFreshVVoucher(
     return normalized
 }
 
-internal fun validatedGeetestResultChallengeOrNull(
-    expectedSourceChallenge: String,
-    sourceChallenge: String?,
-    resultChallenge: String,
-): String? {
-    val normalizedResult = resultChallenge.trim()
-    if (normalizedResult.isEmpty()) return null
-    val normalizedSource = sourceChallenge?.trim()
-    if (normalizedSource != null && normalizedSource != expectedSourceChallenge.trim()) {
-        return null
-    }
-    return normalizedResult
-}
+internal fun acceptedGaiaToken(expectedVoucher: String, sourceVoucher: String, token: String): String? =
+    token.trim().takeIf { it.isNotEmpty() && sourceVoucher == expectedVoucher }
 
 internal fun isCurrentGeetestRegistration(
     registrationGeneration: Long,

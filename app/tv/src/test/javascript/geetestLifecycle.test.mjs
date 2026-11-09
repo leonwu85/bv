@@ -160,3 +160,80 @@ test('phone: failed result delivery can retry without solving another captcha', 
   assert.equal(page.submissions.length, 2);
   assert.equal(page.element('ok').style.display, 'block');
 });
+
+async function runGaiaPage({ sessionId = null, token = 'server-vtoken', error, fetch } = {}) {
+  const path = 'app/shared/src/main/kotlin/dev/aaa1115910/bv/network/GaiaCaptchaPage.kt';
+  const source = readFileSync(resolve(repository, path), 'utf8');
+  const script = source.match(/<script>([\s\S]*?)<\/script>/)[1]
+    .replace('$voucherJson', '"voucher_123"').replace('$sessionJson', JSON.stringify(sessionId));
+  const elements = { status: {}, retry: {} };
+  const results = [];
+  const requests = [];
+  class Xhr {
+    open(method, url) { requests.push([method, url]); }
+  }
+  let registered;
+  const window = {
+    fetch,
+    parent: {fetch, XMLHttpRequest: Xhr, location: {origin: 'http://tv.local:1000'}},
+    CaptchaLoader: { load: async () => async (options) => {
+      registered = options.riskParams.v_voucher;
+      if (error) throw error;
+      return token;
+    } },
+    Android: sessionId ? undefined : { onGaiaVerified(value) { results.push(value); } },
+  };
+  runInNewContext(script, {
+    window, URL, Request, XMLHttpRequest: Xhr, location: { origin: 'http://tv.local:1000' },
+    document: { baseURI: 'https://api.bilibili.com/', getElementById: id => elements[id] }, fetch,
+  });
+  await new Promise(setImmediate);
+  return { results, registered, elements, requests, xhr: new (window.XMLHttpRequest || Xhr)(), fetch: window.fetch };
+}
+
+test('Gaia sends the original voucher to the official SDK and delivers its validated token', async () => {
+  const page = await runGaiaPage();
+  assert.equal(page.registered, 'voucher_123');
+  assert.deepEqual(page.results, ['server-vtoken']);
+});
+
+test('SDK rejection and empty Gaia tokens never resume playback', async () => {
+  for (const options of [{ error: new Error('registration failed') }, { token: '' }]) {
+    const page = await runGaiaPage(options);
+    assert.deepEqual(page.results, []);
+    assert.match(page.elements.status.textContent, /验证未完成/);
+  }
+});
+
+test('Gaia companion relays only API calls and retries delivery of the same token', async () => {
+  const posts = [];
+  const page = await runGaiaPage({ sessionId: 'session', fetch: async (url, options) => {
+    posts.push([url, JSON.parse(options.body)]);
+    return { ok: posts.length > 1 };
+  } });
+  page.xhr.open('GET', '//api.bilibili.com/x/web-frontend/risk/config');
+  page.xhr.open('POST', 'https://api.bilibili.com/x/gaia-vgate/v2/register');
+  page.xhr.open('POST', 'https://api.bilibili.com/x/gaia-vgate/v2/validate');
+  page.xhr.open('GET', 'https://gcaptcha4.geetest.com/load');
+  const base = 'http://tv.local:1000/geetest/session';
+  assert.deepEqual(page.requests, [
+    ['GET', base + '/gaia/config'], ['POST', base + '/gaia/register'],
+    ['POST', base + '/gaia/validate'], ['GET', 'https://gcaptcha4.geetest.com/load'],
+  ]);
+  assert.equal(page.elements.retry.hidden, false);
+  page.elements.retry.onclick();
+  await new Promise(setImmediate);
+  assert.deepEqual(posts, Array(2).fill([base + '/result', { vtoken: 'server-vtoken' }]));
+  assert.equal(page.elements.retry.hidden, true);
+});
+
+test('Gaia companion forwards SDK fetch requests with their form body', async () => {
+  const posts = [];
+  const page = await runGaiaPage({ sessionId: 'session', token: '', fetch: async (url, init) => {
+    posts.push([url, init.method, init.body]);
+  } });
+  await page.fetch(new Request('https://api.bilibili.com/x/gaia-vgate/v2/register?locale=zh', {
+    method: 'POST', body: new URLSearchParams({v_voucher: 'voucher_123'}),
+  }));
+  assert.deepEqual(posts, [['http://tv.local:1000/geetest/session/gaia/register', 'POST', 'v_voucher=voucher_123']]);
+});

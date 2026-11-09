@@ -51,27 +51,10 @@ class GeetestChallengeRefreshTest {
     }
 
     @Test
-    fun acceptsResultChallengeThatDiffersFromRegistrationChallenge() {
-        assertEquals(
-            expected = "result-refreshed",
-            actual = validatedGeetestResultChallengeOrNull(
-                expectedSourceChallenge = "registration",
-                sourceChallenge = "registration",
-                resultChallenge = " result-refreshed ",
-            )
-        )
-    }
-
-    @Test
-    fun rejectsResultFromReplacedRegistrationChallenge() {
-        assertEquals(
-            expected = null,
-            actual = validatedGeetestResultChallengeOrNull(
-                expectedSourceChallenge = "registration-new",
-                sourceChallenge = "registration-old",
-                resultChallenge = "result-old",
-            )
-        )
+    fun acceptsOnlyNonblankTokenForCurrentVoucher() {
+        assertEquals("token", acceptedGaiaToken("new", "new", " token "))
+        assertEquals(null, acceptedGaiaToken("new", "old", "token"))
+        assertEquals(null, acceptedGaiaToken("new", "new", " "))
     }
 
     @Test

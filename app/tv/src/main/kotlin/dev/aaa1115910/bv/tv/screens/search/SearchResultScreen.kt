@@ -101,11 +101,11 @@ fun SearchResultScreen(
     searchResultViewModel: SearchResultViewModel = koinViewModel()
 ) {
     searchResultViewModel.verification?.let { pending ->
-        dev.aaa1115910.bv.tv.component.GeetestTvVerifyDialog(
-            gt = pending.gt, challenge = pending.challenge,
+        dev.aaa1115910.bv.tv.component.GaiaTvVerifyDialog(
+            voucher = pending.voucher,
             onDismiss = searchResultViewModel::cancelVerification,
             onRefreshChallenge = searchResultViewModel::refreshVerification,
-            onResult = { searchResultViewModel.verify(it.challenge, it.validate, it.seccode, it.sourceChallenge) }
+            onVerified = searchResultViewModel::onGaiaVerified
         )
     }
     val context = LocalContext.current

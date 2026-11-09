@@ -15,41 +15,32 @@ import java.util.concurrent.ConcurrentHashMap
  * 手机代完成 Geetest：TV 局域网 HTTP 会话注册与回调。
  *
  * 手机访问 `http://{tv-ip}:{port}/geetest/{sessionId}`，在触屏上完成极验后
- * POST 结果，TV 端通过 [Session.onResult] 收到 challenge/validate/seccode。
+ * POST 结果，TV 端通过 [Session.onResult] 收到登录验证结果或 Gaia 令牌。
  */
 object GeetestCompanionService {
     private val logger = KotlinLogging.logger {}
 
-    data class GeetestResultPayload(
-        val challenge: String,
-        val validate: String,
-        val seccode: String,
-    )
-
     data class Session(
         val id: String,
-        val gt: String,
-        val challenge: String,
+        val request: CaptchaRequest,
         val mockMode: Boolean = false,
         @Volatile var completed: Boolean = false,
-        @Volatile var result: GeetestResultPayload? = null,
-        val onResult: (GeetestResultPayload) -> Unit,
+        @Volatile var result: CaptchaAnswer? = null,
+        val onResult: (CaptchaAnswer) -> Unit,
         val createdAt: Long = System.currentTimeMillis(),
     )
 
     private val sessions = ConcurrentHashMap<String, Session>()
 
     fun createSession(
-        gt: String,
-        challenge: String,
+        request: CaptchaRequest,
         mockMode: Boolean = false,
-        onResult: (GeetestResultPayload) -> Unit,
+        onResult: (CaptchaAnswer) -> Unit,
     ): Session {
         val id = UUID.randomUUID().toString().replace("-", "").take(16)
         val session = Session(
             id = id,
-            gt = gt,
-            challenge = challenge,
+            request = request,
             mockMode = mockMode,
             onResult = onResult,
         )
@@ -62,7 +53,10 @@ object GeetestCompanionService {
         if (session.mockMode) {
             buildMockGeetestHtml(session.id)
         } else {
-            buildGeetestHtml(session.gt, session.challenge, session.id)
+            when (val request = session.request) {
+                is CaptchaRequest.Geetest -> buildGeetestHtml(request.gt, request.challenge, session.id)
+                is CaptchaRequest.Gaia -> gaiaCompanionFrame(session.id)
+            }
         }
 
     /**
@@ -136,21 +130,13 @@ object GeetestCompanionService {
 
     fun getSession(id: String): Session? = sessions[id]
 
-    fun completeSession(
-        id: String,
-        challenge: String,
-        validate: String,
-        seccode: String,
-    ): Boolean {
+    fun completeSession(id: String, payload: CaptchaAnswer): Boolean {
         val session = sessions[id] ?: return false
-        if (session.completed) return true
-        val payload = GeetestResultPayload(
-            challenge = challenge.trim(),
-            validate = validate.trim(),
-            seccode = seccode.trim(),
-        )
-        if (payload.challenge.isBlank() || payload.validate.isBlank() || payload.seccode.isBlank()) {
-            return false
+        when (payload) {
+            is CaptchaAnswer.Gaia -> if (session.request !is CaptchaRequest.Gaia || payload.vtoken.isBlank()) return false
+            is CaptchaAnswer.Geetest -> if (session.request !is CaptchaRequest.Geetest ||
+                payload.challenge.isBlank() || payload.validate.isBlank() || payload.seccode.isBlank()
+            ) return false
         }
         synchronized(session) {
             // 手机浏览器可能因重复点击或网络重试并发提交；同一会话只投递一次结果。

@@ -147,13 +147,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import com.geetest.sdk.GT3ConfigBean
-import com.geetest.sdk.GT3ErrorBean
-import com.geetest.sdk.GT3GeetestUtils
-import com.geetest.sdk.GT3Listener
-import dev.aaa1115910.bv.viewmodel.login.GeetestResult
-import kotlinx.serialization.json.Json
-import org.json.JSONObject
+import dev.aaa1115910.bv.mobile.component.GaiaVerificationDialog
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -463,66 +457,8 @@ fun VideoPlayerScreen(
         }
     }
 
-    // 风控 Geetest（官方 Sensebot SDK）
-    var gt3GeetestUtils: GT3GeetestUtils? by remember { mutableStateOf(null) }
-    val gt3ConfigBean by remember { mutableStateOf(GT3ConfigBean()) }
-
-    DisposableEffect(Unit) {
-        gt3GeetestUtils = GT3GeetestUtils(context)
-        gt3ConfigBean.apply {
-            pattern = 1
-            isCanceledOnTouchOutside = false
-            lang = null
-            timeout = 10000
-            webviewTimeout = 10000
-            corners = 24
-            listener = object : GT3Listener() {
-                override fun onReceiveCaptchaCode(p0: Int) {}
-                override fun onStatistics(p0: String?) {}
-                override fun onSuccess(p0: String?) {}
-                override fun onButtonClick() {}
-
-                override fun onClosed(p0: Int) {
-                    playerViewModel.onGeetestCancelled()
-                }
-
-                override fun onFailed(p0: GT3ErrorBean?) {
-                    playerViewModel.onGeetestCancelled()
-                }
-
-                override fun onDialogResult(result: String) {
-                    runCatching {
-                        val geetestResult = Json.decodeFromString<GeetestResult>(result)
-                        gt3GeetestUtils?.showSuccessDialog()
-                        playerViewModel.onGeetestResult(
-                            challenge = geetestResult.geetestChallenge,
-                            validate = geetestResult.geetestValidate,
-                            seccode = geetestResult.geetestSeccode
-                        )
-                    }.onFailure {
-                        gt3GeetestUtils?.showFailedDialog()
-                        playerViewModel.onGeetestCancelled()
-                    }
-                }
-            }
-        }
-        gt3GeetestUtils!!.init(gt3ConfigBean)
-
-        onDispose {
-            gt3GeetestUtils?.destory()
-        }
-    }
-
-    LaunchedEffect(playerViewModel.showGeetestDialog) {
-        if (playerViewModel.showGeetestDialog) {
-            gt3GeetestUtils?.startCustomFlow()
-            gt3ConfigBean.api1Json = JSONObject().apply {
-                put("success", 1)
-                put("gt", playerViewModel.geetestGt)
-                put("challenge", playerViewModel.geetestChallenge)
-            }
-            gt3GeetestUtils?.getGeetest()
-        }
+    if (playerViewModel.showGeetestDialog) playerViewModel.gaiaVoucher?.let { voucher ->
+        GaiaVerificationDialog(voucher, playerViewModel::onGaiaVerified, playerViewModel::onGeetestCancelled)
     }
 
     val pictures = remember { mutableStateListOf<Picture>() }

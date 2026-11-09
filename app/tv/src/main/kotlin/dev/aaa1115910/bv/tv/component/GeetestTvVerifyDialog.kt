@@ -63,6 +63,9 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.component.QrImage
+import dev.aaa1115910.bv.network.CaptchaAnswer
+import dev.aaa1115910.bv.network.CaptchaRequest
+import dev.aaa1115910.bv.network.buildGaiaCaptchaHtml
 import dev.aaa1115910.bv.network.GeetestCompanionService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
@@ -160,11 +163,53 @@ fun GeetestTvVerifyDialog(
     mockMode: Boolean = false,
     initialMode: GeetestVerifyMode = GeetestVerifyMode.TvRemote,
 ) {
+    TvVerificationDialog(
+        request = CaptchaRequest.Geetest(gt, challenge),
+        onResult = { source, result ->
+            if (source is CaptchaRequest.Geetest && result is CaptchaAnswer.Geetest) {
+                onResult(GeetestTvResult(result.challenge, source.challenge, result.validate, result.seccode))
+            }
+        },
+        onDismiss = onDismiss,
+        onRefreshChallenge = onRefreshChallenge,
+        mockMode = mockMode,
+        initialMode = initialMode,
+    )
+}
+
+@Composable
+fun GaiaTvVerifyDialog(
+    voucher: String,
+    onVerified: (String, String) -> Unit,
+    onDismiss: () -> Unit,
+    onRefreshChallenge: suspend () -> Boolean,
+) {
+    TvVerificationDialog(
+        request = CaptchaRequest.Gaia(voucher),
+        onResult = { source, result ->
+            if (source is CaptchaRequest.Gaia && result is CaptchaAnswer.Gaia) {
+                onVerified(source.voucher, result.vtoken)
+            }
+        },
+        onDismiss = onDismiss,
+        onRefreshChallenge = onRefreshChallenge,
+    )
+}
+
+@Composable
+private fun TvVerificationDialog(
+    request: CaptchaRequest,
+    onResult: (CaptchaRequest, CaptchaAnswer) -> Unit,
+    onDismiss: () -> Unit,
+    onRefreshChallenge: (suspend () -> Boolean)?,
+    mockMode: Boolean = false,
+    initialMode: GeetestVerifyMode = GeetestVerifyMode.TvRemote,
+) {
     var mode by remember { mutableStateOf(initialMode) }
     val tvModeFocusRequester = remember { FocusRequester() }
     val phoneModeFocusRequester = remember { FocusRequester() }
     val contentFocusRequester = remember { FocusRequester() }
-    var detectedTvMode by remember(gt, challenge, mockMode) {
+    var detectedTvMode by remember(request, mockMode) {
         mutableStateOf(
             when {
                 mockMode && initialMode == GeetestVerifyMode.TvSlider -> GeetestVerifyMode.TvSlider
@@ -177,6 +222,9 @@ fun GeetestTvVerifyDialog(
     // >0 表示用户在模式 Tab 按了确定，需要把焦点交回验证区
     var enterContentToken by remember { mutableIntStateOf(0) }
     var pendingMode by remember { mutableStateOf<GeetestVerifyMode?>(null) }
+    // Hold the old page until both the destination and its fresh voucher are ready.
+    var requestBeforeSwitch by remember { mutableStateOf<CaptchaRequest?>(null) }
+    val displayedRequest = if (pendingMode != null) requestBeforeSwitch ?: request else request
     var challengeRefreshing by remember { mutableStateOf(false) }
     var challengeRefreshRequest by remember { mutableIntStateOf(0) }
     var challengeRefreshError by remember { mutableStateOf<String?>(null) }
@@ -230,6 +278,7 @@ fun GeetestTvVerifyDialog(
         }
 
         // 刷新成功后才提交模式切换；失败时保留当前 WebView/手机会话继续验证。
+        requestBeforeSwitch = displayedRequest
         pendingMode = newMode
         challengeRefreshError = null
         enterAfterChallengeRefresh = enterContent
@@ -337,12 +386,11 @@ fun GeetestTvVerifyDialog(
                 )
 
                 // 点击与滑块由页面形式自动识别，只改变遥控器事件注入方式，不重新初始化 challenge。
-                key(mode == GeetestVerifyMode.PhoneCompanion, gt, challenge, mockMode) {
+                key(mode == GeetestVerifyMode.PhoneCompanion, displayedRequest, mockMode) {
                     when (mode) {
                         GeetestVerifyMode.TvRemote,
                         GeetestVerifyMode.TvSlider -> GeetestTvVerifyContent(
-                            gt = gt,
-                            challenge = challenge,
+                            request = displayedRequest,
                             mockMode = mockMode,
                             sliderMode = tvMode == GeetestVerifyMode.TvSlider,
                             contentFocusRequester = contentFocusRequester,
@@ -360,8 +408,7 @@ fun GeetestTvVerifyDialog(
                         )
 
                         GeetestVerifyMode.PhoneCompanion -> GeetestPhoneCompanionContent(
-                            gt = gt,
-                            challenge = challenge,
+                            request = displayedRequest,
                             mockMode = mockMode,
                             contentFocusRequester = contentFocusRequester,
                             modeTabFocusRequester = activeModeFocusRequester,
@@ -548,12 +595,11 @@ private fun ModeChip(
 
 @Composable
 private fun GeetestPhoneCompanionContent(
-    gt: String,
-    challenge: String,
+    request: CaptchaRequest,
     mockMode: Boolean = false,
     contentFocusRequester: FocusRequester,
     modeTabFocusRequester: FocusRequester,
-    onResult: (GeetestTvResult) -> Unit,
+    onResult: (CaptchaRequest, CaptchaAnswer) -> Unit,
 ) {
     val context = LocalContext.current
     val callbackScope = rememberCoroutineScope()
@@ -561,7 +607,7 @@ private fun GeetestPhoneCompanionContent(
     var qrContent by remember { mutableStateOf("") }
     var sessionId by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(gt, challenge, mockMode) {
+    LaunchedEffect(request, mockMode) {
         statusText = "正在准备手机验证…"
         qrContent = ""
         sessionId?.let { GeetestCompanionService.removeSession(it) }
@@ -582,20 +628,12 @@ private fun GeetestPhoneCompanionContent(
         }
 
         val session = GeetestCompanionService.createSession(
-            gt = gt,
-            challenge = challenge,
+            request = request,
             mockMode = mockMode,
             onResult = { payload ->
                 // HTTP 服务的回调发生在后台线程，回到 Compose 主线程再通知 UI。
                 callbackScope.launch {
-                    onResult(
-                        GeetestTvResult(
-                            challenge = payload.challenge,
-                            sourceChallenge = challenge,
-                            validate = payload.validate,
-                            seccode = payload.seccode,
-                        )
-                    )
+                    onResult(request, payload)
                 }
             }
         )
@@ -700,14 +738,13 @@ private fun GeetestPhoneCompanionContent(
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun GeetestTvVerifyContent(
-    gt: String,
-    challenge: String,
+    request: CaptchaRequest,
     mockMode: Boolean = false,
     sliderMode: Boolean,
     contentFocusRequester: FocusRequester,
     modeTabFocusRequester: FocusRequester,
     onTvModeDetected: (GeetestVerifyMode) -> Unit,
-    onResult: (GeetestTvResult) -> Unit,
+    onResult: (CaptchaRequest, CaptchaAnswer) -> Unit,
 ) {
     val density = LocalDensity.current
     val callbackScope = rememberCoroutineScope()
@@ -1006,14 +1043,17 @@ private fun GeetestTvVerifyContent(
                                     // JavascriptInterface 在 WebView 私有后台线程回调。
                                     // 切回 Compose 主线程，避免丢失待验证令牌或跨线程更新状态。
                                     callbackScope.launch {
-                                        currentOnResult.value(
-                                            GeetestTvResult(
-                                                challenge = c,
-                                                sourceChallenge = challenge,
-                                                validate = v,
-                                                seccode = s
-                                            )
-                                        )
+                                        if (request is CaptchaRequest.Geetest) {
+                                            currentOnResult.value(request, CaptchaAnswer.Geetest(c, v, s))
+                                        }
+                                    }
+                                }
+
+                                @JavascriptInterface
+                                fun onGaiaVerified(token: String?) {
+                                    if (request !is CaptchaRequest.Gaia || token.isNullOrBlank()) return
+                                    callbackScope.launch {
+                                        currentOnResult.value(request, CaptchaAnswer.Gaia(token))
                                     }
                                 }
 
@@ -1059,7 +1099,11 @@ private fun GeetestTvVerifyContent(
 
                         loadDataWithBaseURL(
                             "https://api.bilibili.com/",
-                            if (mockMode) buildMockGeetestHtml() else buildGeetestHtml(gt, challenge),
+                            when (request) {
+                                is CaptchaRequest.Gaia -> buildGaiaCaptchaHtml(request.voucher)
+                                is CaptchaRequest.Geetest -> if (mockMode) buildMockGeetestHtml()
+                                    else buildGeetestHtml(request.gt, request.challenge)
+                            },
                             "text/html",
                             "utf-8",
                             null,

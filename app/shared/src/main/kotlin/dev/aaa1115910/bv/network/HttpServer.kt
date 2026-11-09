@@ -10,6 +10,7 @@ import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.request.receiveParameters
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.header
 import io.ktor.server.response.respondFile
@@ -29,7 +30,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.JsonPrimitive
 
 object HttpServer {
     private const val MAX_BIND_ATTEMPTS = 3
@@ -152,6 +153,37 @@ object HttpServer {
                     contentType = ContentType.Text.Html
                 )
             }
+            get("/geetest/{id}/captcha") {
+                val id = call.parameters["id"].orEmpty()
+                val request = GeetestCompanionService.getSession(id)?.request as? CaptchaRequest.Gaia
+                    ?: return@get call.respondText("验证会话已过期", status = HttpStatusCode.NotFound)
+                call.respondText(buildGaiaCaptchaHtml(request.voucher, id), ContentType.Text.Html)
+            }
+            get("/geetest/{id}/gaia/config") {
+                val session = GeetestCompanionService.getSession(call.parameters["id"].orEmpty())
+                if (session?.request !is CaptchaRequest.Gaia) {
+                    return@get call.respondText("验证会话已过期", status = HttpStatusCode.NotFound)
+                }
+                call.respondText(GaiaCompanionApi.config(), ContentType.Application.Json)
+            }
+            post("/geetest/{id}/gaia/{action}") {
+                val session = GeetestCompanionService.getSession(call.parameters["id"].orEmpty())
+                val request = session?.request as? CaptchaRequest.Gaia
+                    ?: return@post call.respondText("验证会话已过期", status = HttpStatusCode.NotFound)
+                val action = call.parameters["action"]
+                val form = call.receiveParameters()
+                val response = when (action) {
+                    "register" -> {
+                        if (form.getAll("v_voucher") != listOf(request.voucher)) {
+                            return@post call.respondText("验证凭据不匹配", status = HttpStatusCode.BadRequest)
+                        }
+                        GaiaCompanionApi.register(form)
+                    }
+                    "validate" -> GaiaCompanionApi.validate(form)
+                    else -> return@post call.respondText("", status = HttpStatusCode.NotFound)
+                }
+                call.respondText(response, ContentType.Application.Json)
+            }
             post("/geetest/{id}/result") {
                 val id = call.parameters["id"].orEmpty()
                 val body = call.receiveText()
@@ -161,15 +193,10 @@ object HttpServer {
                         status = HttpStatusCode.BadRequest,
                         contentType = ContentType.Application.Json
                     )
-                val validate = obj["validate"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                val seccode = obj["seccode"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                val challenge = obj["challenge"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                val ok = GeetestCompanionService.completeSession(
-                    id = id,
-                    challenge = challenge,
-                    validate = validate,
-                    seccode = seccode
-                )
+                fun field(name: String) = (obj[name] as? JsonPrimitive)?.contentOrNull.orEmpty().trim()
+                val answer = if ("vtoken" in obj) CaptchaAnswer.Gaia(field("vtoken"))
+                    else CaptchaAnswer.Geetest(field("challenge"), field("validate"), field("seccode"))
+                val ok = GeetestCompanionService.completeSession(id, answer)
                 if (!ok) {
                     return@post call.respondText(
                         text = """{"ok":false,"message":"session not found or empty result"}""",
