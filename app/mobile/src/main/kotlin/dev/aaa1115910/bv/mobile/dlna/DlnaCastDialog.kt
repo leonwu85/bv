@@ -1,6 +1,11 @@
 package dev.aaa1115910.bv.mobile.dlna
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.LocalActivity
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -48,6 +53,7 @@ fun DlnaCastDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    val activity = LocalActivity.current
     val coroutineScope = rememberCoroutineScope()
     val latestSourceProvider by rememberUpdatedState(sourceProvider)
     val latestOnCastStarted by rememberUpdatedState(onCastStarted)
@@ -73,10 +79,17 @@ fun DlnaCastDialog(
     var discoveryError by remember { mutableStateOf<String?>(null) }
     var castError by remember { mutableStateOf<String?>(null) }
     var castingDeviceId by remember { mutableStateOf<String?>(null) }
+    var openPermissionSettings by remember { mutableStateOf(false) }
+    val settingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        localNetworkPermissionGranted = ContextCompat.checkSelfPermission(context, ACCESS_LOCAL_NETWORK_PERMISSION) ==
+            PackageManager.PERMISSION_GRANTED
+        openPermissionSettings = !localNetworkPermissionGranted
+    }
     val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
         localNetworkPermissionGranted = granted
+        openPermissionSettings = !granted && activity?.shouldShowRequestPermissionRationale(ACCESS_LOCAL_NETWORK_PERMISSION) == false
         if (!granted) {
             discoveryError = "需要本地网络权限才能搜索并连接投屏设备"
         }
@@ -222,6 +235,13 @@ fun DlnaCastDialog(
                     if (localNetworkPermissionGranted) {
                         sourceRequest += 1
                         scanRequest += 1
+                    } else if (openPermissionSettings) {
+                        try {
+                            val packageUri = Uri.fromParts("package", context.packageName, null)
+                            settingsLauncher.launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri))
+                        } catch (_: ActivityNotFoundException) {
+                            discoveryError = "请在系统设置中为本应用授予本地网络权限"
+                        }
                     } else {
                         localNetworkPermissionLauncher.launch(
                             ACCESS_LOCAL_NETWORK_PERMISSION
@@ -229,7 +249,7 @@ fun DlnaCastDialog(
                     }
                 },
             ) {
-                Text(text = "刷新")
+                Text(text = if (openPermissionSettings) "前往系统设置" else if (!localNetworkPermissionGranted) "授予权限" else "刷新")
             }
         },
         dismissButton = {

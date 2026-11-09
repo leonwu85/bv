@@ -255,8 +255,7 @@ class DlnaManager(context: Context) {
         var insideService = false
         var serviceType = ""
         var controlUrl = ""
-        var avTransportControlUrl = ""
-        var avTransportServiceType = ""
+        val transports = mutableListOf<Pair<String, String>>()
 
         while (parser.eventType != XmlPullParser.END_DOCUMENT) {
             when (parser.eventType) {
@@ -289,15 +288,10 @@ class DlnaManager(context: Context) {
                     parser.name.equals("service", ignoreCase = true) && insideService
                 ) {
                     if (
-                        avTransportControlUrl.isBlank() &&
                         serviceType.contains(":service:AVTransport:", ignoreCase = true) &&
                         controlUrl.isNotBlank()
                     ) {
-                        avTransportControlUrl = resolveUrl(
-                            baseUrl = urlBase.ifBlank { descriptionUrl },
-                            value = controlUrl,
-                        ).orEmpty()
-                        avTransportServiceType = serviceType
+                        transports += serviceType to controlUrl
                     }
                     insideService = false
                 }
@@ -305,11 +299,13 @@ class DlnaManager(context: Context) {
             parser.next()
         }
 
-        if (avTransportControlUrl.isBlank()) return null
+        val (avTransportServiceType, resolvedUrl) = transports.firstNotNullOfOrNull { (type, path) ->
+            resolveControlUrl(descriptionUrl, urlBase, path)?.let { type to it }
+        } ?: return null
         return ParsedDeviceDescription(
             deviceType = deviceType,
             friendlyName = friendlyName,
-            avTransportControlUrl = avTransportControlUrl,
+            avTransportControlUrl = resolvedUrl,
             avTransportServiceType = avTransportServiceType,
         )
     }
@@ -434,11 +430,15 @@ class DlnaManager(context: Context) {
                 }
                 .toMap()
 
-        private fun resolveUrl(baseUrl: String, value: String): String? = runCatching {
-            URI(baseUrl).resolve(value).toString().takeIf {
-                it.startsWith("http://") || it.startsWith("https://")
-            }
-        }.getOrNull()
+        internal fun resolveControlUrl(descriptionUrl: String, urlBase: String, value: String): String? {
+            if (value.isBlank()) return null
+            val path = if (value.startsWith("_urn:schemas-upnp-org:service:")) "./$value" else value
+            return runCatching {
+                URI(urlBase.ifBlank { descriptionUrl }).resolve(path)
+                    .takeIf { it.host != null && (it.scheme.equals("http", true) || it.scheme.equals("https", true)) }
+                    ?.toString()
+            }.getOrNull()
+        }
 
         private fun buildSoapEnvelope(
             action: String,
