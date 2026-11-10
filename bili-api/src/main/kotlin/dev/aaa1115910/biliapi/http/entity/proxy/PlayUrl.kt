@@ -62,7 +62,8 @@ data class ProxyWebPlayUrlData(
     @SerialName("clip_info_list")
     val clipInfoList: List<ClipInfo> = emptyList(),
     @SerialName("record_info")
-    val recordInfo: RecordInfo? = null
+    val recordInfo: RecordInfo? = null,
+    val volume: kotlinx.serialization.json.JsonElement? = null
 )
 
 @Serializable
@@ -117,7 +118,8 @@ data class ProxyAppPlayUrlData(
     @SerialName("clip_info_list")
     val clipInfoList: List<ClipInfo> = emptyList(),
     @SerialName("record_info")
-    val recordInfo: RecordInfo? = null
+    val recordInfo: RecordInfo? = null,
+    val volume: kotlinx.serialization.json.JsonElement? = null
 )
 
 @Serializable

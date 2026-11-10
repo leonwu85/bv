@@ -66,7 +66,7 @@ abstract class AbstractVideoPlayer {
      * [pendingSeekPosition]），不得停止、重置或以其它方式影响当前正在进行的播放。
      * 上层依赖这一点在直播 URL 续期时“预置”新地址而不打断当前流。
      */
-    abstract fun playUrl(videoUrl: String? = null, audioUrl: String? = null)
+    abstract fun playUrl(videoUrl: String? = null, audioUrl: String? = null, loudnessGainDb: Double = 0.0)
 
     /** 准备开始播放，使用最近一次 [playUrl] 设置的地址 */
     abstract fun prepare()

@@ -386,6 +386,7 @@ class VideoPlayerV3ViewModel(
         val videoUrl: String?,
         val audioUrl: String?,
         val startPositionMs: Long,
+        val loudnessGainDb: Double,
         val playbackSessionToken: Long,
         /** 与地址对应的 DASH 描述（含 sidx 范围），仅需要它的内核（VLC 4）会用到 */
         val dashStreamInfo: DashStreamInfo? = null,
@@ -1895,7 +1896,7 @@ class VideoPlayerV3ViewModel(
         vodSourceTransitionPending = true
         logger.info { "Video url: ${playbackSource.videoUrl}" }
         logger.info { "Audio url: ${playbackSource.audioUrl}" }
-        player.playUrl(playbackSource.videoUrl, playbackSource.audioUrl)
+        player.playUrl(playbackSource.videoUrl, playbackSource.audioUrl, playbackSource.loudnessGainDb)
         // playUrl 会清掉上一份描述，必须在其后设置
         player.setDashStreamInfo(playbackSource.dashStreamInfo)
 
@@ -2835,6 +2836,7 @@ class VideoPlayerV3ViewModel(
             hasResolvedVodStartPosition = true
             resolvedVodStartPositionSessionToken = playbackSessionToken
             val playbackSource = PendingVodPlaybackSource(
+                loudnessGainDb = if (Prefs.normalizeVodLoudness) playData?.loudness?.gainDb ?: 0.0 else 0.0,
                 videoUrl = videoUrl,
                 audioUrl = audioUrl,
                 startPositionMs = startPositionMs,

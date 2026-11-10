@@ -453,6 +453,10 @@ object Prefs {
             )
         }
 
+    var normalizeVodLoudness: Boolean
+        get() = runBlocking { dsm.getPreference(PrefKeys.normalizeVodLoudnessRequest) }
+        set(value) = runBlocking { dsm.editPreference(PrefKeys.normalizeVodLoudnessRequest.key, value) }
+
     var subtitleSmartDisplay: Boolean
         get() = runBlocking { dsm.getPreferenceFlow(PrefKeys.prefSubtitleSmartDisplayRequest).first() }
         set(value) = runBlocking { dsm.editPreference(PrefKeys.prefSubtitleSmartDisplayKey, value) }
@@ -1088,6 +1092,7 @@ internal object TvTunnelingDefaultMigration {
 }
 
 object PrefKeys {
+    val normalizeVodLoudnessRequest = PreferenceRequest(booleanPreferencesKey("normalize_vod_loudness"), false)
     val commentPureMentionKey = booleanPreferencesKey("comment_filter_pure_mention")
     val commentMentionLimitKey = intPreferencesKey("comment_filter_mention_limit")
     val commentCopyIntroKey = booleanPreferencesKey("comment_filter_copy_intro")

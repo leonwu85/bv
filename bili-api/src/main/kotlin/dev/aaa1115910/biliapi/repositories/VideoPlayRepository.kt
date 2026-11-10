@@ -351,6 +351,7 @@ class VideoPlayRepository(
         codecType: CodeType
     ): PlayViewUniteReq = playViewUniteReq {
         vod = videoVod {
+            voiceBalance = 1
             this.aid = aid
             this.cid = cid
             fnval = 4048

@@ -170,6 +170,9 @@ fun OfflineCacheScreen(
                         item(key = "group-$groupKey") {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("${groupEntries.first().groupTitle} · ${groupEntries.size} 项", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                                TextButton(onClick = { runCacheAction { Result.success(offlineVideoCacheService.updateLoudness(groupEntries)) } }) {
+                                    Text("更新响度")
+                                }
                                 if (groupEntries.any { it.epId == null }) {
                                     TextButton(onClick = { runCacheAction { offlineVideoCacheService.updateSeasonMetadata(groupEntries) } }) {
                                         Text("更新合集")

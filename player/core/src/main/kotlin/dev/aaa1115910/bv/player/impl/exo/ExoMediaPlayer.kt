@@ -1,5 +1,8 @@
 package dev.aaa1115910.bv.player.impl.exo
 
+import android.media.audiofx.LoudnessEnhancer
+import kotlin.math.pow
+import kotlin.math.roundToInt
 import android.content.Context
 import android.os.Build
 import android.os.Handler
@@ -182,13 +185,45 @@ class ExoMediaPlayer(
         initListener()
     }
 
+    private var enhancer: LoudnessEnhancer? = null
+    private var enhancerSession = 0
+    private var activeGainDb = 0.0
+
+    override fun onAudioSessionIdChanged(audioSessionId: Int) {
+        updateEnhancer(audioSessionId)
+    }
+
+    private fun releaseEnhancer() {
+        enhancer?.release()
+        enhancer = null
+        enhancerSession = 0
+    }
+
+    private fun updateEnhancer(sessionId: Int) {
+        if (sessionId != enhancerSession || activeGainDb <= 0.0) releaseEnhancer()
+        if (activeGainDb <= 0.0 || sessionId <= 0) return
+        try {
+            val effect = enhancer ?: LoudnessEnhancer(sessionId).also {
+                enhancer = it
+                enhancerSession = sessionId
+            }
+            effect.setTargetGain((activeGainDb * 100).roundToInt())
+            effect.enabled = true
+        } catch (error: RuntimeException) {
+            releaseEnhancer()
+            Log.w("ExoMediaPlayer", "Loudness effect unavailable for audio session", error)
+        }
+    }
+
     private fun initListener() {
         mPlayer?.addListener(this)
         mPlayer?.addAnalyticsListener(analyticsListener)
     }
 
-    @OptIn(UnstableApi::class)
-    override fun playUrl(videoUrl: String?, audioUrl: String?) {
+    private var sourceGainDb = 0.0
+
+    override fun playUrl(videoUrl: String?, audioUrl: String?, loudnessGainDb: Double) {
+        sourceGainDb = loudnessGainDb
         val videoMediaSource = videoUrl?.let { createMediaSource(it) }
         val audioMediaSource = audioUrl?.let { createMediaSource(it) }
 
@@ -249,6 +284,11 @@ class ExoMediaPlayer(
     override fun prepare() {
         overloadedReportCount = 0
         decoderOverloadReported = false
+        if (activeGainDb != sourceGainDb) {
+            activeGainDb = sourceGainDb
+            mPlayer?.volume = 10.0.pow(minOf(activeGainDb, 0.0) / 20.0).toFloat()
+            updateEnhancer(mPlayer?.audioSessionId ?: 0)
+        }
         mPlayer?.setMediaSource(mMediaSource!!)
         mPlayer?.prepare()
         // 处理初始跳转位置，避免在 onReady 中 seek 导致的状态抖动
@@ -293,6 +333,8 @@ class ExoMediaPlayer(
     }
 
     override fun release() {
+        activeGainDb = 0.0
+        releaseEnhancer()
         try {
             progressHandler.removeCallbacks(progressUpdateRunnable)
             mPlayer?.release()

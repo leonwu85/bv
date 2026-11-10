@@ -2,6 +2,7 @@ package dev.aaa1115910.bv.offline
 
 import android.util.AtomicFile
 import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment
+import dev.aaa1115910.biliapi.entity.TrackLoudness
 import dev.aaa1115910.biliapi.entity.video.VideoDetail
 import dev.aaa1115910.biliapi.http.entity.video.ClipInfo
 import dev.aaa1115910.biliapi.http.SponsorBlockHttpApi
@@ -169,7 +170,8 @@ data class OfflineVideoCacheEntry(
     val upFaceFileName: String = "",
     val skipMetadata: OfflineSkipMetadata = OfflineSkipMetadata(),
     val season: OfflineSeasonMetadata? = null,
-    val epId: Int? = null
+    val epId: Int? = null,
+    val loudness: TrackLoudness? = null
 ) {
     val groupKey: String get() = season?.let { "ugc:${it.mid}:${it.id}" } ?: "video:$aid"
     val groupTitle: String get() = season?.title?.takeIf { it.isNotBlank() } ?: title
@@ -199,7 +201,8 @@ data class OfflineVideoCacheRequest(
     val danmakuCount: Int = 0,
     val skipMetadata: OfflineSkipMetadata = OfflineSkipMetadata(),
     val season: OfflineSeasonMetadata? = null,
-    val epId: Int? = null
+    val epId: Int? = null,
+    val loudness: TrackLoudness? = null
 )
 
 data class OfflineVideoCacheTarget(
@@ -746,6 +749,7 @@ class OfflineVideoCacheService(
             upFace = target.upFace,
             danmakuCount = target.danmakuCount,
             skipMetadata = OfflineSkipMetadata(sponsors, playData.clipInfoList),
+            loudness = playData.loudness ?: existing?.loudness,
             season = season,
             epId = target.epId
         )
@@ -1268,6 +1272,7 @@ class OfflineVideoCacheService(
             coverFileName = COVER_FILE_NAME.takeIf { File(dir, COVER_FILE_NAME).length() > 0L }.orEmpty(),
             upFaceFileName = UP_FACE_FILE_NAME.takeIf { File(dir, UP_FACE_FILE_NAME).length() > 0L }.orEmpty(),
             skipMetadata = request.skipMetadata,
+            loudness = request.loudness,
             season = request.season,
             epId = request.epId
         )
@@ -1285,6 +1290,29 @@ class OfflineVideoCacheService(
             file.failWrite(stream)
             throw error
         }
+    }
+
+    suspend fun updateLoudness(entries: List<OfflineVideoCacheEntry>): String = withContext(Dispatchers.IO) {
+        var updated = 0
+        for (entry in entries.distinctBy { it.aid to it.cid }) {
+            try {
+                val data = videoPlayRepository.getDownloadPlayData(entry.aid, entry.bvid, entry.cid, entry.quality, epid = entry.epId)
+                val loudness = data.loudness ?: continue
+                synchronized(this@OfflineVideoCacheService) {
+                    val latest = getCompletedEntry(entry.aid, entry.cid)
+                    if (latest != null && latest.createdAt == entry.createdAt && key(entry.aid, entry.cid) !in removingTaskKeys) {
+                        persistEntry(entryDir(entry.aid, entry.cid), latest.copy(loudness = loudness))
+                        updated++
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                logger.warn(error) { "Refresh offline loudness failed for cid=${entry.cid}" }
+            }
+        }
+        if (updated > 0) refreshEntries()
+        "已更新 $updated / ${entries.size} 项响度信息"
     }
 
     suspend fun updateSeasonMetadata(entries: List<OfflineVideoCacheEntry>): Result<String> = withContext(Dispatchers.IO) {
@@ -1464,6 +1492,7 @@ class OfflineVideoCacheService(
             backUrl = emptyList()
         )
         return PlayData(
+            loudness = loudness,
             clipInfoList = skipMetadata.clipInfoList,
             dashVideos = listOf(video),
             dashAudios = listOf(audio),

@@ -137,7 +137,10 @@ class VlcMediaPlayer(
         }
     }
 
-    override fun playUrl(videoUrl: String?, audioUrl: String?) {
+    private var sourceGainDb = 0.0
+
+    override fun playUrl(videoUrl: String?, audioUrl: String?, loudnessGainDb: Double) {
+        sourceGainDb = loudnessGainDb
         // 纯设置：不触碰当前 Media，避免直播 URL 续期时中断播放（见 AbstractVideoPlayer.playUrl 契约）
         currentVideoUrl = videoUrl
         currentAudioUrl = audioUrl
@@ -156,6 +159,22 @@ class VlcMediaPlayer(
         dashStreamInfo = info
     }
 
+    private var appliedGainDb = 0.0
+
+    private fun applyTrackGain(player: MediaPlayer) {
+        if (sourceGainDb == appliedGainDb) return
+        try {
+            val equalizer = if (sourceGainDb == 0.0) null else MediaPlayer.Equalizer.create().also {
+                if (!it.setPreAmp(sourceGainDb.toFloat())) return
+            }
+            if (player.setEqualizer(equalizer)) appliedGainDb = sourceGainDb
+        } catch (error: LinkageError) {
+            logger.warn(error) { "VLC equalizer unavailable" }
+        } catch (error: RuntimeException) {
+            logger.warn(error) { "Cannot apply track gain" }
+        }
+    }
+
     override fun prepare() {
         initializationError?.let {
             mPlayerEventListener?.onError(it)
@@ -171,6 +190,7 @@ class VlcMediaPlayer(
             return
         }
 
+        applyTrackGain(mp)
         resetTransientState()
         cancelEndOfStreamWatchdog()
         endDispatchedForCurrentMedia = false

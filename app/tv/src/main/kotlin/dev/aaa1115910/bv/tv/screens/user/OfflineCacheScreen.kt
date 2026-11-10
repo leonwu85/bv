@@ -1,5 +1,7 @@
 package dev.aaa1115910.bv.tv.screens.user
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import android.os.StatFs
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
@@ -279,7 +281,13 @@ fun OfflineCacheScreen(
                     Text(if (manageMode) "完成" else "管理", maxLines = 1)
                 }
             }
-            if (manageMode) {
+        }
+        if (manageMode) {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 OutlinedButton(
                     modifier = Modifier
                         .width(if (allDisplayedSelected) 92.dp else 70.dp)
@@ -319,6 +327,13 @@ fun OfflineCacheScreen(
                         scope.launch { offlineCacheService.updateSeasonMetadata(entries).getOrThrow().toast(context) }
                     }
                 ) { Text("更新合集") }
+                Button(
+                    enabled = completedCards.any { it.key in selectedKeys },
+                    onClick = {
+                        val entries = completedCards.filter { it.key in selectedKeys }.mapNotNull { it.entry }
+                        scope.launch { offlineCacheService.updateLoudness(entries).toast(context) }
+                    }
+                ) { Text("更新响度") }
                 Button(
                     modifier = Modifier.height(36.dp),
                     enabled = selectedKeys.isNotEmpty(),

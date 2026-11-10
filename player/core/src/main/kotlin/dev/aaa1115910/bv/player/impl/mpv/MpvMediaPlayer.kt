@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.player.impl.mpv
 
+import kotlin.math.pow
 import android.app.ActivityManager
 import android.content.Context
 import android.hardware.display.DisplayManager
@@ -201,7 +202,10 @@ class MpvMediaPlayer(
         applyOfflinePlaybackMode()
     }
 
-    override fun playUrl(videoUrl: String?, audioUrl: String?) {
+    private var sourceGainDb = 0.0
+
+    override fun playUrl(videoUrl: String?, audioUrl: String?, loudnessGainDb: Double) {
+        sourceGainDb = loudnessGainDb
         // 纯设置：不触碰正在播放的媒体，状态重置在 loadMedia() 中进行（见 AbstractVideoPlayer.playUrl 契约）
         currentVideoUrl = videoUrl
         currentAudioUrl = audioUrl
@@ -793,6 +797,30 @@ class MpvMediaPlayer(
         }
     }
 
+    private var gainProperty: String? = null
+    private var originalGain = 0.0
+
+    private fun applyTrackGain() {
+        if (sourceGainDb == 0.0 && gainProperty == null) return
+        // Preserve the user's configured gain, including on older engines with only volume.
+        try {
+            val property = gainProperty ?: if (MPVLib.getPropertyDouble("volume-gain") != null) "volume-gain" else "volume"
+            if (gainProperty == null) {
+                originalGain = MPVLib.getPropertyDouble(property) ?: return
+                gainProperty = property
+            }
+            val adjusted = when {
+                sourceGainDb == 0.0 -> originalGain
+                property == "volume-gain" -> originalGain + sourceGainDb
+                else -> (originalGain * 10.0.pow(sourceGainDb / 60.0)).coerceAtMost(MPVLib.getPropertyDouble("volume-max") ?: 100.0)
+            }
+            MPVLib.setPropertyDouble(property, adjusted)
+            if (sourceGainDb == 0.0) gainProperty = null
+        } catch (error: RuntimeException) {
+            logger.warn(error) { "Cannot apply track gain" }
+        }
+    }
+
     private fun loadMedia() {
         val url = currentVideoUrl ?: currentAudioUrl
         if (url.isNullOrBlank()) {
@@ -800,6 +828,7 @@ class MpvMediaPlayer(
             return
         }
 
+        applyTrackGain()
         applyNetworkOptions()
         applyOfflinePlaybackMode()
         val videoUrl = url.toMpvMediaUrl()

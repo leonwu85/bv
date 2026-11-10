@@ -146,7 +146,8 @@ data class PlayUrlData(
     @JsonNames("clipInfoList")
     val clipInfoList: List<ClipInfo> = emptyList(),
     @SerialName("record_info")
-    val recordInfo: RecordInfo? = null
+    val recordInfo: RecordInfo? = null,
+    val volume: kotlinx.serialization.json.JsonElement? = null
 )
 
 @Serializable

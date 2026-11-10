@@ -584,7 +584,7 @@ object BiliHttpApi {
             fnval?.let { append("fnval", it.toString()) }
             fnver?.let { append("fnver", it.toString()) }
             fourk?.let { append("fourk", it.toString()) }
-            append("voice_balance", "0")
+            append("voice_balance", "1")
             append("gaia_source", "pre-load")
             append("isGaiaAvoided", "true")
             append("web_location", "1315873")
@@ -697,6 +697,7 @@ object BiliHttpApi {
             bv?.let { parameter("bvid", it) }
             epid?.let { parameter("ep_id", it) }
             cid?.let { parameter("cid", it) }
+            parameter("voice_balance", 1)
             qn?.let { parameter("qn", it) }
             fnval?.let { parameter("fnval", it) }
             fnver?.let { parameter("fnver", it) }
@@ -746,6 +747,7 @@ object BiliHttpApi {
             bv?.let { parameter("bvid", it) }
             epid?.let { parameter("ep_id", it) }
             cid?.let { parameter("cid", it) }
+            parameter("voice_balance", 1)
             qn?.let { parameter("qn", it) }
             fnval?.let { parameter("fnval", it) }
             fnver?.let { parameter("fnver", it) }

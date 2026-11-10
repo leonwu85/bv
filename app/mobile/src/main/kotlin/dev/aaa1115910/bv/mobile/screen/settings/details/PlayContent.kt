@@ -74,6 +74,12 @@ fun PlayContent(
                     values = PlayerDefaultStartPosition.entries.associate { it.value to it.displayName(context) }
                 )
                 switchPreference(
+                    title = "响度均衡",
+                    summary = "按视频响度调整不同稿件的音量，支持离线缓存",
+                    prefReq = dev.aaa1115910.bv.util.PrefKeys.normalizeVodLoudnessRequest,
+                    onCheckedChange = { true }
+                )
+                switchPreference(
                     title = "自动播放",
                     prefReq = MobilePrefKeys.autoPlayRequest,
                     onCheckedChange = { true }

@@ -19,6 +19,7 @@ data class PlayData(
     val needPay: Boolean = false,
     val clipInfoList: List<ClipInfo> = emptyList(),
     val timeLength: Long = 0,
+    val loudness: TrackLoudness? = null,
 ) {
     companion object {
         fun fromPlayViewUniteReply(playViewUniteReply: PlayViewUniteReply): PlayData {
@@ -78,6 +79,10 @@ data class PlayData(
                 flac = flac,
                 codec = codecs,
                 needPay = false,
+                loudness = playViewUniteReply.vodInfo.takeIf { it.hasVolume() }?.volume?.let {
+                    TrackLoudness(it.measuredI, it.measuredTp, it.targetI, it.targetTp,
+                        it.measuredLra, it.measuredThreshold, it.targetOffset).takeIf { data -> data.gainDb != null }
+                },
                 timeLength = playViewUniteReply.vodInfo.timelength
             )
         }
@@ -220,6 +225,7 @@ data class PlayData(
                 flac = flac,
                 codec = codec,
                 needPay = needPay,
+                loudness = TrackLoudness.fromJson(playUrlData.volume),
                 clipInfoList = playUrlData.clipInfoList,
                 timeLength = timeLength
             )
@@ -302,6 +308,7 @@ data class PlayData(
                 flac = flac,
                 codec = codec,
                 needPay = needPay,
+                loudness = TrackLoudness.fromJson(playUrlData.volume),
                 clipInfoList = playUrlData.clipInfoList,
                 timeLength = playUrlData.timeLength.toLong()
             )
@@ -384,6 +391,7 @@ data class PlayData(
                 flac = flac,
                 codec = codec,
                 needPay = needPay,
+                loudness = TrackLoudness.fromJson(playUrlData.volume),
                 clipInfoList = playUrlData.clipInfoList,
                 timeLength = playUrlData.timeLength.toLong()
             )
@@ -454,6 +462,7 @@ data class PlayData(
                     .filter { it != "none" }
             }.toMap(),
             needPay = needPay || other.needPay,
+            loudness = loudness ?: other.loudness,
             clipInfoList = clipInfoList + other.clipInfoList,
             timeLength = maxOf(timeLength, other.timeLength)
         )

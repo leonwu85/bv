@@ -136,6 +136,7 @@ object BiliHttpProxyApi {
             bv?.let { parameter("bvid", it) }
             epid?.let { parameter("ep_id", it) }
             cid?.let { parameter("cid", it) }
+            parameter("voice_balance", 1)
             qn?.let { parameter("qn", it) }
             fnval?.let { parameter("fnval", it) }
             fnver?.let { parameter("fnver", it) }
@@ -185,6 +186,7 @@ object BiliHttpProxyApi {
             bv?.let { parameter("bvid", it) }
             epid?.let { parameter("ep_id", it) }
             cid?.let { parameter("cid", it) }
+            parameter("voice_balance", 1)
             qn?.let { parameter("qn", it) }
             fnval?.let { parameter("fnval", it) }
             fnver?.let { parameter("fnver", it) }

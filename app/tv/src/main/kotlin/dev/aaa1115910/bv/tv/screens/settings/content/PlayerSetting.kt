@@ -70,6 +70,7 @@ fun PlayerSetting(
     var playerBottomProgressBarColor by remember { mutableStateOf(Prefs.playerBottomProgressBarColor) }
     var playerShowDebugInfo by remember { mutableStateOf(Prefs.playerShowDebugInfo) }
     var debugDanmakuMaskDownsample180p by remember { mutableStateOf(Prefs.debugDanmakuMaskDownsample180p) }
+    var normalizeLoudness by remember { mutableStateOf(Prefs.normalizeVodLoudness) }
     var subtitleSmartDisplay by remember { mutableStateOf(Prefs.subtitleSmartDisplay) }
     var playerExitWhenAllIsPlayed by remember { mutableStateOf(Prefs.playerExitWhenAllIsPlayed) }
     var playerLoadNextAction by remember { mutableStateOf(Prefs.playerLoadNextAction) }
@@ -349,6 +350,17 @@ fun PlayerSetting(
                         }
                     )
                 }
+            }
+            item {
+                SettingSwitchListItem(
+                    title = "响度均衡",
+                    supportText = "按视频响度调整不同稿件的音量，支持离线缓存",
+                    checked = normalizeLoudness,
+                    onCheckedChange = {
+                        normalizeLoudness = it
+                        Prefs.normalizeVodLoudness = it
+                    }
+                )
             }
             item {
                 SettingSwitchListItem(
