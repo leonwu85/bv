@@ -108,6 +108,18 @@ fun CommentItem(
     onShowReply: (rpid: Long) -> Unit = {},
     commentViewModel: CommentViewModel = koinViewModel()
 ) {
+    if (comment.hotspotTitle != null) {
+        var opened by androidx.compose.runtime.remember(comment.rpid) { androidx.compose.runtime.mutableStateOf(false) }
+        val label = listOfNotNull(comment.hotspotTitle, comment.sourceText.takeIf(String::isNotBlank),
+            comment.content.joinToString("").takeIf(String::isNotBlank)).joinToString("\n")
+        androidx.compose.material3.TextButton(onClick = { opened = true }, modifier = modifier) { Text(label) }
+        if (opened) dev.aaa1115910.bv.mobile.component.reply.CommentLinkDialog(
+            dev.aaa1115910.biliapi.entity.reply.CommentAnchor(comment.rpid, oid = comment.oid, type = comment.type),
+            onClose = { opened = false }
+        )
+        return
+    }
+
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var currentComment by remember(comment) { mutableStateOf(comment) }
@@ -211,7 +223,7 @@ fun CommentItem(
                             text = currentComment.member.name
                         )
                         Text(
-                            text = currentComment.timeDesc,
+                            text = currentComment.attribution,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )

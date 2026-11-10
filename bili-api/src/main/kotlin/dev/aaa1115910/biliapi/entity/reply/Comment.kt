@@ -42,14 +42,22 @@ data class CommentsData(
         }
 
         fun fromMainListReply(mainListReply: bilibili.main.community.reply.v1.MainListReply): CommentsData {
+            val pins = buildList {
+                if (mainListReply.hasUpTop()) add(mainListReply.upTop)
+                if (mainListReply.hasAdminTop()) add(mainListReply.adminTop)
+                if (mainListReply.hasVoteTop()) add(mainListReply.voteTop)
+                addAll(mainListReply.topRepliesList)
+            }
+            val normal = mainListReply.repliesList
+            val regularIds = (pins + normal).mapTo(hashSetOf()) { it.id }
+            val hotspots = mainListReply.mixedCardsList.sortedBy { it.displayRank }.mapNotNull { mixed ->
+                if (!mixed.hasHotspot()) return@mapNotNull null
+                val card = mixed.hotspot
+                if (card.rpid in regularIds || card.rpid <= 0 || card.oid <= 0 || card.type <= 0) return@mapNotNull null
+                Comment.fromHotspot(card)
+            }
             return CommentsData(
-                comments = buildList {
-                    if (mainListReply.hasUpTop()) add(mainListReply.upTop)
-                    if (mainListReply.hasAdminTop()) add(mainListReply.adminTop)
-                    if (mainListReply.hasVoteTop()) add(mainListReply.voteTop)
-                    addAll(mainListReply.topRepliesList)
-                    addAll(mainListReply.repliesList)
-                }.distinctBy { it.id }.map(Comment::fromReplyInfo),
+                comments = (pins.map(Comment::fromReplyInfo) + hotspots + normal.map(Comment::fromReplyInfo)).distinctBy { it.rpid },
                 nextPage = CommentPage(
                     nextAppPage = mainListReply.paginationReply.nextOffset
                 ),
@@ -96,7 +104,14 @@ data class Comment(
     val translatedEmotes: List<Emote> = emptyList(),
     val showTranslation: Boolean = false,
     val translationSwitch: TranslationSwitch = TranslationSwitch.TRANSLATION_SWITCH_UNSUPPORTED,
+    val parentReplyName: String = "",
+    val sourceText: String = "",
+    val hotspotTitle: String? = null,
 ) {
+    val attribution: String
+        get() = listOfNotNull(parentReplyName.takeIf(String::isNotBlank)?.let { "回复 @$it" },
+            sourceText.takeIf(String::isNotBlank), timeDesc.takeIf(String::isNotBlank)).joinToString(" · ")
+
     val displayContent: List<String>
         get() = if (showTranslation && hasTranslatedContent) translatedContent else content
 
@@ -146,6 +161,8 @@ data class Comment(
             val translatedContent = mapTranslatedGrpcContent(reply)
             return Comment(
                 rpid = reply.id,
+                parentReplyName = reply.parentReplyMember.name,
+                sourceText = reply.hotInfo.fromText.ifBlank { reply.hotInfo.arcTitle },
                 mentions = reply.content.atNameToMidMap,
                 mid = reply.mid,
                 oid = reply.oid,
@@ -168,6 +185,20 @@ data class Comment(
                 translatedEmotes = translatedContent?.emotes.orEmpty(),
                 showTranslation = translatedContent != null && reply.replyControl.showTranslation,
                 translationSwitch = reply.replyControl.translationSwitch
+            )
+        }
+
+        internal fun fromHotspot(card: bilibili.main.community.reply.v1.HotspotCard): Comment {
+            val content = mapGrpcContent(card.content)
+            val author = card.member.basic
+            return Comment(
+                rpid = card.rpid, oid = card.oid, type = card.type.toLong(), mid = author.mid, parent = 0,
+                member = Member(author.mid, author.face, author.name), content = content.content,
+                emotes = content.emotes, pictures = card.content.picturesList.map(Picture::fromPicture),
+                mentions = card.content.atNameToMidMap, replies = emptyList(), repliesCount = 0,
+                timeDesc = card.replyControl.timeDesc, like = card.like,
+                hotspotTitle = card.titleText.ifBlank { card.title }.ifBlank { "热点评论" },
+                sourceText = card.fromText.ifBlank { card.arcTitle }
             )
         }
 

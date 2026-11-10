@@ -1,5 +1,7 @@
 package dev.aaa1115910.bv.tv.component
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
@@ -63,6 +65,18 @@ fun CommentItem(
     onTranslateToggle: (() -> Unit)? = null,
     isTranslating: Boolean = false
 ) {
+    if (comment.hotspotTitle != null) {
+        var opened by androidx.compose.runtime.remember(comment.rpid) { androidx.compose.runtime.mutableStateOf(false) }
+        val label = listOfNotNull(comment.hotspotTitle, comment.sourceText.takeIf(String::isNotBlank),
+            comment.content.joinToString("").takeIf(String::isNotBlank)).joinToString("\n")
+        androidx.tv.material3.Button(onClick = { opened = true }, modifier = modifier) { Text(label) }
+        if (opened) dev.aaa1115910.bv.tv.component.reply.CommentLinkDialog(
+            dev.aaa1115910.biliapi.entity.reply.CommentAnchor(comment.rpid, oid = comment.oid, type = comment.type),
+            onClose = { opened = false }
+        )
+        return
+    }
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -180,7 +194,7 @@ private fun CommentMainContent(
             ) {
                 // 时间
                 Text(
-                    text = comment.timeDesc,
+                    text = comment.attribution,
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White.copy(alpha = 0.5f)
                 )

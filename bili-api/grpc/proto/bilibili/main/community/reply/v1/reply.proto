@@ -181,6 +181,7 @@ message DetailListReply {
   bilibili.pagination.FeedPaginationReply pagination_reply = 8;
   //
   string session_id = 9;
+  repeated MixedCard mixed_cards = 11;
 }
 
 // 二级评论明细-请求
@@ -365,6 +366,7 @@ message MainListReply {
   string report_params = 22;
   //
   VoteCard vote_card = 23;
+  repeated MixedCard mixed_cards = 27;
 }
 
 // 主评论列表-请求
@@ -928,6 +930,8 @@ message ReplyInfo {
   MemberV2 member_v2 = 15;
   // 译文内容
   Content translated_content = 17;
+  ParentReplyMember parent_reply_member = 18;
+  HotReplyInfo hot_info = 19;
 }
 
 // 查询单条评论-响应
@@ -1351,4 +1355,74 @@ message VoteCardOption{
   string desc = 2;
   //
   int64 count = 3;
+}
+message ParentReplyMember {
+  int64 mid = 1;
+  string name = 2;
+}
+
+message HotReplyInfo {
+  string arc_title = 1;
+  int32 opinion_idx = 2;
+  string from_text = 3;
+}
+
+message MixedCard {
+  enum Type {
+    UNKNOWN = 0;
+    QUESTION = 1;
+    FOLD = 2;
+    HOTSPOT = 3;
+  }
+  Type type = 1;
+  int64 oid = 2;
+  int64 display_rank = 3;
+  oneof item {
+    QuestionCard question = 4;
+    FoldCard fold = 5;
+    HotspotCard hotspot = 6;
+  }
+}
+
+message QuestionCard {
+  message Option {
+    string key = 1;
+    string title = 2;
+  }
+  message Question {
+    int64 qid = 1;
+    string title = 2;
+    bool must_right = 3;
+    repeated Option options = 4;
+  }
+  Question question = 1;
+  QuestionCardStat stat = 2;
+  string bottom_text = 3;
+}
+
+message QuestionCardStat {
+  int64 right_cnt = 1;
+  int64 right_mid_cnt = 2;
+  int64 submit_mid_cnt = 3;
+}
+
+message FoldCard {
+  string bottom_text = 1;
+  bilibili.pagination.FeedPagination fold_pagination = 2;
+}
+
+message HotspotCard {
+  string icon = 1;
+  string title = 2;
+  string title_text = 3;
+  int64 rpid = 4;
+  int64 oid = 5;
+  Content content = 6;
+  MemberV2 member = 7;
+  int64 hotspot_id = 8;
+  ReplyControl reply_control = 9;
+  int64 like = 10;
+  string arc_title = 11;
+  string from_text = 12;
+  int32 type = 13;
 }

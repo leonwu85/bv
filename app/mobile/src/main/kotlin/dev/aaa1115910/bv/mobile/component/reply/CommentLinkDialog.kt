@@ -23,8 +23,12 @@ import org.koin.compose.getKoin
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CommentLinkDialog(anchor: CommentAnchor, videoId: Long = 0, dynamicId: String? = null) {
+fun CommentLinkDialog(anchor: CommentAnchor, videoId: Long = 0, dynamicId: String? = null, onClose: () -> Unit = {}) {
     var visible by rememberSaveable(anchor) { mutableStateOf(true) }
+    fun dismiss() {
+        visible = false
+        onClose()
+    }
     if (!visible) return
     val state = rememberCommentLinkState(anchor, videoId, dynamicId)
     val scope = rememberCoroutineScope()
@@ -44,7 +48,7 @@ fun CommentLinkDialog(anchor: CommentAnchor, videoId: Long = 0, dynamicId: Strin
             located = true
         }
     }
-    ModalBottomSheet(onDismissRequest = { visible = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    ModalBottomSheet(onDismissRequest = { dismiss() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Text("定位评论", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
         if (state.targetUnavailable) Text("目标回复已删除或暂不可见，已显示主评论", modifier = Modifier.padding(16.dp))
         LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().fillMaxHeight(.85f)) {

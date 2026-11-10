@@ -132,7 +132,7 @@ fun SubCommentItem(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        text = comment.timeDesc,
+                        text = comment.attribution,
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.5f)
                     )
@@ -263,7 +263,7 @@ fun SubCommentRootItem(
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
-                            text = comment.timeDesc,
+                            text = comment.attribution,
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.5f)
                         )
