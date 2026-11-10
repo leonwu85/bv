@@ -139,7 +139,7 @@ import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.offline.OfflineCacheQualitySelector
 import dev.aaa1115910.bv.offline.OfflineVideoCacheService
 import dev.aaa1115910.bv.offline.OfflineVideoCacheStatus
-import dev.aaa1115910.bv.offline.toOfflineSeasonMetadata
+import dev.aaa1115910.bv.offline.offlineSeasonIndex
 import dev.aaa1115910.bv.offline.OfflineVideoCacheTarget
 import dev.aaa1115910.bv.offline.OfflineVideoCacheTaskState
 import dev.aaa1115910.bv.player.entity.Resolution
@@ -2053,13 +2053,14 @@ private fun buildTvOfflineCacheItems(
 ): List<TvOfflineCacheItem> {
     if (videoDetail == null) return emptyList()
 
+    val seasonIndex = videoDetail.offlineSeasonIndex()
     val ugcItems = videoDetail.ugcSeason?.sections
         ?.flatMap { section ->
             section.episodes.flatMap { episode ->
                 if (episode.pages.size > 1) {
                     episode.pages.map { page ->
                         val target = OfflineVideoCacheTarget(
-                            season = videoDetail.toOfflineSeasonMetadata(),
+                            season = seasonIndex[episode.aid to page.cid],
                             aid = episode.aid,
                             bvid = episode.bvid,
                             cid = page.cid,
@@ -2088,7 +2089,7 @@ private fun buildTvOfflineCacheItems(
                     val page = episode.pages.firstOrNull()
                     val targetCid = page?.cid ?: episode.cid
                     val target = OfflineVideoCacheTarget(
-                        season = videoDetail.toOfflineSeasonMetadata(),
+                        season = seasonIndex[episode.aid to targetCid],
                         aid = episode.aid,
                         bvid = episode.bvid,
                         cid = targetCid,
@@ -2124,7 +2125,7 @@ private fun buildTvOfflineCacheItems(
 
     return videoDetail.pages.map { page ->
         val target = OfflineVideoCacheTarget(
-            season = videoDetail.toOfflineSeasonMetadata(),
+            season = seasonIndex[videoDetail.aid to page.cid],
             aid = videoDetail.aid,
             bvid = videoDetail.bvid,
             cid = page.cid,

@@ -313,6 +313,13 @@ fun OfflineCacheScreen(
                     }
                 ) { Text("更新片段") }
                 Button(
+                    enabled = completedCards.any { it.key in selectedKeys && it.entry?.epId == null },
+                    onClick = {
+                        val entries = completedCards.filter { it.key in selectedKeys }.mapNotNull { it.entry }
+                        scope.launch { offlineCacheService.updateSeasonMetadata(entries).getOrThrow().toast(context) }
+                    }
+                ) { Text("更新合集") }
+                Button(
                     modifier = Modifier.height(36.dp),
                     enabled = selectedKeys.isNotEmpty(),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),

@@ -105,11 +105,36 @@ data class OfflineSeasonMetadata(
     val id: Long,
     val title: String,
     val cover: String = "",
-    val mid: Long = 0L
+    val mid: Long = 0L,
+    val episodeIndex: Int? = null,
+    val pageIndex: Int? = null
 )
 
-fun VideoDetail.toOfflineSeasonMetadata(): OfflineSeasonMetadata? = ugcSeason?.let {
-    OfflineSeasonMetadata(it.id.toLong(), it.title, it.cover, author.mid)
+fun VideoDetail.offlineSeasonIndex(): Map<Pair<Long, Long>, OfflineSeasonMetadata> {
+    val season = ugcSeason ?: return emptyMap()
+    val meta = OfflineSeasonMetadata(season.id.toLong(), season.title, season.cover, author.mid)
+    return buildMap {
+        var episodeIndex = 0
+        for (section in season.sections) {
+            for (episode in section.episodes) {
+                val parts = episode.pages.ifEmpty { if (episode.aid == aid) pages else emptyList() }
+                if (parts.isEmpty()) {
+                    put(episode.aid to episode.cid, meta.copy(episodeIndex = episodeIndex, pageIndex = 0))
+                } else {
+                    parts.forEachIndexed { i, part ->
+                        put(episode.aid to part.cid, meta.copy(episodeIndex = episodeIndex, pageIndex = i))
+                    }
+                }
+                episodeIndex++
+            }
+        }
+    }
+}
+
+internal fun List<OfflineVideoCacheEntry>.inSeasonOrder(): List<OfflineVideoCacheEntry> {
+    if (any { it.season?.episodeIndex == null || it.season.pageIndex == null }) return this
+    return sortedWith(compareBy<OfflineVideoCacheEntry> { it.season?.episodeIndex }
+        .thenBy { it.season?.pageIndex }.thenBy { it.cid })
 }
 
 @Serializable
@@ -527,6 +552,7 @@ class OfflineVideoCacheService(
         val loadedEntries = scannedEntries
             .filter { it.completed && cacheFilesReady(it) }
             .sortedByDescending { it.updatedAt }
+            .groupBy { it.groupKey }.values.flatMap { it.inSeasonOrder() }
         val interruptedStates = scannedEntries
             .filterNot { it.completed && cacheFilesReady(it) }
             .map { it.toInterruptedState() }
@@ -601,7 +627,7 @@ class OfflineVideoCacheService(
 
     fun getCompletedGroupEntries(entry: OfflineVideoCacheEntry): List<OfflineVideoCacheEntry> =
         getAllCompletedEntries().filter { it.groupKey == entry.groupKey }
-            .sortedWith(compareBy<OfflineVideoCacheEntry> { it.createdAt }.thenBy { it.cid })
+            .sortedWith(compareBy<OfflineVideoCacheEntry> { it.createdAt }.thenBy { it.cid }).inSeasonOrder()
 
     fun getAllCompletedEntries(): List<OfflineVideoCacheEntry> =
         scanEntries()
@@ -690,7 +716,7 @@ class OfflineVideoCacheService(
         val season = target.season ?: existing?.season ?: if (target.epId == null) {
             try {
                 videoDetailRepository.getVideoDetail(target.aid, preferApiType = PlayerSettingsProvider.current.apiType, withUserActions = false)
-                    .toOfflineSeasonMetadata()
+                    .offlineSeasonIndex()[target.aid to target.cid]
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
                 null
@@ -1259,6 +1285,33 @@ class OfflineVideoCacheService(
             file.failWrite(stream)
             throw error
         }
+    }
+
+    suspend fun updateSeasonMetadata(entries: List<OfflineVideoCacheEntry>): Result<String> = withContext(Dispatchers.IO) {
+        val eligible = entries.filter { it.epId == null }.distinctBy { it.aid to it.cid }
+        var updated = 0
+        for ((aid, parts) in eligible.groupBy { it.aid }) {
+            try {
+                val detail = videoDetailRepository.getVideoDetail(aid, preferApiType = PlayerSettingsProvider.current.apiType, withUserActions = false)
+                val index = detail.offlineSeasonIndex()
+                for (part in parts) {
+                    val metadata = index[aid to part.cid] ?: continue
+                    synchronized(this@OfflineVideoCacheService) {
+                        val latest = getCompletedEntry(aid, part.cid)
+                        if (latest != null && latest.createdAt == part.createdAt && key(aid, part.cid) !in removingTaskKeys) {
+                            persistEntry(entryDir(aid, part.cid), latest.copy(season = metadata))
+                            updated++
+                        }
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.warn(e) { "Refresh offline season failed for aid=$aid" }
+            }
+        }
+        if (updated > 0) refreshEntries()
+        Result.success("已更新 $updated / ${eligible.size} 项合集信息")
     }
 
     suspend fun updateSkipMetadata(aid: Long, cid: Long): Result<String> = withContext(Dispatchers.IO) {

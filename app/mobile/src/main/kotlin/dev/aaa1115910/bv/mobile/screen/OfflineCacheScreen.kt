@@ -168,7 +168,14 @@ fun OfflineCacheScreen(
                     }
                     entries.groupBy { it.groupKey }.forEach { (groupKey, groupEntries) ->
                         item(key = "group-$groupKey") {
-                            Text("${groupEntries.first().groupTitle} · ${groupEntries.size} 项", style = MaterialTheme.typography.titleMedium)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("${groupEntries.first().groupTitle} · ${groupEntries.size} 项", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                                if (groupEntries.any { it.epId == null }) {
+                                    TextButton(onClick = { runCacheAction { offlineVideoCacheService.updateSeasonMetadata(groupEntries) } }) {
+                                        Text("更新合集")
+                                    }
+                                }
+                            }
                         }
                     items(
                         items = groupEntries,
