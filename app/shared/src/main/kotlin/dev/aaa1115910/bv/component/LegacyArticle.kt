@@ -36,20 +36,27 @@ fun LegacyArticle(id: Long, tv: Boolean, onBack: () -> Unit, onOpen: (String) ->
             error?.let { Text(it); OpusAction("重试", tv) { retry++ } }
             val body = html
             if (body == null && error == null) LinearProgressIndicator(Modifier.fillMaxWidth())
-            if (body != null) AndroidView(modifier = Modifier.fillMaxWidth().weight(1f), factory = { context ->
-                WebView(context).apply {
-                    settings.javaScriptEnabled = false
-                    settings.allowFileAccess = false
-                    settings.allowContentAccess = false
-                    webViewClient = object : WebViewClient() {
-                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                            request?.url?.toString()?.let(onOpen)
-                            return true
-                        }
-                    }
-                    loadDataWithBaseURL("https://www.bilibili.com/", "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><style>body{font-size:18px;line-height:1.7;padding:12px;color:#333}img{max-width:100%;height:auto}blockquote{border-left:3px solid #777;padding-left:16px}</style>$body", "text/html", "UTF-8", null)
-                }
-            }, onRelease = { it.destroy() })
+            if (body != null) ArticleHtml(body, Modifier.fillMaxWidth().weight(1f), onOpen)
         }
+    }
+}
+
+@Composable
+fun ArticleHtml(body: String, modifier: Modifier, onOpen: (String) -> Unit) {
+    key(body) {
+        AndroidView(modifier = modifier, factory = { context ->
+            WebView(context).apply {
+                settings.javaScriptEnabled = false
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                        request?.url?.toString()?.let(onOpen)
+                        return true
+                    }
+                }
+                loadDataWithBaseURL("https://www.bilibili.com/", "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><style>body{font-size:18px;line-height:1.7;padding:12px;color:#333}img{max-width:100%;height:auto}blockquote{border-left:3px solid #777;padding-left:16px}</style>$body", "text/html", "UTF-8", null)
+            }
+        }, onRelease = { it.destroy() })
     }
 }

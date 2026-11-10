@@ -15,10 +15,11 @@ import dev.aaa1115910.bv.ui.theme.BVTheme
 
 class DynamicDetailActivity : TvComponentActivity() {
     companion object {
-        fun actionStart(context: Context, dynamicId: String, commentAnchor: CommentAnchor? = null) {
+        fun actionStart(context: Context, dynamicId: String, commentAnchor: CommentAnchor? = null, fullText: Boolean = false) {
             context.startActivity(
                 Intent(context, DynamicDetailActivity::class.java).apply {
                     putExtra("dynamicId", dynamicId)
+                    putExtra("fullText", fullText)
                     putCommentAnchor(commentAnchor)
                 }
             )

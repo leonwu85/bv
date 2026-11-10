@@ -117,6 +117,7 @@ data class OpusParagraph(
     val pic: OpusPicParagraph? = null,
     val line: OpusLineParagraph? = null,
     val blockquote: OpusBlockquote? = null,
+    @SerialName("link_card") val linkCard: JsonElement? = null,
     val format: OpusParagraphFormat? = null
 )
 

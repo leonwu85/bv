@@ -3,6 +3,10 @@ package dev.aaa1115910.biliapi.entity.user
 import dev.aaa1115910.biliapi.http.entity.dynamic.OpusParagraph
 import dev.aaa1115910.biliapi.http.entity.dynamic.OpusTextNode
 
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+
 object OpusParagraphParser {
     fun parse(paragraphs: List<OpusParagraph>, depth: Int = 0): List<ArticleParagraph> {
         if (depth >= 16) return emptyList()
@@ -44,9 +48,19 @@ object OpusParagraphParser {
                     }
                     ArticleParagraph.LineParagraph(picture = picture)
                 }
+                6 -> parseLinkCard(para.linkCard as? JsonObject)
                 else -> null
             }
         }
+    }
+
+    private fun parseLinkCard(wrapper: JsonObject?): ArticleParagraph.LinkCard? {
+        val card = wrapper?.get("card") as? JsonObject ?: return null
+        fun JsonObject.text(key: String) = (get(key) as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+        val kind = card.text("type")?.removePrefix("LINK_CARD_TYPE_")?.lowercase()
+        val body = kind?.let { card[it] as? JsonObject }
+        val title = body?.text("title") ?: body?.text("text") ?: card.text("title") ?: return null
+        return ArticleParagraph.LinkCard(title, body?.text("jump_url")?.let { if (it.startsWith("//")) "https:$it" else it })
     }
 
     /**

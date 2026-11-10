@@ -318,7 +318,7 @@ fun NewDynamicsScreen(
                 else -> {
                     // 其他类型跳转到动态详情页
                     dynamic.id?.let { dynamicId ->
-                        DynamicDetailActivity.actionStart(context, dynamicId)
+                        DynamicDetailActivity.actionStart(context, dynamicId, fullText = dynamic.hasFullText)
                     }
                 }
             }
@@ -981,6 +981,7 @@ private fun AllDynamicCard(
                 else -> DynamicUnknownContent(type = dynamicItem.type)
             }
 
+            if (dynamicItem.hasFullText && dynamicItem.blocked == null) Text("全文")
             DynamicFooterInfo(footer = dynamicItem.footer)
         }
     }

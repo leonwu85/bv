@@ -107,7 +107,7 @@ fun DynamicDetailScreen(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    var dynamicItem by remember { mutableStateOf<DynamicItem?>(null) }
+    val dynamicItem = dynamicDetailViewModel.dynamicItem
     var isLoading by remember { mutableStateOf(true) }
     var showCommentPanel by remember { mutableStateOf(false) }
     var showRepostDialog by remember { mutableStateOf(false) }
@@ -120,13 +120,9 @@ fun DynamicDetailScreen(
         logger.fInfo { "Loading dynamic detail for id: $dynamicId" }
         dynamicDetailViewModel.dynamicId = dynamicId
         dynamicDetailViewModel.loadDynamic()
-        dynamicItem = dynamicDetailViewModel.dynamicItem
         isLoading = false
 
-        // 如果是专栏类型，加载完整内容
-        if (dynamicItem?.type == DynamicType.Article) {
-            dynamicDetailViewModel.loadArticleContent()
-        }
+        dynamicDetailViewModel.loadArticleContent((context as android.app.Activity).intent.getBooleanExtra("fullText", false))
     }
 
     val contentFocusRequester = remember { FocusRequester() }
@@ -598,6 +594,10 @@ private fun DynamicContentSection(
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        if (dynamicItem.type != DynamicType.Article && articleParagraphs.isNotEmpty()) {
+            ArticleContent(paragraphs = articleParagraphs)
+            return@Column
+        }
         when (dynamicItem.type) {
             DynamicType.Av -> {
                 dynamicItem.video?.let { video ->

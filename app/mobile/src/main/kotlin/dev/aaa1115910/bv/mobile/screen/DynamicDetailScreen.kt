@@ -937,7 +937,7 @@ fun rememberDynamicDetailState(
 
         scope.launch(Dispatchers.IO) {
             dynamicDetailViewModel.loadDynamic()
-            dynamicDetailViewModel.loadArticleContent()
+            dynamicDetailViewModel.loadArticleContent(intent.getBooleanExtra("fullText", false))
             dynamicDetailViewModel.dynamicItem?.let { item ->
                 if (item.commentId > 0L && item.commentType > 0L) {
                     withContext(Dispatchers.Main.immediate) {

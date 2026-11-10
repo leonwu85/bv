@@ -11,7 +11,7 @@ sealed interface BiliContentLink {
     data class Live(val roomId: Int) : BiliContentLink
     data class LiveActivity(val url: String) : BiliContentLink
     data class User(val mid: Long) : BiliContentLink
-    data class Dynamic(val id: String, val commentAnchor: CommentAnchor? = null) : BiliContentLink
+    data class Dynamic(val id: String, val commentAnchor: CommentAnchor? = null, val isOpus: Boolean = false) : BiliContentLink
     data class Article(val id: Long, val commentAnchor: CommentAnchor? = null) : BiliContentLink
 
     companion object {
@@ -33,7 +33,7 @@ sealed interface BiliContentLink {
                 ?: uri.fragment?.removePrefix("reply")?.toLongOrNull()?.takeIf { it > 0 })?.let {
                 CommentAnchor(it, positive("comment_secondary_id") ?: positive("anchor"))
             }
-            fun dynamic(id: String) = Dynamic(id, anchor)
+            fun dynamic(id: String) = Dynamic(id, anchor, isOpus = host == "opus" || parts.firstOrNull() == "opus")
             fun article(id: String) = id.removePrefix("cv").toLongOrNull()?.takeIf { it > 0 }?.let { Article(it, anchor) }
             fun video(id: Long) = Video(
                 aid = id,

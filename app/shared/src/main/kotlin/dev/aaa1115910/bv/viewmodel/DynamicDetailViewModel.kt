@@ -73,8 +73,8 @@ class DynamicDetailViewModel(
      * 加载专栏完整内容
      * 在 loadDynamic 之后调用，仅对 Article 类型动态有效
      */
-    suspend fun loadArticleContent() {
-        if (dynamicItem?.type != DynamicType.Article) return
+    suspend fun loadArticleContent(fullText: Boolean = false) {
+        if (dynamicItem?.blocked != null || (!fullText && dynamicItem?.type != DynamicType.Article && dynamicItem?.hasFullText != true)) return
         if (isLoadingArticle) return
 
         isLoadingArticle = true
@@ -90,6 +90,7 @@ class DynamicDetailViewModel(
             updateCommentTarget(opusDetail.commentId, opusDetail.commentType)
             logger.fInfo { "Loaded ${articleParagraphs.size} paragraphs" }
         }.onFailure {
+            if (it is kotlinx.coroutines.CancellationException) throw it
             logger.fException(it) { "Failed to load article content" }
             articleLoadError = it.message
             // 加载失败不显示 toast，回退到摘要显示

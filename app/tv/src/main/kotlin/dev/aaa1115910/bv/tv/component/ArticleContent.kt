@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.tv.component
 
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
@@ -42,12 +43,21 @@ fun ArticleContent(
 ) {
     val linkColor = MaterialTheme.colorScheme.primary
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val open: (String) -> Unit = { url -> scope.launch { dev.aaa1115910.bv.tv.util.openBiliContent(context, url) } }
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         paragraphs.forEachIndexed { index, paragraph ->
             when (paragraph) {
+                is ArticleParagraph.LegacyHtml -> dev.aaa1115910.bv.component.ArticleHtml(paragraph.html, Modifier.fillMaxWidth(), open)
+                is ArticleParagraph.LinkCard -> {
+                    val url = paragraph.url
+                    if (url == null) Text(paragraph.title)
+                    else dev.aaa1115910.bv.component.OpusAction(paragraph.title, true) { open(url) }
+                }
                 is ArticleParagraph.QuoteParagraph -> {
                     ArticleContent(
                         modifier = Modifier.fillMaxWidth().drawBehind {

@@ -18,11 +18,12 @@ class DynamicDetailActivity : ComponentActivity() {
     companion object {
         private val logger = KotlinLogging.logger { }
 
-        fun actionStart(context: Context, dynamicId: String, commentAnchor: CommentAnchor? = null) {
+        fun actionStart(context: Context, dynamicId: String, commentAnchor: CommentAnchor? = null, fullText: Boolean = false) {
             logger.info { "actionStart: dynamicId=$dynamicId" }
             context.startActivity(
                 Intent(context, DynamicDetailActivity::class.java).apply {
                     putExtra("dynamicId", dynamicId)
+                    putExtra("fullText", fullText)
                     putCommentAnchor(commentAnchor)
                 }
             )

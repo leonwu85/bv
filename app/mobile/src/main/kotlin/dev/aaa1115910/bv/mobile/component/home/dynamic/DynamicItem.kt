@@ -134,6 +134,11 @@ fun DynamicItem(
                 onShowPreviewer = onShowPreviewer,
                 onClick = onClick
             )
+            if (dynamicItem.hasFullText && dynamicItem.blocked == null) {
+                androidx.compose.material3.TextButton(onClick = {
+                    dynamicItem.id?.let { dev.aaa1115910.bv.mobile.activities.DynamicDetailActivity.actionStart(context, it, fullText = true) }
+                }) { Text("全文") }
+            }
             dynamicItem.vote?.let { vote ->
                 DynamicVoteCard(
                     modifier = Modifier.padding(horizontal = paddingSize),
@@ -190,6 +195,10 @@ fun DynamicContent(
             modifier = contentModifier,
             blocked = blocked
         )
+        return
+    }
+    if (dynamicItem.type != DynamicType.Article && articleParagraphs.isNotEmpty()) {
+        ArticleParagraphContent(articleParagraphs, previewerState, onShowPreviewer)
         return
     }
     when (dynamicItem.type) {
@@ -1722,10 +1731,19 @@ private fun ArticleParagraphContent(
     previewerState: ImagePreviewerState,
     onShowPreviewer: (List<Picture>, () -> Unit) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val open: (String) -> Unit = { url -> scope.launch { dev.aaa1115910.bv.mobile.util.openBiliContent(context, url) } }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             paragraphs.forEach { paragraph ->
                 when (paragraph) {
-                    is ArticleParagraph.QuoteParagraph -> {
+                    is ArticleParagraph.LegacyHtml -> dev.aaa1115910.bv.component.ArticleHtml(paragraph.html, Modifier.fillMaxWidth(), open)
+                is ArticleParagraph.LinkCard -> {
+                    val url = paragraph.url
+                    if (url == null) Text(paragraph.title)
+                    else dev.aaa1115910.bv.component.OpusAction(paragraph.title, false) { open(url) }
+                }
+                is ArticleParagraph.QuoteParagraph -> {
                         val quoteColor = MaterialTheme.colorScheme.primary
                         Column(Modifier.fillMaxWidth().drawBehind {
                             drawRect(quoteColor, size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height))

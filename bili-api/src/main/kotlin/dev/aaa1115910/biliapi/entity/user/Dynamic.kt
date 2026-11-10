@@ -279,13 +279,15 @@ data class DynamicItem(
     var vote: DynamicVoteModule? = null,
     val footer: DynamicFooterModule? = null,
     var orig: DynamicItem? = null,
-    var jumpUrl: String? = null
+    var jumpUrl: String? = null,
+    val hasFullText: Boolean = false
 ) {
     companion object {
         fun fromDynamicItem(item: dev.aaa1115910.biliapi.http.entity.dynamic.DynamicItem): DynamicItem {
             val dynamicType = DynamicType.fromWebValueOrNull(item.type) ?: DynamicType.None
             val dynamicItem = DynamicItem(
                 id = item.idStr.ifBlank { null },
+                hasFullText = item.modules.moduleDynamic.major?.opus?.foldAction?.singleOrNull() == "全文",
                 commentId = item.basic.commentIdStr.toLongOrDefault(0),
                 commentType = item.basic.commentType,
                 type = dynamicType,
@@ -372,6 +374,7 @@ data class DynamicItem(
             }
             val dynamicItem = DynamicItem(
                 id = item.extend.dynIdStr,
+                hasFullText = item.getOpusSummaryModule()?.summaryJumpBtnText == "全文",
                 commentId = item.extend.businessId.toLongOrDefault(0),
                 commentType = commentType,
                 // item.extend.rType 总是为 0
@@ -1479,7 +1482,7 @@ private fun bilibili.app.dynamic.v2.DynamicItem.getParagraphModule() =
  * 段落类型枚举
  */
 enum class ParagraphType {
-    Text, Pictures, Line, Quote, Unknown
+    Text, Pictures, Line, Quote, Unknown, LegacyHtml, LinkCard
 }
 
 /**
@@ -1509,6 +1512,14 @@ sealed class ArticleParagraph {
         val children: List<ArticleParagraph>,
         override val type: ParagraphType = ParagraphType.Quote
     ) : ArticleParagraph()
+
+    data class LegacyHtml(val html: String) : ArticleParagraph() {
+        override val type = ParagraphType.LegacyHtml
+    }
+
+    data class LinkCard(val title: String, val url: String?) : ArticleParagraph() {
+        override val type = ParagraphType.LinkCard
+    }
 
     data class LineParagraph(
         override val type: ParagraphType = ParagraphType.Line,

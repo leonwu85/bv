@@ -38,10 +38,10 @@ suspend fun openBiliContent(context: Context, text: String): Boolean {
                 val article = withContext(Dispatchers.IO) { BiliHttpApi.getArticleView(link.id.toString(), dev.aaa1115910.bv.util.Prefs.sessData).getResponseData() }
                 val opusId = article.opus?.opusId
                 if (opusId != null && opusId > 0) DynamicDetailActivity.actionStart(context, opusId.toString(),
-                    link.commentAnchor?.copy(oid = link.id, type = 12))
+                    link.commentAnchor?.copy(oid = link.id, type = 12), fullText = true)
                 else dev.aaa1115910.bv.tv.activities.ArticleActivity.actionStart(context, link.id, link.commentAnchor)
             }
-            is BiliContentLink.Dynamic -> DynamicDetailActivity.actionStart(context, link.id, link.commentAnchor)
+            is BiliContentLink.Dynamic -> DynamicDetailActivity.actionStart(context, link.id, link.commentAnchor, fullText = link.isOpus)
         }
     } catch (e: CancellationException) {
         throw e
