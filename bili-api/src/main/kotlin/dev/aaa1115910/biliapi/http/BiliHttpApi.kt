@@ -247,7 +247,7 @@ object BiliHttpApi {
         buvid3?.takeIf { it.isNotBlank() }?.let { cookieParts.add("buvid3=$it") }
         gaiaVtoken?.takeIf { it.isNotBlank() }?.let { cookieParts.add("x-bili-gaia-vtoken=$it") }
         if (cookieParts.isNotEmpty()) {
-            header("Cookie", cookieParts.joinToString(";") + ";")
+            header("Cookie", cookieParts.joinToString("; "))
         }
     }
 
