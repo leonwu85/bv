@@ -20,5 +20,6 @@ internal object GaiaCompanionApi {
     private suspend fun submit(action: String, form: Parameters): String =
         client.submitForm("$API/x/gaia-vgate/v2/$action", form) {
             header("Referer", "https://www.bilibili.com/")
+            WebDeviceCookieSync.verificationCookies()?.let { header("Cookie", it.toCookieHeader()) }
         }.bodyAsText()
 }

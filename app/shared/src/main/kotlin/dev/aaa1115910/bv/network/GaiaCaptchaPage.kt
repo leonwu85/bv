@@ -44,6 +44,56 @@ fun buildGaiaCaptchaHtml(voucher: String, sessionId: String? = null): String {
         var transport = window.parent;
         lanFetch = transport.fetch.bind(transport);
         sessionUrl = transport.location.origin + '/geetest/' + encodeURIComponent(sessionId);
+        // HTTP LAN pages have getRandomValues, but no SubtleCrypto (including Safari).
+        // The official SDK needs only raw AES-CBC import/encrypt after the user solves the
+        // challenge. Delegate those operations to the TV's JCE provider for this session.
+        // Loading HTTPS scripts or upgrade-insecure-requests does not make this page secure.
+        if (window.crypto && !window.crypto.subtle) {
+          var keys = new WeakMap();
+          function bytes(value) {
+            return ArrayBuffer.isView(value)
+              ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+              : new Uint8Array(value);
+          }
+          function base64(value) {
+            var binary = '';
+            bytes(value).forEach(function (byte) { binary += String.fromCharCode(byte); });
+            return btoa(binary);
+          }
+          function isAesCbc(algorithm) {
+            return String(typeof algorithm === 'string' ? algorithm : algorithm && algorithm.name)
+              .toUpperCase() === 'AES-CBC';
+          }
+          Object.defineProperty(window.crypto, 'subtle', {value: {
+            importKey: async function (format, data, algorithm, extractable, usages) {
+              if (format !== 'raw' || !isAesCbc(algorithm) || extractable ||
+                  !Array.isArray(usages) || usages.length !== 1 || usages[0] !== 'encrypt') {
+                throw new Error('不支持的验证加密方式');
+              }
+              var raw = bytes(data);
+              if ([16, 24, 32].indexOf(raw.byteLength) < 0) throw new Error('验证密钥长度无效');
+              var key = Object.freeze({type: 'secret', extractable: false,
+                algorithm: Object.freeze({name: 'AES-CBC', length: raw.byteLength * 8}),
+                usages: Object.freeze(['encrypt'])});
+              keys.set(key, base64(raw));
+              return key;
+            },
+            encrypt: async function (algorithm, key, data) {
+              if (!isAesCbc(algorithm) || !keys.has(key) || !algorithm.iv ||
+                  bytes(algorithm.iv).byteLength !== 16 || bytes(data).byteLength > 65536) {
+                throw new Error('验证加密参数无效');
+              }
+              var response = await lanFetch(sessionUrl + '/gaia/encrypt', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({key: keys.get(key), iv: base64(algorithm.iv), data: base64(data)})
+              });
+              if (!response.ok) throw new Error('验证加密失败，请检查与电视的连接或重新扫码');
+              var result = await response.json();
+              if (typeof result.data !== 'string') throw new Error('验证加密结果无效');
+              return Uint8Array.from(atob(result.data), function (char) { return char.charCodeAt(0); }).buffer;
+            }
+          }});
+        }
         // The LAN page cannot make credentialed cross-origin SDK requests to Bilibili.
         var routes = {
           '/x/web-frontend/risk/config': 'config',

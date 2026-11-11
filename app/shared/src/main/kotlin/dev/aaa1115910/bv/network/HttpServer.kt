@@ -11,6 +11,7 @@ import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.receiveParameters
+import io.ktor.server.request.receiveChannel
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.header
 import io.ktor.server.response.respondFile
@@ -18,6 +19,8 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.ktor.utils.io.readRemaining
+import kotlinx.io.readByteArray
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.net.BindException
 import java.util.concurrent.atomic.AtomicBoolean
@@ -165,6 +168,23 @@ object HttpServer {
                     return@get call.respondText("验证会话已过期", status = HttpStatusCode.NotFound)
                 }
                 call.respondText(GaiaCompanionApi.config(), ContentType.Application.Json)
+            }
+            post("/geetest/{id}/gaia/encrypt") {
+                val session = GeetestCompanionService.getSession(call.parameters["id"].orEmpty())
+                if (session?.request !is CaptchaRequest.Gaia || session.completed) {
+                    return@post call.respondText("验证会话已过期", status = HttpStatusCode.NotFound)
+                }
+                val body = call.receiveChannel()
+                    .readRemaining(GaiaCompanionCrypto.MAX_REQUEST_BYTES + 1).readByteArray()
+                if (body.size > GaiaCompanionCrypto.MAX_REQUEST_BYTES) {
+                    return@post call.respondText("验证数据过大", status = HttpStatusCode.PayloadTooLarge)
+                }
+                val encrypted = try {
+                    GaiaCompanionCrypto.encrypt(body.decodeToString())
+                } catch (_: IllegalArgumentException) {
+                    return@post call.respondText("验证加密参数无效", status = HttpStatusCode.BadRequest)
+                }
+                call.respondText(encrypted, ContentType.Application.Json)
             }
             post("/geetest/{id}/gaia/{action}") {
                 val session = GeetestCompanionService.getSession(call.parameters["id"].orEmpty())

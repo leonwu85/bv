@@ -194,6 +194,11 @@ fun HttpClient.encApiSign() = plugin(HttpSend)
                 request.headers["Cookie"] = newCookie
             }
         }
+        if (!isAppRequest && request.url.host == "api.bilibili.com") {
+            BiliHttpApi.webDeviceCookiesProvider()?.let { device ->
+                request.headers["Cookie"] = device.mergeInto(request.headers["Cookie"].orEmpty())
+            }
+        }
 
         when (request.method) {
             // app 端如果既用到了 wbi get 接口，也用到了 token 去请求，那是先计算 wbi sign 还是 app sign？

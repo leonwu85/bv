@@ -83,6 +83,7 @@ import dev.aaa1115910.bv.player.renderer.SimpleRenderer
 import dev.aaa1115910.bv.player.util.TvDanmakuCompatibilityPolicy
 import dev.aaa1115910.bv.player.AbstractVideoPlayer
 import dev.aaa1115910.bv.network.DashIndexProbe
+import dev.aaa1115910.bv.network.WebDeviceCookieSync
 import dev.aaa1115910.bv.player.PlaybackRequestHeaders
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.DashRepresentation
@@ -2419,6 +2420,7 @@ class VideoPlayerV3ViewModel(
                 !isVodPlaybackSessionActive(pending.retryRequest.playbackSessionToken)
             ) return@launch
 
+            WebDeviceCookieSync.synchronize(authRepository)
             authRepository.gaiaVtoken = token
             geetestRegistrationGeneration++
             val reboundPending = rebindGeetestToNextVodPlaybackSession(pending)

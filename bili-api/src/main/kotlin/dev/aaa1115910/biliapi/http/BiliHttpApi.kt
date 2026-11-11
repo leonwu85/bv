@@ -106,6 +106,7 @@ import dev.aaa1115910.biliapi.http.entity.video.VideoShot
 import dev.aaa1115910.biliapi.http.entity.web.NavResponseData
 import dev.aaa1115910.biliapi.http.plugins.BiliUserAgent
 import dev.aaa1115910.biliapi.http.util.BiliAppConf
+import dev.aaa1115910.biliapi.http.util.WebDeviceCookies
 import dev.aaa1115910.biliapi.http.util.encAppGet
 import dev.aaa1115910.biliapi.http.util.encWbi
 import dev.aaa1115910.biliapi.http.util.encApiSign
@@ -176,6 +177,7 @@ object BiliHttpApi {
     var sessDataProvider: () -> String = { "" }
     // 用于获取 buvid3 的提供者，由应用层设置
     var buvid3Provider: () -> String? = { null }
+    var webDeviceCookiesProvider: () -> WebDeviceCookies? = { null }
 
     private val json = Json {
         coerceInputValues = true

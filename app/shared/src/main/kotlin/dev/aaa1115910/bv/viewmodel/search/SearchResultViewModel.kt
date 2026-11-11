@@ -8,6 +8,7 @@ import dev.aaa1115910.biliapi.entity.search.searchKey
 import dev.aaa1115910.biliapi.repositories.*
 import dev.aaa1115910.bv.repository.LocalUserBlockRepository
 import dev.aaa1115910.bv.R
+import dev.aaa1115910.bv.network.WebDeviceCookieSync
 import dev.aaa1115910.bv.util.Partition
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.viewmodel.acceptedGaiaToken
@@ -75,6 +76,7 @@ class SearchResultViewModel(
         val pending = verification ?: return
         if (!pending.isCurrent()) return
         authRepository.gaiaVtoken = acceptedGaiaToken(pending.voucher, sourceVoucher, vtoken) ?: return
+        WebDeviceCookieSync.synchronize(authRepository)
         verification = null
         if (refreshingVerification === pending) {
             jobs.remove(pending.type)?.cancel()

@@ -23,6 +23,7 @@ import dev.aaa1115910.bv.dao.AppDatabase
 import dev.aaa1115910.bv.entity.AuthData
 import dev.aaa1115910.bv.entity.db.UserDB
 import dev.aaa1115910.bv.network.HttpServer
+import dev.aaa1115910.bv.network.WebDeviceCookieSync
 import dev.aaa1115910.bv.repository.UserRepository
 import dev.aaa1115910.bv.util.BlacklistUtil
 import dev.aaa1115910.bv.util.CoilConfig
@@ -115,6 +116,7 @@ class BVApp : Application() {
         // 设置 sessData 提供者，用于更新 WBI keys 时携带登录凭证
         BiliHttpApi.sessDataProvider = { Prefs.sessData }
         BiliHttpApi.buvid3Provider = { Prefs.buvid3 }
+        BiliHttpApi.webDeviceCookiesProvider = WebDeviceCookieSync::currentCookies
         BiliAuthFailureHandler.onAuthFailure = { message ->
             if (Prefs.isLogin) {
                 val authData = AuthData.fromPrefs()
@@ -143,6 +145,7 @@ class BVApp : Application() {
         authRepository.mid = Prefs.uid.takeIf { it != 0L }
         authRepository.buvid3 = Prefs.buvid3
         authRepository.buvid = Prefs.buvid
+        WebDeviceCookieSync.synchronize(authRepository)
     }
 
     fun initProxy() {

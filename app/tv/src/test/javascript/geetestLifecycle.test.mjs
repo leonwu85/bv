@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import test from 'node:test';
+import { webcrypto } from 'node:crypto';
 
 const repository = fileURLToPath(new URL('../../../../../', import.meta.url));
 const pages = {
@@ -161,7 +162,7 @@ test('phone: failed result delivery can retry without solving another captcha', 
   assert.equal(page.element('ok').style.display, 'block');
 });
 
-async function runGaiaPage({ sessionId = null, token = 'server-vtoken', error, fetch } = {}) {
+async function runGaiaPage({ sessionId = null, token = 'server-vtoken', error, fetch, crypto, beforeToken } = {}) {
   const path = 'app/shared/src/main/kotlin/dev/aaa1115910/bv/network/GaiaCaptchaPage.kt';
   const source = readFileSync(resolve(repository, path), 'utf8');
   const script = source.match(/<script>([\s\S]*?)<\/script>/)[1]
@@ -174,21 +175,23 @@ async function runGaiaPage({ sessionId = null, token = 'server-vtoken', error, f
   }
   let registered;
   const window = {
-    fetch,
+    fetch, crypto,
     parent: {fetch, XMLHttpRequest: Xhr, location: {origin: 'http://tv.local:1000'}},
     CaptchaLoader: { load: async () => async (options) => {
       registered = options.riskParams.v_voucher;
       if (error) throw error;
+      if (beforeToken) await beforeToken(window);
       return token;
     } },
     Android: sessionId ? undefined : { onGaiaVerified(value) { results.push(value); } },
   };
   runInNewContext(script, {
-    window, URL, Request, XMLHttpRequest: Xhr, location: { origin: 'http://tv.local:1000' },
+    window, URL, Request, btoa, atob, XMLHttpRequest: Xhr, location: { origin: 'http://tv.local:1000' },
     document: { baseURI: 'https://api.bilibili.com/', getElementById: id => elements[id] }, fetch,
   });
   await new Promise(setImmediate);
-  return { results, registered, elements, requests, xhr: new (window.XMLHttpRequest || Xhr)(), fetch: window.fetch };
+  return { results, registered, elements, requests, crypto: window.crypto,
+    xhr: new (window.XMLHttpRequest || Xhr)(), fetch: window.fetch };
 }
 
 test('Gaia sends the original voucher to the official SDK and delivers its validated token', async () => {
@@ -236,4 +239,75 @@ test('Gaia companion forwards SDK fetch requests with their form body', async ()
     method: 'POST', body: new URLSearchParams({v_voucher: 'voucher_123'}),
   }));
   assert.deepEqual(posts, [['http://tv.local:1000/geetest/session/gaia/register', 'POST', 'v_voucher=voucher_123']]);
+});
+
+test('HTTP companion provides the SDK AES-CBC operation without native SubtleCrypto', async () => {
+  const posts = [];
+  const getRandomValues = webcrypto.getRandomValues.bind(webcrypto);
+  const page = await runGaiaPage({ sessionId: 'session', token: '', crypto: { getRandomValues },
+    fetch: async (url, init) => {
+      const payload = JSON.parse(init.body);
+      posts.push({ url, payload });
+      const key = await webcrypto.subtle.importKey('raw', Buffer.from(payload.key, 'base64'),
+        'AES-CBC', false, ['encrypt']);
+      const encrypted = await webcrypto.subtle.encrypt({ name: 'AES-CBC', iv: Buffer.from(payload.iv, 'base64') },
+        key, Buffer.from(payload.data, 'base64'));
+      return { ok: true, json: async () => ({ data: Buffer.from(encrypted).toString('base64') }) };
+    } });
+  assert.equal(page.crypto.getRandomValues, getRandomValues);
+  for (const size of [16, 24, 32]) {
+    // Views with offsets must not leak bytes outside the view; importKey must copy the input.
+    const raw = Uint8Array.from({ length: size + 2 }, (_, i) => i).subarray(1, size + 1);
+    const saved = raw.slice();
+    const key = await page.crypto.subtle.importKey('raw', raw, { name: 'AES-CBC' }, false, ['encrypt']);
+    raw.fill(0);
+    const iv = Uint8Array.from({ length: 18 }, (_, i) => i).subarray(1, 17);
+    for (const length of [0, 16, 17]) {
+      const data = Uint8Array.from({ length: length + 2 }, (_, i) => i).subarray(1, length + 1);
+      const encrypted = await page.crypto.subtle.encrypt({ name: 'AES-CBC', iv }, key, data);
+      const post = posts.at(-1);
+      assert.equal(post.url, 'http://tv.local:1000/geetest/session/gaia/encrypt');
+      assert.deepEqual(Buffer.from(post.payload.key, 'base64'), Buffer.from(saved));
+      assert.deepEqual(Buffer.from(post.payload.iv, 'base64'), Buffer.from(iv));
+      const nativeKey = await webcrypto.subtle.importKey('raw', saved, 'AES-CBC', false, ['decrypt']);
+      const decrypted = await webcrypto.subtle.decrypt({ name: 'AES-CBC', iv }, nativeKey, encrypted);
+      assert.deepEqual(Buffer.from(decrypted), Buffer.from(data));
+    }
+  }
+});
+
+test('Gaia leaves native SubtleCrypto and the TV WebView unchanged', async () => {
+  const native = { subtle: webcrypto.subtle };
+  const phone = await runGaiaPage({ sessionId: 'session', token: '', crypto: native, fetch: async () => {} });
+  assert.equal(phone.crypto.subtle, webcrypto.subtle);
+  const tv = await runGaiaPage({ crypto: {} });
+  assert.equal(tv.crypto.subtle, undefined);
+  assert.deepEqual(tv.results, ['server-vtoken']);
+});
+
+test('failed companion encryption rejects the SDK result and never submits a token', async () => {
+  const posts = [];
+  const page = await runGaiaPage({ sessionId: 'session', crypto: {}, fetch: async (url) => {
+    posts.push(url);
+    return { ok: false };
+  }, beforeToken: async (window) => {
+    const key = await window.crypto.subtle.importKey('raw', new Uint8Array(16), 'AES-CBC', false, ['encrypt']);
+    await window.crypto.subtle.encrypt({ name: 'AES-CBC', iv: new Uint8Array(16) }, key, new Uint8Array(1));
+  } });
+  assert.deepEqual(posts, ['http://tv.local:1000/geetest/session/gaia/encrypt']);
+  assert.match(page.elements.status.textContent, /验证未完成：验证加密失败/);
+});
+
+test('companion crypto rejects unsupported operations and invalid inputs before requesting the TV', async () => {
+  let count = 0;
+  const page = await runGaiaPage({ sessionId: 'session', token: '', crypto: {}, fetch: async () => { count++; } });
+  const subtle = page.crypto.subtle;
+  await assert.rejects(subtle.importKey('raw', new Uint8Array(16), 'AES-GCM', false, ['encrypt']));
+  await assert.rejects(subtle.importKey('raw', new Uint8Array(15), 'AES-CBC', false, ['encrypt']));
+  await assert.rejects(subtle.importKey('raw', new Uint8Array(16), 'AES-CBC', false, ['decrypt']));
+  const key = await subtle.importKey('raw', new Uint8Array(16), 'AES-CBC', false, ['encrypt']);
+  await assert.rejects(subtle.encrypt({ name: 'AES-CBC', iv: new Uint8Array(15) }, key, new Uint8Array(1)));
+  await assert.rejects(subtle.encrypt({ name: 'AES-CBC', iv: new Uint8Array(16) }, {}, new Uint8Array(1)));
+  await assert.rejects(subtle.encrypt({ name: 'AES-CBC', iv: new Uint8Array(16) }, key, new Uint8Array(65537)));
+  assert.equal(count, 0);
 });
