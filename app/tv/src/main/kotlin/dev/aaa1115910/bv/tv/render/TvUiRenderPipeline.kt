@@ -5,13 +5,14 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Point
 import android.os.Build
+import android.view.ContextThemeWrapper
 import android.view.Display
 import dev.aaa1115910.bv.util.DeviceUtil
 
 /**
  * TV 界面与视频层的分辨率管线。
  *
- * 仅供 TV Activity 使用：浏览界面在真 4K UI 上降为 1080p Surface，
+ * 仅供 TV Activity 使用：Android 12+ 的浏览界面在真 4K UI 上降为 1080p Surface，
  * 视频仍由它自身的 SurfaceView 按物理屏和视频源分辨率输出。
  */
 internal const val TV_UI_TARGET_WIDTH_PX = 1920
@@ -73,13 +74,12 @@ internal object TvUiRenderPipeline {
                 Configuration.UI_MODE_TYPE_TELEVISION
         val has4kOutput = physicalSize.x >= 3_200 && physicalSize.y >= 1_800
         val uiExceeds1080p = uiSize.x > TV_UI_TARGET_WIDTH_PX || uiSize.y > TV_UI_TARGET_HEIGHT_PX
-        val canEmbedUi = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
         val renderMode = TvUiRenderSettings.getMode(activity)
         val renderPath = resolveRenderPath(
             isTelevision = isTelevision,
             has4kOutput = has4kOutput,
             uiExceeds1080p = uiExceeds1080p,
-            canEmbedUi = canEmbedUi,
+            sdkInt = Build.VERSION.SDK_INT,
             renderMode = renderMode,
         )
 
@@ -105,7 +105,12 @@ internal object TvUiRenderPipeline {
             else -> 2f
         }
         config.densityDpi = (density * DisplayMetricsDpiBaseline).toInt().coerceAtLeast(1)
-        return baseContext.createConfigurationContext(config)
+        // A bare configuration Context loses the Activity's startActivity/window
+        // behavior. Keep the Activity as the base so LocalContext navigation and
+        // dialogs still work when Compose is hosted in a separate ViewRoot.
+        return ContextThemeWrapper(baseContext, 0).apply {
+            applyOverrideConfiguration(config)
+        }
     }
 
     private const val DisplayMetricsDpiBaseline = 160f
@@ -123,9 +128,14 @@ internal fun resolveRenderPath(
     isTelevision: Boolean,
     has4kOutput: Boolean,
     uiExceeds1080p: Boolean,
-    canEmbedUi: Boolean,
+    sdkInt: Int,
     renderMode: TvUiRenderMode,
 ): TvUiRenderPath {
+    // Android 11 has SurfaceControlViewHost, but SurfaceView only starts forwarding
+    // focus to its embedded window in Android 12. Without that, D-pad key events
+    // stay in the Activity window while the Compose UI lives in a different root.
+    // Even Force1080p must keep the native input path on unsupported versions.
+    val canEmbedUi = sdkInt >= Build.VERSION_CODES.S
     val shouldEmbed = when (renderMode) {
         TvUiRenderMode.Native -> false
         TvUiRenderMode.Force1080p -> isTelevision && has4kOutput && canEmbedUi

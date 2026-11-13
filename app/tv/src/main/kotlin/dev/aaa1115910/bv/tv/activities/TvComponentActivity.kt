@@ -2,7 +2,7 @@ package dev.aaa1115910.bv.tv.activities
 
 import android.graphics.PixelFormat
 import android.os.Build
-import android.os.Bundle
+import android.view.KeyEvent
 import android.view.SurfaceControlViewHost
 import android.view.SurfaceView
 import android.view.ViewGroup
@@ -23,6 +23,7 @@ import dev.aaa1115910.bv.tv.render.TV_UI_TARGET_HEIGHT_PX
 import dev.aaa1115910.bv.tv.render.TV_UI_TARGET_WIDTH_PX
 import dev.aaa1115910.bv.tv.render.TvUiRenderPath
 import dev.aaa1115910.bv.tv.render.TvUiRenderPipeline
+import dev.aaa1115910.bv.tv.render.TvUiRenderSettings
 import androidx.compose.ui.unit.IntSize
 import dev.aaa1115910.bv.player.tv.LocalTvUiSurfaceEmbedded
 import dev.aaa1115910.bv.player.tv.LocalTvVideoSurfaceFixedSize
@@ -31,7 +32,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 /**
  * TV 端公共 Compose Activity。
  *
- * 仅在「物理输出为 4K，且系统 UI 层确实为高于 1080p」时，将 Compose
+ * 仅在 Android 12+ 且「物理输出为 4K，且系统 UI 层确实为高于 1080p」时，将 Compose
  * 放入 1920×1080 的 SurfaceControlViewHost。已经使用 1080p UI 层的 TV 继续使用系统原生路径，
  * 不额外增加 Surface。
  */
@@ -44,11 +45,12 @@ abstract class TvComponentActivity : ComponentActivity() {
         val tvContent: @Composable () -> Unit = { ProvideTvUiDensity(pipeline.uiWidthPx, content) }
         logger.info {
             "TV UI render path=${pipeline.renderPath}, " +
+                "sdk=${Build.VERSION.SDK_INT}, mode=${TvUiRenderSettings.getMode(this)}, " +
                 "physical=${pipeline.physicalWidthPx}x${pipeline.physicalHeightPx}, " +
                 "ui=${pipeline.uiWidthPx}x${pipeline.uiHeightPx}"
         }
         if (
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             pipeline.renderPath == TvUiRenderPath.Native
         ) {
             setNativeComposeContent(tvContent)
@@ -71,7 +73,7 @@ abstract class TvComponentActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             uiSurfaceHost?.release()
         }
         uiSurfaceHost = null
@@ -79,7 +81,7 @@ abstract class TvComponentActivity : ComponentActivity() {
     }
 }
 
-@RequiresApi(Build.VERSION_CODES.R)
+@RequiresApi(Build.VERSION_CODES.S)
 private class TvUiSurfaceHost(
     private val activity: ComponentActivity,
     private val physicalSize: IntSize,
@@ -107,8 +109,12 @@ private class TvUiSurfaceHost(
                 setFixedSize(TV_UI_TARGET_WIDTH_PX, TV_UI_TARGET_HEIGHT_PX)
             }
             setZOrderOnTop(true)
-            isFocusable = true
-            isFocusableInTouchMode = true
+            // Android 12 transfers embedded focus only from onFocusChanged().
+            // Keep this host unfocusable until its child package is attached;
+            // otherwise setContentView() can focus it too early and a later
+            // requestFocus() will not produce another focus change.
+            isFocusable = false
+            isFocusableInTouchMode = false
         }
         hostSurfaceView = surfaceView
         root.addView(surfaceView)
@@ -119,10 +125,6 @@ private class TvUiSurfaceHost(
             runCatching {
                 val hostedContext = TvUiRenderPipeline.createUiContext(activity)
                 val composeView = ComposeView(hostedContext).apply {
-                    setViewTreeLifecycleOwner(activity)
-                    setViewTreeViewModelStoreOwner(activity)
-                    setViewTreeSavedStateRegistryOwner(activity)
-                    setViewTreeOnBackPressedDispatcherOwner(activity)
                     isFocusable = true
                     isFocusableInTouchMode = true
                     setContent {
@@ -138,6 +140,33 @@ private class TvUiSurfaceHost(
                         }
                     }
                 }
+                val hostedRoot = object : FrameLayout(hostedContext) {
+                    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                        // Let Compose/player key handlers consume Back first. A windowless
+                        // ViewRoot has no Activity callback for unhandled keys, so bridge
+                        // the remaining Back event to the dispatcher used by BackHandler.
+                        if (super.dispatchKeyEvent(event)) return true
+                        if (event.keyCode != KeyEvent.KEYCODE_BACK) return false
+                        if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
+                            activity.onBackPressedDispatcher.onBackPressed()
+                        }
+                        return true
+                    }
+                }.apply {
+                    // The window recomposer looks up owners from the hosted root,
+                    // not just from the ComposeView child.
+                    setViewTreeLifecycleOwner(activity)
+                    setViewTreeViewModelStoreOwner(activity)
+                    setViewTreeSavedStateRegistryOwner(activity)
+                    setViewTreeOnBackPressedDispatcherOwner(activity)
+                    addView(
+                        composeView,
+                        FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        ),
+                    )
+                }
                 val display = requireNotNull(activity.display) { "Activity display is unavailable" }
                 val host = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
                     val rootSurfaceControl = requireNotNull(surfaceView.rootSurfaceControl) {
@@ -151,12 +180,16 @@ private class TvUiSurfaceHost(
                 } else {
                     createLegacySurfaceControlViewHost(surfaceView, display)
                 }
-                host.setView(composeView, TV_UI_TARGET_WIDTH_PX, TV_UI_TARGET_HEIGHT_PX)
+                // Keep ownership before attachment so failures also release the ViewRoot.
+                surfaceHost = host
+                host.setView(hostedRoot, TV_UI_TARGET_WIDTH_PX, TV_UI_TARGET_HEIGHT_PX)
                 surfaceView.setChildSurfacePackage(
                     requireNotNull(host.surfacePackage) { "UI SurfacePackage is unavailable" },
                 )
-                surfaceHost = host
-                surfaceView.requestFocus()
+                surfaceView.isFocusable = true
+                surfaceView.isFocusableInTouchMode = true
+                check(surfaceView.requestFocus()) { "1080p TV UI host could not acquire focus" }
+                logger.info { "1080p TV UI surface attached; host focus acquired" }
             }.onFailure { throwable ->
                 logger.error(throwable) { "Attach 1080p TV UI surface failed; falling back to native UI" }
                 release()

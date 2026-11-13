@@ -134,7 +134,7 @@ fun UISetting(
                 item {
                     SettingListItem(
                         title = "4K 界面渲染",
-                        supportText = "仅 TV 端生效；保持 4K 视频输出，界面可以 1080p 渲染后放大",
+                        supportText = "保持 4K 视频输出；Android 12 及以上可使用 1080p 界面，较低版本使用系统原生分辨率",
                         valueText = tvUiRenderMode.displayName,
                         onClick = { showTvUiRenderModeDialog = true },
                     )

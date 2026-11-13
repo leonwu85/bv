@@ -31,7 +31,7 @@ class TvUiRenderPipelineTest {
                 isTelevision = true,
                 has4kOutput = true,
                 uiExceeds1080p = true,
-                canEmbedUi = true,
+                sdkInt = 31,
                 renderMode = TvUiRenderMode.Auto,
             ),
         )
@@ -45,7 +45,7 @@ class TvUiRenderPipelineTest {
                 isTelevision = true,
                 has4kOutput = true,
                 uiExceeds1080p = false,
-                canEmbedUi = true,
+                sdkInt = 31,
                 renderMode = TvUiRenderMode.Auto,
             ),
         )
@@ -59,7 +59,7 @@ class TvUiRenderPipelineTest {
                 isTelevision = false,
                 has4kOutput = true,
                 uiExceeds1080p = true,
-                canEmbedUi = true,
+                sdkInt = 31,
                 renderMode = TvUiRenderMode.Force1080p,
             ),
         )
@@ -69,7 +69,7 @@ class TvUiRenderPipelineTest {
                 isTelevision = true,
                 has4kOutput = true,
                 uiExceeds1080p = true,
-                canEmbedUi = false,
+                sdkInt = 29,
                 renderMode = TvUiRenderMode.Force1080p,
             ),
         )
@@ -83,9 +83,45 @@ class TvUiRenderPipelineTest {
                 isTelevision = true,
                 has4kOutput = true,
                 uiExceeds1080p = true,
-                canEmbedUi = true,
+                sdkInt = 31,
                 renderMode = TvUiRenderMode.Native,
             ),
         )
+    }
+
+    @Test
+    fun android11KeepsNativeInputEvenWhen1080pIsForced() {
+        for (mode in TvUiRenderMode.entries) {
+            assertEquals(
+                TvUiRenderPath.Native,
+                resolveRenderPath(
+                    isTelevision = true,
+                    has4kOutput = true,
+                    uiExceeds1080p = true,
+                    sdkInt = 30,
+                    renderMode = mode,
+                ),
+                "Android 11 must retain D-pad input with mode=$mode",
+            )
+        }
+    }
+
+    @Test
+    fun supportedVersionsCanForce1080pButStillRequire4kOutput() {
+        for (sdkInt in listOf(31, 32, 33, 34, 35, 36, 37)) {
+            for (has4kOutput in listOf(false, true)) {
+                assertEquals(
+                    if (has4kOutput) TvUiRenderPath.Embedded1080p else TvUiRenderPath.Native,
+                    resolveRenderPath(
+                        isTelevision = true,
+                        has4kOutput = has4kOutput,
+                        uiExceeds1080p = false,
+                        sdkInt = sdkInt,
+                        renderMode = TvUiRenderMode.Force1080p,
+                    ),
+                    "sdk=$sdkInt, has4kOutput=$has4kOutput",
+                )
+            }
+        }
     }
 }
